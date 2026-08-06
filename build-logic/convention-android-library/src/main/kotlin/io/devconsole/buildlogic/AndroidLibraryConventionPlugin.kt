@@ -29,13 +29,8 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
                 sourceCompatibility = JavaVersion.VERSION_11
                 targetCompatibility = JavaVersion.VERSION_11
             }
-            publishing {
-                // Sources come from the release variant; the javadoc jar is added by the publishing
-                // convention (a minimal placeholder, so this stays off the Dokka toolchain per module).
-                singleVariant("release") {
-                    withSourcesJar()
-                }
-            }
+            // The release singleVariant publication (with sources) is registered by the Vanniktech
+            // plugin via devconsole.publishing; registering it here too would collide.
         }
         dependencies.add("testImplementation", "junit:junit:4.13.2")
         }

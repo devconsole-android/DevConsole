@@ -20,6 +20,7 @@ dependencies {
     // root's aggregation dependency falls back to resolving the module's ordinary AGP runtime
     // variants, which is both semantically wrong and ambiguous (debug vs release).
     implementation("org.jetbrains.dokka:dokka-gradle-plugin:2.2.0")
+    implementation("com.vanniktech:gradle-maven-publish-plugin:0.37.0")
 }
 
 sourceSets {

@@ -48,3 +48,4 @@
 **Contributing / releasing**
 - [Migration guide](MIGRATION.md)
 - [Release checklist](RELEASE_CHECKLIST.md)
+- [Publishing to Maven Central](MAVEN_PUBLISHING.md)
