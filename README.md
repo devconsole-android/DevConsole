@@ -12,12 +12,12 @@ ever ships to production, and the Gradle plugin fails the build if it would.
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.shakibuzzaman3104.android") version "0.1.0-SNAPSHOT"
+    id("io.github.shakibuzzaman3104.android") version "0.1.0"
 }
 
 dependencies {
-    debugImplementation("io.github.shakibuzzaman3104:devconsole:0.1.0-SNAPSHOT")
-    releaseImplementation("io.github.shakibuzzaman3104:devconsole-noop:0.1.0-SNAPSHOT")
+    debugImplementation("io.github.shakibuzzaman3104:devconsole:0.1.0")
+    releaseImplementation("io.github.shakibuzzaman3104:devconsole-noop:0.1.0")
 }
 ```
 

@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "io.devconsole"
-version = "0.1.0-SNAPSHOT"
+version = "0.1.0"
 
 // Targets Java 17: this plugin JAR runs inside the Gradle daemon (Gradle 9.5
 // requires JDK 17) and compiles against com.android.tools.build:gradle:9.3.0,

@@ -79,7 +79,7 @@ class PublishingConventionPlugin : Plugin<Project> {
 
     private companion object {
         const val MAVEN_GROUP = "io.github.shakibuzzaman3104"
-        const val SDK_VERSION = "0.1.0-SNAPSHOT"
+        const val SDK_VERSION = "0.1.0"
         const val PROJECT_URL = "https://github.com/Shakibuzzaman3104/DevConsole"
     }
 }

@@ -19,7 +19,9 @@ removed before ever shipping — see Removed, below — so it never joined this 
 From 1.0.0 onward: breaking changes to `sdk:api` require a major version, new API requires a minor,
 and everything else is a patch.
 
-## Unreleased
+## 0.1.0 — 2026-08-07
+
+First public release.
 
 This window includes a from-scratch redesign of how a browser connects (auth) and how the host
 starts the server (facade), the removal of the generic plugin framework, and full browser/device
