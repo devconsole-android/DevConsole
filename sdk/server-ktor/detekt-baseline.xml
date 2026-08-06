@@ -1,0 +1,62 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:DevConsoleKtorModule.kt$listOfNotNull(fromEpochMs, toEpochMs).any { it &lt; 0 } || (fromEpochMs != null &amp;&amp; toEpochMs != null &amp;&amp; fromEpochMs > toEpochMs)</ID>
+    <ID>ComplexCondition:DevConsoleKtorModule.kt$requestedSessionId != null &amp;&amp; requestedSessionId.length > MAX_EXPORT_SESSION_ID_LENGTH || rawLimit != null &amp;&amp; rawLimit.toIntOrNull() == null || limit !in 1..RetainedCaptureQuery.MAX_LIMIT</ID>
+    <ID>CyclomaticComplexMethod:DevConsoleKtorModule.kt$@Suppress("ThrowsCount") fun Application.devConsoleModule( sessionAuthority: SessionAuthority, sessionCodeAuthority: SessionCodeAuthority = SessionCodeAuthority(sessionAuthority), configure: DevConsoleModuleConfig.() -> Unit = {}, )</ID>
+    <ID>CyclomaticComplexMethod:DevConsoleKtorModule.kt$private fun PushEvent.json(): String</ID>
+    <ID>CyclomaticComplexMethod:DevConsoleKtorModule.kt$private fun StateValue.json(): String</ID>
+    <ID>CyclomaticComplexMethod:DevConsoleKtorModule.kt$private fun String.commandAuditIdentity(method: String): Pair&lt;String, String>?</ID>
+    <ID>CyclomaticComplexMethod:DevConsoleKtorModule.kt$private fun io.ktor.http.Parameters.toComposerRequestOrNull(): ComposerRequest?</ID>
+    <ID>CyclomaticComplexMethod:DevConsoleKtorModule.kt$private fun io.ktor.server.application.ApplicationCall.networkTransactionQuery( defaultLimit: Int = NetworkTransactionQuery.DEFAULT_PAGE_LIMIT, ): NetworkTransactionQuery?</ID>
+    <ID>CyclomaticComplexMethod:DevConsoleKtorModule.kt$private fun io.ktor.server.application.ApplicationCall.socketMessageQuery(): SocketMessageQuery?</ID>
+    <ID>CyclomaticComplexMethod:DevConsoleKtorModule.kt$private fun recordComposerCapture( request: ResolvedComposerRequest, secretValues: List&lt;String>, response: ComposerResponse?, error: Throwable?, correlationId: String, browserSessionId: String, startedAtEpochMs: Long, networkTransactions: NetworkTransactionStore, timeline: Timeline, redaction: RedactionEngine, )</ID>
+    <ID>LargeClass:DevConsoleKtorModuleTest.kt$DevConsoleKtorModuleTest</ID>
+    <ID>LargeClass:InspectorRoutesTest.kt$InspectorRoutesTest</ID>
+    <ID>LongMethod:DevConsoleKtorModule.kt$@Suppress("ThrowsCount") fun Application.devConsoleModule( sessionAuthority: SessionAuthority, sessionCodeAuthority: SessionCodeAuthority = SessionCodeAuthority(sessionAuthority), configure: DevConsoleModuleConfig.() -> Unit = {}, )</ID>
+    <ID>LongMethod:DevConsoleKtorModule.kt$KtorLocalServerEngine$override suspend fun start(request: StartRequest): ServerStartResult</ID>
+    <ID>LongMethod:DevConsoleKtorModule.kt$private fun io.ktor.http.Parameters.toComposerRequestOrNull(): ComposerRequest?</ID>
+    <ID>LongMethod:DevConsoleKtorModule.kt$private fun io.ktor.server.application.ApplicationCall.networkTransactionQuery( defaultLimit: Int = NetworkTransactionQuery.DEFAULT_PAGE_LIMIT, ): NetworkTransactionQuery?</ID>
+    <ID>LongMethod:DevConsoleKtorModule.kt$private fun recordComposerCapture( request: ResolvedComposerRequest, secretValues: List&lt;String>, response: ComposerResponse?, error: Throwable?, correlationId: String, browserSessionId: String, startedAtEpochMs: Long, networkTransactions: NetworkTransactionStore, timeline: Timeline, redaction: RedactionEngine, )</ID>
+    <ID>LongMethod:DevConsoleKtorModuleTest.kt$DevConsoleKtorModuleTest$@Test fun `authenticated browser can inspect redacted network transactions and exports`()</ID>
+    <ID>LongMethod:DevConsoleKtorModuleTest.kt$DevConsoleKtorModuleTest$@Test fun `every authenticated failed control command creates one audit record`()</ID>
+    <ID>LongMethod:DevConsoleKtorModuleTest.kt$DevConsoleKtorModuleTest$@Test fun `scoped zip export requires csrf and returns a re-redacted integrity manifest`()</ID>
+    <ID>LongMethod:KtorLocalServerEngineTest.kt$KtorLocalServerEngineTest$@Test fun `engine forwards composer collaborators, host allow-list, audit log, and redaction policy`()</ID>
+    <ID>LongMethod:KtorLocalServerEngineTest.kt$KtorLocalServerEngineTest$@Test fun `engine forwards the push simulator, timeline annotations, and its public stream hub`()</ID>
+    <ID>LongParameterList:DevConsoleKtorModule.kt$( request: ResolvedComposerRequest, secretValues: List&lt;String>, response: ComposerResponse?, error: Throwable?, correlationId: String, browserSessionId: String, startedAtEpochMs: Long, networkTransactions: NetworkTransactionStore, timeline: Timeline, redaction: RedactionEngine, )</ID>
+    <ID>LoopWithTooManyJumpStatements:DevConsoleKtorModule.kt$while</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$0x20</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$10</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$100</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$1024</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$16</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$256</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$4</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$50</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$599</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$999</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$DevConsoleModuleConfig$16</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$KtorLocalServerEngine$100</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$KtorLocalServerEngine$16</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$KtorLocalServerEngine$200</ID>
+    <ID>MagicNumber:DevConsoleKtorModule.kt$KtorLocalServerEngine$65_535</ID>
+    <ID>MagicNumber:EventStreamHub.kt$0x20</ID>
+    <ID>MagicNumber:EventStreamHub.kt$16</ID>
+    <ID>MagicNumber:EventStreamHub.kt$4</ID>
+    <ID>MaxLineLength:DevConsoleKtorModule.kt$"{\"accessToken\":\"${refreshed.token}\",\"csrfToken\":\"${refreshed.csrfToken}\",\"expiresAtEpochMs\":${refreshed.expiresAtEpochMs}}"</ID>
+    <ID>MaxLineLength:DevConsoleKtorModule.kt$"{\"id\":\"${principal.id.escapeJson()}\",\"browserLabel\":\"${principal.browserLabel.escapeJson()}\",\"sourceIp\":\"${principal.sourceIp.escapeJson()}\",\"expiresAtEpochMs\":${principal.expiresAtEpochMs}}"</ID>
+    <ID>MaxLineLength:DevConsoleKtorModule.kt$"{\"type\":\"server.welcome\",\"protocolVersion\":1,\"currentSequence\":${streamHub.currentSequence},\"heartbeatSeconds\":20}"</ID>
+    <ID>MaxLineLength:DevConsoleKtorModule.kt$/** Payload is embedded as JSON only after capture-time redaction; no reparsing means malformed legacy data remains harmless. */</ID>
+    <ID>ReturnCount:DevConsoleKtorModule.kt$private fun io.ktor.server.application.ApplicationCall.networkTransactionQuery( defaultLimit: Int = NetworkTransactionQuery.DEFAULT_PAGE_LIMIT, ): NetworkTransactionQuery?</ID>
+    <ID>ReturnCount:DevConsoleKtorModule.kt$private fun io.ktor.server.application.ApplicationCall.socketMessageQuery(): SocketMessageQuery?</ID>
+    <ID>ReturnCount:DevConsoleKtorModule.kt$private suspend fun io.ktor.server.application.ApplicationCall.captureRuleControlSession( sessionAuthority: SessionAuthority, commandAuditLog: CommandAuditLog, captureRulesEditable: Boolean, commandType: String, target: String, ): BrowserSession?</ID>
+    <ID>ReturnCount:DevConsoleKtorModule.kt$private suspend fun io.ktor.server.application.ApplicationCall.filesControlSession( sessionAuthority: SessionAuthority, commandAuditLog: CommandAuditLog, filesEditable: Boolean, commandType: String, target: String, ): BrowserSession?</ID>
+    <ID>ReturnCount:DevConsoleKtorModule.kt$private suspend fun io.ktor.server.application.ApplicationCall.mockRuleControlSession( sessionAuthority: SessionAuthority, commandAuditLog: CommandAuditLog, mocksEditable: Boolean, commandType: String, target: String, ): BrowserSession?</ID>
+    <ID>ReturnCount:DevConsoleKtorModule.kt$private suspend fun io.ktor.server.application.ApplicationCall.preferencesControlSession( sessionAuthority: SessionAuthority, commandAuditLog: CommandAuditLog, preferencesEditable: Boolean, commandType: String, target: String, ): BrowserSession?</ID>
+    <ID>ReturnCount:DevConsoleKtorModule.kt$private suspend fun io.ktor.server.application.ApplicationCall.resolveNetworkExportTransactions( networkTransactions: NetworkTransactionStore, ): List&lt;NetworkTransaction>?</ID>
+    <ID>TooGenericExceptionCaught:DevConsoleKtorModule.kt$failure: Throwable</ID>
+    <ID>TooGenericExceptionCaught:DevConsoleKtorModule.kt$throwable: Throwable</ID>
+    <ID>TooManyFunctions:DevConsoleKtorModule.kt$io.devconsole.server.ktor.DevConsoleKtorModule.kt</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  android:windowLightNavigationBar landed in API 27. The base values/ theme omits it so the
+  inspector still builds and runs at the SDK's minSdk of 24; on 27 and above this override adds
+  it back. The dark navigation bar the base theme sets is already correct without it.
+-->
+<resources>
+    <style name="Theme.DevConsole" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#090D0B</item>
+        <item name="android:navigationBarColor">#111713</item>
+        <item name="android:statusBarColor">#090D0B</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

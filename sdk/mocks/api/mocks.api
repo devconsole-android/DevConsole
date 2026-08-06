@@ -1,0 +1,323 @@
+public final class io/devconsole/mocks/InMemoryMockRuleStore : io/devconsole/mocks/MockRuleStore {
+	public fun <init> ()V
+	public fun <init> (Ljava/util/List;I)V
+	public synthetic fun <init> (Ljava/util/List;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun load ()Ljava/util/List;
+	public fun save (Ljava/util/List;)V
+}
+
+public abstract interface class io/devconsole/mocks/MockAction {
+	public static final field DEFAULT_TIMEOUT_MS J
+	public static final field MAX_DELAY_MS J
+}
+
+public final class io/devconsole/mocks/MockAction$BodyReplacement : io/devconsole/mocks/MockAction {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/mocks/MockAction$BodyReplacement;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockAction$BodyReplacement;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/mocks/MockAction$BodyReplacement;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBody ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockAction$ConnectionFailure : io/devconsole/mocks/MockAction {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/mocks/MockAction$ConnectionFailure;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockAction$ConnectionFailure;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/mocks/MockAction$ConnectionFailure;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockAction$Delay : io/devconsole/mocks/MockAction {
+	public fun <init> (JLio/devconsole/mocks/MockAction;)V
+	public synthetic fun <init> (JLio/devconsole/mocks/MockAction;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()J
+	public final fun component2 ()Lio/devconsole/mocks/MockAction;
+	public final fun copy (JLio/devconsole/mocks/MockAction;)Lio/devconsole/mocks/MockAction$Delay;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockAction$Delay;JLio/devconsole/mocks/MockAction;ILjava/lang/Object;)Lio/devconsole/mocks/MockAction$Delay;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDurationMs ()J
+	public final fun getNext ()Lio/devconsole/mocks/MockAction;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockAction$Passthrough : io/devconsole/mocks/MockAction {
+	public static final field INSTANCE Lio/devconsole/mocks/MockAction$Passthrough;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockAction$StaticResponse : io/devconsole/mocks/MockAction {
+	public fun <init> (ILjava/lang/String;Ljava/util/Map;)V
+	public synthetic fun <init> (ILjava/lang/String;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun copy (ILjava/lang/String;Ljava/util/Map;)Lio/devconsole/mocks/MockAction$StaticResponse;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockAction$StaticResponse;ILjava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lio/devconsole/mocks/MockAction$StaticResponse;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBody ()Ljava/lang/String;
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getStatusCode ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockAction$StatusOverride : io/devconsole/mocks/MockAction {
+	public fun <init> (I)V
+	public final fun component1 ()I
+	public final fun copy (I)Lio/devconsole/mocks/MockAction$StatusOverride;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockAction$StatusOverride;IILjava/lang/Object;)Lio/devconsole/mocks/MockAction$StatusOverride;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getStatusCode ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockAction$TemplateResponse : io/devconsole/mocks/MockAction {
+	public fun <init> (ILjava/lang/String;Ljava/util/Map;)V
+	public synthetic fun <init> (ILjava/lang/String;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun copy (ILjava/lang/String;Ljava/util/Map;)Lio/devconsole/mocks/MockAction$TemplateResponse;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockAction$TemplateResponse;ILjava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lio/devconsole/mocks/MockAction$TemplateResponse;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getStatusCode ()I
+	public final fun getTemplate ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockAction$Timeout : io/devconsole/mocks/MockAction {
+	public fun <init> ()V
+	public fun <init> (J)V
+	public synthetic fun <init> (JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()J
+	public final fun copy (J)Lio/devconsole/mocks/MockAction$Timeout;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockAction$Timeout;JILjava/lang/Object;)Lio/devconsole/mocks/MockAction$Timeout;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDurationMs ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/mocks/MockDecision {
+}
+
+public final class io/devconsole/mocks/MockDecision$Matched : io/devconsole/mocks/MockDecision {
+	public fun <init> (Lio/devconsole/mocks/MockRule;Lio/devconsole/mocks/MockAction;)V
+	public final fun component1 ()Lio/devconsole/mocks/MockRule;
+	public final fun component2 ()Lio/devconsole/mocks/MockAction;
+	public final fun copy (Lio/devconsole/mocks/MockRule;Lio/devconsole/mocks/MockAction;)Lio/devconsole/mocks/MockDecision$Matched;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockDecision$Matched;Lio/devconsole/mocks/MockRule;Lio/devconsole/mocks/MockAction;ILjava/lang/Object;)Lio/devconsole/mocks/MockDecision$Matched;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAction ()Lio/devconsole/mocks/MockAction;
+	public final fun getRule ()Lio/devconsole/mocks/MockRule;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockDecision$Passthrough : io/devconsole/mocks/MockDecision {
+	public static final field INSTANCE Lio/devconsole/mocks/MockDecision$Passthrough;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockEngine {
+	public static final field DEFAULT_MAX_BODY_PREDICATE_BYTES I
+	public static final field DEFAULT_PATH Ljava/lang/String;
+	public fun <init> (Ljava/util/List;ZZI)V
+	public synthetic fun <init> (Ljava/util/List;ZZIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun bindPersistence (Lio/devconsole/mocks/MockRuleStore;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun clearSessionRules ()V
+	public final fun conflicts ()Ljava/util/List;
+	public final fun decide (Lio/devconsole/mocks/MockRequest;)Lio/devconsole/mocks/MockDecision;
+	public final fun isEnabled ()Z
+	public final fun persist (Lio/devconsole/mocks/MockRuleStore;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun remove (Ljava/lang/String;)Z
+	public final fun restore (Lio/devconsole/mocks/MockRuleStore;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun rules ()Ljava/util/List;
+	public final fun setEnabled (Ljava/lang/String;Z)Z
+	public final fun setEnabled (Z)V
+	public final fun stats (Ljava/lang/String;)Lio/devconsole/mocks/MockRuleStats;
+	public final fun statsSnapshot ()Ljava/util/Map;
+	public final fun upsert (Lio/devconsole/mocks/MockRule;)V
+	public final fun withOutcomeSink (Lio/devconsole/mocks/MockOutcomeSink;)Lio/devconsole/mocks/MockEngine;
+}
+
+public abstract interface class io/devconsole/mocks/MockOutcome {
+}
+
+public final class io/devconsole/mocks/MockOutcome$EvaluationError : io/devconsole/mocks/MockOutcome {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/mocks/MockOutcome$EvaluationError;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockOutcome$EvaluationError;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/mocks/MockOutcome$EvaluationError;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public final fun getRuleId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockOutcome$Matched : io/devconsole/mocks/MockOutcome {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/mocks/MockOutcome$Matched;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockOutcome$Matched;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/mocks/MockOutcome$Matched;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActionType ()Ljava/lang/String;
+	public final fun getRuleId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockOutcome$Passthrough : io/devconsole/mocks/MockOutcome {
+	public fun <init> (Lio/devconsole/mocks/MockPassthroughReason;)V
+	public final fun component1 ()Lio/devconsole/mocks/MockPassthroughReason;
+	public final fun copy (Lio/devconsole/mocks/MockPassthroughReason;)Lio/devconsole/mocks/MockOutcome$Passthrough;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockOutcome$Passthrough;Lio/devconsole/mocks/MockPassthroughReason;ILjava/lang/Object;)Lio/devconsole/mocks/MockOutcome$Passthrough;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getReason ()Lio/devconsole/mocks/MockPassthroughReason;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/mocks/MockOutcomeSink {
+	public abstract fun record (Lio/devconsole/mocks/MockOutcome;)V
+}
+
+public final class io/devconsole/mocks/MockPassthroughReason : java/lang/Enum {
+	public static final field DISABLED Lio/devconsole/mocks/MockPassthroughReason;
+	public static final field EVALUATION_ERROR Lio/devconsole/mocks/MockPassthroughReason;
+	public static final field INPUT_LIMIT Lio/devconsole/mocks/MockPassthroughReason;
+	public static final field NO_MATCH Lio/devconsole/mocks/MockPassthroughReason;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/mocks/MockPassthroughReason;
+	public static fun values ()[Lio/devconsole/mocks/MockPassthroughReason;
+}
+
+public final class io/devconsole/mocks/MockRequest {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/util/Map;
+	public final fun component6 ()Ljava/util/Map;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;)Lio/devconsole/mocks/MockRequest;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockRequest;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/mocks/MockRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBody ()Ljava/lang/String;
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getHost ()Ljava/lang/String;
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getPath ()Ljava/lang/String;
+	public final fun getQuery ()Ljava/util/Map;
+	public final fun getScheme ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockRule {
+	public fun <init> (Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;Lio/devconsole/mocks/MockScope;Lio/devconsole/mocks/MockAction;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;Lio/devconsole/mocks/MockScope;Lio/devconsole/mocks/MockAction;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Lio/devconsole/mocks/MockScope;
+	public final fun component11 ()Lio/devconsole/mocks/MockAction;
+	public final fun component12 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/util/Map;
+	public final fun component8 ()Ljava/util/Map;
+	public final fun component9 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;Lio/devconsole/mocks/MockScope;Lio/devconsole/mocks/MockAction;Ljava/lang/String;)Lio/devconsole/mocks/MockRule;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockRule;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Ljava/lang/String;Lio/devconsole/mocks/MockScope;Lio/devconsole/mocks/MockAction;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/mocks/MockRule;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAction ()Lio/devconsole/mocks/MockAction;
+	public final fun getBodyPredicate ()Ljava/lang/String;
+	public final fun getHeaderPredicates ()Ljava/util/Map;
+	public final fun getHost ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getPath ()Ljava/lang/String;
+	public final fun getPersistence ()Lio/devconsole/mocks/MockRulePersistence;
+	public final fun getPriority ()I
+	public final fun getQueryPredicates ()Ljava/util/Map;
+	public final fun getScheme ()Ljava/lang/String;
+	public final fun getScope ()Lio/devconsole/mocks/MockScope;
+	public final fun getSourceBodySnapshot ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun withPersistence (Lio/devconsole/mocks/MockRulePersistence;)Lio/devconsole/mocks/MockRule;
+}
+
+public final class io/devconsole/mocks/MockRulePersistence {
+	public fun <init> ()V
+	public fun <init> (ZLjava/lang/String;Ljava/lang/String;Ljava/util/Set;Z)V
+	public synthetic fun <init> (ZLjava/lang/String;Ljava/lang/String;Ljava/util/Set;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/util/Set;
+	public final fun component5 ()Z
+	public final fun copy (ZLjava/lang/String;Ljava/lang/String;Ljava/util/Set;Z)Lio/devconsole/mocks/MockRulePersistence;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockRulePersistence;ZLjava/lang/String;Ljava/lang/String;Ljava/util/Set;ZILjava/lang/Object;)Lio/devconsole/mocks/MockRulePersistence;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCompatibleAcrossReinstall ()Z
+	public final fun getCompatibleAppVersions ()Ljava/util/Set;
+	public final fun getCreatedAppVersion ()Ljava/lang/String;
+	public final fun getEnabled ()Z
+	public final fun getInstallationId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockRuleStats {
+	public fun <init> ()V
+	public fun <init> (JLjava/lang/Long;)V
+	public synthetic fun <init> (JLjava/lang/Long;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()J
+	public final fun component2 ()Ljava/lang/Long;
+	public final fun copy (JLjava/lang/Long;)Lio/devconsole/mocks/MockRuleStats;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockRuleStats;JLjava/lang/Long;ILjava/lang/Object;)Lio/devconsole/mocks/MockRuleStats;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHitCount ()J
+	public final fun getLastHitEpochMs ()Ljava/lang/Long;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/mocks/MockRuleStore {
+	public abstract fun load ()Ljava/util/List;
+	public abstract fun save (Ljava/util/List;)V
+}
+
+public final class io/devconsole/mocks/MockScope : java/lang/Enum {
+	public static final field PERSISTENT_INTERNAL Lio/devconsole/mocks/MockScope;
+	public static final field SESSION Lio/devconsole/mocks/MockScope;
+	public static final field TEST_FIXTURE Lio/devconsole/mocks/MockScope;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/mocks/MockScope;
+	public static fun values ()[Lio/devconsole/mocks/MockScope;
+}
+

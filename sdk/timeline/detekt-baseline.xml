@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:Timeline.kt$CursorCodec$16</ID>
+    <ID>MagicNumber:Timeline.kt$CursorCodec$3</ID>
+    <ID>MagicNumber:Timeline.kt$CursorCodec$4</ID>
+    <ID>MaxLineLength:Timeline.kt$CursorCodec$return if (scope == expectedScope) CursorDecodeResult.Valid(CursorMarker(sequence, id)) else CursorDecodeResult.Invalid</ID>
+    <ID>ReturnCount:Timeline.kt$CursorCodec$fun decode( cursor: String, expectedScope: String, ): CursorDecodeResult</ID>
+  </CurrentIssues>
+</SmellBaseline>

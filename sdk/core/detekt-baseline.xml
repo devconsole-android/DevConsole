@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>LongMethod:EventPipeline.kt$EventPipeline$@Synchronized fun publish(draft: EventDraft): EventEnvelope</ID>
+    <ID>LongParameterList:EventBatchWriter.kt$EventBatchWriter$( private val store: EventStore, private val scope: CoroutineScope, private val capacity: Int = DEFAULT_CAPACITY, private val maxBatchSize: Int = DEFAULT_BATCH_SIZE, private val flushIntervalMs: Long = DEFAULT_FLUSH_INTERVAL_MS, private val onDrop: (StoredEvent, EventBatchDropReason) -> Unit = { _, _ -> }, private val onStored: suspend (List&lt;StoredEvent>) -> Unit = {}, )</ID>
+    <ID>MagicNumber:EventBatchWriter.kt$0x20</ID>
+    <ID>MagicNumber:EventBatchWriter.kt$16</ID>
+    <ID>MagicNumber:EventBatchWriter.kt$4</ID>
+    <ID>MagicNumber:EventBatchWriter.kt$96L</ID>
+    <ID>ReturnCount:EventBatchWriter.kt$EventBatchWriter$private fun enqueue( state: QueueState, incoming: StoredEvent, dropped: MutableList&lt;StoredEvent>, ): Boolean</ID>
+    <ID>TooManyFunctions:DevConsoleRuntime.kt$DevConsoleRuntime</ID>
+    <ID>TooManyFunctions:EventBatchWriter.kt$EventBatchWriter</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -1,0 +1,10 @@
+root = true
+
+[*.{kt,kts}]
+# @Composable functions are conventionally PascalCase; ktlint's default function-naming rule
+# doesn't know about that convention without this override.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+# Match detekt's MaxLineLength default (120, via buildUponDefaultConfig with no custom
+# detekt.yml) so ktlint's line-joining and detekt's line-length check agree; otherwise
+# ktlintFormat can join lines past 120 chars that detekt then rejects.
+max_line_length = 120

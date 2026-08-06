@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>MaxLineLength:DevConsoleOkHttpWebSocketListener.kt$DevConsoleOkHttpWebSocketListener$recorder.onBinaryMessage(connectionIdProvider(webSocket), SocketDirection.RECEIVED, bytes.size.toLong(), "application/octet-stream")</ID>
+  </CurrentIssues>
+</SmellBaseline>

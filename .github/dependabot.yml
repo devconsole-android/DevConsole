@@ -1,0 +1,33 @@
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      gradle-dependencies:
+        patterns:
+          - "*"
+  # build-logic and gradle-plugin are separate included builds (settings.gradle.kts
+  # includeBuild), each with their own version catalog / plugin classpath, so they need their
+  # own dependabot entries -- the root entry above does not cover them.
+  - package-ecosystem: gradle
+    directory: /build-logic
+    schedule:
+      interval: weekly
+    groups:
+      gradle-dependencies:
+        patterns:
+          - "*"
+  - package-ecosystem: gradle
+    directory: /gradle-plugin
+    schedule:
+      interval: weekly
+    groups:
+      gradle-dependencies:
+        patterns:
+          - "*"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

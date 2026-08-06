@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>MaxLineLength:RedactionEngine.kt$RedactionEngine$Regex("(\\\"(?:$sensitiveNamePattern)\\\"\\s*:\\s*)(?:\\\"(?:\\\\.|[^\\\"])*\\\"|[^,}\\s]+)", RegexOption.IGNORE_CASE)</ID>
+  </CurrentIssues>
+</SmellBaseline>

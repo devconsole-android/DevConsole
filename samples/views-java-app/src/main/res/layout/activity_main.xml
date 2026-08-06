@@ -1,0 +1,133 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/ground">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="DEV"
+                android:textColor="@color/ink"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.12" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CONSOLE"
+                android:textColor="@color/signal"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.12" />
+        </LinearLayout>
+
+        <TextView style="@style/SectionLabel" android:text="SERVER" />
+
+        <LinearLayout style="@style/Card">
+
+            <!-- Populated at runtime by DevConsolePanelControllerFactory: the real
+                 DevConsolePanelView in debug builds (sdk:ui-views is debugImplementation-only,
+                 no release no-op exists for it), left empty in release. -->
+            <FrameLayout
+                android:id="@+id/dev_console_panel_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <TextView style="@style/SectionLabel" android:text="EXERCISE THE SDK" />
+
+        <LinearLayout style="@style/Card">
+
+            <Button
+                android:id="@+id/btnSendNetworkRequest"
+                style="@style/DevConsoleButton"
+                android:layout_marginTop="0dp"
+                android:text="Send network request" />
+
+            <Button
+                android:id="@+id/btnSendMockedRequest"
+                style="@style/DevConsoleButton"
+                android:text="Send mocked request" />
+
+            <Button
+                android:id="@+id/btnOpenSocket"
+                style="@style/DevConsoleButton"
+                android:text="Open sample WebSocket" />
+
+            <Button
+                android:id="@+id/btnSimulatePush"
+                style="@style/DevConsoleButton"
+                android:text="Simulate push" />
+
+            <Button
+                android:id="@+id/btnSimulateFirebasePush"
+                style="@style/DevConsoleButton"
+                android:text="Simulate Firebase push" />
+
+            <Button
+                android:id="@+id/btnReadFeatureFlag"
+                style="@style/DevConsoleButton"
+                android:text="Read feature flag" />
+
+            <Button
+                android:id="@+id/btnToggleMockRule"
+                style="@style/DevConsoleButton"
+                android:text="Toggle /orders mock rule" />
+
+            <Button
+                android:id="@+id/btnCaptureScreenshot"
+                style="@style/DevConsoleButton"
+                android:text="Capture screenshot" />
+        </LinearLayout>
+
+        <TextView style="@style/HazardSectionLabel" android:text="HAZARD ZONE — DESTRUCTIVE" />
+
+        <LinearLayout style="@style/Card">
+
+            <TextView
+                style="@style/HazardNotice"
+                android:text="These buttons are destructive. Crash kills the process; ANR freezes the UI for a few seconds." />
+
+            <Button
+                android:id="@+id/btnTriggerCrash"
+                style="@style/HazardButton"
+                android:layout_marginTop="0dp"
+                android:text="Trigger crash (kills the process)" />
+
+            <Button
+                android:id="@+id/btnTriggerAnr"
+                style="@style/HazardButton"
+                android:text="Trigger ANR (freezes ~6s)" />
+        </LinearLayout>
+
+        <TextView style="@style/SectionLabel" android:text="LAST RESULT" />
+
+        <TextView
+            android:id="@+id/tvLastResponse"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:accessibilityLiveRegion="polite"
+            android:background="@drawable/card_devconsole"
+            android:padding="14dp"
+            android:fontFamily="monospace"
+            android:textColor="@color/ink"
+            android:textSize="13sp"
+            android:text="No action run yet — start the server, then tap a capability above." />
+
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,55 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:PlatformFacadeProvider.kt$PlatformFacadeProvider$private fun mapStartResult(result: ServerStartResult): StartResult</ID>
+    <ID>CyclomaticComplexMethod:PlatformFacadeProvider.kt$PlatformFacadeProvider$private suspend fun startLocked(request: StartRequest): StartResult</ID>
+    <ID>LargeClass:PlatformFacadeProvider.kt$PlatformFacadeProvider : DevConsoleFacadeProvider</ID>
+    <ID>LongMethod:PlatformFacadeProvider.kt$PlatformFacadeProvider$@Synchronized internal fun initialize( application: Application, config: DevConsoleConfig, provisional: Boolean, ): InitResult</ID>
+    <ID>LongMethod:PlatformFacadeProvider.kt$PlatformFacadeProvider$private fun mapStartResult(result: ServerStartResult): StartResult</ID>
+    <ID>LongMethod:PlatformFacadeProvider.kt$PlatformFacadeProvider$private suspend fun startLocked(request: StartRequest): StartResult</ID>
+    <ID>LongParameterList:CaptureTimeline.kt$CaptureTimelineBridge$( pluginId: String, type: String, severity: EventSeverity, summary: String, tagsJson: String, correlationId: String? = null, tags: Map&lt;String, String> = emptyMap(), attachmentId: String? = null, sessionIdOverride: String? = null, payloadJson: String? = null, wallTimeMsOverride: Long? = null, )</ID>
+    <ID>MagicNumber:SessionMarkers.kt$128</ID>
+    <ID>MaxLineLength:AndroidMockRuleStore.kt$AndroidMockRuleStore$"static" -> MockAction.StaticResponse(getInt("statusCode"), getString("body"), getJSONObject("headers").toStringMap())</ID>
+    <ID>MaxLineLength:AndroidMockRuleStore.kt$private fun Map&lt;String, String>.toJson(): JSONObject</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$"contentType" to str(response.contentType)</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$"correlationId" to str(request.correlationId)</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$"headers" to map(request.headers)</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$"kind" to str("binary")</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$"kind" to str(when (preview) { is BodyPreview.Text -> "text"; is BodyPreview.Binary -> "binary"; BodyPreview.Absent -> "absent" })</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$"method" to str(request.method)</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$"preview" to str((preview as? BodyPreview.Text)?.value)</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$"statusCode" to num(response.statusCode)</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$"truncated" to bool(when (preview) { is BodyPreview.Text -> preview.truncated; is BodyPreview.Binary -> preview.truncated; BodyPreview.Absent -> false })</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$"type" to str(event.type.name)</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$is SocketPayload.Text -> obj("kind" to str("text"), "preview" to str(payload.preview), "truncated" to bool(payload.truncated))</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$private fun map(value: Map&lt;String, String>): String</ID>
+    <ID>MaxLineLength:CapturePayloadCodec.kt$CapturePayloadCodec$private fun obj(vararg fields: Pair&lt;String, String?>): String</ID>
+    <ID>MaxLineLength:CaptureTimeline.kt$TeeingNetworkTransactionStore$severity = if (status != null &amp;&amp; status >= HTTP_ERROR_FLOOR) EventSeverity.ERROR else EventSeverity.INFO</ID>
+    <ID>MaxLineLength:CrashCapture.kt$CrashCapture$runBlocking { withTimeoutOrNull(PERSIST_TIMEOUT_MS) { sessions.crash(activeSessionId, System.currentTimeMillis()) } }</ID>
+    <ID>MaxLineLength:CrashCapture.kt$CrashCapture$runCatching { record(CrashKind.UNCAUGHT, thread.name, throwable.stackTraceToString(), describe(throwable)) }</ID>
+    <ID>MaxLineLength:FullFacadeTest.kt$FullFacadeTest$assertTrue("expected the same listener owner to release port $port, got $restarted", restarted is StartResult.Started)</ID>
+    <ID>MaxLineLength:FullInspectorDataSourceTest.kt$FullInspectorDataSourceTest$val health = InspectorHealthUi(state = "Started", initializationCount = 1, publishedEventCount = 5, droppedEventCount = 0)</ID>
+    <ID>MaxLineLength:InspectorExporter.kt$append("{\"key\":\"").append(name.escapeJson()).append("\",\"value\":\"").append(value.escapeJson()).append("\"}")</ID>
+    <ID>MaxLineLength:PersistentTimeline.kt$PersistentTimeline$(delegate as? InMemoryTimeline)?.replaceSession(sessionId, events) ?: hydrate(events.filter { it.sessionId == sessionId })</ID>
+    <ID>MaxLineLength:PlatformFacadeProvider.kt$PlatformFacadeProvider$?:</ID>
+    <ID>MaxLineLength:PlatformFacadeProvider.kt$PlatformFacadeProvider$LogRecorder(redaction, TimelineLogSink(::activeSessionId, { timelineAppender }, timelineSequence::incrementAndGet))</ID>
+    <ID>MaxLineLength:PlatformFacadeProvider.kt$PlatformFacadeProvider$if</ID>
+    <ID>MaxLineLength:PlatformFacadeProvider.kt$PlatformFacadeProvider$private fun activeSessionId(): String</ID>
+    <ID>MaxLineLength:PlatformFacadeProvider.kt$PlatformFacadeProvider$timeline = persistentTimeline(application, config.storagePolicy, config.retentionPolicy, config.eventBufferCapacity)</ID>
+    <ID>MaxLineLength:PlatformFacadeProvider.kt$if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) packageInfo.longVersionCode else @Suppress("DEPRECATION") packageInfo.versionCode.toLong()</ID>
+    <ID>MaxLineLength:RecoveringDevConsoleDatabaseTest.kt$RecoveringDevConsoleDatabaseTest$assertTrue(quarantines.any { quarantine -> quarantine.listFiles().orEmpty().any { it.name == databaseName } })</ID>
+    <ID>MaxLineLength:SessionMarkers.kt$AndroidSessionMarkerMonitor$if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) == true) add("BLUETOOTH")</ID>
+    <ID>ReturnCount:AndroidMockRuleStore.kt$AndroidMockRuleStore$override fun load(): List&lt;MockRule></ID>
+    <ID>ReturnCount:PlatformFacadeProvider.kt$PlatformFacadeProvider$@Synchronized internal fun initialize( application: Application, config: DevConsoleConfig, provisional: Boolean, ): InitResult</ID>
+    <ID>ReturnCount:PlatformFacadeProvider.kt$PlatformFacadeProvider$private fun persistNetworkAttachment(payload: NetworkAttachmentPayload): String?</ID>
+    <ID>ReturnCount:PlatformFacadeProvider.kt$PlatformFacadeProvider$private suspend fun bootstrapDurableSessionWithinTimeout( application: Application, expectedSessionId: String, ): Boolean</ID>
+    <ID>ReturnCount:PlatformFacadeProvider.kt$PlatformFacadeProvider$private suspend fun startLocked(request: StartRequest): StartResult</ID>
+    <ID>TooGenericExceptionCaught:RecoveringDevConsoleDatabase.kt$RecoveringDevConsoleDatabase$failure: Throwable</ID>
+    <ID>TooManyFunctions:CapturePayloadCodec.kt$CapturePayloadCodec</ID>
+    <ID>TooManyFunctions:PlatformFacadeProvider.kt$PlatformFacadeProvider : DevConsoleFacadeProvider</ID>
+    <ID>TooManyFunctions:PlatformFacadeProvider.kt$io.devconsole.PlatformFacadeProvider.kt</ID>
+    <ID>TooManyFunctions:SessionMarkers.kt$AndroidSessionMarkerMonitor : ActivityLifecycleCallbacksComponentCallbacks2</ID>
+    <ID>UnusedPrivateMember:PlatformFacadeProvider.kt$private fun StartResult.describe(): String</ID>
+  </CurrentIssues>
+</SmellBaseline>

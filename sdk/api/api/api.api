@@ -1,0 +1,890 @@
+public final class io/devconsole/api/AccessInfo {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;J)V
+	public final fun getConnectUrl ()Ljava/lang/String;
+	public final fun getExpiresAtEpochMs ()J
+	public final fun getSessionCode ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/BindingMode : java/lang/Enum {
+	public static final field LAN Lio/devconsole/api/BindingMode;
+	public static final field LOOPBACK Lio/devconsole/api/BindingMode;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/api/BindingMode;
+	public static fun values ()[Lio/devconsole/api/BindingMode;
+}
+
+public final class io/devconsole/api/BrowserBinding : java/lang/Enum {
+	public static final field LAN Lio/devconsole/api/BrowserBinding;
+	public static final field LOOPBACK Lio/devconsole/api/BrowserBinding;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/api/BrowserBinding;
+	public static fun values ()[Lio/devconsole/api/BrowserBinding;
+}
+
+public final class io/devconsole/api/BrowserConfig {
+	public static final field Companion Lio/devconsole/api/BrowserConfig$Companion;
+	public static final field DEFAULT_SESSION_CODE_TTL_MS J
+	public fun <init> ()V
+	public fun <init> (Lio/devconsole/api/BrowserBinding;Lkotlin/ranges/IntRange;J)V
+	public synthetic fun <init> (Lio/devconsole/api/BrowserBinding;Lkotlin/ranges/IntRange;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lio/devconsole/api/BrowserBinding;
+	public final fun component2 ()Lkotlin/ranges/IntRange;
+	public final fun component3 ()J
+	public final fun copy (Lio/devconsole/api/BrowserBinding;Lkotlin/ranges/IntRange;J)Lio/devconsole/api/BrowserConfig;
+	public static synthetic fun copy$default (Lio/devconsole/api/BrowserConfig;Lio/devconsole/api/BrowserBinding;Lkotlin/ranges/IntRange;JILjava/lang/Object;)Lio/devconsole/api/BrowserConfig;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBinding ()Lio/devconsole/api/BrowserBinding;
+	public final fun getPortRange ()Lkotlin/ranges/IntRange;
+	public final fun getSessionCodeTtlMs ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun validationErrors ()Ljava/util/List;
+}
+
+public final class io/devconsole/api/BrowserConfig$Companion {
+}
+
+public final class io/devconsole/api/BrowserEndpoint {
+	public fun <init> (Ljava/lang/String;ILio/devconsole/api/BindingMode;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()Lio/devconsole/api/BindingMode;
+	public final fun copy (Ljava/lang/String;ILio/devconsole/api/BindingMode;)Lio/devconsole/api/BrowserEndpoint;
+	public static synthetic fun copy$default (Lio/devconsole/api/BrowserEndpoint;Ljava/lang/String;ILio/devconsole/api/BindingMode;ILjava/lang/Object;)Lio/devconsole/api/BrowserEndpoint;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBindingMode ()Lio/devconsole/api/BindingMode;
+	public final fun getHost ()Ljava/lang/String;
+	public final fun getPort ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/CaptureCategory : java/lang/Enum {
+	public static final field CRASHES Lio/devconsole/api/CaptureCategory;
+	public static final field Companion Lio/devconsole/api/CaptureCategory$Companion;
+	public static final field INSPECTION Lio/devconsole/api/CaptureCategory;
+	public static final field LOGS Lio/devconsole/api/CaptureCategory;
+	public static final field MOCKS Lio/devconsole/api/CaptureCategory;
+	public static final field MQTT Lio/devconsole/api/CaptureCategory;
+	public static final field NETWORK Lio/devconsole/api/CaptureCategory;
+	public static final field PUSH Lio/devconsole/api/CaptureCategory;
+	public static final field SOCKET Lio/devconsole/api/CaptureCategory;
+	public static final field STATE Lio/devconsole/api/CaptureCategory;
+	public static final fun all ()Ljava/util/Set;
+	public static final fun fromWireName (Ljava/lang/String;)Lio/devconsole/api/CaptureCategory;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWireName ()Ljava/lang/String;
+	public static final fun none ()Ljava/util/Set;
+	public static final fun of ([Lio/devconsole/api/CaptureCategory;)Ljava/util/Set;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/api/CaptureCategory;
+	public static fun values ()[Lio/devconsole/api/CaptureCategory;
+	public static final fun wireNames (Ljava/util/Set;)Ljava/util/List;
+}
+
+public final class io/devconsole/api/CaptureCategory$Companion {
+	public final fun all ()Ljava/util/Set;
+	public final fun fromWireName (Ljava/lang/String;)Lio/devconsole/api/CaptureCategory;
+	public final fun none ()Ljava/util/Set;
+	public final fun of ([Lio/devconsole/api/CaptureCategory;)Ljava/util/Set;
+	public final fun wireNames (Ljava/util/Set;)Ljava/util/List;
+}
+
+public final class io/devconsole/api/CaptureRule {
+	public static final field Companion Lio/devconsole/api/CaptureRule$Companion;
+	public static final field MAX_HOST_LENGTH I
+	public static final field MAX_PATH_PREFIX_LENGTH I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)Lio/devconsole/api/CaptureRule;
+	public static synthetic fun copy$default (Lio/devconsole/api/CaptureRule;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)Lio/devconsole/api/CaptureRule;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnabled ()Z
+	public final fun getHost ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getPathPrefix ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun matches (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z
+	public final fun normalized ()Lio/devconsole/api/CaptureRule;
+	public static final fun of (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/api/CaptureRule;
+	public static final fun of (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/api/CaptureRule;
+	public static final fun of (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/api/CaptureRule;
+	public static final fun of (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)Lio/devconsole/api/CaptureRule;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/CaptureRule$Companion {
+	public final fun of (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/api/CaptureRule;
+	public final fun of (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/api/CaptureRule;
+	public final fun of (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/api/CaptureRule;
+	public final fun of (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)Lio/devconsole/api/CaptureRule;
+	public static synthetic fun of$default (Lio/devconsole/api/CaptureRule$Companion;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)Lio/devconsole/api/CaptureRule;
+}
+
+public final class io/devconsole/api/CaptureRuleEngine {
+	public static final field Companion Lio/devconsole/api/CaptureRuleEngine$Companion;
+	public static final field MAX_RULES I
+	public fun <init> ()V
+	public fun <init> (Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun allowsCapture (Ljava/lang/String;Ljava/lang/String;)Z
+	public final fun bindPersistence (Lio/devconsole/api/CaptureRuleStore;)V
+	public final fun remove (Ljava/lang/String;)Z
+	public final fun restore (Lio/devconsole/api/CaptureRuleStore;)V
+	public final fun rules ()Ljava/util/List;
+	public final fun setEnabled (Ljava/lang/String;Z)Z
+	public final fun upsert (Lio/devconsole/api/CaptureRule;)V
+}
+
+public final class io/devconsole/api/CaptureRuleEngine$Companion {
+}
+
+public abstract interface class io/devconsole/api/CaptureRuleStore {
+	public abstract fun load ()Ljava/util/List;
+	public abstract fun save (Ljava/util/List;)V
+}
+
+public final class io/devconsole/api/ConfigValidationCode : java/lang/Enum {
+	public static final field INVALID_ANR_THRESHOLD Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_BREADCRUMB_DEPTH Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_BROWSER_CONFIGURATION Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_EVENT_BUFFER_CAPACITY Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_MAX_FRAMES_PER_THREAD Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_MAX_STACK_CHARS Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_MAX_THREADS_IN_DUMP Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_PORT_RANGE Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_REDACTION_EXPRESSION Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_RETENTION_POLICY Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_SCREENSHOT_MAX_BYTES Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_SCREENSHOT_MAX_LONGEST_EDGE Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_SESSION_POLICY Lio/devconsole/api/ConfigValidationCode;
+	public static final field INVALID_STORAGE_POLICY Lio/devconsole/api/ConfigValidationCode;
+	public static final field NO_CAPTURE_CATEGORIES_ENABLED Lio/devconsole/api/ConfigValidationCode;
+	public static final field UNSAFE_PRODUCTION_RUNTIME Lio/devconsole/api/ConfigValidationCode;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/api/ConfigValidationCode;
+	public static fun values ()[Lio/devconsole/api/ConfigValidationCode;
+}
+
+public final class io/devconsole/api/ConfigValidationError {
+	public fun <init> (Lio/devconsole/api/ConfigValidationCode;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Lio/devconsole/api/ConfigValidationCode;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Lio/devconsole/api/ConfigValidationCode;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/api/ConfigValidationError;
+	public static synthetic fun copy$default (Lio/devconsole/api/ConfigValidationError;Lio/devconsole/api/ConfigValidationCode;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/api/ConfigValidationError;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCode ()Lio/devconsole/api/ConfigValidationCode;
+	public final fun getField ()Ljava/lang/String;
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/CrashPolicy {
+	public static final field Companion Lio/devconsole/api/CrashPolicy$Companion;
+	public static final field DEFAULT_ANR_THRESHOLD_MS J
+	public static final field DEFAULT_BREADCRUMB_DEPTH I
+	public static final field DEFAULT_MAX_FRAMES_PER_THREAD I
+	public static final field DEFAULT_MAX_STACK_CHARS I
+	public static final field DEFAULT_MAX_THREADS_IN_DUMP I
+	public fun <init> ()V
+	public fun <init> (ZZJIIII)V
+	public synthetic fun <init> (ZZJIIIIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()J
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun component6 ()I
+	public final fun component7 ()I
+	public final fun copy (ZZJIIII)Lio/devconsole/api/CrashPolicy;
+	public static synthetic fun copy$default (Lio/devconsole/api/CrashPolicy;ZZJIIIIILjava/lang/Object;)Lio/devconsole/api/CrashPolicy;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAnrThresholdMs ()J
+	public final fun getAnrWatchdogEnabled ()Z
+	public final fun getBreadcrumbDepth ()I
+	public final fun getCrashCaptureEnabled ()Z
+	public final fun getMaxFramesPerThread ()I
+	public final fun getMaxStackChars ()I
+	public final fun getMaxThreadsInDump ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun validationErrors ()Ljava/util/List;
+}
+
+public final class io/devconsole/api/CrashPolicy$Companion {
+	public final fun getANR_THRESHOLD_RANGE ()Lkotlin/ranges/LongRange;
+	public final fun getBREADCRUMB_DEPTH_RANGE ()Lkotlin/ranges/IntRange;
+	public final fun getMAX_FRAMES_PER_THREAD_RANGE ()Lkotlin/ranges/IntRange;
+	public final fun getMAX_STACK_CHARS_RANGE ()Lkotlin/ranges/IntRange;
+	public final fun getMAX_THREADS_IN_DUMP_RANGE ()Lkotlin/ranges/IntRange;
+}
+
+public final class io/devconsole/api/DevConsoleConfig {
+	public static final field Companion Lio/devconsole/api/DevConsoleConfig$Companion;
+	public static final field DEFAULT_EVENT_BUFFER_CAPACITY I
+	public fun <init> ()V
+	public fun <init> (ILjava/util/List;Ljava/util/List;ZLjava/util/Set;ZLio/devconsole/security/RedactionPolicy;)V
+	public synthetic fun <init> (ILjava/util/List;Ljava/util/List;ZLjava/util/Set;ZLio/devconsole/security/RedactionPolicy;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public static final fun builder ()Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun capturesCategory (Lio/devconsole/api/CaptureCategory;)Z
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()Z
+	public final fun component5 ()Ljava/util/Set;
+	public final fun component6 ()Z
+	public final fun component7 ()Lio/devconsole/security/RedactionPolicy;
+	public final fun copy (ILjava/util/List;Ljava/util/List;ZLjava/util/Set;ZLio/devconsole/security/RedactionPolicy;)Lio/devconsole/api/DevConsoleConfig;
+	public static synthetic fun copy$default (Lio/devconsole/api/DevConsoleConfig;ILjava/util/List;Ljava/util/List;ZLjava/util/Set;ZLio/devconsole/security/RedactionPolicy;ILjava/lang/Object;)Lio/devconsole/api/DevConsoleConfig;
+	public static final fun default ()Lio/devconsole/api/DevConsoleConfig;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBrowserConfig ()Lio/devconsole/api/BrowserConfig;
+	public final fun getCaptureCategories ()Ljava/util/Set;
+	public final fun getComposerAllowedHosts ()Ljava/util/Set;
+	public final fun getComposerEnabled ()Z
+	public final fun getCrashPolicy ()Lio/devconsole/api/CrashPolicy;
+	public final fun getEditingCapabilities ()Lio/devconsole/api/EditingCapabilities;
+	public final fun getEventBufferCapacity ()I
+	public final fun getFeatureFlags ()Ljava/util/List;
+	public final fun getRedactionPolicy ()Lio/devconsole/security/RedactionPolicy;
+	public final fun getRetentionPolicy ()Lio/devconsole/api/RetentionPolicy;
+	public final fun getScreenshotPolicy ()Lio/devconsole/api/ScreenshotPolicy;
+	public final fun getSessionPolicy ()Lio/devconsole/api/SessionPolicy;
+	public final fun getStateMutationsEnabled ()Z
+	public final fun getStateProviders ()Ljava/util/List;
+	public final fun getStoragePolicy ()Lio/devconsole/api/StoragePolicy;
+	public fun hashCode ()I
+	public final fun runtimeEquivalentTo (Lio/devconsole/api/DevConsoleConfig;)Z
+	public fun toString ()Ljava/lang/String;
+	public final fun validationErrors ()Ljava/util/List;
+	public final fun validationErrors (Z)Ljava/util/List;
+	public static synthetic fun validationErrors$default (Lio/devconsole/api/DevConsoleConfig;ZILjava/lang/Object;)Ljava/util/List;
+	public final fun withBrowserConfig (Lio/devconsole/api/BrowserConfig;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withCaptureCategories (Ljava/util/Set;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withCaptureCategories ([Lio/devconsole/api/CaptureCategory;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withCrashPolicy (Lio/devconsole/api/CrashPolicy;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withEditingCapabilities (Lio/devconsole/api/EditingCapabilities;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withRetentionPolicy (Lio/devconsole/api/RetentionPolicy;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withScreenshotPolicy (Lio/devconsole/api/ScreenshotPolicy;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withSessionPolicy (Lio/devconsole/api/SessionPolicy;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withStoragePolicy (Lio/devconsole/api/StoragePolicy;)Lio/devconsole/api/DevConsoleConfig;
+}
+
+public final class io/devconsole/api/DevConsoleConfig$Builder {
+	public fun <init> ()V
+	public final fun addCaptureCategory (Lio/devconsole/api/CaptureCategory;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun addFeatureFlag (Lio/devconsole/state/FeatureFlag;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun addStateProvider (Lio/devconsole/state/StateProvider;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun browserConfig (Lio/devconsole/api/BrowserConfig;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun build ()Lio/devconsole/api/DevConsoleConfig;
+	public final fun captureCategories (Ljava/util/Set;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun composerAllowedHosts (Ljava/util/Set;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun composerEnabled (Z)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun crashPolicy (Lio/devconsole/api/CrashPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun editingCapabilities (Lio/devconsole/api/EditingCapabilities;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun eventBufferCapacity (I)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun redactionPolicy (Lio/devconsole/security/RedactionPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun retentionPolicy (Lio/devconsole/api/RetentionPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun screenshotPolicy (Lio/devconsole/api/ScreenshotPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun sessionPolicy (Lio/devconsole/api/SessionPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun stateMutationsEnabled (Z)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun storagePolicy (Lio/devconsole/api/StoragePolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
+}
+
+public final class io/devconsole/api/DevConsoleConfig$Companion {
+	public final fun builder ()Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun default ()Lio/devconsole/api/DevConsoleConfig;
+}
+
+public abstract interface class io/devconsole/api/DevConsoleFacadeProvider {
+	public abstract fun accessInfo ()Lio/devconsole/api/AccessInfo;
+	public abstract fun captureScreenshot (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun createInspectorIntent (Landroid/content/Context;)Landroid/content/Intent;
+	public abstract fun endpoint ()Lio/devconsole/api/BrowserEndpoint;
+	public abstract fun featureFlagStringValue (Ljava/lang/String;)Ljava/lang/String;
+	public abstract fun featureFlagValue (Ljava/lang/String;)Z
+	public abstract fun initialize (Landroid/app/Application;Lio/devconsole/api/DevConsoleConfig;)Lio/devconsole/api/InitResult;
+	public abstract fun logRecorder ()Lio/devconsole/logs/LogRecorder;
+	public abstract fun mockEngine ()Lio/devconsole/mocks/MockEngine;
+	public abstract fun networkRecorder ()Lio/devconsole/network/NetworkTransactionRecorder;
+	public abstract fun openInspector (Landroid/content/Context;)Lio/devconsole/api/InspectorOpenResult;
+	public abstract fun recordPush (Lio/devconsole/push/PushInput;)Lio/devconsole/push/PushEvent;
+	public abstract fun registerStateProvider (Lio/devconsole/state/StateProvider;)Z
+	public abstract fun socketRecorder ()Lio/devconsole/socket/SocketRecorder;
+	public abstract fun startBrowser (Lio/devconsole/api/StartRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun state ()Lkotlinx/coroutines/flow/StateFlow;
+	public abstract fun stop (Lio/devconsole/api/StopReason;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract class io/devconsole/api/DevConsoleState {
+	public static final field Companion Lio/devconsole/api/DevConsoleState$Companion;
+}
+
+public final class io/devconsole/api/DevConsoleState$Companion {
+	public final fun getAll ()Ljava/util/Set;
+}
+
+public final class io/devconsole/api/DevConsoleState$DisabledForBuild : io/devconsole/api/DevConsoleState {
+	public static final field INSTANCE Lio/devconsole/api/DevConsoleState$DisabledForBuild;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/DevConsoleState$Failed : io/devconsole/api/DevConsoleState {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/api/DevConsoleState$Failed;
+	public static synthetic fun copy$default (Lio/devconsole/api/DevConsoleState$Failed;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/api/DevConsoleState$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/DevConsoleState$Initialized : io/devconsole/api/DevConsoleState {
+	public static final field INSTANCE Lio/devconsole/api/DevConsoleState$Initialized;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/DevConsoleState$PermissionRequired : io/devconsole/api/DevConsoleState {
+	public static final field INSTANCE Lio/devconsole/api/DevConsoleState$PermissionRequired;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/DevConsoleState$Running : io/devconsole/api/DevConsoleState {
+	public static final field INSTANCE Lio/devconsole/api/DevConsoleState$Running;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/DevConsoleState$Starting : io/devconsole/api/DevConsoleState {
+	public static final field INSTANCE Lio/devconsole/api/DevConsoleState$Starting;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/DevConsoleState$Stopped : io/devconsole/api/DevConsoleState {
+	public static final field INSTANCE Lio/devconsole/api/DevConsoleState$Stopped;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/DevConsoleState$Stopping : io/devconsole/api/DevConsoleState {
+	public static final field INSTANCE Lio/devconsole/api/DevConsoleState$Stopping;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/DevConsoleState$Uninitialized : io/devconsole/api/DevConsoleState {
+	public static final field INSTANCE Lio/devconsole/api/DevConsoleState$Uninitialized;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/EditingCapabilities {
+	public static final field Companion Lio/devconsole/api/EditingCapabilities$Companion;
+	public fun <init> ()V
+	public fun <init> (ZZZZZZZ)V
+	public synthetic fun <init> (ZZZZZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public static final fun builder ()Lio/devconsole/api/EditingCapabilities$Builder;
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun component6 ()Z
+	public final fun component7 ()Z
+	public final fun copy (ZZZZZZZ)Lio/devconsole/api/EditingCapabilities;
+	public static synthetic fun copy$default (Lio/devconsole/api/EditingCapabilities;ZZZZZZZILjava/lang/Object;)Lio/devconsole/api/EditingCapabilities;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCaptureRules ()Z
+	public final fun getDatabase ()Z
+	public final fun getFeatureFlags ()Z
+	public final fun getFiles ()Z
+	public final fun getMocks ()Z
+	public final fun getPreferences ()Z
+	public final fun getRequestExecution ()Z
+	public fun hashCode ()I
+	public static final fun readOnly ()Lio/devconsole/api/EditingCapabilities;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/EditingCapabilities$Builder {
+	public fun <init> ()V
+	public final fun build ()Lio/devconsole/api/EditingCapabilities;
+	public final fun captureRules (Z)Lio/devconsole/api/EditingCapabilities$Builder;
+	public final fun database (Z)Lio/devconsole/api/EditingCapabilities$Builder;
+	public final fun featureFlags (Z)Lio/devconsole/api/EditingCapabilities$Builder;
+	public final fun files (Z)Lio/devconsole/api/EditingCapabilities$Builder;
+	public final fun mocks (Z)Lio/devconsole/api/EditingCapabilities$Builder;
+	public final fun preferences (Z)Lio/devconsole/api/EditingCapabilities$Builder;
+	public final fun requestExecution (Z)Lio/devconsole/api/EditingCapabilities$Builder;
+}
+
+public final class io/devconsole/api/EditingCapabilities$Companion {
+	public final fun builder ()Lio/devconsole/api/EditingCapabilities$Builder;
+	public final fun readOnly ()Lio/devconsole/api/EditingCapabilities;
+}
+
+public final class io/devconsole/api/EventEnvelope {
+	public static final field CURRENT_SCHEMA_VERSION I
+	public static final field Companion Lio/devconsole/api/EventEnvelope$Companion;
+	public fun <init> (Ljava/util/UUID;Ljava/util/UUID;Ljava/lang/String;Ljava/lang/String;JJJLio/devconsole/api/EventSeverity;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;I)V
+	public synthetic fun <init> (Ljava/util/UUID;Ljava/util/UUID;Ljava/lang/String;Ljava/lang/String;JJJLio/devconsole/api/EventSeverity;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/UUID;
+	public final fun component10 ()Ljava/lang/String;
+	public final fun component11 ()Ljava/util/Map;
+	public final fun component12 ()Ljava/lang/String;
+	public final fun component13 ()I
+	public final fun component2 ()Ljava/util/UUID;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()J
+	public final fun component6 ()J
+	public final fun component7 ()J
+	public final fun component8 ()Lio/devconsole/api/EventSeverity;
+	public final fun component9 ()Ljava/lang/String;
+	public final fun copy (Ljava/util/UUID;Ljava/util/UUID;Ljava/lang/String;Ljava/lang/String;JJJLio/devconsole/api/EventSeverity;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;I)Lio/devconsole/api/EventEnvelope;
+	public static synthetic fun copy$default (Lio/devconsole/api/EventEnvelope;Ljava/util/UUID;Ljava/util/UUID;Ljava/lang/String;Ljava/lang/String;JJJLio/devconsole/api/EventSeverity;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;IILjava/lang/Object;)Lio/devconsole/api/EventEnvelope;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCorrelationId ()Ljava/lang/String;
+	public final fun getId ()Ljava/util/UUID;
+	public final fun getMonotonicNanos ()J
+	public final fun getPayloadRef ()Ljava/lang/String;
+	public final fun getPluginId ()Ljava/lang/String;
+	public final fun getSchemaVersion ()I
+	public final fun getSequence ()J
+	public final fun getSessionId ()Ljava/util/UUID;
+	public final fun getSeverity ()Lio/devconsole/api/EventSeverity;
+	public final fun getSummary ()Ljava/lang/String;
+	public final fun getTags ()Ljava/util/Map;
+	public final fun getTimestampEpochMs ()J
+	public final fun getType ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/EventEnvelope$Companion {
+}
+
+public final class io/devconsole/api/EventSeverity : java/lang/Enum {
+	public static final field DEBUG Lio/devconsole/api/EventSeverity;
+	public static final field ERROR Lio/devconsole/api/EventSeverity;
+	public static final field INFO Lio/devconsole/api/EventSeverity;
+	public static final field WARN Lio/devconsole/api/EventSeverity;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/api/EventSeverity;
+	public static fun values ()[Lio/devconsole/api/EventSeverity;
+}
+
+public final class io/devconsole/api/InMemoryCaptureRuleStore : io/devconsole/api/CaptureRuleStore {
+	public fun <init> ()V
+	public fun <init> (Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun load ()Ljava/util/List;
+	public fun save (Ljava/util/List;)V
+}
+
+public abstract interface class io/devconsole/api/InitResult {
+}
+
+public final class io/devconsole/api/InitResult$Conflict : io/devconsole/api/InitResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/api/InitResult$Conflict;
+	public static synthetic fun copy$default (Lio/devconsole/api/InitResult$Conflict;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/api/InitResult$Conflict;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/InitResult$Disabled : io/devconsole/api/InitResult {
+	public static final field INSTANCE Lio/devconsole/api/InitResult$Disabled;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/InitResult$ExistingRuntime : io/devconsole/api/InitResult {
+	public static final field INSTANCE Lio/devconsole/api/InitResult$ExistingRuntime;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/InitResult$Failed : io/devconsole/api/InitResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/api/InitResult$Failed;
+	public static synthetic fun copy$default (Lio/devconsole/api/InitResult$Failed;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/api/InitResult$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/InitResult$Initialized : io/devconsole/api/InitResult {
+	public static final field INSTANCE Lio/devconsole/api/InitResult$Initialized;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/InitResult$InvalidConfiguration : io/devconsole/api/InitResult {
+	public fun <init> (Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;)Lio/devconsole/api/InitResult$InvalidConfiguration;
+	public static synthetic fun copy$default (Lio/devconsole/api/InitResult$InvalidConfiguration;Ljava/util/List;ILjava/lang/Object;)Lio/devconsole/api/InitResult$InvalidConfiguration;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getErrors ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/api/InspectorOpenResult {
+}
+
+public final class io/devconsole/api/InspectorOpenResult$DisabledForBuild : io/devconsole/api/InspectorOpenResult {
+	public static final field INSTANCE Lio/devconsole/api/InspectorOpenResult$DisabledForBuild;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/InspectorOpenResult$Failed : io/devconsole/api/InspectorOpenResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/api/InspectorOpenResult$Failed;
+	public static synthetic fun copy$default (Lio/devconsole/api/InspectorOpenResult$Failed;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/api/InspectorOpenResult$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/InspectorOpenResult$NotInitialized : io/devconsole/api/InspectorOpenResult {
+	public static final field INSTANCE Lio/devconsole/api/InspectorOpenResult$NotInitialized;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/InspectorOpenResult$Opened : io/devconsole/api/InspectorOpenResult {
+	public static final field INSTANCE Lio/devconsole/api/InspectorOpenResult$Opened;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/RetentionPolicy {
+	public static final field Companion Lio/devconsole/api/RetentionPolicy$Companion;
+	public static final field DEFAULT_MAX_AGE_MS J
+	public static final field DEFAULT_MAX_BYTES J
+	public static final field DEFAULT_MAX_SESSIONS I
+	public fun <init> ()V
+	public fun <init> (IJJ)V
+	public synthetic fun <init> (IJJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()J
+	public final fun component3 ()J
+	public final fun copy (IJJ)Lio/devconsole/api/RetentionPolicy;
+	public static synthetic fun copy$default (Lio/devconsole/api/RetentionPolicy;IJJILjava/lang/Object;)Lio/devconsole/api/RetentionPolicy;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxAgeMs ()J
+	public final fun getMaxBytes ()J
+	public final fun getMaxSessions ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun validationErrors ()Ljava/util/List;
+}
+
+public final class io/devconsole/api/RetentionPolicy$Companion {
+}
+
+public final class io/devconsole/api/ScreenshotPolicy {
+	public static final field Companion Lio/devconsole/api/ScreenshotPolicy$Companion;
+	public static final field DEFAULT_MAX_BYTES J
+	public static final field DEFAULT_MAX_LONGEST_EDGE_PX I
+	public fun <init> ()V
+	public fun <init> (ZIJ)V
+	public synthetic fun <init> (ZIJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()I
+	public final fun component3 ()J
+	public final fun copy (ZIJ)Lio/devconsole/api/ScreenshotPolicy;
+	public static synthetic fun copy$default (Lio/devconsole/api/ScreenshotPolicy;ZIJILjava/lang/Object;)Lio/devconsole/api/ScreenshotPolicy;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnabled ()Z
+	public final fun getMaxBytes ()J
+	public final fun getMaxLongestEdgePx ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun validationErrors ()Ljava/util/List;
+}
+
+public final class io/devconsole/api/ScreenshotPolicy$Companion {
+	public final fun getMAX_BYTES_RANGE ()Lkotlin/ranges/LongRange;
+	public final fun getMAX_LONGEST_EDGE_PX_RANGE ()Lkotlin/ranges/IntRange;
+}
+
+public abstract interface class io/devconsole/api/ScreenshotResult {
+}
+
+public final class io/devconsole/api/ScreenshotResult$Captured : io/devconsole/api/ScreenshotResult {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;III)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;III)Lio/devconsole/api/ScreenshotResult$Captured;
+	public static synthetic fun copy$default (Lio/devconsole/api/ScreenshotResult$Captured;Ljava/lang/String;Ljava/lang/String;IIIILjava/lang/Object;)Lio/devconsole/api/ScreenshotResult$Captured;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttachmentId ()Ljava/lang/String;
+	public final fun getByteCount ()I
+	public final fun getEventId ()Ljava/lang/String;
+	public final fun getHeightPx ()I
+	public final fun getWidthPx ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/ScreenshotResult$Disabled : io/devconsole/api/ScreenshotResult {
+	public static final field INSTANCE Lio/devconsole/api/ScreenshotResult$Disabled;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/ScreenshotResult$DisabledForBuild : io/devconsole/api/ScreenshotResult {
+	public static final field INSTANCE Lio/devconsole/api/ScreenshotResult$DisabledForBuild;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/ScreenshotResult$Failed : io/devconsole/api/ScreenshotResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/api/ScreenshotResult$Failed;
+	public static synthetic fun copy$default (Lio/devconsole/api/ScreenshotResult$Failed;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/api/ScreenshotResult$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/ScreenshotResult$NoForegroundActivity : io/devconsole/api/ScreenshotResult {
+	public static final field INSTANCE Lio/devconsole/api/ScreenshotResult$NoForegroundActivity;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/ScreenshotResult$SecureWindow : io/devconsole/api/ScreenshotResult {
+	public static final field INSTANCE Lio/devconsole/api/ScreenshotResult$SecureWindow;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/SessionPolicy {
+	public static final field Companion Lio/devconsole/api/SessionPolicy$Companion;
+	public static final field DEFAULT_MAX_AUTHENTICATED_SESSIONS I
+	public fun <init> ()V
+	public fun <init> (I)V
+	public synthetic fun <init> (IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun copy (I)Lio/devconsole/api/SessionPolicy;
+	public static synthetic fun copy$default (Lio/devconsole/api/SessionPolicy;IILjava/lang/Object;)Lio/devconsole/api/SessionPolicy;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxAuthenticatedSessions ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/SessionPolicy$Companion {
+}
+
+public final class io/devconsole/api/StartRequest {
+	public fun <init> ()V
+	public fun <init> (Lio/devconsole/api/BindingMode;Lkotlin/ranges/IntRange;)V
+	public synthetic fun <init> (Lio/devconsole/api/BindingMode;Lkotlin/ranges/IntRange;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lio/devconsole/api/BindingMode;
+	public final fun component2 ()Lkotlin/ranges/IntRange;
+	public final fun copy (Lio/devconsole/api/BindingMode;Lkotlin/ranges/IntRange;)Lio/devconsole/api/StartRequest;
+	public static synthetic fun copy$default (Lio/devconsole/api/StartRequest;Lio/devconsole/api/BindingMode;Lkotlin/ranges/IntRange;ILjava/lang/Object;)Lio/devconsole/api/StartRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBindingMode ()Lio/devconsole/api/BindingMode;
+	public final fun getPortRange ()Lkotlin/ranges/IntRange;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun validationErrors ()Ljava/util/List;
+}
+
+public abstract interface class io/devconsole/api/StartResult {
+}
+
+public final class io/devconsole/api/StartResult$DisabledForBuild : io/devconsole/api/StartResult {
+	public static final field INSTANCE Lio/devconsole/api/StartResult$DisabledForBuild;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/StartResult$Failed : io/devconsole/api/StartResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/api/StartResult$Failed;
+	public static synthetic fun copy$default (Lio/devconsole/api/StartResult$Failed;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/api/StartResult$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/StartResult$InvalidConfiguration : io/devconsole/api/StartResult {
+	public fun <init> (Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;)Lio/devconsole/api/StartResult$InvalidConfiguration;
+	public static synthetic fun copy$default (Lio/devconsole/api/StartResult$InvalidConfiguration;Ljava/util/List;ILjava/lang/Object;)Lio/devconsole/api/StartResult$InvalidConfiguration;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getErrors ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/StartResult$NoEligibleNetwork : io/devconsole/api/StartResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/api/StartResult$NoEligibleNetwork;
+	public static synthetic fun copy$default (Lio/devconsole/api/StartResult$NoEligibleNetwork;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/api/StartResult$NoEligibleNetwork;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDetails ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/StartResult$NotInitialized : io/devconsole/api/StartResult {
+	public static final field INSTANCE Lio/devconsole/api/StartResult$NotInitialized;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/StartResult$PermissionRequired : io/devconsole/api/StartResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/api/StartResult$PermissionRequired;
+	public static synthetic fun copy$default (Lio/devconsole/api/StartResult$PermissionRequired;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/api/StartResult$PermissionRequired;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPermission ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/StartResult$PortUnavailable : io/devconsole/api/StartResult {
+	public fun <init> (Lkotlin/ranges/IntRange;)V
+	public final fun component1 ()Lkotlin/ranges/IntRange;
+	public final fun copy (Lkotlin/ranges/IntRange;)Lio/devconsole/api/StartResult$PortUnavailable;
+	public static synthetic fun copy$default (Lio/devconsole/api/StartResult$PortUnavailable;Lkotlin/ranges/IntRange;ILjava/lang/Object;)Lio/devconsole/api/StartResult$PortUnavailable;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttempted ()Lkotlin/ranges/IntRange;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/StartResult$ServerUnavailable : io/devconsole/api/StartResult {
+	public static final field INSTANCE Lio/devconsole/api/StartResult$ServerUnavailable;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/StartResult$Started : io/devconsole/api/StartResult {
+	public fun <init> (Lio/devconsole/api/BrowserEndpoint;Lio/devconsole/api/AccessInfo;)V
+	public final fun component1 ()Lio/devconsole/api/BrowserEndpoint;
+	public final fun component2 ()Lio/devconsole/api/AccessInfo;
+	public final fun copy (Lio/devconsole/api/BrowserEndpoint;Lio/devconsole/api/AccessInfo;)Lio/devconsole/api/StartResult$Started;
+	public static synthetic fun copy$default (Lio/devconsole/api/StartResult$Started;Lio/devconsole/api/BrowserEndpoint;Lio/devconsole/api/AccessInfo;ILjava/lang/Object;)Lio/devconsole/api/StartResult$Started;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAccess ()Lio/devconsole/api/AccessInfo;
+	public final fun getEndpoint ()Lio/devconsole/api/BrowserEndpoint;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/api/StopReason {
+}
+
+public final class io/devconsole/api/StopReason$ApplicationTerminated : io/devconsole/api/StopReason {
+	public static final field INSTANCE Lio/devconsole/api/StopReason$ApplicationTerminated;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/StopReason$Failure : io/devconsole/api/StopReason {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/api/StopReason$Failure;
+	public static synthetic fun copy$default (Lio/devconsole/api/StopReason$Failure;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/api/StopReason$Failure;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/StopReason$UserRequested : io/devconsole/api/StopReason {
+	public static final field INSTANCE Lio/devconsole/api/StopReason$UserRequested;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/StoragePolicy {
+	public static final field Companion Lio/devconsole/api/StoragePolicy$Companion;
+	public static final field DEFAULT_MAX_AGE_MS J
+	public static final field DEFAULT_MAX_BYTES J
+	public static final field DEFAULT_MAX_NETWORK_TRANSACTIONS I
+	public static final field DEFAULT_MAX_TIMELINE_EVENTS I
+	public fun <init> ()V
+	public fun <init> (JJII)V
+	public synthetic fun <init> (JJIIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()J
+	public final fun component2 ()J
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun copy (JJII)Lio/devconsole/api/StoragePolicy;
+	public static synthetic fun copy$default (Lio/devconsole/api/StoragePolicy;JJIIILjava/lang/Object;)Lio/devconsole/api/StoragePolicy;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxAgeMs ()J
+	public final fun getMaxBytes ()J
+	public final fun getMaxNetworkTransactions ()I
+	public final fun getMaxTimelineEvents ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/StoragePolicy$Companion {
+}
+

@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>DevConsole</title>
+  <link rel="stylesheet" href="/assets/dashboard.css">
+</head>
+<body>
+<a class="skip-link" href="#mainContent">Skip to inspector content</a>
+<svg class="dc-sprite" aria-hidden="true" focusable="false">
+  <symbol id="dc-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7"/></symbol>
+  <symbol id="dc-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="dc-network" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h11a4 4 0 0 1 4 4v1"/><path d="M16 21l4-4-4-4"/><path d="M20 17H9a4 4 0 0 1-4-4v-1"/></symbol>
+  <symbol id="dc-sockets" viewBox="0 0 24 24"><path d="M9 2v6M15 2v6"/><path d="M7 8h10v3a5 5 0 0 1-10 0V8Z"/><path d="M12 16v6"/></symbol>
+  <symbol id="dc-push" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.5 20a1.8 1.8 0 0 0 3 0"/></symbol>
+  <symbol id="dc-activity" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 15 2.5-9H21"/></symbol>
+  <symbol id="dc-health" viewBox="0 0 24 24"><path d="M12 21s-7-4.35-9.5-8.5C.5 8 3 4.5 6.5 4.5c2 0 3.3 1 4 2 .7-1 2-2 4-2 3.5 0 6 3.5 4 8-2.5 4.15-6.5 8.5-6.5 8.5Z"/></symbol>
+  <symbol id="dc-composer" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></symbol>
+  <symbol id="dc-mocks" viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4"/><path d="M8.5 11.5s1 1.5 3.5 1.5 3.5-1.5 3.5-1.5"/><circle cx="9" cy="8.5" r=".6" fill="currentColor" stroke="none"/><circle cx="15" cy="8.5" r=".6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="dc-funnel" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4-2v-4Z"/></symbol>
+  <symbol id="dc-flag" viewBox="0 0 24 24"><path d="M5 3v18"/><path d="M5 4h11l-2 4 2 4H5Z"/></symbol>
+  <symbol id="dc-sliders" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h13M21 18v0"/><circle cx="14" cy="6" r="2"/><circle cx="7" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+  <symbol id="dc-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+  <symbol id="dc-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="dc-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6Z"/></symbol>
+  <symbol id="dc-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="dc-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="dc-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/></symbol>
+  <symbol id="dc-pencil" viewBox="0 0 24 24"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+  <symbol id="dc-check" viewBox="0 0 24 24"><path d="m5 12 5 5L20 6"/></symbol>
+  <symbol id="dc-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="dc-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+  <symbol id="dc-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.3M21 3v5h-5"/></symbol>
+  <symbol id="dc-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 19h16"/></symbol>
+  <symbol id="dc-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+  <symbol id="dc-star" viewBox="0 0 24 24"><path d="m12 3 2.6 5.6 6.2.6-4.6 4.2 1.3 6.1L12 16.9l-5.5 2.6 1.3-6.1L3.2 9.2l6.2-.6Z"/></symbol>
+  <symbol id="dc-keyboard" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></symbol>
+  <symbol id="dc-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="dc-moon" viewBox="0 0 24 24"><path d="M20 15A8 8 0 0 1 9 4a8 8 0 1 0 11 11Z"/></symbol>
+  <symbol id="dc-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="dc-pause" viewBox="0 0 24 24"><rect x="7" y="5" width="3.5" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="3.5" height="14" rx="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="dc-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17.5h.01"/></symbol>
+  <symbol id="dc-send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></symbol>
+  <symbol id="dc-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="dc-sidebar" viewBox="0 0 16 16"><path stroke-width="1.4" d="M3.5 3h9A1.5 1.5 0 0 1 14 4.5v7A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-7A1.5 1.5 0 0 1 3.5 3ZM6.2 3v10"/></symbol>
+  <symbol id="dc-chevron" viewBox="0 0 16 16"><path stroke-width="1.4" d="M4 6.5 8 10.5l4-4"/></symbol>
+  <symbol id="dc-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="dc-expand" viewBox="0 0 24 24"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6"/></symbol>
+  <symbol id="dc-collapse" viewBox="0 0 24 24"><path d="M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6"/></symbol>
+  <symbol id="dc-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="dc-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></symbol>
+  <symbol id="dc-plug" viewBox="0 0 24 24"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-10 0V8Z"/><path d="M12 16v6"/></symbol>
+  <symbol id="dc-camera" viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-2h7l1 2H18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+  <symbol id="dc-bug" viewBox="0 0 24 24"><path d="M9 8h6M8 12h8M8 16h8"/><rect x="7" y="6" width="10" height="14" rx="4"/><path d="M12 6V4M6 9 4 7M18 9l2-2M6 15l-2 1M18 15l2 1"/></symbol>
+</svg>
+
+<header class="topbar">
+  <button type="button" class="rail-toggle" id="railToggle" aria-pressed="false" title="Hide the view list and give the content full width (\)"><svg class="ic" aria-hidden="true"><use href="#dc-sidebar"/></svg></button>
+  <div class="brand">
+    <span class="brand-logo"><svg class="ic brand-mark" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" stroke="currentColor" stroke-opacity=".35"/><circle cx="11" cy="11" r="6" stroke="currentColor" stroke-opacity=".6"/><circle cx="11" cy="11" r="2.4" fill="currentColor" stroke="none"/></svg></span>
+    <span class="brand-name">DEVCONSOLE</span>
+  </div>
+  <div class="topbar-divider"></div>
+  <div class="session-pill">
+    <span class="dot" id="lamp"></span>
+    <span class="label" id="status" title="Open DevConsole on the device, tap More, then scan the QR or copy the link — it shows on screen, never in logcat">Open DevConsole on device → More → scan the QR</span>
+  </div>
+  <div class="stream-seg" role="group" aria-label="Live tail control">
+    <button type="button" id="streamLive" title="Record live events (p)" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#dc-record"/></svg><span class="stream-seg-label">LIVE</span></button>
+    <button type="button" id="streamPaused" title="Pause the stream (p)" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#dc-pause"/></svg><span class="stream-seg-label">PAUSED</span></button>
+  </div>
+  <span class="host-line" id="hostLine" title="The device's More screen shows the connect QR and an 8-character, single-use code">Not connected — see the device's More screen for the connect QR</span>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-actions">
+    <button type="button" class="icon-btn" id="captureScreenshot" title="Capture a screenshot of the device's foreground screen — off by default; the host enables it via screenshotPolicy.enabled" aria-label="Capture screenshot" disabled><svg class="ic" aria-hidden="true"><use href="#dc-camera"/></svg></button>
+    <button type="button" class="icon-btn" id="quickExport" title="Export session ZIP" aria-label="Export session ZIP" disabled><svg class="ic" aria-hidden="true"><use href="#dc-download"/></svg></button>
+    <button type="button" class="icon-btn" id="modeToggle" title="Advanced mode on/off (a)" aria-pressed="false" aria-label="Advanced mode on/off"><svg class="ic" aria-hidden="true"><use href="#dc-expand"/></svg></button>
+    <button type="button" class="icon-btn" id="shortcutsBtn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><svg class="ic" aria-hidden="true"><use href="#dc-keyboard"/></svg></button>
+    <button type="button" class="icon-btn" id="themeToggle" title="Toggle theme" aria-label="Toggle theme"><svg class="ic" aria-hidden="true"><use href="#dc-sun"/></svg></button>
+  </div>
+</header>
+
+<div class="workspace">
+  <nav class="rail" id="viewNav" aria-label="Inspector views">
+    <div class="rail-group">
+      <div class="rail-group-label"><span class="text">Workbench</span><span class="rule"></span></div>
+      <button type="button" id="viewOverview" class="active" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#dc-grid"/></svg><span class="rail-name">Overview</span></button>
+    </div>
+    <div class="rail-group">
+      <div class="rail-group-label"><span class="text">Traffic</span><span class="rule"></span></div>
+      <button type="button" id="viewNetwork"><svg class="ic" aria-hidden="true"><use href="#dc-network"/></svg><span class="rail-name">Network</span><span class="rail-count" id="navCountNetwork">0</span></button>
+      <button type="button" id="viewSockets"><svg class="ic" aria-hidden="true"><use href="#dc-sockets"/></svg><span class="rail-name">WebSockets</span><span class="rail-count" id="navCountSockets">0</span></button>
+    </div>
+    <div class="rail-group">
+      <div class="rail-group-label"><span class="text">Signals</span><span class="rule"></span></div>
+      <button type="button" id="viewTimeline"><svg class="ic" aria-hidden="true"><use href="#dc-activity"/></svg><span class="rail-name">Timeline</span><span class="rail-count" id="navCountTimeline">0</span></button>
+      <button type="button" id="viewCrashes"><svg class="ic" aria-hidden="true"><use href="#dc-bug"/></svg><span class="rail-name">Crashes</span><span class="rail-count" id="navCountCrashes">0</span></button>
+      <button type="button" id="viewPush"><svg class="ic" aria-hidden="true"><use href="#dc-push"/></svg><span class="rail-name">Push</span><span class="rail-count" id="navCountPush">0</span></button>
+      <button type="button" id="viewSdkHealth"><svg class="ic" aria-hidden="true"><use href="#dc-health"/></svg><span class="rail-name">SDK Health</span></button>
+    </div>
+    <div class="rail-group">
+      <div class="rail-group-label"><span class="text">Control</span><span class="rule"></span></div>
+      <button type="button" id="viewComposer"><svg class="ic" aria-hidden="true"><use href="#dc-composer"/></svg><span class="rail-name">Composer</span></button>
+      <button type="button" id="viewMocks"><svg class="ic" aria-hidden="true"><use href="#dc-mocks"/></svg><span class="rail-name">Mocks</span></button>
+      <button type="button" id="viewCaptureRules"><svg class="ic" aria-hidden="true"><use href="#dc-funnel"/></svg><span class="rail-name">Capture rules</span><span class="rail-count" id="navCountCaptureRules">0</span></button>
+    </div>
+    <div class="rail-group" id="railGroupData">
+      <div class="rail-group-label"><span class="text">Data</span><span class="rule"></span></div>
+      <button type="button" id="viewState"><svg class="ic" aria-hidden="true"><use href="#dc-flag"/></svg><span class="rail-name">State &amp; Flags</span></button>
+      <button type="button" id="viewPreferences"><svg class="ic" aria-hidden="true"><use href="#dc-sliders"/></svg><span class="rail-name">Preferences</span></button>
+      <button type="button" id="viewDatabase"><svg class="ic" aria-hidden="true"><use href="#dc-database"/></svg><span class="rail-name">Database</span></button>
+      <button type="button" id="viewFiles"><svg class="ic" aria-hidden="true"><use href="#dc-folder"/></svg><span class="rail-name">Files</span></button>
+    </div>
+    <div class="rail-group">
+      <div class="rail-group-label"><span class="text">Report</span><span class="rule"></span></div>
+      <button type="button" id="viewEvidence"><svg class="ic" aria-hidden="true"><use href="#dc-flag"/></svg><span class="rail-name">Evidence tray</span><span class="rail-count" id="navCountEvidence">0</span></button>
+      <button type="button" id="viewSession"><svg class="ic" aria-hidden="true"><use href="#dc-shield"/></svg><span class="rail-name">Session &amp; Security</span></button>
+    </div>
+    <div class="rail-group rail-group-advanced" id="railGroupAdvanced" hidden>
+      <button type="button" class="rail-group-label rail-adv-toggle" id="railAdvancedToggle" aria-expanded="false" aria-controls="railAdvancedBody">
+        <span class="text">Advanced</span><span class="rule"></span><svg class="ic ic-sm rail-adv-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>
+      </button>
+      <div id="railAdvancedBody" hidden></div>
+    </div>
+    <div class="rail-shortcuts">
+      <div class="rail-shortcuts-title">Shortcuts</div>
+      <div class="rail-shortcuts-grid">
+        <div><span class="key">/</span> filter &nbsp;<span class="key">p</span> pause</div>
+        <div><span class="key">t</span> theme &nbsp;<span class="key">?</span> all shortcuts</div>
+      </div>
+    </div>
+  </nav>
+
+  <main id="mainContent" tabindex="-1">
+   <div class="main-inner">
+    <!-- OVERVIEW -->
+    <section class="view active" id="overviewView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">Overview</h1><span class="view-badge" id="overviewBadge"></span></div>
+        <p class="view-hint">Session, traffic health, and the latest signals for this debug build.</p>
+      </div>
+      <div id="overviewCrashBanner" hidden></div>
+      <div class="metrics-strip" id="overviewMetrics"></div>
+      <div id="overviewCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-lock"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR, or paste the session code below to inspect this session.</div></div></div>
+    </section>
+
+    <!-- TIMELINE -->
+    <section class="view" id="timelineView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">Timeline</h1><span class="view-badge" id="timelineBadge"></span></div>
+        <p class="view-hint">Unified event tail across network, sockets, push, mocks, and system signals.</p>
+      </div>
+      <div class="metrics-strip" id="timelineMetrics"></div>
+      <div class="toolbar">
+        <label class="field search-field"><span>Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="search" placeholder="summary, type, source…"></span></label>
+        <div class="toolbar-group-stack">
+          <span class="toolbar-group-label">Level</span>
+          <div class="seg" id="timelineSeveritySeg" role="group" aria-label="Filter by severity">
+            <button type="button" class="active" data-value="">All</button>
+            <button type="button" data-value="0">DBG</button>
+            <button type="button" data-value="1">INF</button>
+            <button type="button" data-value="2">WRN</button>
+            <button type="button" data-value="3">ERR</button>
+          </div>
+        </div>
+        <div class="toolbar-group-stack" id="timelineSourceGroup">
+          <span class="toolbar-group-label">Source</span>
+          <div class="seg" id="timelineSourceSeg" role="group" aria-label="Filter by source"></div>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <button type="button" id="timelineBookmarkOnly" title="Show only bookmarked events" aria-pressed="false"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-star"/></svg>Bookmarked only</button>
+      </div>
+      <div class="applied-filters" id="timelineChips" hidden></div>
+      <div class="split-shell">
+        <div class="list-pane">
+          <div class="list-head">
+            <span class="col-badge">Level</span><span class="col-main">Summary</span><span class="col-duration">Type</span><span class="col-status">Time</span><span class="col-flag"></span>
+          </div>
+          <div class="list-body" id="events" aria-label="Events"><div class="empty-state empty-connect">
+            <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-activity"/></svg>
+            <div class="empty-title">Not connected yet</div>
+            <div class="empty-sub">The unified event tail appears here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code.</div>
+            <ul class="connect-steps">
+              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential — a bare <code class="inline-code">http://host:port/</code> address alone stays unauthenticated forever.</li>
+              <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb reverse tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
+              <li>Scan the QR, or paste the code into <strong>Overview</strong> — either connects this browser.</li>
+            </ul>
+          </div></div>
+          <div class="list-foot"><span id="timelineFootLeft"></span><span id="timelineFootRight"></span></div>
+          <div class="pager"><button type="button" id="timelineNewest">Newest</button><button type="button" id="timelineOlder" disabled>Older</button></div>
+        </div>
+        <div class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize list and detail panes" tabindex="0" title="Drag to resize — drag past the edge to hide a pane. Arrow keys resize (and restore a hidden pane), Home hides the list, End hides the detail, double-click resets"></div>
+        <aside class="detail-pane-v2" id="eventDetail">
+          <div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-activity"/></svg><div class="empty-title">No event selected</div><div class="empty-sub">Select a timeline event from the list to inspect it.</div></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- NETWORK -->
+    <section class="view" id="networkView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">Network</h1><span class="view-badge" id="networkBadge"></span></div>
+        <p class="view-hint">Full request and response — headers, payload, body, timing — side by side. Search spans every field.</p>
+      </div>
+      <div class="metrics-strip" id="networkMetrics"></div>
+      <div class="toolbar">
+        <label class="field search-field"><span>Search captures</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="networkSearch" placeholder="host, path, method, status…"></span></label>
+        <div class="toolbar-group-stack">
+          <span class="toolbar-group-label">Status</span>
+          <div class="seg" id="networkStatusSeg" role="group" aria-label="Filter by status class">
+            <button type="button" class="active" data-value="">All</button>
+            <button type="button" data-value="2xx">2xx</button>
+            <button type="button" data-value="3xx">3xx</button>
+            <button type="button" data-value="4xx">4xx</button>
+            <button type="button" data-value="5xx">5xx</button>
+            <button type="button" data-value="fail">fail</button>
+          </div>
+        </div>
+        <div class="toolbar-group-stack" id="networkMethodGroup">
+          <span class="toolbar-group-label">Method</span>
+          <div class="seg" id="networkMethodSeg" role="group" aria-label="Filter by method">
+            <button type="button" class="active" data-value="">ALL</button>
+            <button type="button" data-value="GET">GET</button>
+            <button type="button" data-value="POST">POST</button>
+            <button type="button" data-value="PUT">PUT</button>
+            <button type="button" data-value="PATCH">PATCH</button>
+            <button type="button" data-value="DELETE">DEL</button>
+          </div>
+        </div>
+        <div class="drop" id="networkHostDrop"></div>
+        <div class="toolbar-spacer"></div>
+        <button type="button" id="networkToggleHost" title="Show or hide the host on every row — the full URL stays in the detail pane" aria-pressed="false"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-eye"/></svg><span id="networkToggleHostLabel">Base URL shown</span></button>
+        <button type="button" id="networkHarDownload"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-download"/></svg>HAR</button>
+        <button type="button" id="networkPostmanDownload"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-download"/></svg>Postman</button>
+      </div>
+      <div class="applied-filters" id="networkChips" hidden></div>
+      <div class="selection-bar" id="networkSelectionBar" hidden aria-label="Export selection"></div>
+      <details class="adv-filters" id="networkAdvFilters">
+        <summary><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-funnel"/></svg>More filters</summary>
+        <div class="filter-grid">
+          <label class="field"><span>From epoch ms</span><input id="networkFrom" type="number" min="0"></label>
+          <label class="field"><span>To epoch ms</span><input id="networkTo" type="number" min="0"></label>
+          <label class="field"><span>Path</span><input id="networkPath" placeholder="/v1/orders"></label>
+          <label class="field"><span>Content type</span><input id="networkContentType" placeholder="application/json"></label>
+          <label class="field"><span>Method</span><select id="networkMethod"><option value="">Any</option><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option></select></label>
+          <label class="field"><span>Status from</span><input id="networkStatusFrom" type="number" min="0" placeholder="200"></label>
+          <label class="field"><span>Status to</span><input id="networkStatusTo" type="number" min="0" placeholder="299"></label>
+          <label class="field"><span>Host</span><input id="networkHost" placeholder="api.example.com"></label>
+          <label class="field"><span>Minimum duration ms</span><input id="networkMinDuration" type="number" min="0"></label>
+          <label class="field"><span>Maximum duration ms</span><input id="networkMaxDuration" type="number" min="0"></label>
+          <label class="field"><span>Error</span><select id="networkError"><option value="">Any</option><option value="true">Errors only</option><option value="false">No error</option></select></label>
+          <label class="field"><span>Correlation ID</span><input id="networkCorrelation"></label>
+          <label class="field"><span>Tag (name=value)</span><input id="networkTag"></label>
+          <div class="filter-actions"><button type="button" id="networkRefresh"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Apply</button></div>
+        </div>
+      </details>
+      <div class="split-shell">
+        <div class="list-pane">
+          <div class="list-head">
+            <button type="button" class="col-check" id="networkSelectAllVisible" role="checkbox" aria-checked="false" title="Select all visible"></button>
+            <span class="col-badge">Method</span><span class="col-main" id="networkMainColLabel">Path</span><span class="col-duration">Duration</span><span class="col-status">Status</span><span class="col-flag"></span>
+          </div>
+          <div class="list-body" id="transactions" aria-label="Transactions"><div class="empty-state empty-connect">
+            <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-network"/></svg>
+            <div class="empty-title">Not connected yet</div>
+            <div class="empty-sub">Captured HTTP transactions appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code.</div>
+            <ul class="connect-steps">
+              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential — a bare <code class="inline-code">http://host:port/</code> address alone stays unauthenticated forever.</li>
+              <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb reverse tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
+              <li>Scan the QR, or paste the code into <strong>Overview</strong> — either connects this browser.</li>
+            </ul>
+          </div></div>
+          <div class="list-foot"><span id="networkFootLeft"></span><span id="networkFootRight"></span></div>
+          <div class="pager"><button type="button" id="networkNewest">Newest</button><button type="button" id="networkOlder" disabled>Older</button></div>
+        </div>
+        <div class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize list and detail panes" tabindex="0" title="Drag to resize — drag past the edge to hide a pane. Arrow keys resize (and restore a hidden pane), Home hides the list, End hides the detail, double-click resets"></div>
+        <aside class="detail-pane-v2" id="networkDetailPane">
+          <div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-network"/></svg><div class="empty-title">No transaction selected</div><div class="empty-sub">Select a transaction from the list to inspect its redacted metadata.</div></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- SOCKETS -->
+    <section class="view" id="socketView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">WebSockets</h1><span class="view-badge" id="socketBadge"></span></div>
+        <p class="view-hint" id="socketHint">Connections and redacted frames. Binary previews appear only when the host opted in.</p>
+      </div>
+      <div class="metrics-strip" id="socketMetrics"></div>
+      <div class="toolbar">
+        <label class="field search-field"><span>Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="socketSearch" placeholder="payload text…"></span></label>
+        <div class="toolbar-group-stack" id="socketFrameTypeGroup">
+          <span class="toolbar-group-label">Frame type</span>
+          <div class="seg" id="socketFrameTypeSeg" role="group" aria-label="Filter by frame type">
+            <button type="button" class="active" data-value="">All</button>
+            <button type="button" data-value="TEXT">TEXT</button>
+            <button type="button" data-value="BINARY">BINARY</button>
+            <button type="button" data-value="PING">PING</button>
+            <button type="button" data-value="PONG">PONG</button>
+          </div>
+        </div>
+        <div class="toolbar-group-stack" id="socketDirectionGroup">
+          <span class="toolbar-group-label">Direction</span>
+          <div class="seg" id="socketDirectionSeg" role="group" aria-label="Filter by direction">
+            <button type="button" class="active" data-value="">All</button>
+            <button type="button" data-value="SENT">Sent</button>
+            <button type="button" data-value="RECEIVED">Recv</button>
+          </div>
+        </div>
+        <div class="toolbar-group-stack" id="socketProtocolGroup">
+          <span class="toolbar-group-label">Protocol</span>
+          <div class="seg" id="socketProtocolSeg" role="group" aria-label="Filter by protocol">
+            <button type="button" class="active" data-value="">All</button>
+            <button type="button" data-value="websocket">WebSocket</button>
+            <button type="button" data-value="mqtt">MQTT</button>
+          </div>
+        </div>
+        <div class="toolbar-group-stack">
+          <span class="toolbar-group-label">View</span>
+          <div class="seg" id="socketModeSeg" role="group" aria-label="List or timeline view">
+            <button type="button" class="active" data-value="list">List</button>
+            <button type="button" data-value="timeline">Timeline</button>
+          </div>
+        </div>
+        <div class="drop" id="socketConnDrop"></div>
+        <div class="toolbar-spacer"></div>
+        <button type="button" id="socketClearFilters" class="ghost">Clear filters</button>
+      </div>
+      <div class="applied-filters" id="socketChips" hidden></div>
+      <details class="adv-filters">
+        <summary><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-funnel"/></svg>More filters</summary>
+        <div class="filter-grid">
+          <label class="field"><span>From epoch ms</span><input id="socketFrom" type="number" min="0"></label>
+          <label class="field"><span>To epoch ms</span><input id="socketTo" type="number" min="0"></label>
+          <label class="field"><span>Connection error</span><select id="socketError"><option value="">Any</option><option value="true">Errors only</option><option value="false">No error</option></select></label>
+          <div class="filter-actions"><button type="button" id="socketApply"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Apply</button></div>
+        </div>
+      </details>
+      <div class="split-shell">
+        <div class="list-pane">
+          <div class="list-head" id="socketListHead"></div>
+          <div class="list-body" id="sockets" aria-label="Socket connections"><div class="empty-state empty-connect">
+            <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-sockets"/></svg>
+            <div class="empty-title">Not connected yet</div>
+            <div class="empty-sub">WebSocket connections and frames appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code.</div>
+            <ul class="connect-steps">
+              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential — a bare <code class="inline-code">http://host:port/</code> address alone stays unauthenticated forever.</li>
+              <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb reverse tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
+              <li>Scan the QR, or paste the code into <strong>Overview</strong> — either connects this browser.</li>
+            </ul>
+          </div></div>
+          <div class="list-foot"><span id="socketFootLeft"></span><span id="socketFootRight"></span></div>
+        </div>
+        <div class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize list and detail panes" tabindex="0" title="Drag to resize — drag past the edge to hide a pane. Arrow keys resize (and restore a hidden pane), Home hides the list, End hides the detail, double-click resets"></div>
+        <aside class="detail-pane-v2" id="socketMessages">
+          <div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-sockets"/></svg><div class="empty-title">No socket message selected</div><div class="empty-sub">Select a connection or apply filters to inspect frames. JSON text frames are formatted; binary previews appear only when the host opted in.</div></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- PUSH -->
+    <section class="view" id="pushView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">Push</h1><span class="view-badge" id="pushBadge"></span></div>
+        <p class="view-hint">Captured push lifecycle events. Simulated payloads are labelled everywhere they appear.</p>
+      </div>
+      <div class="metrics-strip" id="pushMetrics"></div>
+      <div class="toolbar">
+        <label class="field search-field"><span>Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="pushSearch" placeholder="message, campaign, source…"></span></label>
+        <div class="seg" id="pushProviderSeg" role="group" aria-label="Filter by provider"></div>
+        <div class="toolbar-spacer"></div>
+        <button type="button" id="pushRefresh"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Refresh</button>
+      </div>
+      <details class="adv-filters">
+        <summary><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-push"/></svg>Simulate push event</summary>
+        <div class="filter-grid">
+          <label class="field"><span>Provider</span><input id="pushProvider" placeholder="fcm" value="local"></label>
+          <label class="field"><span>Message ID (optional)</span><input id="pushMessageId"></label>
+          <label class="field"><span>Data key (optional)</span><input id="pushDataKey"></label>
+          <label class="field"><span>Data value (optional)</span><input id="pushDataValue"></label>
+          <div class="filter-actions"><button type="button" id="pushSimulate" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-send"/></svg>Simulate push</button></div>
+        </div>
+      </details>
+      <div class="split-shell">
+        <div class="list-pane">
+          <div class="list-head">
+            <span class="col-badge">Provider</span><span class="col-main">Message</span><span class="col-duration">Lifecycle</span><span class="col-status">Time</span><span class="col-flag"></span>
+          </div>
+          <div class="list-body" id="pushEvents" aria-label="Push events"><div class="empty-state empty-connect">
+            <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-push"/></svg>
+            <div class="empty-title">Not connected yet</div>
+            <div class="empty-sub">Captured push lifecycle events appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code.</div>
+            <ul class="connect-steps">
+              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential — a bare <code class="inline-code">http://host:port/</code> address alone stays unauthenticated forever.</li>
+              <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb reverse tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
+              <li>Scan the QR, or paste the code into <strong>Overview</strong> — either connects this browser.</li>
+            </ul>
+          </div></div>
+          <div class="list-foot"><span id="pushFootLeft"></span><span id="pushFootRight"></span></div>
+        </div>
+        <div class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize list and detail panes" tabindex="0" title="Drag to resize — drag past the edge to hide a pane. Arrow keys resize (and restore a hidden pane), Home hides the list, End hides the detail, double-click resets"></div>
+        <aside class="detail-pane-v2" id="pushDetail">
+          <div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-push"/></svg><div class="empty-title">No push notification selected</div><div class="empty-sub">Select a push event from the list to inspect its payload.</div></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- CRASHES -->
+    <section class="view" id="crashesView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">Crashes</h1><span class="view-badge" id="crashesBadge"></span></div>
+        <p class="view-hint">Uncaught exceptions and ANRs from the crash plugin — every crash and ANR is flagged into the evidence tray automatically.</p>
+      </div>
+      <div class="metrics-strip" id="crashesMetrics"></div>
+      <div class="toolbar">
+        <label class="field search-field"><span>Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="crashesSearch" placeholder="summary, thread…"></span></label>
+        <div class="toolbar-group-stack">
+          <span class="toolbar-group-label">Kind</span>
+          <div class="seg" id="crashesKindSeg" role="group" aria-label="Filter by kind">
+            <button type="button" class="active" data-value="">All</button>
+            <button type="button" data-value="UNCAUGHT">Crash</button>
+            <button type="button" data-value="ANR">ANR</button>
+          </div>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <button type="button" id="crashesRefresh"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Refresh</button>
+      </div>
+      <div class="split-shell">
+        <div class="list-pane">
+          <div class="list-head">
+            <span class="col-badge">Kind</span><span class="col-main">Summary</span><span class="col-duration">Thread</span><span class="col-status">Time</span><span class="col-flag"></span>
+          </div>
+          <div class="list-body" id="crashesList" aria-label="Crashes"><div class="empty-state empty-connect">
+            <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-bug"/></svg>
+            <div class="empty-title">Not connected yet</div>
+            <div class="empty-sub">Crashes and ANRs appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code.</div>
+            <ul class="connect-steps">
+              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential — a bare <code class="inline-code">http://host:port/</code> address alone stays unauthenticated forever.</li>
+              <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb reverse tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
+              <li>Scan the QR, or paste the code into <strong>Overview</strong> — either connects this browser.</li>
+            </ul>
+          </div></div>
+          <div class="list-foot"><span id="crashesFootLeft"></span><span id="crashesFootRight"></span></div>
+        </div>
+        <div class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize list and detail panes" tabindex="0" title="Drag to resize — drag past the edge to hide a pane. Arrow keys resize (and restore a hidden pane), Home hides the list, End hides the detail, double-click resets"></div>
+        <aside class="detail-pane-v2" id="crashDetail">
+          <div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-bug"/></svg><div class="empty-title">No crash selected</div><div class="empty-sub">Select a crash or ANR from the list to inspect its breadcrumbs and all-thread dump.</div></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- STATE & FLAGS -->
+    <section class="view" id="stateView">
+      <div class="view-head"><h1 class="view-title">State &amp; Flags</h1><p class="view-hint">App state snapshots and feature flags. Each flag's own `mutable` bit gates its toggle — the SDK reports no session-wide write switch for either.</p></div>
+      <div id="stateGate" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      <div id="stateCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-flag"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect state and flags.</div></div></div>
+    </section>
+
+    <!-- PREFERENCES -->
+    <section class="view" id="preferencesView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">Preferences</h1><span class="view-badge" id="prefBadge"></span></div>
+        <p class="view-hint">SharedPreferences viewer. Redaction is allowlist-based — keys that merely look sensitive can still slip through unmasked.</p>
+      </div>
+      <div class="toolbar"><label class="field field-w240"><span>Preferences file</span><select id="prefFile"><option value="">Choose a file</option></select></label></div>
+      <div id="prefCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-sliders"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to browse SharedPreferences.</div></div></div>
+    </section>
+
+    <!-- DATABASE -->
+    <section class="view" id="databaseView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">Database</h1><span class="view-badge" id="dbBadge"></span></div>
+        <p class="view-hint">Read-only SQLite browser unless the database capability is enabled. Filter the table list, then query inside it.</p>
+      </div>
+      <div class="toolbar">
+        <label class="field field-w200"><span>Database</span><select id="dbName"><option value="">Choose a database</option></select></label>
+        <label class="field search-field"><span>Find table</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="dbTableSearch" placeholder="order, menu, courier…"></span></label>
+        <div class="toolbar-group"><span class="toolbar-group-label">Sort</span><div class="seg" id="dbSortSeg" role="group" aria-label="Sort tables by"><button type="button" class="active" data-value="name">Name</button><button type="button" data-value="rows">Rows</button></div></div>
+      </div>
+      <div id="dbCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-database"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to browse the SQLite databases.</div></div></div>
+    </section>
+
+    <!-- FILES -->
+    <section class="view" id="filesView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">Files</h1><span class="view-badge" id="filesBadge"></span></div>
+        <p class="view-hint">Sandbox browser. Create, rename, and save need the files capability.</p>
+      </div>
+      <div class="toolbar">
+        <label class="field field-w150"><span>Root</span><select id="fileRoot"><option value="">Choose a root</option></select></label>
+        <label class="field field-w200"><span>Path</span><input id="filePath" placeholder="(root)"></label>
+        <button type="button" id="fileGo"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-folder"/></svg>Go</button>
+        <button type="button" id="fileCreate" disabled title="Sign in and enable the files capability"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-plus"/></svg>New file</button>
+      </div>
+      <div id="filesCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-folder"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to browse the sandbox.</div></div></div>
+    </section>
+
+    <!-- SDK HEALTH -->
+    <section class="view" id="sdkHealthView">
+      <div class="view-head"><h1 class="view-title">SDK Health</h1><p class="view-hint">Bounded health snapshot and protocol metadata reported by the on-device SDK.</p></div>
+      <div class="metrics-strip" id="sdkHealthMetrics"></div>
+      <div id="sdkHealthDetail"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-health"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect SDK health.</div></div></div>
+    </section>
+
+    <!-- EVIDENCE TRAY -->
+    <section class="view" id="evidenceView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">Evidence tray</h1><span class="view-badge" id="evidenceBadge"></span></div>
+        <p class="view-hint">Everything a developer needs to reproduce, assembled while the session is still live.</p>
+      </div>
+      <div class="metrics-strip" id="evidenceMetrics"></div>
+      <div id="evidenceList"></div>
+    </section>
+
+    <!-- SESSION & SECURITY -->
+    <section class="view" id="sessionView">
+      <div class="view-head"><h1 class="view-title">Session &amp; Security</h1><p class="view-hint">Who is connected, what is retained, and what this build exposes on the LAN.</p></div>
+      <div class="metrics-strip" id="sessionMetrics"></div>
+      <div id="sessionCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-shield"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to see who's connected and what this build exposes.</div></div></div>
+    </section>
+
+    <!-- COMPOSER -->
+    <section class="view" id="composerView">
+      <div class="view-head"><h1 class="view-title">Composer</h1><p class="view-hint">Execute requests with the SDK-owned client, import cURL, and save ephemeral collections.</p></div>
+      <div id="composerGate" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      <div class="cards-grid">
+        <section class="card-shell" data-span="2">
+          <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-composer"/></svg><h2 class="card-shell-title">Request</h2></div>
+          <div class="card-shell-body">
+          <div class="card-fields filter-grid filter-grid-flush">
+            <label class="field"><span>HTTP method</span><select id="composerMethod"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option></select></label>
+            <label class="field"><span>URL</span><input id="composerUrl" type="url" placeholder="https://api.example.test/orders"></label>
+            <label class="field"><span>Body type</span><select id="composerBodyType"><option value="NONE">None</option><option value="TEXT">Text</option><option value="JSON">JSON</option><option value="FORM_URL_ENCODED">Form URL encoded</option><option value="MULTIPART">Multipart</option><option value="BINARY_FILE">Binary file</option></select></label>
+            <label class="field"><span>Timeout ms</span><input id="composerTimeout" type="number" min="1" max="120000" value="15000"></label>
+            <label class="field"><span>Redirect policy</span><select id="composerRedirects"><option value="true">Follow allowed redirects</option><option value="false">Do not follow</option></select></label>
+            <label class="field"><span>Binary body (maximum 3 MiB)</span><input id="composerBinary" type="file"></label>
+            <label class="field field-full"><span>Query parameters (name=value, one per line)</span><textarea id="composerQuery" rows="3"></textarea></label>
+            <label class="field field-full"><span>Headers (Name: value, one per line)</span><textarea id="composerHeaders" rows="3"></textarea></label>
+            <label class="field field-full"><span>Text or JSON body</span><textarea id="composerBody" rows="4"></textarea></label>
+            <label class="field"><span>Form fields (name=value, one per line)</span><textarea id="composerForm" rows="3"></textarea></label>
+            <label class="field"><span>Multipart fields (name=value, one per line)</span><textarea id="composerMultipart" rows="3"></textarea></label>
+            <label class="field"><span>Environment variables (name=value, one per line)</span><textarea id="composerVariables" rows="3"></textarea></label>
+            <label class="field"><span>Secret variables (memory only)</span><textarea id="composerSecrets" rows="3"></textarea></label>
+          </div>
+          <div class="card-buttons"><button type="button" id="composerRun" class="primary" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-send"/></svg>Execute request</button></div>
+          </div>
+        </section>
+        <section class="card-shell">
+          <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-terminal"/></svg><h2 class="card-shell-title">cURL import</h2></div>
+          <div class="card-shell-body">
+          <label class="field"><span>Supported cURL command</span><textarea id="composerCurl" rows="4" placeholder="curl -X POST …"></textarea></label>
+          <div class="card-buttons"><button type="button" id="composerImport" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-terminal"/></svg>Import cURL</button></div>
+          </div>
+        </section>
+        <section class="card-shell">
+          <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-send"/></svg><h2 class="card-shell-title">Last response</h2></div>
+          <div class="card-shell-body">
+          <div id="composerResult"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-send"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to execute or import requests.</div></div></div>
+          </div>
+        </section>
+        <section class="card-shell">
+          <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-folder"/></svg><h2 class="card-shell-title">Ephemeral collections</h2></div>
+          <div class="card-shell-body">
+          <label class="field"><span>Collection name</span><input id="composerCollectionName"></label>
+          <div class="card-buttons">
+            <button type="button" id="composerCollectionSave" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg>Save imported cURL</button>
+            <button type="button" id="composerCollections"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Load collections</button>
+          </div>
+          <div id="composerCollectionList" class="mt-10">Collections contain no persisted secret variable values.</div>
+          </div>
+        </section>
+        <section class="card-shell">
+          <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-shield"/></svg><h2 class="card-shell-title">Host allowlist</h2></div>
+          <div class="card-shell-body">
+          <div id="composerAllowedHosts">Loading…</div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- MOCKS -->
+    <section class="view" id="mocksView">
+      <div class="view-head"><h1 class="view-title">Mocks</h1><p class="view-hint">Rules that intercept matching requests on device before they reach the network.</p></div>
+      <div class="metrics-strip" id="mocksMetrics"></div>
+      <div id="mocksGate" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      <div class="cards-grid">
+        <section class="card-shell" data-span="2">
+          <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-mocks"/></svg><h2 class="card-shell-title">Rules</h2><span class="card-shell-badge" id="mocksRulesBadge"></span></div>
+          <div class="card-shell-body">
+          <div id="mockRuleList"></div>
+          <div class="card-buttons">
+            <button type="button" id="mockNewRule"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-plus"/></svg>New rule</button>
+            <button type="button" id="mockDisable" class="danger" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-close"/></svg>Disable all mocks</button>
+          </div>
+          </div>
+        </section>
+        <section class="card-shell" id="mocksConflictsCard">
+          <div class="card-shell-head"><svg class="ic tone-text-warn" aria-hidden="true"><use href="#dc-alert"/></svg><h2 class="card-shell-title">Conflicts</h2></div>
+          <div class="card-shell-body"><div id="mockConflicts">No conflicts detected.</div></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- CAPTURE RULES -->
+    <section class="view" id="captureRulesView">
+      <div class="view-head"><h1 class="view-title">Capture rules</h1><p class="view-hint">What the SDK records, and what it drops before anything is retained.</p></div>
+      <div id="captureRulesGate" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      <div class="cards-grid">
+        <section class="card-shell" data-span="2">
+          <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-funnel"/></svg><h2 class="card-shell-title">Active exclusions</h2><span class="card-shell-badge" id="captureRulesBadge"></span></div>
+          <div class="card-shell-body">
+          <div id="captureRuleList"></div>
+          <div class="card-fields mt-12">
+            <label class="field"><span>Rule ID</span><input id="captureRuleId" placeholder="auth-host"></label>
+            <label class="field"><span>Host (exact)</span><input id="captureRuleHost" placeholder="auth.example.test"></label>
+            <label class="field"><span>Method (optional)</span><input id="captureRuleMethod" placeholder="POST"></label>
+            <label class="field"><span>Path prefix (optional)</span><input id="captureRulePathPrefix" placeholder="/token"></label>
+          </div>
+          <div class="card-buttons"><button type="button" id="captureRuleSave" disabled title="Sign in and enable the captureRules capability"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg>Save exclusion</button></div>
+          <pre id="captureRuleStatus" class="mt-10">Connect this browser to inspect capture exclusions.</pre>
+          </div>
+        </section>
+        <section class="card-shell">
+          <div class="card-shell-head"><svg class="ic tone-text-warn" aria-hidden="true"><use href="#dc-shield"/></svg><h2 class="card-shell-title">Redacted field names</h2></div>
+          <div class="card-shell-body">
+          <p class="card-lede">Header and body keys matching these names are masked before anything leaves the device. This is the real denylist reported by the SDK — not an allowlist of what stays verbatim.</p>
+          <div id="captureRedaction"></div>
+          </div>
+        </section>
+      </div>
+    </section>
+   </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="confirmModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="modal-header"><span class="modal-title" id="confirmTitle">Confirm</span><button type="button" class="modal-close" id="confirmClose" aria-label="Close">&times;</button></div>
+    <div class="modal-body" id="confirmMessage"></div>
+    <div class="modal-footer"><button type="button" id="confirmCancel">Cancel</button><button type="button" id="confirmSubmit" class="primary danger">Confirm</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="mockRuleModal" hidden>
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="mockRuleModalTitle">
+    <div class="modal-header">
+      <span class="modal-title" id="mockRuleModalTitle"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-mocks"/></svg><span id="mockRuleModalTitleText">New mock rule</span></span>
+      <button type="button" class="modal-close" id="mockRuleModalClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="filter-grid filter-grid-flush">
+        <label class="field"><span>Rule ID</span><input id="mockRuleId" placeholder="orders-success" maxlength="128" aria-describedby="mockRuleIdHelp"></label>
+        <label class="field"><span>Method</span><select id="mockRuleMethod"><option value="">Any</option><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option></select></label>
+        <label class="field"><span>Scheme (optional)</span><input id="mockRuleScheme" placeholder="https"></label>
+        <label class="field"><span>Host (optional)</span><input id="mockRuleHost" placeholder="api.example.test"></label>
+        <label class="field field-full"><span>Path regular expression</span><input id="mockRulePath" placeholder="/orders.*"></label>
+        <label class="field"><span>Response status</span><input id="mockRuleStatus" type="number" min="100" max="599" value="200"></label>
+        <label class="field"><span>Delay ms (optional)</span><input id="mockRuleDelay" type="number" min="0" max="30000" placeholder="0"></label>
+        <label class="field field-full"><span>Response headers (Name: value, one per line)</span><textarea id="mockRuleHeaders" rows="3"></textarea></label>
+        <label class="field field-full">
+          <span>Response body</span>
+          <textarea id="mockRuleBody" rows="7" placeholder="{}"></textarea>
+        </label>
+        <div class="field-full mock-body-toolbar">
+          <button type="button" id="mockRuleBodyFormat" class="xs">Format</button>
+          <span id="mockRuleBodyStatus" class="card-field-help"></span>
+        </div>
+        <div id="mockRuleBodyPreview" class="field-full"></div>
+        <label class="field"><span>Priority</span><input id="mockRulePriority" type="number" value="0"></label>
+        <label class="field"><span>Scope</span><select id="mockRuleScope"><option value="SESSION">Session</option><option value="PERSISTENT_INTERNAL">Persistent (internal)</option></select></label>
+      </div>
+      <p class="card-field-help" id="mockRuleIdHelp">Letters, digits, dot, underscore, and hyphen — cannot be changed once a rule exists.</p>
+      <p class="card-field-help tone-text-error" id="mockRuleFormError" role="alert" hidden></p>
+    </div>
+    <div class="modal-footer"><button type="button" id="mockRuleCancel">Cancel</button><button type="button" id="mockRuleSave" class="primary" disabled title="Sign in and enable the mocks capability"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg>Save rule</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="shortcutsModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
+    <div class="modal-header">
+      <span class="modal-title" id="shortcutsTitle"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-keyboard"/></svg>Keyboard shortcuts</span>
+      <button type="button" class="modal-close" id="shortcutsClose" aria-label="Close">esc</button>
+    </div>
+    <div class="modal-body">
+      <div class="shortcut-grid">
+        <div class="shortcut-row"><kbd>/</kbd><span>Focus the current view's filter field</span></div>
+        <div class="shortcut-row"><kbd>?</kbd><span>Open this shortcut sheet</span></div>
+        <div class="shortcut-row"><kbd>p</kbd><span>Toggle record / pause of the live stream</span></div>
+        <div class="shortcut-row"><kbd>f</kbd><span>Expand the detail pane to full width</span></div>
+        <div class="shortcut-row"><kbd>\</kbd><span>Hide or show the left view list</span></div>
+        <div class="shortcut-row"><kbd>↑ ↓</kbd><span>Move through the list — j and k also work</span></div>
+        <div class="shortcut-row"><kbd>↵</kbd><span>Flag the selected capture as evidence</span></div>
+        <div class="shortcut-row adv-only"><kbd>b</kbd><span>Pin the selected capture as the diff baseline<span class="shortcut-adv-note"> (advanced)</span></span></div>
+        <div class="shortcut-row"><kbd>t</kbd><span>Toggle dark and light theme</span></div>
+        <div class="shortcut-row"><kbd>a</kbd><span>Toggle Simple / Advanced mode</span></div>
+        <div class="shortcut-row"><kbd>esc</kbd><span>Dismiss dialog, clear selection</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="codeFullscreenModal" hidden>
+  <div class="modal modal-fullscreen" role="dialog" aria-modal="true" aria-labelledby="codeFullscreenTitle">
+    <div class="modal-header">
+      <span class="modal-title" id="codeFullscreenTitle">JSON body</span>
+      <button type="button" class="modal-close" id="codeFullscreenClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body modal-body-code" id="codeFullscreenBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="/assets/dashboard.js"></script>
+</body></html>

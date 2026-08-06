@@ -1,0 +1,35 @@
+name: Release artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  verify-and-attest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v6
+      - run: ./gradlew testDebugUnitTest :samples:foundation-app:assembleRelease :samples:foundation-app:verifyDevConsoleProtectedArtifacts :samples:compose-app:assembleRelease :samples:compose-app:verifyDevConsoleProtectedArtifacts :samples:views-java-app:assembleRelease :samples:views-java-app:verifyDevConsoleProtectedArtifacts
+      - uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: devconsole.spdx.json
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: devconsole.spdx.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: devconsole-sbom
+          path: devconsole.spdx.json

@@ -1,0 +1,1461 @@
+/* ============================================================
+   DevConsole dashboard — terminal-green instrument panel.
+   Dual theme via [data-theme] on <html>; dark is the default.
+   ============================================================ */
+
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Dark terminal-green (default) */
+  --ground: #0b0e0d;
+  --panel: #151a18;
+  --surface-2: #1b231e;
+  --surface-3: #212b24;
+  --code-bg: #10140f;
+  --ink: #e7e5d8;
+  --muted: #92968e;
+  --text-3: #7d8479;
+  --line: #344039;
+  --border-strong: #4a5a4f;
+  --signal: #b7ed65;
+  --signal-ink: #0b0e0d;
+  --warn: #f0b45c;
+  --error: #ff715e;
+  --put: #7fd0c9;
+
+  --signal-soft: rgba(183, 237, 101, 0.11);
+  --error-soft: rgba(255, 113, 94, 0.13);
+  --warn-soft: rgba(240, 180, 92, 0.13);
+  --put-soft: rgba(127, 208, 201, 0.13);
+
+  /* One Material elevation folded into a local token (constraints #2) — same in both themes. */
+  --elev-3: 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3);
+
+  --json-key: #8fd6c4;
+  --json-string: #cfd8a6;
+  --json-number: #f0b45c;
+  --json-boolean: #b7ed65;
+  --json-null: #92968e;
+  --json-brace-0: #b7ed65;
+  --json-brace-1: #f0b45c;
+  --json-brace-2: #7fd0c9;
+  --json-brace-3: #e7e5d8;
+  --json-brace-4: #92968e;
+}
+
+:root[data-theme="light"] {
+  --ground: #f3f6ee;
+  --panel: #ffffff;
+  --surface-2: #eef2e6;
+  --surface-3: #e3e9d7;
+  --code-bg: #f6f8f1;
+  --ink: #182018;
+  --muted: #5b6459;
+  --text-3: #656c5f;
+  --line: #dde3d1;
+  --border-strong: #c3cdb4;
+  --signal: #427526;
+  --signal-ink: #ffffff;
+  --warn: #93630a;
+  --error: #b6392a;
+  --put: #1f7a6c;
+
+  --signal-soft: rgba(66, 117, 38, 0.1);
+  --error-soft: rgba(182, 57, 42, 0.1);
+  --warn-soft: rgba(147, 99, 10, 0.1);
+  --put-soft: rgba(31, 122, 108, 0.1);
+
+  --json-key: #1f7a6c;
+  --json-string: #4a5b1f;
+  --json-number: #93630a;
+  /* Boolean + brace-0 track the light --signal, which was darkened #4f8f28 -> #427526 for AA
+     (the old hex measures 3.97:1 on #ffffff / 3.71:1 on --code-bg -- see §3.2's "do not lighten
+     back" note in docs/DESIGN_SPEC.md). */
+  --json-boolean: #427526;
+  --json-null: #656c5f;
+  --json-brace-0: #427526;
+  --json-brace-1: #93630a;
+  --json-brace-2: #1f7a6c;
+  --json-brace-3: #182018;
+  /* --json-brace-4 was the missing step in the light ladder and fell through to the DARK theme's
+     value (#92968e, ~2.9:1 on white -- fails AA). Plum, not a tint of any tone already in the
+     ladder above: ~6.9:1 on #ffffff and ~6.4:1 on --code-bg (#f6f8f1), both comfortably past the
+     4.5:1 AA floor the rest of this block is held to. See docs/DESIGN_SPEC.md §3.3. */
+  --json-brace-4: #6a4c93;
+}
+
+* { box-sizing: border-box; }
+/* The `hidden` attribute only sets `display: none` in the UA stylesheet, so any author rule that
+   sets `display` beats it and the element stays on screen. Several components here declare
+   `display: flex` or `grid` and are toggled by setting `.hidden` from JS -- the empty selection bar
+   rendered as a bare green rule above the network list because of exactly this. Enforce the
+   attribute once, globally, instead of patching each component after someone notices. */
+[hidden] { display: none !important; }
+html { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
+
+/* ---------------- Density tokens (task E6: Simple/Advanced mode) ----------------
+   Advanced keeps today's numbers byte-for-byte (that's the whole point: density is a feature for
+   developers). Simple overrides the same four tokens under body.mode-simple so every consumer
+   below reads through a variable instead of a per-component override — E1's breakpoints and E6's
+   density then compose instead of fighting, since neither ever hard-codes the other's concern.
+   Colour is untouched by either mode, so the AA contrast ratios in §3.1/3.2 apply unchanged. */
+:root {
+  --d-body-font: 13px;
+  --d-body-lh: 1.5;
+  --d-row-h: 34px;
+  --d-row-font: 12px;
+  --d-row-main-font: 12.5px;
+  --d-trace-h: 44px;
+  --d-card-pad: 16px;
+  --d-card-gap: 12px;
+}
+body.mode-simple {
+  --d-body-font: 14.5px;
+  --d-body-lh: 1.65;
+  --d-row-h: 44px;
+  --d-row-font: 13px;
+  --d-row-main-font: 13.5px;
+  --d-trace-h: 54px;
+  --d-card-pad: 20px;
+  --d-card-gap: 16px;
+}
+
+/* height: 100vh (not min-height) pins the whole app to one viewport-tall flex column: .topbar
+   takes its fixed 52px and .workspace below it gets the rest via flex — the chain that lets
+   `main` (see below) resolve "100% - the real chrome above it" without guessing at a pixel
+   number. Views that don't need a filled/bounded height (everything except the five .split-shell
+   ones) are untouched by this — they still just size to content and `main`'s own overflow-y:auto
+   scrolls them, same as page scroll always did. */
+body {
+  margin: 0;
+  /* dvh so mobile browser chrome (dynamic toolbars) doesn't push the bottom of `main` under it;
+     the vh line stays as the fallback for engines without dynamic viewport units. */
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--d-body-font);
+  line-height: var(--d-body-lh);
+  letter-spacing: 0.005em;
+  font-feature-settings: "tnum";
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--signal); color: var(--signal-ink); }
+a { color: var(--signal); }
+a:hover { color: var(--ink); text-decoration: underline; }
+
+/* Visible focus ring everywhere (mock: 2px signal, offset 2) — WCAG 2.2 AA gate.
+   No border-radius here: the universal selector would override each element's own radius. */
+*:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+/* Scrollbars */
+div::-webkit-scrollbar, nav::-webkit-scrollbar { width: 10px; height: 10px; }
+div::-webkit-scrollbar-thumb, nav::-webkit-scrollbar-thumb {
+  background: var(--line); border-radius: 99px; border: 3px solid transparent; background-clip: content-box;
+}
+div::-webkit-scrollbar-track, nav::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes dcPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ---------------- Icon sprite ---------------- */
+.dc-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.ic {
+  width: 16px; height: 16px; flex-shrink: 0;
+  display: inline-block; vertical-align: middle;
+  fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round;
+  color: inherit; pointer-events: none;
+}
+.ic-sm { width: 12px; height: 12px; }
+.ic-lg { width: 20px; height: 20px; }
+.ic-xl { width: 38px; height: 38px; stroke-width: 1.6; }
+/* The brand mark is drawn at 22x22 with the SVG's default 1px stroke — distinct from .ic-lg
+   (20px / stroke-width 2), so it gets its own class instead of reusing that one. */
+.brand-mark { width: 22px; height: 22px; stroke-width: 1; }
+/* Topbar icon buttons and the rail toggle draw their icon at 15px, not the
+   default 16px `.ic`. */
+.rail-toggle .ic, .icon-btn .ic { width: 15px; height: 15px; }
+
+/* ---------------- Topbar ---------------- */
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  height: 52px; flex: 0 0 52px; padding: 0 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 60;
+}
+.rail-toggle {
+  display: grid; place-items: center; flex: 0 0 auto;
+  /* padding: 0 overrides the generic button padding (9px 11px), which shrank this 30px box's
+     content area below the icon size and pinned the icon to the content top -- visibly low. */
+  width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface-2); color: var(--muted); cursor: pointer;
+}
+.rail-toggle:hover { color: var(--signal); border-color: var(--border-strong); }
+.rail-toggle[aria-pressed="true"] { border-color: var(--signal); background: var(--signal-soft); color: var(--signal); }
+.brand { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.brand-logo { display: inline-flex; align-items: center; justify-content: center; color: var(--signal); }
+.brand-name { font-size: 13px; font-weight: 700; letter-spacing: 0.15em; white-space: nowrap; }
+.topbar-divider { width: 1px; height: 22px; background: var(--line); flex: 0 0 auto; }
+
+.session-pill {
+  /* flex: 0 1 auto + min-width: 0 (not the old 0 0 auto) so the pill can actually shrink at
+     narrow widths instead of forcing the topbar wider; max-width caps it so a long status string
+     ("SESSION CODE EXPIRED OR INVALID") ellipses in the label below instead of growing the pill. */
+  display: flex; align-items: center; flex: 0 1 auto; min-width: 0; max-width: 260px; gap: 8px;
+  padding: 0 8px; height: 24px; border: 1px solid var(--line); border-radius: 99px;
+  background: var(--surface-2); white-space: nowrap; overflow: hidden;
+}
+.session-pill .dot {
+  flex: 0 0 auto; width: 6px; height: 6px; border-radius: 99px;
+  background: var(--warn); animation: dcPulse 2.4s ease-in-out infinite;
+}
+.session-pill .dot.live { background: var(--signal); }
+.session-pill .label {
+  min-width: 0; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); overflow: hidden; text-overflow: ellipsis;
+}
+
+.stream-seg {
+  display: flex; align-items: center; flex: 0 0 auto;
+  border: 1px solid var(--line); border-radius: 8px; overflow: hidden; height: 26px;
+}
+.stream-seg button {
+  position: relative; display: flex; align-items: center; gap: 8px;
+  padding: 0 12px; height: 24px; border: none; border-right: 1px solid var(--line);
+  border-radius: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+  color: var(--muted); background: transparent; cursor: pointer;
+}
+.stream-seg button:last-child { border-right: none; }
+.stream-seg button .ic { width: 12px; height: 12px; opacity: 1; }
+.stream-seg button.active { color: var(--signal-ink); background: var(--signal); }
+
+.host-line {
+  flex: 0 1 auto; min-width: 0; font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.topbar-spacer { flex: 1; }
+
+
+.topbar-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.icon-btn {
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--muted);
+  width: 32px; height: 32px; padding: 0; border-radius: 8px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.icon-btn:hover { color: var(--signal); border-color: var(--border-strong); }
+.icon-btn.active { color: var(--signal-ink); background: var(--signal); border-color: var(--signal); }
+.icon-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+.icon-btn:disabled:hover { color: var(--muted); border-color: var(--line); }
+
+@media (max-width: 960px) { .host-line { display: none; } }
+/* The session pill carries the only "open the code link from the device" instruction once
+   .host-line hides above — it must never go display:none, or a disconnected operator on a narrow
+   viewport sees no connect instruction anywhere in the topbar. It just keeps shrinking. */
+@media (max-width: 680px) { .session-pill { max-width: 150px; } }
+@media (max-width: 560px) { .stream-seg .stream-seg-label { display: none; } .stream-seg button { padding: 0 9px; } }
+@media (max-width: 480px) {
+  .session-pill { max-width: 108px; }
+  /* Task E1: below ~480px the topbar's non-shrinkable groups (rail-toggle 30px + brand ~110px +
+     stream-seg ~62px icon-only + topbar-actions' four 32px icon buttons = 152px, fixed — nothing
+     here is ever hidden, per §2's "never imply a control doesn't exist") add up to more than a
+     375px viewport even with the session pill collapsed to nothing. Wrapping to a second row (via
+     a full-width spacer, which forces a break right before .topbar-actions without touching
+     source order) keeps every control reachable instead of clipping the row or hiding a button. */
+  .topbar { flex-wrap: wrap; height: auto; min-height: 52px; padding: 8px 10px; gap: 8px; row-gap: 8px; }
+  .topbar-spacer { flex-basis: 100%; height: 0; }
+}
+
+/* ---------------- Workspace / rail ---------------- */
+/* align-items: stretch (not the old flex-start) so .rail and main both take .workspace's full
+   height -- flex-start let each size to its own content, which is exactly what left `main` with
+   no definite height for the calc(100vh - <n>) hacks below to measure against. .rail's own
+   position: sticky/max-height/overflow-y still governs its own scroll, so it looks identical. */
+.workspace { display: flex; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+.rail {
+  flex: 0 0 232px; width: 232px; padding: 8px 12px 28px;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  position: sticky; top: 52px; align-self: flex-start;
+  max-height: calc(100vh - 52px); overflow-y: auto;
+}
+body.rail-hidden .rail { display: none; }
+
+.rail-group { margin-top: 16px; }
+.rail-group-label { display: flex; align-items: center; gap: 8px; padding: 0 8px 8px; }
+.rail-group-label .text {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-3);
+  white-space: nowrap;
+}
+.rail-group-label .rule { flex: 1; height: 1px; background: var(--line); }
+
+.rail button {
+  position: relative; display: grid; grid-template-columns: 17px 1fr auto; align-items: center; gap: 12px;
+  width: 100%; height: 32px; margin-bottom: 2px; padding: 0 8px; border: none; border-radius: 8px;
+  text-align: left; background: transparent; color: var(--muted); cursor: pointer;
+  font: inherit; transition: background 0.12s, color 0.12s;
+}
+.rail button .ic { width: 16px; height: 16px; opacity: 0.9; color: inherit; }
+.rail button:hover { background: var(--surface-2); color: var(--ink); }
+.rail button.active, .rail button[aria-current="page"] {
+  background: var(--signal-soft); color: var(--ink); font-weight: 600;
+}
+.rail button.active::before, .rail button[aria-current="page"]::before {
+  content: ""; position: absolute; left: 0; top: 5px; bottom: 5px; width: 2px; border-radius: 99px; background: var(--signal);
+}
+.rail-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rail button.active .rail-name, .rail button[aria-current="page"] .rail-name { font-weight: 600; }
+.rail-count {
+  font-family: var(--font-mono); font-size: 10.5px; min-width: 20px; text-align: center;
+  /* --muted, not the mock's --text-3: 10.5px on --surface-3 needs >=4.5:1 in both themes. */
+  padding: 1px 4px; display: none; border-radius: 99px; background: var(--surface-3); color: var(--muted);
+}
+.rail-count.show { display: inline-block; }
+.rail button.active .rail-count, .rail button[aria-current="page"] .rail-count { background: var(--signal); color: var(--signal-ink); }
+
+.rail-shortcuts { margin-top: 24px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 8px; }
+.rail-shortcuts-title {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3);
+  margin-bottom: 4px;
+}
+.rail-shortcuts-grid { display: grid; gap: 4px; font-size: 11px; color: var(--muted); }
+.rail-shortcuts-grid .key { font-family: var(--font-mono); color: var(--ink); }
+
+/* <780px: rail collapses to an icon-only strip; \\ / the topbar toggle hides it entirely. */
+@media (max-width: 780px) {
+  .rail { width: 58px; flex-basis: 58px; padding: 8px 6px 20px; }
+  .rail-group-label, .rail-name, .rail-count, .rail-shortcuts { display: none; }
+  .rail button { grid-template-columns: 1fr; justify-items: center; }
+}
+
+/* The inner wrapper (not `main` itself) carries the padding/max-width/centering;
+   the implementer's 20px bottom spacing moves onto whichever `.view` is actually showing. */
+/* main is the one scroll container for everything right of the rail: min-height: 0 lets it
+   actually shrink to workspace's bounded height instead of growing to fit its content (the old
+   failure mode), and overflow-y: auto is what "normal page scroll" now means for every view that
+   isn't built around a .split-shell -- content just scrolls inside here exactly like it used to
+   scroll the document. */
+main { flex: 1 1 0%; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+/* min-height: 0 (not the default `auto`) is doing real work here, same as everywhere else in this
+   chain: a flex item's automatic minimum size floors it at its own content's height regardless of
+   flex-basis/flex-grow, so without this override a view with a lot of content (e.g. Network with a
+   large response body open) would drag main-inner -- and therefore every view, including the ones
+   built around a filled .split-shell below -- up to that content height instead of staying pinned
+   to main's actual available space. */
+.main-inner { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px 24px 0; max-width: 1560px; width: 100%; margin: 0 auto; }
+.view { display: none; animation: fadein 0.18s ease; }
+.view.active { display: block; padding-bottom: 20px; }
+/* The five views built around a .split-shell (Timeline/Network/Sockets/Push/Crashes) need a real,
+   filled height instead of every other view's auto/content height -- flex: 1 1 0% (grow to claim
+   whatever's left inside .main-inner, basis 0% + min-height: 0 so it never floors at its own
+   content height either, for the same reason as .main-inner above) is what lets the shell below
+   fill it instead of guessing a fixed pixel budget. The one hard floor in this whole chain is
+   .split-shell's own explicit min-height: 360px (not an automatic/content-based one) -- if the
+   view's own content genuinely can't fit above that floor, it overflows this box visually (nothing
+   here sets overflow: hidden) and `main`'s overflow-y: auto above scrolls the rest into view,
+   same as any other view. Every other view is untouched: still display: block with no flex sizing
+   at all. */
+#timelineView.active,
+#networkView.active,
+#socketView.active,
+#pushView.active,
+#crashesView.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+}
+@keyframes fadein { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+/* View head */
+.view-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding-bottom: 12px; }
+.view-title { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+.view-badge {
+  flex: 0 0 auto; font-family: var(--font-mono); font-size: 11px; padding: 2px 8px; border-radius: 99px;
+  border: 1px solid var(--line); color: var(--text-3); white-space: nowrap;
+}
+@media (max-width: 1000px) { .view-badge { display: none; } }
+.view-hint { margin: 0; flex: 0 1 auto; min-width: 0; font-size: 12px; color: var(--muted); text-align: right; max-width: 520px; }
+/* Title + badge row inside `.view-head`'s left side (every view repeats this). */
+.view-title-row { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+
+/* ---------------- Toolbar / inputs ---------------- */
+.toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+label.field { display: grid; gap: 4px; color: var(--muted); font-size: 11.5px; }
+label.field > span { text-transform: uppercase; letter-spacing: 0.07em; font-size: 10.5px; font-weight: 600; color: var(--text-3); }
+
+input, select, textarea, button {
+  min-width: 0; color: var(--ink); background: var(--code-bg);
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 11px; font: inherit; font-size: 12.5px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+textarea { font-family: var(--font-mono); }
+input::placeholder, textarea::placeholder { color: var(--text-3); }
+input:focus, select:focus, textarea:focus {
+  outline: none; border-color: var(--signal);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 18%, transparent);
+}
+select {
+  appearance: none; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2392968e' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; background-size: 10px 6px;
+  padding-right: 28px;
+}
+
+/* Buttons — default/primary/danger color variants; radius 8px, literal (not --r). */
+button {
+  cursor: pointer; background: var(--surface-2); color: var(--ink); border-color: var(--line);
+  display: inline-flex; align-items: center; gap: 6px;
+  font-weight: 500; white-space: nowrap;
+}
+button .ic { opacity: 0.85; }
+button:hover { border-color: var(--signal); color: var(--signal); }
+button:disabled { cursor: not-allowed; opacity: 0.5; }
+button.primary { background: var(--signal); color: var(--signal-ink); border-color: var(--signal); font-weight: 700; }
+button.primary:hover { background: color-mix(in srgb, var(--signal) 85%, black); color: var(--signal-ink); }
+button.danger { color: var(--error); border-color: var(--error); background: var(--error-soft); }
+button.danger:hover { border-color: var(--error); background: color-mix(in srgb, var(--error) 20%, transparent); color: var(--error); }
+button.xs { padding: 5px 9px; font-size: 11px; }
+button.ghost { background: transparent; }
+.toolbar > button, .toolbar .filter-actions > button {
+  height: 32px; border-radius: 8px; padding: 0 12px; font-size: 12px;
+}
+.card-buttons > button { height: 31px; border-radius: 8px; padding: 0 12px; font-size: 12px; }
+
+/* Search field with a leading icon */
+.search-wrap { position: relative; display: flex; flex: 1 1 220px; min-width: 180px; }
+/* Uppercase label stacked over the search input, sharing the toolbar's flex-end baseline. */
+.search-field { flex: 1 1 260px; min-width: 200px; }
+.search-field .search-wrap { flex: 1 1 auto; min-width: 0; width: 100%; }
+.search-wrap .search-lead { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--text-3); }
+.search-wrap input {
+  flex: 1; height: 32px; padding: 0 12px 0 28px; border-radius: 8px;
+  font-family: var(--font-mono); font-size: 12px;
+}
+
+/* Segmented control */
+.seg { display: flex; align-items: center; height: 32px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+.seg button {
+  position: relative; border: none; border-right: 1px solid var(--line); background: transparent; border-radius: 0;
+  min-width: 42px; height: 30px; padding: 0 12px; font-size: 11.5px; font-family: var(--font-mono);
+  letter-spacing: 0.02em; color: var(--muted);
+}
+.seg button:hover { color: var(--ink); background: var(--surface-2); }
+.seg button.active { color: var(--signal-ink); background: var(--signal); }
+.seg-count { margin-left: 8px; color: var(--text-3); font-size: 10.5px; }
+
+/* Labeled multi-select dropdown — behavior is attached in dashboard.js (dropdownHtml). */
+.drop { display: grid; gap: 4px; position: relative; }
+.drop-btn {
+  display: flex; align-items: center; gap: 8px; height: 32px; min-width: 168px;
+  padding: 0 12px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--code-bg); color: var(--ink);
+}
+.drop-btn:hover { border-color: var(--signal); color: var(--ink); }
+.drop-btn[aria-expanded="true"], .drop-btn.has-selection { border-color: var(--signal); }
+.drop-btn.has-selection { background: var(--signal-soft); }
+.drop-summary {
+  flex: 1; text-align: left; font-family: var(--font-mono); font-size: 11.5px;
+  color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.drop-btn.has-selection .drop-summary { color: var(--ink); }
+.drop-count {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700; padding: 1px 8px;
+  border-radius: 99px; background: var(--signal); color: var(--signal-ink);
+}
+.drop-btn .ic-chevron { flex: 0 0 auto; color: var(--text-3); transform: rotate(-90deg); transition: transform 0.12s ease; }
+.drop-btn[aria-expanded="true"] .ic-chevron { transform: rotate(0deg); }
+.drop-panel {
+  position: fixed; z-index: 200; min-width: 250px; max-width: min(92vw, 420px);
+  background: var(--panel); border: 1px solid var(--border-strong); border-radius: 8px;
+  box-shadow: var(--elev-3); padding: 4px;
+}
+.drop-list { display: grid; gap: 1px; max-height: 240px; overflow-y: auto; overflow-x: hidden; }
+.drop-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px;
+  border: none; border-radius: 6px; background: transparent; text-align: left; color: var(--muted);
+}
+.drop-item:hover { background: var(--surface-2); border-color: transparent; color: var(--ink); }
+.drop-item[aria-checked="true"] { background: var(--signal-soft); color: var(--ink); }
+.drop-box {
+  display: grid; place-items: center; flex: 0 0 auto; width: 15px; height: 15px;
+  border: 1px solid var(--border-strong); border-radius: 6px; background: transparent; color: var(--signal-ink);
+}
+.drop-item[aria-checked="true"] .drop-box { border-color: var(--signal); background: var(--signal); }
+.drop-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 99px; }
+.drop-item-label {
+  flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.drop-item-count { flex: 0 0 auto; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); }
+.drop-footer { display: flex; gap: 4px; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
+.drop-footer button {
+  flex: 1; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px;
+  font-size: 11px; font-weight: 600; color: var(--muted); background: var(--surface-2); justify-content: center;
+}
+
+/* Applied-filters strip — scaffolding for result-count chips with a remove (×) action. */
+.applied-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.applied-filters-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+.applied-filter {
+  display: flex; align-items: center; gap: 8px; height: 24px; padding: 0 4px 0 8px;
+  border: 1px solid var(--signal); border-radius: 99px; background: var(--signal-soft); color: var(--ink); cursor: pointer;
+}
+.applied-filter-label { font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
+.applied-filter-x {
+  display: grid; place-items: center; width: 14px; height: 14px; border-radius: 99px;
+  background: var(--signal); color: var(--signal-ink); font-size: 11px; line-height: 1;
+}
+.applied-filters-reset {
+  height: 24px; padding: 0 8px; font-size: 11px; font-weight: 600; color: var(--muted);
+  background: none; border: none; border-bottom: 1px solid var(--line); border-radius: 0;
+}
+
+/* Network export-selection bar: appears in place of (above) the applied-filters row once at least
+   one row is checked. Same pill/chip visual language as .applied-filter so it reads as part of the
+   same toolbar family rather than a new, unrelated widget. */
+.selection-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
+  padding: 6px 10px; border: 1px solid var(--signal); border-radius: 8px; background: var(--signal-soft);
+}
+.selection-count { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.selection-spacer { flex: 1; }
+.selection-bar button {
+  height: 26px; padding: 0 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px; background: var(--panel);
+}
+.selection-bar button[data-sel-action="clear"] { color: var(--muted); background: transparent; border-color: transparent; }
+
+/* Zero-config category chips (Network toolbar) — client-derived facets, not a server filter.
+   Color comes entirely from the existing .badge-<tone>/.tone-border-<tone> utilities (deterministic
+   per-label tone assignment lives in dashboard.js), so every chip is automatically one of the
+   already-audited signal/put/warn/muted combinations rather than a new color pairing. */
+
+/* Metrics strip — scaffolding for per-view summary rows. */
+.metrics-strip { display: flex; flex-wrap: wrap; flex-shrink: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+.metric { flex: 1 1 130px; min-width: 130px; padding: 8px 16px 12px; border-left: 1px solid var(--line); }
+.metric-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metric-value-row { display: flex; align-items: baseline; gap: 8px; margin-top: 4px; }
+.metric-value { font-family: var(--font-mono); font-size: 19px; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.metric-sub { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Gate banner — capability/host-gate explanation scaffolding. */
+.gate-banner {
+  display: flex; align-items: flex-start; gap: 12px; padding: 12px; margin-bottom: 12px;
+  border: 1px solid var(--border-strong); border-left: 2px solid var(--warn); border-radius: 8px; background: var(--warn-soft);
+}
+.gate-banner .ic { color: var(--warn); flex: 0 0 auto; margin-top: 1px; }
+.gate-banner-title { font-size: 12px; font-weight: 600; color: var(--ink); }
+.gate-banner-body { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+/* Same visual as .gate-banner but a real <button> (the Overview "previous-run-crashed" banner is
+   clickable — jumps to Crashes) so it stays reachable and activatable by keyboard, unlike a div
+   with an onclick. Resets the browser's default button chrome the plain .gate-banner divs never
+   needed. */
+.gate-banner-btn { width: 100%; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.gate-banner-btn:hover { border-color: var(--warn); }
+.gate-banner-code {
+  font-family: var(--font-mono); font-size: 10.5px; padding: 2px 8px; border-radius: 99px;
+  border: 1px solid var(--border-strong); color: var(--warn); white-space: nowrap;
+}
+
+/* Card section shell — scaffolding for card-grid views. */
+.card-shell { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.card-shell-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.card-shell-head .ic { width: 14px; height: 14px; }
+.card-shell-title { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; flex: 1; }
+.card-shell-badge { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--text-3); }
+.card-shell-body { flex: 1; display: flex; flex-direction: column; padding: 12px var(--d-card-pad) var(--d-card-pad); }
+
+/* Toggle switch, 38x22 — scaffolding for capability toggles. */
+.toggle-switch { position: relative; flex: 0 0 auto; width: 38px; height: 22px; border-radius: 99px; border: 1px solid var(--border-strong); background: var(--surface-3); }
+.toggle-switch .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 99px; background: var(--muted); transition: left 0.15s ease; }
+.toggle-switch[aria-checked="true"] { border-color: var(--signal); background: var(--signal); }
+.toggle-switch[aria-checked="true"] .knob { left: 18px; background: var(--signal-ink); }
+.toggle-switch:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Advanced filters disclosure */
+details.adv-filters { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; margin-bottom: 12px; }
+details.adv-filters > summary {
+  list-style: none; cursor: pointer; padding: 10px 14px; display: flex; align-items: center; gap: 8px;
+  color: var(--muted); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+}
+details.adv-filters > summary::-webkit-details-marker { display: none; }
+details.adv-filters > summary .ic { color: var(--text-3); }
+.filter-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 10px;
+  padding: 4px 14px 14px;
+}
+.filter-actions { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; grid-column: 1 / -1; }
+/* A `.filter-grid` used inside a card-shell-body that already has its own padding (Composer's
+   Request card) needs to flush its own to avoid doubling up. */
+.filter-grid-flush { padding: 0; }
+
+/* ---------------- List / detail split ---------------- */
+.split-shell {
+  /* flex: 1 1 auto (no explicit height) inside the view's own flex column above: it grows to fill
+     whatever room is actually left after this view's header/toolbar/filters, and can shrink back
+     down to the 360px floor if that leftover space is tight -- replaces a fixed
+     height: calc(100vh - 260px) that assumed every view's chrome above the shell was the same
+     260px tall. It wasn't (Network alone stacks metrics + toolbar + chips + a selection bar +
+     an adv-filters disclosure on top of the shared view-head), so the guess was either too tall
+     (shell ran past the fold, and .detail-body below couldn't be scrolled into view) or too short
+     (dead space under the shell) depending on which view was showing. */
+  flex: 1 1 0%; min-height: 360px;
+  /* Floors of 300/360 (not the previous 320/400) so the two panes' combined minimum (665px + the
+     5px splitter) stays comfortably under the ~743px actually available at a 1024px viewport with
+     the rail expanded and main-inner's 24px side padding — the previous 320/400 floor (725px)
+     left only ~18px of margin at exactly 1024px, a real overflow risk. */
+  display: grid; grid-template-columns: minmax(300px, var(--list-w, 1fr)) 5px minmax(360px, 1.1fr);
+  /* minmax(0, 1fr), not the implicit `auto` a bare single-row grid gets by default: an `auto` row
+     sizes to the max-content height of whatever's inside it, so one long response body in
+     .detail-body (which wants to be its intrinsic full height, not the shell's) would balloon this
+     row -- and everything above it up the flex chain, since flex-basis:auto reads that same
+     max-content size -- instead of handing .detail-body a bounded box it has to scroll inside. The
+     explicit 0 minimum is what lets the row (and therefore .list-pane/.detail-pane-v2) actually be
+     clamped to the shell's real, filled height so their own overflow rules take over. Reset in the
+     960px stacked override below, where rows are meant to size to content again. */
+  grid-template-rows: minmax(0, 1fr);
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden;
+}
+body.detail-zoom .split-shell { grid-template-columns: 1fr; }
+body.detail-zoom .split-shell > .list-pane, body.detail-zoom .split-shell > .splitter { display: none; }
+
+/* Splitter collapse states (dragged past a threshold near an edge, Home/End, or restored via
+   double-click — see initSplitters in dashboard.js). Full grid-template-columns overrides, not
+   display:none on the pane, so the splitter column survives and stays draggable/focusable at the
+   shell's edge. .list-pane/.detail-pane-v2 are already `overflow: hidden`, so the 0-width column
+   can't paint past its clip. */
+.split-shell.collapse-list { grid-template-columns: 0 5px minmax(360px, 1fr); }
+.split-shell.collapse-detail { grid-template-columns: minmax(300px, 1fr) 5px 0; }
+/* Zoom always wins: it already fully hides the list pane + splitter, so a collapse class left
+   over from before zoom was toggled must not reintroduce the list column. Matched selectors, not
+   just source order, so this holds regardless of where either rule block sits in the file. */
+body.detail-zoom .split-shell.collapse-list,
+body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
+
+/* Drag-time preview: past the collapse threshold but not yet released, so the about-to-vanish
+   pane dims and the splitter flags red rather than the pane silently disappearing mid-drag. */
+.split-shell.collapsing-list .splitter,
+.split-shell.collapsing-detail .splitter { background: var(--error); }
+.split-shell.collapsing-list > .list-pane,
+.split-shell.collapsing-detail > .detail-pane-v2 { opacity: 0.35; transition: opacity 0.1s ease; }
+
+@media (max-width: 960px) {
+  /* flex: 0 0 auto (shrink pinned to 0) instead of the desktop flex: 1 1 auto: stacked mode's two
+     360px-floor panes run well past a typical viewport's remaining height on their own, and
+     shrink: 0 is what keeps this shell pinned at that natural (content-sized) height instead of
+     being squeezed under it -- the parent view (flex: 1 1 0%, shrink allowed) just ends up
+     shorter than this shell needs, and since nothing in the chain clips that overflow, `main`'s
+     overflow-y: auto scrolls the rest into view. Sizing to natural content and letting `main`
+     scroll the excess is exactly what the old auto-height block flow did here. grid-template-rows
+     reverts to the browser default (each of the two stacked panes gets its own content-sized row)
+     since the desktop minmax(0, 1fr) single row no longer applies once list-pane and
+     detail-pane-v2 stack into two rows instead of sharing one. Applied to the collapse-list/
+     collapse-detail variants too (see splitter collapse states above) so a pane collapsed at
+     desktop width doesn't carry that grid-template-columns override into stacked mode. */
+  .split-shell,
+  .split-shell.collapse-list,
+  .split-shell.collapse-detail { grid-template-columns: 1fr; grid-template-rows: none; flex: 0 0 auto; min-height: 0; }
+  .split-shell > .splitter { display: none; }
+  /* height (not just min-height) so the stacked panes are a bounded box, not an unbounded one that
+     only ever grows to fit its content -- .list-body's flex:1;min-height:0;overflow-y:auto (below)
+     needs a definite ancestor size to actually overflow inside of, same as it gets at >=960px from
+     .split-shell's own fixed height. Without a cap here the pane's height:auto simply grows past
+     the virtualizer's first-paint row window and the rest of the list becomes unreachable by any
+     scroll gesture (min-height is a floor, never a ceiling). Applied to both panes, even though
+     .detail-body isn't virtualized, so the two stacked panes stay independently scrollable instead
+     of one collapsing into ordinary page scroll while the other doesn't. */
+  .split-shell > .list-pane { height: min(60vh, 480px); min-height: 360px; }
+  .split-shell > .detail-pane-v2 { height: min(60vh, 480px); min-height: 360px; }
+  /* body.detail-zoom already hides .list-pane/.splitter above (line ~566) so the detail pane is the
+     only thing on screen -- the 60vh/480px cap above exists to keep the *stacked* pane pair each a
+     bounded, independently-scrollable box, which doesn't apply once it's the sole pane. Reset it so
+     zoomed detail can use the full viewport instead of sitting in a short box under it. */
+  body.detail-zoom .split-shell > .detail-pane-v2 { height: auto; min-height: 0; }
+}
+
+.list-pane { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.list-head {
+  display: flex; align-items: center; gap: 12px; padding: 0 12px; height: 30px; flex: 0 0 30px;
+  border-bottom: 1px solid var(--line); background: var(--surface-2);
+}
+.list-head span { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
+/* overflow-anchor: none -- Network/Timeline/Sockets/Push (E4) rebuild this element's content on
+   every scroll-driven virtualizer repaint; the browser's automatic scroll anchoring otherwise
+   fights that rebuild (it tries to hold some now-removed node's visual position), producing a
+   jump. The virtualizer sets scrollTop itself whenever it needs to move it. */
+.list-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overflow-anchor: none; }
+.list-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; height: 30px; flex: 0 0 30px;
+  border-top: 1px solid var(--line); background: var(--surface-2);
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
+}
+
+.col-badge { flex: 0 0 54px; text-align: center; }
+.col-main { flex: 1; min-width: 0; text-align: left; }
+.col-duration { flex: 0 0 74px; text-align: right; }
+.col-status { flex: 0 0 62px; text-align: right; }
+.col-flag { flex: 0 0 34px; text-align: right; }
+@media (max-width: 620px) { .col-duration { display: none; } }
+
+/* Export-selection checkbox (Network list only): header "select all visible" + one per row.
+   Same 24x24/6px-radius footprint as .row-flag so the row height and header never shift when a
+   view opts in. */
+.col-check, .row-check {
+  flex: 0 0 24px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+  border: 1px solid var(--border-strong); border-radius: 6px; background: transparent; color: var(--signal-ink);
+}
+.row-check:hover, .col-check:hover { border-color: var(--signal); }
+.row-check[aria-checked="true"], .col-check[aria-checked="true"] { border-color: var(--signal); background: var(--signal); }
+/* A left accent bar (box-shadow, never background) so a checked-but-not-open-in-detail row still
+   reads as picked without fighting .row.selected's own background/::before for the same pixels. */
+.row.row-picked { box-shadow: inset 2px 0 0 var(--put); }
+
+/* touch-action: none so Pointer Events drive the drag on touch/pen instead of the browser
+   treating the gesture as a page pan. */
+.splitter { background: var(--line); position: relative; min-height: 5px; cursor: col-resize; transition: background 0.15s; touch-action: none; }
+.splitter::before {
+  content: ""; position: absolute; top: 50%; left: -2px; width: 9px; height: 26px; margin-top: -13px;
+  border-radius: 99px; background: var(--surface-3); border: 1px solid var(--border-strong);
+}
+.splitter:hover, .splitter.dragging { background: var(--signal); }
+/* Under a coarse pointer the 5px visual line is well under WCAG 2.5.8's 24px minimum target size.
+   A transparent ::after hit-extension used to grow the draggable area 10px into each neighbor
+   instead, but that overhang sat on top of pane content -- 10px into .list-pane reaches ~2px into
+   the 24px .row-flag button hugging the splitter's left edge. Widen the track itself instead:
+   .split-shell's middle grid column grows from 5px to 16px so the splitter has real hit area of its
+   own, with the painted line repainted as a centered 5px ::after (freeing ::before to stay the
+   handle knob, re-centered for the wider track) instead of the splitter's own full-width
+   background. Scoped to >960px because .splitter is display:none below that -- see the
+   max-width:960px block above, where the panes stack instead. dashboard.js reads the splitter's
+   width via getBoundingClientRect on the list pane, not a hardcoded 5px, so no JS change follows. */
+@media (pointer: coarse) and (min-width: 961px) {
+  .split-shell { grid-template-columns: minmax(300px, var(--list-w, 1fr)) 16px minmax(360px, 1.1fr); }
+  /* Same (0,2,0) specificity as the base .collapse-list/.collapse-detail rules above, restated here
+     so the 16px coarse-pointer track survives collapse instead of losing to the base rules' 5px
+     middle column (equal specificity, base rules come first in source so they'd otherwise win). A
+     collapsed pane on a touch device must keep the same enlarged hit area as the uncollapsed
+     splitter -- it's the only way to grab it back. */
+  .split-shell.collapse-list { grid-template-columns: 0 16px minmax(360px, 1fr); }
+  .split-shell.collapse-detail { grid-template-columns: minmax(300px, 1fr) 16px 0; }
+  .splitter { background: transparent; }
+  /* The base .splitter:hover/.dragging rule above is (0,2,0) and beats this block's (0,1,0)
+     background: transparent regardless of source order -- restate it at equal specificity here so
+     hover/drag can't repaint the whole 16px track; only the centered ::after line lights up. */
+  .splitter:hover, .splitter.dragging { background: transparent; }
+  .splitter::before { left: 3.5px; }
+  .splitter::after {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0; left: 50%; width: 5px; margin-left: -2.5px;
+    background: var(--line);
+  }
+  .splitter:hover::after, .splitter.dragging::after { background: var(--signal); }
+}
+
+.detail-pane-v2 { min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--ground); }
+
+/* ---- List rows ---- */
+.row {
+  position: relative; display: flex; align-items: center; gap: 12px; width: 100%; height: var(--d-row-h);
+  padding: 0 8px 0 12px; text-align: left; cursor: pointer; border: none; border-bottom: 1px solid var(--line);
+  background: transparent; color: var(--ink); font: inherit; font-size: var(--d-row-font); border-radius: 0;
+}
+.row:hover { background: var(--surface-2); }
+.row.selected, .row[aria-selected="true"] { background: var(--signal-soft); }
+.row.selected::before, .row[aria-selected="true"]::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--signal);
+}
+.row-badge {
+  flex: 0 0 54px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+  text-align: center; padding: 2px 0; border-radius: 4px;
+}
+.row-main { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.row-main-text {
+  font-family: var(--font-mono); font-size: var(--d-row-main-font); color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row-tag {
+  flex: 0 0 auto; font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
+  padding: 1px 4px; border-radius: 99px; border: 1px solid var(--border-strong);
+}
+.row-duration { flex: 0 0 74px; font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; color: var(--text-3); }
+.row-status { flex: 0 0 62px; font-family: var(--font-mono); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.row-flag {
+  flex: 0 0 auto; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+  border: none; border-radius: 6px; background: transparent; color: var(--text-3);
+}
+.row-flag:hover { color: var(--signal); border-color: transparent; background: var(--surface-3); }
+.row-flag[aria-pressed="true"] { color: var(--signal-ink); background: var(--signal); }
+
+/* Badge / tag / status color tones -- shared by method, level, direction and provider badges */
+.badge-signal { color: var(--signal); background: var(--signal-soft); }
+.badge-put { color: var(--put); background: var(--put-soft); }
+.badge-warn { color: var(--warn); background: var(--warn-soft); }
+.badge-error { color: var(--error); background: var(--error-soft); }
+.badge-muted { color: var(--muted); background: var(--surface-2); }
+.tone-text-ink { color: var(--ink); }
+.tone-text-signal { color: var(--signal); }
+.tone-text-put { color: var(--put); }
+.tone-text-warn { color: var(--warn); }
+.tone-text-error { color: var(--error); }
+.tone-text-muted { color: var(--muted); }
+.tone-bg-signal { background: var(--signal); }
+.tone-bg-put { background: var(--put); }
+.tone-bg-warn { background: var(--warn); }
+.tone-bg-error { background: var(--error); }
+.tone-bg-strong { background: var(--border-strong); }
+
+/* ---- WebSocket timeline-mode trace rows ---- */
+.trace-row {
+  position: relative; display: grid; grid-template-columns: 74px 20px 1fr; align-items: center; gap: 8px;
+  min-height: var(--d-trace-h); padding: 4px 12px; cursor: pointer; width: 100%; text-align: left;
+  border: none; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit;
+}
+.trace-row:hover { background: var(--surface-2); }
+.trace-row.selected { background: var(--signal-soft); }
+.trace-row.selected::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--signal); }
+.trace-time { display: grid; gap: 2px; justify-items: end; }
+.trace-t { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.trace-gap { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
+.trace-gap.warn { color: var(--warn); }
+.trace-line { position: relative; align-self: stretch; display: block; justify-self: center; width: 20px; }
+.trace-line::before { content: ""; position: absolute; left: 9px; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.trace-dot { position: absolute; left: 3px; top: 50%; margin-top: -8px; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 99px; }
+.trace-dot .ic { width: 9px; height: 9px; }
+.trace-main { display: grid; gap: 4px; min-width: 0; }
+.trace-line1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.trace-dir { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; flex: 0 0 auto; }
+.trace-label { font-family: var(--font-mono); font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trace-sz { flex: 0 0 auto; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); }
+.trace-bar { display: block; height: 5px; min-width: 8px; border-radius: 4px; }
+
+/* ---- List empty state (distinct from the larger .empty-state) ---- */
+.list-empty { display: grid; place-items: center; gap: 8px; padding: 56px 24px; text-align: center; }
+.list-empty .ic { color: var(--text-3); width: 22px; height: 22px; }
+.list-empty-title { font-size: 13px; font-weight: 600; }
+.list-empty-sub { font-size: 11.5px; color: var(--muted); max-width: 260px; }
+
+/* ---- Detail pane header block ---- */
+.detail-head { flex: 0 0 auto; padding: 12px 16px 0; border-bottom: 1px solid var(--line); }
+.detail-head-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.detail-badge { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; padding: 4px 8px; border-radius: 4px; }
+.detail-head-title { font-family: var(--font-mono); font-size: 13px; font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detail-head-status { font-family: var(--font-mono); font-size: 13px; font-weight: 700; }
+.detail-expand { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--muted); }
+.detail-expand.active { border-color: var(--signal); background: var(--signal-soft); color: var(--signal); }
+.detail-facts { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; }
+.detail-fact { display: flex; align-items: baseline; gap: 8px; font-size: 11.5px; }
+.detail-fact-k { font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+.detail-fact-v { font-family: var(--font-mono); color: var(--ink); }
+/* Clickable fact (M2: "mock rule: <id>" linking to the Mocks view) — same layout as a plain
+   .detail-fact but as a button, so it needs its own background/border/padding reset. */
+.detail-fact-link { background: transparent; border: none; padding: 0; border-radius: 4px; cursor: pointer; }
+.detail-fact-link:hover .detail-fact-v { color: var(--signal); text-decoration: underline; }
+
+/* Brief flash on a mock rule row when linked to from the Network detail pane's "mock rule: <id>"
+   fact — respects prefers-reduced-motion via the blanket `animation: none !important` below. */
+@keyframes dcRowFlash { from { background: var(--signal-soft); } to { background: transparent; } }
+.row-flash { animation: dcRowFlash 900ms ease; }
+.detail-actions-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.detail-action-btn { display: flex; align-items: center; gap: 8px; height: 27px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 11.5px; color: var(--ink); background: var(--surface-2); }
+.detail-action-btn.on { color: var(--signal); border-color: var(--signal); background: var(--signal-soft); }
+.detail-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.detail-tabs { display: flex; align-items: center; gap: 2px; margin-top: 12px; flex-wrap: wrap; }
+.detail-tab { position: relative; padding: 0 12px; height: 31px; font-size: 12px; font-weight: 500; color: var(--muted); background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0; }
+.detail-tab.active { font-weight: 600; color: var(--ink); border-color: var(--signal); }
+.detail-tab-count { margin-left: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
+.detail-layout-toggle { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 10px; margin-bottom: 4px; margin-left: auto; border: 1px solid var(--line); border-radius: 8px; font-size: 11.5px; color: var(--muted); background: var(--surface-2); }
+.detail-layout-toggle.on { border-color: var(--signal); background: var(--signal-soft); color: var(--signal); }
+
+/* ---- Find-in-detail bar ---- */
+.detail-find { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.detail-find .search-wrap input { height: 28px; font-size: 11.5px; }
+.detail-find-count { font-family: var(--font-mono); font-size: 10.5px; white-space: nowrap; flex: 0 0 auto; }
+
+/* ---- Scrollable body ---- */
+.detail-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 16px 20px; }
+
+/* Side-by-side panes */
+.sbs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.sbs-grid.stacked { grid-template-columns: 1fr; }
+@media (max-width: 1180px) { .sbs-grid { grid-template-columns: 1fr; } }
+.sbs-pane { min-width: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
+.sbs-pane-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
+.sbs-pane-dot { width: 6px; height: 6px; border-radius: 99px; flex: 0 0 auto; }
+.sbs-pane-side { font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
+/* Meta absorbs the squeeze (ellipsis) so the action buttons never clip at the pane edge. */
+.sbs-pane-meta { font-family: var(--font-mono); font-size: 10.5px; white-space: nowrap; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.sbs-pane-action { display: flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; }
+.sbs-pane-body { padding: 12px; display: grid; gap: 12px; }
+
+/* Collapsible groups (used both inside sbs panes and standalone) */
+.detail-group { min-width: 0; }
+.detail-group-head { display: flex; align-items: center; flex-wrap: nowrap; gap: 8px; margin-bottom: 8px; min-width: 0; }
+.detail-group-toggle { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; background: transparent; border: none; padding: 0; color: var(--text-3); }
+.detail-group-toggle .ic { width: 10px; height: 10px; transition: transform 0.12s ease; }
+.detail-group-toggle[aria-expanded="false"] .ic { transform: rotate(-90deg); }
+.detail-group-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.detail-group-rule { flex: 1; min-width: 8px; height: 1px; background: var(--line); }
+.detail-group-meta { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); white-space: nowrap; }
+.detail-group-copy { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--muted); }
+/* The default 16px .ic overflows the 20px bordered button and paints outside it. */
+.detail-group-copy .ic { width: 11px; height: 11px; }
+.detail-group-empty { display: block; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+
+/* k/v grids */
+.kv-grid { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.kv-grid .kv-k { padding: 4px 8px; background: var(--surface-2); font-family: var(--font-mono); font-size: 11px; color: var(--json-key); overflow-wrap: anywhere; }
+.kv-grid .kv-v { padding: 4px 8px; background: var(--code-bg); font-family: var(--font-mono); font-size: 11px; overflow-wrap: anywhere; }
+.kv-grid-lg { grid-template-columns: minmax(120px, auto) 1fr; border-radius: 8px; }
+.kv-grid.kv-grid-lg .kv-k { padding: 8px 12px; font-size: 11.5px; white-space: nowrap; }
+.kv-grid.kv-grid-lg .kv-v { padding: 8px 12px; font-size: 11.5px; background: var(--panel); word-break: break-all; }
+/* Find-highlight must win over both grid sizes' background overrides above — same (0,3,0)
+   specificity as `.kv-grid.kv-grid-lg .kv-v` but declared after it, so source order decides. */
+.kv-grid .kv-k.hit, .kv-grid .kv-v.hit { background: var(--signal-soft); }
+
+/* Code blocks with JSON syntax tokens */
+.code-block { border: 1px solid var(--line); border-radius: 6px; background: var(--code-bg); padding: 8px 12px; overflow-x: auto; }
+.code-block.code-block-lg { border-radius: 8px; padding: 12px; }
+.code-line { display: flex; font-family: var(--font-mono); font-size: 11.5px; line-height: 1.65; white-space: pre; }
+.code-block-lg .code-line { font-size: 12px; line-height: 1.7; }
+.code-line.hit { background: var(--signal-soft); }
+.code-line.diff { background: var(--warn-soft); }
+.code-pad { color: var(--text-3); }
+.code-key { color: var(--json-key); }
+.code-brace { color: var(--muted); }
+
+/* Fullscreen toggle pinned to every code block's top-right corner (network/diff bodies, socket
+   and push payloads, state/files/mocks/evidence previews — every codeBlockHtml() call). The
+   translucent panel background keeps the button legible without reserving permanent vertical
+   space that would push the first code line down site-wide. */
+.code-block-wrap { position: relative; }
+.code-fullscreen-btn {
+  position: absolute; top: 6px; right: 6px; z-index: 1;
+  display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-2) 80%, transparent);
+  color: var(--muted);
+}
+.code-fullscreen-btn:hover { color: var(--ink); border-color: var(--border-strong); }
+.code-fullscreen-btn .ic { width: 12px; height: 12px; }
+
+/* Timing bars */
+.bars-grid { display: grid; gap: 8px; }
+.bar-row { display: grid; grid-template-columns: 110px 1fr 62px; align-items: center; gap: 12px; }
+.bar-row-label { font-size: 11.5px; color: var(--muted); }
+.bar-track { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: block; }
+.bar-fill { display: block; height: 8px; }
+.bar-row-val { font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+
+/* Note textarea */
+.detail-note { display: grid; gap: 4px; margin-top: 16px; }
+.detail-note > span { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+.detail-note textarea { width: 100%; padding: 8px 12px; font-size: 12px; resize: vertical; }
+
+/* Redaction footnote */
+.detail-footnote { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+/* Timeline event detail: crash/ANR/log stack trace (payloadJson.stackTrace) — wraps long lines
+   instead of the body-viewer's exact-width <pre> since this pane is comparatively narrow. */
+.detail-stacktrace {
+  font-family: var(--font-mono); font-size: 11.5px; line-height: 1.6; background: var(--code-bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto;
+  white-space: pre-wrap; word-break: break-word; color: var(--ink); margin: 4px 0 0;
+}
+.detail-footnote .ic { color: var(--text-3); flex: 0 0 auto; margin-top: 1px; }
+.detail-footnote span { font-size: 11.5px; color: var(--muted); }
+
+/* ---------------- Empty states ---------------- */
+.empty-state {
+  /* grid-template-columns is explicit (not the implicit single `auto` column display:grid would
+     otherwise pick) so the column's max track size is capped at the container's own width —
+     without it, a wide child (long connect-instruction copy, task E2) sizes the implicit column to
+     its own content and silently overflows/clips inside an `overflow-x:hidden` ancestor like
+     .list-body instead of wrapping. Verified at 375px: see the E1 report. */
+  display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; gap: 8px;
+  text-align: center; padding: 56px 24px; height: 100%; min-height: 220px;
+}
+.empty-icon { width: 22px; height: 22px; color: var(--text-3); }
+.empty-title { font-size: 13px; font-weight: 600; }
+.empty-sub { font-size: 11.5px; color: var(--muted); max-width: 260px; line-height: 1.5; text-wrap: pretty; }
+.empty { padding: 55px 18px; color: var(--muted); text-align: center; }
+
+/* Task E2: first-run "not connected" empty states carry the connect steps, not a passive
+   sentence, so they need more width and left-aligned body copy than the generic centered
+   icon/title/sub built for a one-line hint. Icon and title stay centered (the grid's default
+   place-items); `justify-items: stretch` lets .empty-sub and .connect-steps below span the full
+   (capped) width instead of shrink-wrapping to their own centered column. */
+.empty-state.empty-connect { justify-items: stretch; max-width: 480px; margin: 0 auto; gap: 10px; }
+.empty-state.empty-connect .empty-icon,
+.empty-state.empty-connect .empty-title { justify-self: center; }
+.empty-state.empty-connect .empty-sub { max-width: none; text-align: left; line-height: 1.6; }
+/* Steps list used both inside .empty-connect and the Overview connect card (a .card-shell, not
+   an .empty-state) — kept unscoped so both can reuse it verbatim. */
+/* Same implicit-column trap as .empty-state above: an explicit minmax(0,1fr) column keeps this
+   list from sizing itself to its widest (unwrapped) line and overflowing its container. */
+.connect-steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; text-align: left; font-size: 11.5px; line-height: 1.55; color: var(--muted); }
+/* Block layout, not flex: a flex item mixing wrappable text with a `white-space:nowrap` <code>
+   span (the adb command, the #code= fragment) got an unreliable automatic min-size in testing —
+   a line break that should have landed before the nowrap span sometimes didn't, so the span
+   overflowed its (clipped) list-body instead of wrapping. Reserving the arrow's column with
+   padding + absolute positioning sidesteps flex's text-sizing quirks entirely: the <li> is a
+   plain block and wraps exactly like a paragraph. Verified at 375px: see the E1 report. */
+.connect-steps li { position: relative; padding-left: 16px; }
+.connect-steps li::before { content: "\2192"; position: absolute; left: 0; top: 0; color: var(--signal); font-weight: 700; }
+/* Inline copyable command/credential fragments in connect copy (adb reverse, #code=, bare URLs) —
+   the terminal-panel equivalent of `kbd`, sized to sit inline in a sentence rather than a block. */
+.inline-code {
+  font-family: var(--font-mono); font-size: 0.92em; color: var(--ink);
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+  padding: 1px 6px; white-space: nowrap;
+}
+
+/* ---------------- Card-grid views ----------------
+   `.cards-grid` replaces the legacy `.card-grid`/`.card` pair for the ten card-based views
+   (Overview, SDK Health, Composer, Mocks, Capture rules, State & Flags, Preferences, Database,
+   Files, Session & Security) plus the new Evidence tray. Span capping is done here with a
+   container query instead of a JS viewport-width resize listener — same outcome (span 2/3 cards
+   fold to 1 column before they'd overflow a narrow rail-adjacent grid), far less code to keep
+   in sync. */
+.cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--d-card-gap); align-items: stretch; container-type: inline-size; }
+.card-shell[data-span="2"] { grid-column: span 2; }
+.card-shell[data-span="3"] { grid-column: span 3; }
+@container (max-width: 1044px) { .card-shell[data-span="3"] { grid-column: span 2; } }
+@container (max-width: 692px) { .card-shell[data-span] { grid-column: span 1; } }
+
+.card-lede { margin: 0 0 12px; font-size: 12px; color: var(--muted); text-wrap: pretty; }
+.card-fields { display: grid; gap: 12px; margin-bottom: 12px; }
+/* height: 32px here used to combine with the generic `input, select, textarea, button` rule's
+   `padding: 9px 11px` to leave only a 12px content box (32 - 18 padding - 2 border) for text --
+   less than even this font's own ascent+descent at 12px, let alone the line-height the density
+   tokens (--d-body-lh, 1.5 advanced / 1.65 simple) compute for it. Every sibling rule elsewhere
+   in this file that fixes a control's height (`.search-wrap input`, `.toolbar > button`, `.seg
+   button`) also zeroes the vertical padding for exactly this reason; this rule never did. Zero
+   only padding-top/-bottom (not the shorthand) so a select's `padding-right: 28px` arrow gutter
+   and an input's 11px horizontal padding stay untouched. */
+.card-fields label.field input, .card-fields label.field select {
+  height: 32px; padding-top: 0; padding-bottom: 0; font-family: var(--font-mono); font-size: 12px;
+}
+.card-fields label.field textarea { font-family: var(--font-mono); font-size: 12px; }
+/* A `.field` that should span every column of its `.card-fields` grid (multi-line inputs). */
+.field-full { grid-column: 1 / -1; }
+
+.card-stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.card-stack-bar { display: flex; height: 10px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.card-stack-legend { display: flex; flex-wrap: wrap; gap: 12px; }
+.card-stack-legend-item { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
+.card-stack-legend-item .val { font-family: var(--font-mono); color: var(--ink); }
+.card-stack-dot { width: 8px; height: 8px; border-radius: 4px; flex: 0 0 auto; }
+
+.card-rows { display: grid; gap: 1px; margin-bottom: 12px; }
+.card-row { display: grid; grid-template-columns: minmax(110px, 38%) 1fr auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.card-row:last-child { border-bottom: none; }
+.card-row-k { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-row-v { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.card-row-tag { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border-strong); white-space: nowrap; }
+
+.card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.card-metric { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.card-metric-label { font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-metric-val { font-family: var(--font-mono); font-size: 17px; margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.card-toggles { display: grid; gap: 1px; margin-bottom: 12px; }
+.card-toggle-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.card-toggle-row:last-child { border-bottom: none; }
+.card-toggle-text { flex: 1; min-width: 0; }
+.card-toggle-k { display: block; font-family: var(--font-mono); font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-toggle-sub { display: block; font-size: 11px; color: var(--text-3); margin-top: 1px; }
+
+.card-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; }
+.card-table { border-collapse: collapse; width: 100%; min-width: 100%; }
+.card-table th { text-align: left; padding: 8px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
+.card-table td { padding: 8px 12px; border-bottom: 1px solid var(--line); font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+.card-table tr:last-child td { border-bottom: none; }
+
+.min-w0 { min-width: 0; }
+/* Per-field width overrides for toolbar/card-fields `.field` labels whose control needs more
+   room than the default (a select or path input, mostly). */
+.field-w150 { min-width: 150px; }
+.field-w200 { min-width: 200px; }
+.field-w240 { min-width: 240px; }
+.mt-10 { margin-top: 10px; }
+.mt-12 { margin-top: 12px; }
+.card-findings { display: grid; gap: 8px; margin-bottom: 12px; }
+.card-finding { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 12px; border: 1px solid var(--line); border-left: 2px solid var(--border-strong); border-radius: 8px; background: var(--surface-2); }
+.card-finding-signal { border-left-color: var(--signal); }
+.card-finding-warn { border-left-color: var(--warn); }
+.card-finding-error { border-left-color: var(--error); }
+.card-finding-put { border-left-color: var(--put); }
+.card-finding-sev { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em; padding: 4px 8px; height: 19px; border-radius: 99px; border: 1px solid; white-space: nowrap; }
+.card-finding-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.card-finding-title { font-size: 12.5px; font-weight: 600; }
+.card-finding-where { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); }
+.card-finding-body { font-size: 11.5px; color: var(--muted); margin-top: 4px; text-wrap: pretty; }
+.card-finding-fix { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; }
+.card-finding-fix .ic { color: var(--signal); flex: 0 0 auto; margin-top: 1px; width: 13px; height: 13px; }
+.card-finding-fix span { font-size: 11.5px; color: var(--ink); text-wrap: pretty; }
+
+/* max-height is a CSS custom property (per-card `c.treeMax`, threaded through
+   cardTreeHtml/cardHtml) so callers can override without an inline max-height. */
+.card-tree { display: grid; gap: 1px; max-height: var(--tree-max, 320px); overflow-y: auto; overflow-x: hidden; margin-bottom: 12px; }
+.card-tree-node { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; height: 29px; padding: 0 8px; border-radius: 6px; text-align: left; background: transparent; border: none; }
+.card-tree-node .ic { flex: 0 0 auto; width: 14px; height: 14px; }
+.card-tree-node-label { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-tree-node-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); }
+.card-tree-node.selected { background: var(--signal-soft); }
+
+.card-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 12px; }
+.card-buttons .ic { width: 13px; height: 13px; }
+
+.tone-border-signal { border-color: var(--signal); }
+.tone-border-warn { border-color: var(--warn); }
+.tone-border-error { border-color: var(--error); }
+.tone-border-put { border-color: var(--put); }
+.tone-border-muted { border-color: var(--border-strong); }
+
+/* Toolbar group (a labeled cluster of segments/dropdowns inside `.toolbar`) — replaces the
+   inline label styles previously repeated per view. `.toolbar-group` lays the label beside its
+   control (Database's Sort); `.toolbar-group-stack` lays the label above it (Timeline/Network/
+   WebSockets' Level/Source/Status/Method/Frame type/Direction/View). */
+.toolbar-group { display: flex; align-items: center; gap: 8px; }
+.toolbar-group-stack { display: grid; gap: 5px; }
+.toolbar-group-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+/* Pushes trailing toolbar controls (e.g. "Bookmarked only") to the right edge. */
+.toolbar-spacer { flex: 1; }
+
+.block-title { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); margin: 16px 0 6px; }
+.card-field-help { font-size: 11px; color: var(--text-3); }
+
+/* ---------------- JSON tree (Composer's execute/import result, and — via the shared
+   renderJson()/mountBodyViewers() body-viewer below — any detected-JSON network/socket body) */
+.json-tree { font-family: var(--font-mono); font-size: 11.5px; line-height: 1.6; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+.json-toggle { cursor: pointer; user-select: none; }
+.json-key { color: var(--json-key); }
+.json-string { color: var(--json-string); }
+.json-number { color: var(--json-number); }
+.json-boolean { color: var(--json-boolean); }
+.json-null { color: var(--json-null); font-style: italic; }
+.json-arrow { color: var(--json-null); }
+.json-summary { display: none; color: var(--muted); font-style: italic; }
+.json-collapsed .json-summary { display: inline; }
+.json-children { margin-left: 14px; border-left: 1px solid var(--line); padding-left: 12px; }
+.json-collapsed > .json-children { display: none; }
+.json-collapsed > div:last-child { display: none; }
+/* Chunk-expand stub (JSON_TREE_CHUNK_SIZE) — the clickable "… N more" left behind when a
+   container has more sibling entries than one chunk builds at a time. */
+.json-more-stub {
+  display: inline-block; margin: 2px 0; padding: 2px 8px; border: 1px dashed var(--line);
+  border-radius: 6px; background: transparent; color: var(--muted);
+  font-family: var(--font-mono); font-size: 11px; cursor: pointer;
+}
+.json-more-stub:hover { color: var(--ink); border-color: var(--border-strong); }
+.brace { font-weight: 700; }
+.brace-0 { color: var(--json-brace-0); }
+.brace-1 { color: var(--json-brace-1); }
+.brace-2 { color: var(--json-brace-2); }
+.brace-3 { color: var(--json-brace-3); }
+.brace-4 { color: var(--json-brace-4); }
+/* Mocked-response diff highlight (diffMockBody): flags a json-tree row whose field changed or was
+   added versus the mock rule's source snapshot. Same token/visual weight as the code-line/kv-grid
+   search-hit highlight above (--signal-soft) — not the baseline-diff .code-line.diff, which uses
+   --warn-soft for a different comparison (this transaction vs. a separately pinned one). */
+.json-diff-hit { background: var(--signal-soft); border-radius: 3px; }
+
+/* ---------------- Body viewer: Pretty/Raw toggle wrapping a JSON tree (renderJson) or an
+   indented XML <pre>, used for network request/response bodies and text socket frames. Raw mode
+   reuses the pre-existing .code-block exactly as before, so bodies that aren't JSON/XML (or are
+   over the format-size guard) render exactly like they always did. */
+.body-viewer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.body-viewer-seg button { font-size: 10.5px; padding: 3px 10px; }
+/* Pretty mode's copy/fullscreen affordances (S15b) — Raw mode already gets both for free from
+   codeBlockHtml's own button, but Pretty is the default view and previously had neither. */
+.body-viewer-tools { display: flex; gap: 4px; flex-shrink: 0; }
+.body-viewer-tool-btn {
+  display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--muted);
+}
+.body-viewer-tool-btn:hover { color: var(--ink); border-color: var(--border-strong); }
+.body-viewer-tool-btn .ic { width: 12px; height: 12px; }
+.body-viewer-pretty[hidden], .body-viewer-raw[hidden] { display: none; }
+.body-viewer-pretty .json-tree { margin: 0; }
+.body-viewer-xml {
+  font-family: var(--font-mono); font-size: 11.5px; line-height: 1.6; background: var(--code-bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto;
+  white-space: pre; color: var(--ink); margin: 0;
+}
+
+/* ---------------- Pager ---------------- */
+/* Lives inside the list pane as a fixed bottom row (it pages the LIST); floating it after the
+   full-height split shell left it clipped below the viewport. */
+.pager { display: flex; justify-content: space-between; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--line); background: var(--surface-2); flex: 0 0 auto; }
+.pager > button { height: 26px; padding: 0 12px; font-size: 11.5px; border-radius: 6px; }
+
+/* ---------------- Modal ---------------- */
+.modal-overlay {
+  position: fixed; inset: 0; background: color-mix(in srgb, #000 55%, transparent);
+  backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 16px; animation: fadein 0.15s ease;
+}
+.modal-overlay[hidden] { display: none; }
+.modal {
+  background: var(--panel); border: 1px solid var(--border-strong); border-radius: 8px;
+  width: 100%; max-width: 480px; max-height: 85vh; display: flex; flex-direction: column;
+  box-shadow: var(--elev-3); animation: modalpop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+@keyframes modalpop { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.modal-title { font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+.modal-title .ic { color: var(--signal); }
+.modal-close { border: 1px solid var(--line); border-radius: 8px; background: transparent; font-size: 20px; line-height: 1; color: var(--text-3); padding: 0 4px; }
+.modal-close:hover { color: var(--ink); border-color: var(--border-strong); }
+/* Mock rule dialog (M2): wider than the generic 480px modal to fit a two-column field grid
+   without the path/headers/body rows wrapping too tightly. */
+.modal.modal-wide { max-width: 640px; }
+.mock-body-toolbar { display: flex; align-items: center; gap: 12px; margin-top: -4px; }
+
+/* Code block fullscreen overlay: near-viewport-size instead of the generic 480px modal so a long
+   JSON/code body gets real room. Its .code-block-lg content scrolls inside .modal-body-code. */
+.modal.modal-fullscreen { max-width: 96vw; width: 96vw; height: 92vh; max-height: 92vh; }
+.modal-body-code { padding: 12px 16px 16px; }
+
+/* Shortcuts modal is narrower than the generic .modal and its close button/body
+   diverge from the generic pattern — scoped overrides rather than changing every modal. */
+#shortcutsModal .modal { max-width: 440px; }
+#shortcutsModal .modal-title .ic { width: 15px; height: 15px; }
+#shortcutsModal .modal-close {
+  width: 28px; height: 28px; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--muted);
+}
+#shortcutsModal .modal-body { padding: 8px 16px 16px; }
+.modal-body { padding: 16px; overflow-y: auto; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 16px; border-top: 1px solid var(--line); }
+
+/* Keyboard shortcut help */
+.shortcut-grid { display: grid; }
+.shortcut-row { display: flex; align-items: center; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.shortcut-row span { color: var(--muted); font-size: 12.5px; flex: 1; }
+kbd {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--ink);
+  background: var(--code-bg); border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: 4px 0; min-width: 34px; text-align: center; flex: 0 0 auto;
+}
+
+/* ---------------- Toast ---------------- */
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(8px);
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel); color: var(--ink); padding: 12px 16px;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  font-size: 12.5px; box-shadow: var(--elev-3); opacity: 0; pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s; z-index: 1000; max-width: 90vw;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+.toast .ic { color: var(--signal); flex: 0 0 auto; }
+.toast.toast-error { border-color: var(--error); background: var(--error-soft); }
+.toast.toast-error .ic { color: var(--error); }
+.toast-close {
+  display: inline-flex; align-items: center; justify-content: center; margin-left: 4px;
+  width: 20px; height: 20px; padding: 0; border: none; background: transparent; color: var(--muted);
+  cursor: pointer; border-radius: 4px; flex: 0 0 auto;
+}
+.toast-close:hover { background: var(--surface-3); color: var(--ink); }
+.toast-close .ic { color: inherit; }
+
+/* ============================================================
+   Responsive — task E1 (mobile-first pass, done together with E6's density tokens above)
+   ============================================================
+   The breakpoint ladder, rationalised from the ad hoc 960/780/680/620/560/480/1000/1180 set that
+   was already scattered through the file. Every one of those eight values turned out to be doing
+   real, distinct work, so none were dropped — they're now a documented width-descending ladder
+   plus two container queries, instead of unexplained numbers next to the rules they touch:
+
+     1180px  .sbs-grid          side-by-side request/response (or diff) panes stack to one column.
+     1044px  .cards-grid (cq)   a data-span="3" card folds to span 2 (container query, not viewport
+                                 — it reacts to the grid's own rendered width, e.g. rail collapsed
+                                 vs expanded, not just the window).
+     1000px  .view-badge        the view-badge chip next to the view title hides — below this
+                                 width there's no longer room for badge + title + hint on one
+                                 baseline (.view-hint is the one that must stay, per §2).
+      960px  .split-shell        list+detail split panes stack to one column (list on top);
+             .host-line          topbar host/build info hides — the session-pill's status text
+                                 becomes the only connect instruction from here down (see the note
+                                 by .session-pill above; it must never also go display:none).
+       780px  .rail               collapses to a 58px icon-only strip (labels/counts/shortcuts hide);
+             .main-inner         side padding tightens 24px → 14px; .view bottom padding grows so
+                                 content clears the shorter viewport instead of hugging the edge.
+       692px  .cards-grid (cq)   any remaining data-span card folds to span 1 (full width).
+       680px  .session-pill      first width cut (260px → 150px) as the topbar's shrinkable slot.
+       620px  .col-duration      the list row's "duration" column hides — least essential at a
+                                 glance; still in the detail pane once a row is opened.
+       560px  .stream-seg        LIVE/PAUSED labels hide, icon-only.
+       480px  .session-pill      second width cut (150px → 108px);
+             .brand-name        wordmark shrinks;
+             .topbar            wraps to two rows (a full-width spacer forces the break right
+                                 before the always-visible icon-button cluster) — below this width
+                                 the topbar's non-shrinkable groups (rail-toggle + brand + stream-seg
+                                 + the four topbar-action buttons) no longer fit on one line even
+                                 with the session-pill collapsed to nothing, and nothing here is
+                                 ever allowed to just disappear.
+
+   Orthogonal, not width-keyed: `prefers-reduced-motion: reduce` (motion off) and `pointer: coarse`
+   (touch target floor) below — both apply at any viewport width.
+
+   Verified against zero horizontal body overflow at 375 / 768 / 1024 — see the implementation
+   report for the per-view check list; this comment is the contract those checks were run against.
+   ============================================================ */
+@media (max-width: 780px) {
+  .main-inner { padding: 16px 14px 0; }
+  .view.active { padding-bottom: 40px; }
+}
+@media (max-width: 480px) {
+  .brand-name { font-size: 11.5px; }
+  .topbar { padding: 0 10px; gap: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+@media (pointer: coarse) {
+  input, select, button, textarea { min-height: 44px; }
+  /* The blanket 44px bump above breaks dense instrument-panel chrome that already meets WCAG
+     2.5.8's 24px minimum target size at its mock geometry: .stream-seg and .seg sit in
+     fixed-height, overflow:hidden containers (26px / 32px) so a 44px child gets visibly clipped;
+     .rail-toggle (30x30) and .rail button (32px nav rows) just get inflated past their mock size;
+     .row-flag (24x24) sits in a fixed 34px .row with no overflow clipping, so inflating it would
+     make it poke into neighboring rows -- .row-check/.col-check share that same unclipped .row
+     geometry (and the same 24x24 footprint the export-selection checkbox note above ties to
+     .row-flag on purpose) plus the list virtualizer's own fixed row-height math, so they get
+     inflated and desynced from it the same way; .toggle-switch (38x22) has an
+     absolutely-positioned 16x16 knob pinned to `top: 2px`, so bumping the switch's own box taller
+     leaves the knob off-center inside it. `min-height` (not `height`) is overridden here — these
+     selectors already win the cascade on specificity, but height/min-height are different
+     properties, so the smaller explicit height never on its own beats a larger min-height. */
+  .rail-toggle,
+  .rail button,
+  .stream-seg button,
+  .seg button,
+  .row-flag,
+  .row-check,
+  .col-check,
+  .toggle-switch {
+    min-height: 0;
+  }
+  /* The switch keeps its 38x22 visual (min-height:0 above), but 22px is under WCAG 2.5.8's 24px
+     floor. Same technique as .splitter::after further up: a transparent ::after hit-extension grows
+     the tappable area without touching the painted box -- .toggle-switch is already `position:relative`
+     and the knob is a child, so the extension sits free above both. Extends top/bottom only (the
+     38px width already clears 24px) to reach 44px tall, matching the blanket coarse-pointer target
+     size this same block opts dense chrome out of. */
+  .toggle-switch::after {
+    content: "";
+    position: absolute;
+    top: -11px; bottom: -11px; left: 0; right: 0;
+  }
+}
+
+/* Keyboard skip link: off-screen until focused, then a visible signal-green pill. */
+.skip-link {
+  position: absolute; left: 8px; top: -48px; z-index: 1000;
+  background: var(--signal); color: var(--signal-ink); font-weight: 700;
+  padding: 8px 14px; border-radius: 8px; text-decoration: none;
+  transition: top 0.15s ease;
+}
+.skip-link:focus { top: 8px; outline: 3px solid var(--ink); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .skip-link { transition: none; } }
+
+/* ============================================================
+   Simple / Advanced mode (progressive disclosure) — task D1.
+   Trims are CSS-first: the underlying control/state is untouched, only its rail/toolbar/detail
+   affordance is hidden in Simple mode, so switching back to Advanced never loses anything.
+   ============================================================ */
+body.mode-simple .metrics-strip { display: none; }
+body.mode-simple #networkMethodGroup,
+body.mode-simple #networkHostDrop,
+body.mode-simple #networkToggleHost,
+body.mode-simple #networkAdvFilters,
+body.mode-simple #socketFrameTypeGroup,
+body.mode-simple #socketDirectionGroup,
+body.mode-simple #socketConnDrop,
+body.mode-simple #timelineSourceGroup,
+body.mode-simple #timelineBookmarkOnly,
+body.mode-simple #mocksConflictsCard { display: none; }
+body.mode-simple #networkDetailPane [data-detail-tab="headers"],
+body.mode-simple #networkDetailPane [data-detail-tab="timing"],
+body.mode-simple #networkDetailPane [data-detail-tab="related"] { display: none; }
+/* Pin/fetch: unlike the tabs above, Pin's visibility depends on runtime state (whether a baseline
+   is already pinned), not just the view — dashboard.js sets this class per-render (see
+   renderNetworkDetail's `hideInSimple`) instead of a blanket id selector, so an already-pinned
+   baseline's Pin/Unpin action never gets stranded behind a mode switch. `fetch` always sets it. */
+body.mode-simple .detail-action-hide-simple { display: none; }
+
+/* Rail "Advanced" disclosure group: JS moves the advanced-only view buttons into #railAdvancedBody
+   only in Simple mode (advanced mode keeps them in their original thematic groups, unchanged). */
+.rail-group-label.rail-adv-toggle {
+  /* Must re-declare display: the .rail button rule (0,1,1) otherwise wins over
+     .rail-group-label (0,1,0) and grids the ADVANCED label into a 17px icon track. */
+  display: flex; align-items: center; gap: 8px; height: auto;
+  width: 100%; border: none; border-radius: 0; background: transparent; color: var(--text-3);
+  font: inherit; cursor: pointer; padding: 0 8px 8px;
+}
+.rail-group-label.rail-adv-toggle:hover { color: var(--signal); }
+.rail-group-label.rail-adv-toggle:hover .text { color: var(--signal); }
+.rail-adv-chevron { transform: rotate(-90deg); transition: transform 0.12s ease; margin-left: -4px; }
+#railGroupAdvanced.open .rail-adv-chevron { transform: rotate(0deg); }
+#railAdvancedBody .rail-name { font-size: 13px; }
+body.mode-advanced #railGroupAdvanced { display: none; }
+body.mode-simple #railGroupData { display: none; }
+
+/* Shortcuts modal: rows whose only UI affordance lives in Advanced mode stay listed (never
+   hidden) but read as muted with an "(advanced)" suffix while Simple mode is active. */
+.shortcut-adv-note { display: none; }
+body.mode-simple .shortcut-row.adv-only span { color: var(--text-3); }
+body.mode-simple .shortcut-row.adv-only .shortcut-adv-note { display: inline; }
+
+/* ---------------- Screenshot thumbnails (evidence tray, timeline detail) ----------------
+   Attachment bytes only ever arrive via an authenticated fetch (GET /api/v1/attachments/{id}
+   needs the bearer header, so a bare <img src> can't reach it) — dashboard.js fetches the bytes
+   and hands this an object URL once resolved. UNREDACTED reuses the existing badge-error tone
+   (no new token) — screenshots are unredactable by construction (workstream B), so this is the
+   honesty badge the whole storage change exists to support. */
+.evidence-thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 12px; }
+.evidence-thumb-card { position: relative; width: 132px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--code-bg); }
+.evidence-thumb-card img { display: block; width: 100%; height: 88px; object-fit: cover; cursor: zoom-in; background: var(--surface-2); }
+.evidence-thumb-card button.evidence-thumb-btn { display: block; width: 100%; padding: 0; border: none; background: none; cursor: zoom-in; }
+.evidence-thumb-card button.evidence-thumb-btn:hover { border: none; }
+.evidence-thumb-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 5px 7px; font-size: 10.5px; color: var(--muted); }
+.evidence-thumb-badge {
+  position: absolute; top: 5px; left: 5px; padding: 2px 6px; border-radius: 4px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--error); background: var(--error-soft); border: 1px solid var(--error);
+}
+/* Small inline tone pill (the UNREDACTED marker inside the attachments table, elsewhere any
+   caller needs a tone badge that isn't the fixed-width .row-badge/.detail-badge). Combine with an
+   existing .badge-<tone> class for color — no new token, reuses the same pairs already vetted for
+   AA contrast on .row-badge/.detail-badge. */
+.badge-pill { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+
+/* ---------------- Crashes: breadcrumb strip ----------------
+   A bounded ring-buffer of already-redacted timeline summaries leading up to the crash
+   (CrashPolicy.breadcrumbDepth) — a compact horizontal trail, oldest first, scrolling inside its
+   own container so a full 50-entry buffer never widens the detail pane. */
+.crumb-strip { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 8px; margin: 4px 0 0; }
+.crumb {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; min-width: 132px; max-width: 200px;
+  padding: 6px 9px; border: 1px solid var(--line); border-left: 2px solid var(--border-strong);
+  border-radius: 6px; background: var(--surface-2); font-size: 10.5px;
+}
+.crumb-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--text-3); }
+.crumb-summary { color: var(--ink); line-height: 1.4; white-space: normal; word-break: break-word; }
+.crumb.crumb-sev-error { border-left-color: var(--error); }
+.crumb.crumb-sev-warn { border-left-color: var(--warn); }
+.crumb-empty { font-size: 11.5px; color: var(--muted); padding: 4px 0 8px; }
+

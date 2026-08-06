@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:MockEngine.kt$MockEngine$10</ID>
+    <ID>MagicNumber:MockEngine.kt$MockEngine$100</ID>
+    <ID>MaxLineLength:MockEngine.kt$MockEngine$listOfNotNull(method, scheme, host, bodyPredicate).size * 100 + path.count { it.isLetterOrDigit() } + queryPredicates.size * 10</ID>
+    <ID>MaxLineLength:MockEngine.kt$MockEngine$metadata.copy(enabled = metadata.enabled &amp;&amp; installCompatible &amp;&amp; (sameVersion || versionCompatible))</ID>
+    <ID>MaxLineLength:MockEngineConflictTest.kt$MockEngineConflictTest$val specific = MockRule(id = "specific", priority = 1, method = "GET", host = "api.example.test", path = "/orders")</ID>
+    <ID>MaxLineLength:MockEngineTest.kt$MockEngineTest$MockEngine(listOf(rule), bodyMatchingEnabled = true, maxBodyPredicateBytes = 4).decide(request) is MockDecision.Passthrough</ID>
+    <ID>MaxLineLength:MockEngineTest.kt$MockEngineTest$action = MockAction.TemplateResponse(200, "{\"path\":\"{{path}}\",\"tenant\":\"{{header.X-Tenant}}\"}")</ID>
+    <ID>MaxLineLength:MockEngineTest.kt$MockEngineTest$assertEquals("exact", (engine.decide(MockRequest("GET", "https", "api.test", "/orders")) as MockDecision.Matched).rule.id)</ID>
+    <ID>MaxLineLength:MockEngineTest.kt$MockEngineTest$assertEquals("fixture", (engine.decide(MockRequest("GET", "https", "api.test", "/orders")) as MockDecision.Matched).rule.id)</ID>
+    <ID>MaxLineLength:MockEngineTest.kt$MockEngineTest$assertEquals("orders", (engine.decide(MockRequest("GET", "https", "api.test", "/orders")) as MockDecision.Matched).rule.id)</ID>
+    <ID>MaxLineLength:MockEngineTest.kt$MockEngineTest$assertTrue(changedInstall.decide(MockRequest("GET", "https", "api.test", "/orders")) is MockDecision.Passthrough)</ID>
+    <ID>MaxLineLength:MockEngineTest.kt$MockEngineTest$assertTrue(incompatibleVersion.decide(MockRequest("GET", "https", "api.test", "/orders")) is MockDecision.Passthrough)</ID>
+    <ID>ReturnCount:MockEngine.kt$MockEngine$fun decide(request: MockRequest): MockDecision</ID>
+    <ID>ReturnCount:MockEngine.kt$MockEngine$private fun bodyMatches( predicate: Pattern?, body: String?, ): Boolean</ID>
+    <ID>TooGenericExceptionCaught:MockEngine.kt$MockEngine$error: Throwable</ID>
+    <ID>TooManyFunctions:MockEngine.kt$MockEngine</ID>
+  </CurrentIssues>
+</SmellBaseline>

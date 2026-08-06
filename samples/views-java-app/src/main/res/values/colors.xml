@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ground">#0B0E0D</color>
+    <color name="surface">#151A18</color>
+    <color name="line">#344039</color>
+    <color name="ink">#E7E5D8</color>
+    <color name="muted">#92968E</color>
+    <color name="signal">#B7ED65</color>
+    <color name="signalPressed">#93C13F</color>
+    <!-- Same error-red used by compose-app's MaterialTheme.colorScheme.error and
+         foundation-app's HAZARD constant, so the destructive area reads consistently
+         across every sample. -->
+    <color name="hazard">#FF715E</color>
+    <color name="hazardPressed">#D65A49</color>
+</resources>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backs the `${applicationId}.devconsole.files` FileProvider declared in AndroidManifest.xml.
+  Each entry mirrors one of AndroidFileInspector's `rootDirs` exactly (see its doc comment: "files",
+  "cache", "external-files", "no-backup") so a file the Files screen can browse is always a file
+  FileProvider is willing to hand out a content:// URI for, and nothing outside those roots ever is.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="files" path="." />
+    <cache-path name="cache" path="." />
+    <external-files-path name="external-files" path="." />
+    <!-- getNoBackupFilesDir() is the sibling "no_backup" directory next to getFilesDir(). -->
+    <files-path name="no-backup" path="../no_backup/" />
+</paths>

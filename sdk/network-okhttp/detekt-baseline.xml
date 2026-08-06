@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MaxLineLength:DevConsoleOkHttpEventListenerFactory.kt$DevConsoleOkHttpEventListenerFactory$internal</ID>
+    <ID>MaxLineLength:DevConsoleOkHttpInterceptorTest.kt$DevConsoleOkHttpInterceptorTest$val transactions = InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))</ID>
+    <ID>TooGenericExceptionCaught:DevConsoleOkHttpInterceptor.kt$DevConsoleOkHttpInterceptor$error: Exception</ID>
+  </CurrentIssues>
+</SmellBaseline>

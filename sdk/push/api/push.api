@@ -1,0 +1,121 @@
+public final class io/devconsole/push/InMemoryPushStore : io/devconsole/push/PushStore {
+	public fun <init> ()V
+	public fun <init> (I)V
+	public synthetic fun <init> (IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun append (Lio/devconsole/push/PushEvent;)V
+	public final fun clear ()V
+	public fun events ()Ljava/util/List;
+}
+
+public final class io/devconsole/push/PushEvent {
+	public fun <init> (Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;JLio/devconsole/push/PushNotification;Ljava/util/Map;Lio/devconsole/push/PushLifecycle;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;JLio/devconsole/push/PushNotification;Ljava/util/Map;Lio/devconsole/push/PushLifecycle;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Z
+	public final fun component2 ()Ljava/util/Map;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/Long;
+	public final fun component6 ()J
+	public final fun component7 ()Lio/devconsole/push/PushNotification;
+	public final fun component8 ()Ljava/util/Map;
+	public final fun component9 ()Lio/devconsole/push/PushLifecycle;
+	public final fun copy (Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;JLio/devconsole/push/PushNotification;Ljava/util/Map;Lio/devconsole/push/PushLifecycle;Z)Lio/devconsole/push/PushEvent;
+	public static synthetic fun copy$default (Lio/devconsole/push/PushEvent;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;JLio/devconsole/push/PushNotification;Ljava/util/Map;Lio/devconsole/push/PushLifecycle;ZILjava/lang/Object;)Lio/devconsole/push/PushEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getData ()Ljava/util/Map;
+	public final fun getLifecycle ()Lio/devconsole/push/PushLifecycle;
+	public final fun getMessageId ()Ljava/lang/String;
+	public final fun getNotification ()Lio/devconsole/push/PushNotification;
+	public final fun getProvider ()Ljava/lang/String;
+	public final fun getRawMetadata ()Ljava/util/Map;
+	public final fun getReceivedAtEpochMs ()J
+	public final fun getSentAtEpochMs ()Ljava/lang/Long;
+	public final fun getSimulated ()Z
+	public final fun getSource ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/push/PushInput {
+	public fun <init> (Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;JLio/devconsole/push/PushNotification;Ljava/util/Map;Lio/devconsole/push/PushLifecycle;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;JLio/devconsole/push/PushNotification;Ljava/util/Map;Lio/devconsole/push/PushLifecycle;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Z
+	public final fun component2 ()Ljava/util/Map;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/Long;
+	public final fun component6 ()J
+	public final fun component7 ()Lio/devconsole/push/PushNotification;
+	public final fun component8 ()Ljava/util/Map;
+	public final fun component9 ()Lio/devconsole/push/PushLifecycle;
+	public final fun copy (Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;JLio/devconsole/push/PushNotification;Ljava/util/Map;Lio/devconsole/push/PushLifecycle;Z)Lio/devconsole/push/PushInput;
+	public static synthetic fun copy$default (Lio/devconsole/push/PushInput;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;JLio/devconsole/push/PushNotification;Ljava/util/Map;Lio/devconsole/push/PushLifecycle;ZILjava/lang/Object;)Lio/devconsole/push/PushInput;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getData ()Ljava/util/Map;
+	public final fun getLifecycle ()Lio/devconsole/push/PushLifecycle;
+	public final fun getMessageId ()Ljava/lang/String;
+	public final fun getNotification ()Lio/devconsole/push/PushNotification;
+	public final fun getProvider ()Ljava/lang/String;
+	public final fun getRawMetadata ()Ljava/util/Map;
+	public final fun getReceivedAtEpochMs ()J
+	public final fun getSentAtEpochMs ()Ljava/lang/Long;
+	public final fun getSimulated ()Z
+	public final fun getSource ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/push/PushLifecycle : java/lang/Enum {
+	public static final field ACTION_CLICKED Lio/devconsole/push/PushLifecycle;
+	public static final field DEEP_LINK_RESOLVED Lio/devconsole/push/PushLifecycle;
+	public static final field DISPLAYED Lio/devconsole/push/PushLifecycle;
+	public static final field HANDLING_FAILED Lio/devconsole/push/PushLifecycle;
+	public static final field OPENED Lio/devconsole/push/PushLifecycle;
+	public static final field RECEIVED Lio/devconsole/push/PushLifecycle;
+	public static final field SUPPRESSED Lio/devconsole/push/PushLifecycle;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/push/PushLifecycle;
+	public static fun values ()[Lio/devconsole/push/PushLifecycle;
+}
+
+public final class io/devconsole/push/PushNotification {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/push/PushNotification;
+	public static synthetic fun copy$default (Lio/devconsole/push/PushNotification;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/push/PushNotification;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBody ()Ljava/lang/String;
+	public final fun getChannelId ()Ljava/lang/String;
+	public final fun getImageUrl ()Ljava/lang/String;
+	public final fun getTitle ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/push/PushRecorder {
+	public fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/push/PushStore;Z)V
+	public synthetic fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/push/PushStore;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun record (Lio/devconsole/push/PushInput;)Lio/devconsole/push/PushEvent;
+}
+
+public abstract interface class io/devconsole/push/PushSimulationCallback {
+	public abstract fun onSimulatedPush (Lio/devconsole/push/PushInput;)Lio/devconsole/push/PushLifecycle;
+}
+
+public final class io/devconsole/push/PushSimulator {
+	public fun <init> (Lio/devconsole/push/PushSimulationCallback;Lio/devconsole/push/PushRecorder;)V
+	public final fun simulate (Lio/devconsole/push/PushInput;)Lio/devconsole/push/PushEvent;
+}
+
+public abstract interface class io/devconsole/push/PushStore {
+	public abstract fun append (Lio/devconsole/push/PushEvent;)V
+	public abstract fun events ()Ljava/util/List;
+}
+

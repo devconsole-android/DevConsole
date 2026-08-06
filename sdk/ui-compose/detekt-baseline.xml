@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>FunctionNaming:DevConsolePanel.kt$@Composable fun DevConsolePanel( state: DevConsoleState, onStart: () -> Unit, onStop: () -> Unit, modifier: Modifier = Modifier, endpoint: BrowserEndpoint? = null, )</ID>
+    <ID>FunctionNaming:DevConsolePanel.kt$@Composable fun DevConsoleStatusChip( state: DevConsoleState, modifier: Modifier = Modifier, endpoint: BrowserEndpoint? = null, )</ID>
+    <ID>FunctionNaming:KeepAliveNotificationPrompt.kt$@Composable internal fun KeepAliveNotificationPromptEffect( promptNeeded: Boolean, snackbarHostState: SnackbarHostState, onPermissionResult: () -> Unit, )</ID>
+  </CurrentIssues>
+</SmellBaseline>

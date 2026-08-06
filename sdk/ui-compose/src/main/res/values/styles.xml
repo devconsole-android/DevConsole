@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.DevConsole" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#090D0B</item>
+        <item name="android:navigationBarColor">#111713</item>
+        <item name="android:statusBarColor">#090D0B</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

@@ -1,0 +1,334 @@
+public final class io/devconsole/socket/BinaryPreviewEncoding : java/lang/Enum {
+	public static final field BASE64 Lio/devconsole/socket/BinaryPreviewEncoding;
+	public static final field HEX Lio/devconsole/socket/BinaryPreviewEncoding;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/socket/BinaryPreviewEncoding;
+	public static fun values ()[Lio/devconsole/socket/BinaryPreviewEncoding;
+}
+
+public final class io/devconsole/socket/BinaryPreviewPolicy : java/lang/Enum {
+	public static final field BASE64 Lio/devconsole/socket/BinaryPreviewPolicy;
+	public static final field HEX Lio/devconsole/socket/BinaryPreviewPolicy;
+	public static final field NONE Lio/devconsole/socket/BinaryPreviewPolicy;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/socket/BinaryPreviewPolicy;
+	public static fun values ()[Lio/devconsole/socket/BinaryPreviewPolicy;
+}
+
+public final class io/devconsole/socket/InMemorySocketStore : io/devconsole/socket/SocketStore {
+	public static final field Companion Lio/devconsole/socket/InMemorySocketStore$Companion;
+	public static final field DEFAULT_MAX_BYTES J
+	public static final field DEFAULT_MAX_CONNECTIONS I
+	public static final field DEFAULT_MAX_MESSAGES_PER_CONNECTION I
+	public fun <init> ()V
+	public fun <init> (II)V
+	public synthetic fun <init> (IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun append (Lio/devconsole/socket/SocketMessage;)V
+	public fun appendLifecycle (Lio/devconsole/socket/SocketLifecycleEvent;)V
+	public final fun clear ()V
+	public fun close (Ljava/lang/String;Lio/devconsole/socket/SocketConnectionState;JLjava/lang/String;)V
+	public fun connection (Ljava/lang/String;)Lio/devconsole/socket/SocketConnection;
+	public fun connections ()Ljava/util/List;
+	public fun lifecycleEvents (Ljava/lang/String;)Ljava/util/List;
+	public fun messages (Lio/devconsole/socket/SocketMessageQuery;)Ljava/util/List;
+	public fun messages (Ljava/lang/String;)Ljava/util/List;
+	public fun open (Lio/devconsole/socket/SocketConnection;)V
+	public fun transition (Ljava/lang/String;Lio/devconsole/socket/SocketConnectionState;JLjava/lang/Integer;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun withByteCapacity (J)Lio/devconsole/socket/InMemorySocketStore;
+}
+
+public final class io/devconsole/socket/InMemorySocketStore$Companion {
+}
+
+public final class io/devconsole/socket/MqttFrameMetadata {
+	public static final field CONTENT_TYPE Ljava/lang/String;
+	public static final field INSTANCE Lio/devconsole/socket/MqttFrameMetadata;
+	public static final fun format (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun format (Ljava/lang/String;I)Ljava/lang/String;
+	public static final fun format (Ljava/lang/String;IZ)Ljava/lang/String;
+	public static synthetic fun format$default (Ljava/lang/String;IZILjava/lang/Object;)Ljava/lang/String;
+	public static final fun isMqtt (Ljava/lang/String;)Z
+	public static final fun qos (Ljava/lang/String;)Ljava/lang/Integer;
+	public static final fun retained (Ljava/lang/String;)Ljava/lang/Boolean;
+	public static final fun topic (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class io/devconsole/socket/SocketConnection {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;JLjava/lang/Long;Lio/devconsole/socket/SocketConnectionState;Ljava/lang/String;ILjava/util/List;Lio/devconsole/socket/SocketProtocol;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;JLjava/lang/Long;Lio/devconsole/socket/SocketConnectionState;Ljava/lang/String;ILjava/util/List;Lio/devconsole/socket/SocketProtocol;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()J
+	public final fun component4 ()Ljava/lang/Long;
+	public final fun component5 ()Lio/devconsole/socket/SocketConnectionState;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()I
+	public final fun component8 ()Ljava/util/List;
+	public final fun component9 ()Lio/devconsole/socket/SocketProtocol;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;JLjava/lang/Long;Lio/devconsole/socket/SocketConnectionState;Ljava/lang/String;ILjava/util/List;Lio/devconsole/socket/SocketProtocol;)Lio/devconsole/socket/SocketConnection;
+	public static synthetic fun copy$default (Lio/devconsole/socket/SocketConnection;Ljava/lang/String;Ljava/lang/String;JLjava/lang/Long;Lio/devconsole/socket/SocketConnectionState;Ljava/lang/String;ILjava/util/List;Lio/devconsole/socket/SocketProtocol;ILjava/lang/Object;)Lio/devconsole/socket/SocketConnection;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getClosedAtEpochMs ()Ljava/lang/Long;
+	public final fun getError ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getLifecycleEvents ()Ljava/util/List;
+	public final fun getMessages ()Ljava/util/List;
+	public final fun getOpenedAtEpochMs ()J
+	public final fun getProtocol ()Lio/devconsole/socket/SocketProtocol;
+	public final fun getReceivedCount ()I
+	public final fun getReconnectAttempt ()I
+	public final fun getSentCount ()I
+	public final fun getState ()Lio/devconsole/socket/SocketConnectionState;
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun withLifecycleEvents (Ljava/util/List;)Lio/devconsole/socket/SocketConnection;
+}
+
+public final class io/devconsole/socket/SocketConnectionState : java/lang/Enum {
+	public static final field CLOSED Lio/devconsole/socket/SocketConnectionState;
+	public static final field CLOSING Lio/devconsole/socket/SocketConnectionState;
+	public static final field CREATED Lio/devconsole/socket/SocketConnectionState;
+	public static final field FAILED Lio/devconsole/socket/SocketConnectionState;
+	public static final field OPEN Lio/devconsole/socket/SocketConnectionState;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/socket/SocketConnectionState;
+	public static fun values ()[Lio/devconsole/socket/SocketConnectionState;
+}
+
+public final class io/devconsole/socket/SocketDirection : java/lang/Enum {
+	public static final field RECEIVED Lio/devconsole/socket/SocketDirection;
+	public static final field SENT Lio/devconsole/socket/SocketDirection;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/socket/SocketDirection;
+	public static fun values ()[Lio/devconsole/socket/SocketDirection;
+}
+
+public final class io/devconsole/socket/SocketFrameType : java/lang/Enum {
+	public static final field BINARY Lio/devconsole/socket/SocketFrameType;
+	public static final field PING Lio/devconsole/socket/SocketFrameType;
+	public static final field PONG Lio/devconsole/socket/SocketFrameType;
+	public static final field TEXT Lio/devconsole/socket/SocketFrameType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/socket/SocketFrameType;
+	public static fun values ()[Lio/devconsole/socket/SocketFrameType;
+}
+
+public final class io/devconsole/socket/SocketLifecycleEvent {
+	public fun <init> (Ljava/lang/String;Lio/devconsole/socket/SocketLifecycleType;JLjava/lang/Integer;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Lio/devconsole/socket/SocketLifecycleType;JLjava/lang/Integer;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lio/devconsole/socket/SocketLifecycleType;
+	public final fun component3 ()J
+	public final fun component4 ()Ljava/lang/Integer;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Lio/devconsole/socket/SocketLifecycleType;JLjava/lang/Integer;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/socket/SocketLifecycleEvent;
+	public static synthetic fun copy$default (Lio/devconsole/socket/SocketLifecycleEvent;Ljava/lang/String;Lio/devconsole/socket/SocketLifecycleType;JLjava/lang/Integer;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/socket/SocketLifecycleEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCode ()Ljava/lang/Integer;
+	public final fun getConnectionId ()Ljava/lang/String;
+	public final fun getError ()Ljava/lang/String;
+	public final fun getReason ()Ljava/lang/String;
+	public final fun getTimestampEpochMs ()J
+	public final fun getType ()Lio/devconsole/socket/SocketLifecycleType;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/socket/SocketLifecycleType : java/lang/Enum {
+	public static final field CLOSED Lio/devconsole/socket/SocketLifecycleType;
+	public static final field CLOSING Lio/devconsole/socket/SocketLifecycleType;
+	public static final field CREATED Lio/devconsole/socket/SocketLifecycleType;
+	public static final field FAILED Lio/devconsole/socket/SocketLifecycleType;
+	public static final field OPENED Lio/devconsole/socket/SocketLifecycleType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/socket/SocketLifecycleType;
+	public static fun values ()[Lio/devconsole/socket/SocketLifecycleType;
+}
+
+public final class io/devconsole/socket/SocketMessage {
+	public fun <init> (Ljava/lang/String;Lio/devconsole/socket/SocketDirection;JLio/devconsole/socket/SocketPayload;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Lio/devconsole/socket/SocketDirection;JLio/devconsole/socket/SocketPayload;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lio/devconsole/socket/SocketDirection;
+	public final fun component3 ()J
+	public final fun component4 ()Lio/devconsole/socket/SocketPayload;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Lio/devconsole/socket/SocketDirection;JLio/devconsole/socket/SocketPayload;Ljava/lang/String;)Lio/devconsole/socket/SocketMessage;
+	public static synthetic fun copy$default (Lio/devconsole/socket/SocketMessage;Ljava/lang/String;Lio/devconsole/socket/SocketDirection;JLio/devconsole/socket/SocketPayload;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/socket/SocketMessage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConnectionId ()Ljava/lang/String;
+	public final fun getContentType ()Ljava/lang/String;
+	public final fun getDirection ()Lio/devconsole/socket/SocketDirection;
+	public final fun getMetadata ()Lio/devconsole/socket/SocketMessageMetadata;
+	public final fun getPayload ()Lio/devconsole/socket/SocketPayload;
+	public final fun getTimestampEpochMs ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun withMetadata (Lio/devconsole/socket/SocketMessageMetadata;)Lio/devconsole/socket/SocketMessage;
+}
+
+public final class io/devconsole/socket/SocketMessageMetadata {
+	public fun <init> ()V
+	public fun <init> (Lio/devconsole/socket/SocketFrameType;Lio/devconsole/socket/SocketTextFormat;)V
+	public synthetic fun <init> (Lio/devconsole/socket/SocketFrameType;Lio/devconsole/socket/SocketTextFormat;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lio/devconsole/socket/SocketFrameType;
+	public final fun component2 ()Lio/devconsole/socket/SocketTextFormat;
+	public final fun copy (Lio/devconsole/socket/SocketFrameType;Lio/devconsole/socket/SocketTextFormat;)Lio/devconsole/socket/SocketMessageMetadata;
+	public static synthetic fun copy$default (Lio/devconsole/socket/SocketMessageMetadata;Lio/devconsole/socket/SocketFrameType;Lio/devconsole/socket/SocketTextFormat;ILjava/lang/Object;)Lio/devconsole/socket/SocketMessageMetadata;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFrameType ()Lio/devconsole/socket/SocketFrameType;
+	public final fun getTextFormat ()Lio/devconsole/socket/SocketTextFormat;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/socket/SocketMessageQuery {
+	public fun <init> ()V
+	public fun <init> (Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/Boolean;)V
+	public synthetic fun <init> (Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/Boolean;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/Set;
+	public final fun component2 ()Ljava/util/Set;
+	public final fun component3 ()Ljava/util/Set;
+	public final fun component4 ()Ljava/lang/Long;
+	public final fun component5 ()Ljava/lang/Long;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/Boolean;
+	public final fun copy (Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/Boolean;)Lio/devconsole/socket/SocketMessageQuery;
+	public static synthetic fun copy$default (Lio/devconsole/socket/SocketMessageQuery;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/Boolean;ILjava/lang/Object;)Lio/devconsole/socket/SocketMessageQuery;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConnectionIds ()Ljava/util/Set;
+	public final fun getDirections ()Ljava/util/Set;
+	public final fun getFrameTypes ()Ljava/util/Set;
+	public final fun getFromEpochMs ()Ljava/lang/Long;
+	public final fun getHasError ()Ljava/lang/Boolean;
+	public final fun getQuery ()Ljava/lang/String;
+	public final fun getToEpochMs ()Ljava/lang/Long;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/socket/SocketPayload {
+}
+
+public final class io/devconsole/socket/SocketPayload$Binary : io/devconsole/socket/SocketPayload {
+	public fun <init> (JZ)V
+	public synthetic fun <init> (JZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()J
+	public final fun component2 ()Z
+	public final fun copy (JZ)Lio/devconsole/socket/SocketPayload$Binary;
+	public static synthetic fun copy$default (Lio/devconsole/socket/SocketPayload$Binary;JZILjava/lang/Object;)Lio/devconsole/socket/SocketPayload$Binary;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLength ()J
+	public final fun getPreview ()Ljava/lang/String;
+	public final fun getPreviewEncoding ()Lio/devconsole/socket/BinaryPreviewEncoding;
+	public final fun getTruncated ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun withPreview (Ljava/lang/String;Lio/devconsole/socket/BinaryPreviewEncoding;)Lio/devconsole/socket/SocketPayload$Binary;
+}
+
+public final class io/devconsole/socket/SocketPayload$Text : io/devconsole/socket/SocketPayload {
+	public fun <init> (Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/lang/String;Z)Lio/devconsole/socket/SocketPayload$Text;
+	public static synthetic fun copy$default (Lio/devconsole/socket/SocketPayload$Text;Ljava/lang/String;ZILjava/lang/Object;)Lio/devconsole/socket/SocketPayload$Text;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPreview ()Ljava/lang/String;
+	public final fun getTruncated ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/socket/SocketProtocol : java/lang/Enum {
+	public static final field Companion Lio/devconsole/socket/SocketProtocol$Companion;
+	public static final field MQTT Lio/devconsole/socket/SocketProtocol;
+	public static final field WEBSOCKET Lio/devconsole/socket/SocketProtocol;
+	public static final fun fromWireName (Ljava/lang/String;)Lio/devconsole/socket/SocketProtocol;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWireName ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/socket/SocketProtocol;
+	public static fun values ()[Lio/devconsole/socket/SocketProtocol;
+}
+
+public final class io/devconsole/socket/SocketProtocol$Companion {
+	public final fun fromWireName (Ljava/lang/String;)Lio/devconsole/socket/SocketProtocol;
+}
+
+public final class io/devconsole/socket/SocketRecorder {
+	public static final field Companion Lio/devconsole/socket/SocketRecorder$Companion;
+	public static final field MAX_BINARY_FRAME_PREVIEW_BYTES I
+	public static final field MAX_BINARY_PREVIEW_BYTES J
+	public static final field MAX_TEXT_PREVIEW_CHARS I
+	public fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/socket/SocketStore;ZLkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/socket/SocketStore;ZLkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/socket/SocketStore;ZLkotlin/jvm/functions/Function0;Lio/devconsole/socket/BinaryPreviewPolicy;)V
+	public final fun bindToCurrentSession ()Lio/devconsole/socket/SocketRecorder;
+	public final fun getProtocol ()Lio/devconsole/socket/SocketProtocol;
+	public final fun onBinaryMessage (Ljava/lang/String;Lio/devconsole/socket/SocketDirection;JLjava/lang/String;)V
+	public final fun onBinaryMessage (Ljava/lang/String;Lio/devconsole/socket/SocketDirection;[BLjava/lang/String;)V
+	public static synthetic fun onBinaryMessage$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Lio/devconsole/socket/SocketDirection;JLjava/lang/String;ILjava/lang/Object;)V
+	public static synthetic fun onBinaryMessage$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Lio/devconsole/socket/SocketDirection;[BLjava/lang/String;ILjava/lang/Object;)V
+	public final fun onClosed (Ljava/lang/String;ZLjava/lang/String;)V
+	public static synthetic fun onClosed$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;ZLjava/lang/String;ILjava/lang/Object;)V
+	public final fun onClosing (Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;)V
+	public static synthetic fun onClosing$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;ILjava/lang/Object;)V
+	public final fun onCreated (Ljava/lang/String;Ljava/lang/String;I)V
+	public static synthetic fun onCreated$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Ljava/lang/String;IILjava/lang/Object;)V
+	public final fun onFailure (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public final fun onMessage (Ljava/lang/String;Lio/devconsole/socket/SocketDirection;Ljava/lang/String;Ljava/lang/String;)V
+	public static synthetic fun onMessage$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Lio/devconsole/socket/SocketDirection;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)V
+	public final fun onOpen (Ljava/lang/String;Ljava/lang/String;I)V
+	public static synthetic fun onOpen$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Ljava/lang/String;IILjava/lang/Object;)V
+	public final fun onPing (Ljava/lang/String;Lio/devconsole/socket/SocketDirection;[B)V
+	public static synthetic fun onPing$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Lio/devconsole/socket/SocketDirection;[BILjava/lang/Object;)V
+	public final fun onPong (Ljava/lang/String;Lio/devconsole/socket/SocketDirection;[B)V
+	public static synthetic fun onPong$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Lio/devconsole/socket/SocketDirection;[BILjava/lang/Object;)V
+	public final fun withOperationLock (Ljava/lang/Object;)Lio/devconsole/socket/SocketRecorder;
+	public final fun withProtocol (Lio/devconsole/socket/SocketProtocol;)Lio/devconsole/socket/SocketRecorder;
+	public final fun withProtocolGate (Lkotlin/jvm/functions/Function1;)Lio/devconsole/socket/SocketRecorder;
+	public final fun withSessionIdProvider (Lkotlin/jvm/functions/Function0;)Lio/devconsole/socket/SocketRecorder;
+}
+
+public final class io/devconsole/socket/SocketRecorder$Companion {
+}
+
+public abstract interface class io/devconsole/socket/SocketStore {
+	public abstract fun append (Lio/devconsole/socket/SocketMessage;)V
+	public fun appendLifecycle (Lio/devconsole/socket/SocketLifecycleEvent;)V
+	public abstract fun close (Ljava/lang/String;Lio/devconsole/socket/SocketConnectionState;JLjava/lang/String;)V
+	public static synthetic fun close$default (Lio/devconsole/socket/SocketStore;Ljava/lang/String;Lio/devconsole/socket/SocketConnectionState;JLjava/lang/String;ILjava/lang/Object;)V
+	public abstract fun connection (Ljava/lang/String;)Lio/devconsole/socket/SocketConnection;
+	public abstract fun connections ()Ljava/util/List;
+	public fun lifecycleEvents (Ljava/lang/String;)Ljava/util/List;
+	public static synthetic fun lifecycleEvents$default (Lio/devconsole/socket/SocketStore;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
+	public fun messages (Lio/devconsole/socket/SocketMessageQuery;)Ljava/util/List;
+	public abstract fun messages (Ljava/lang/String;)Ljava/util/List;
+	public static synthetic fun messages$default (Lio/devconsole/socket/SocketStore;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
+	public abstract fun open (Lio/devconsole/socket/SocketConnection;)V
+	public fun transition (Ljava/lang/String;Lio/devconsole/socket/SocketConnectionState;JLjava/lang/Integer;Ljava/lang/String;Ljava/lang/String;)V
+	public static synthetic fun transition$default (Lio/devconsole/socket/SocketStore;Ljava/lang/String;Lio/devconsole/socket/SocketConnectionState;JLjava/lang/Integer;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)V
+}
+
+public final class io/devconsole/socket/SocketStore$DefaultImpls {
+	public static fun appendLifecycle (Lio/devconsole/socket/SocketStore;Lio/devconsole/socket/SocketLifecycleEvent;)V
+	public static synthetic fun close$default (Lio/devconsole/socket/SocketStore;Ljava/lang/String;Lio/devconsole/socket/SocketConnectionState;JLjava/lang/String;ILjava/lang/Object;)V
+	public static fun lifecycleEvents (Lio/devconsole/socket/SocketStore;Ljava/lang/String;)Ljava/util/List;
+	public static synthetic fun lifecycleEvents$default (Lio/devconsole/socket/SocketStore;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
+	public static fun messages (Lio/devconsole/socket/SocketStore;Lio/devconsole/socket/SocketMessageQuery;)Ljava/util/List;
+	public static synthetic fun messages$default (Lio/devconsole/socket/SocketStore;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
+	public static fun transition (Lio/devconsole/socket/SocketStore;Ljava/lang/String;Lio/devconsole/socket/SocketConnectionState;JLjava/lang/Integer;Ljava/lang/String;Ljava/lang/String;)V
+	public static synthetic fun transition$default (Lio/devconsole/socket/SocketStore;Ljava/lang/String;Lio/devconsole/socket/SocketConnectionState;JLjava/lang/Integer;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)V
+}
+
+public final class io/devconsole/socket/SocketTextFormat : java/lang/Enum {
+	public static final field JSON Lio/devconsole/socket/SocketTextFormat;
+	public static final field TEXT Lio/devconsole/socket/SocketTextFormat;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/socket/SocketTextFormat;
+	public static fun values ()[Lio/devconsole/socket/SocketTextFormat;
+}
+

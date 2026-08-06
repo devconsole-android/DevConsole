@@ -1,0 +1,32 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least privilege: this workflow only reads the repository; it publishes nothing and needs no write.
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v6
+      - run: ./gradlew testDebugUnitTest :samples:foundation-app:assembleDebug :samples:foundation-app:assembleRelease :samples:foundation-app:verifyDevConsoleProtectedArtifacts :samples:compose-app:assembleDebug :samples:compose-app:assembleRelease :samples:compose-app:verifyDevConsoleProtectedArtifacts :samples:views-java-app:assembleDebug :samples:views-java-app:assembleRelease :samples:views-java-app:verifyDevConsoleProtectedArtifacts --stacktrace
+      - run: ./gradlew -p gradle-plugin test --stacktrace
+      # ktlint/detekt run across every module via the devconsole.quality convention plugin.
+      # Pre-existing detekt findings are frozen per-module in detekt-baseline.xml, so this
+      # gates strictly on new findings repo-wide instead of a hand-picked module subset.
+      - run: ./gradlew ktlintCheck detekt --stacktrace
+      - run: ./gradlew apiCheck --stacktrace
+      - run: ./gradlew dokkaGenerate --stacktrace
+      # Publishable modules only (those carrying the devconsole.publishing convention plugin);
+      # verifies the POMs/coordinates resolve end-to-end. Does not publish anywhere real.
+      - run: ./gradlew publishToMavenLocal --stacktrace

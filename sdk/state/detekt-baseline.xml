@@ -1,0 +1,10 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>MaxLineLength:FeatureFlags.kt$SessionFeatureFlags$val definition = definitions.firstOrNull { it.key == key &amp;&amp; it.mutable } ?: error("Unknown or immutable feature flag: $key")</ID>
+    <ID>MaxLineLength:FeatureFlagsTest.kt$FeatureFlagsTest$val flags = SessionFeatureFlags(listOf(FeatureFlag("new_ui", false, description = "New checkout", source = "remote")))</ID>
+    <ID>MaxLineLength:StateProviderTest.kt$StateProviderTest$assertEquals(StateValue.BooleanValue(true), (result as StateMutationResult.Success).snapshot.values.getValue("cleared"))</ID>
+    <ID>MaxLineLength:StateProviderTest.kt$StateProviderTest.&lt;no name provided&gt;$StateMutationResult.Success(StateSnapshot(mapOf("cleared" to StateValue.BooleanValue(true))))</ID>
+  </CurrentIssues>
+</SmellBaseline>

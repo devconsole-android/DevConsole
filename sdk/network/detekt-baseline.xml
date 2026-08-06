@@ -1,0 +1,30 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:NetworkCapture.kt$NetworkCaptureFactory$internal fun attachmentPayloads( transactionId: String, request: NetworkRequestInput, response: NetworkResponseInput?, capture: NetworkCapture, ): List&lt;NetworkAttachmentPayload></ID>
+    <ID>CyclomaticComplexMethod:NetworkCapture.kt$private fun BodyPreview.metadata( declaredLength: Long?, omittedReason: String?, ): CaptureBodyMetadata</ID>
+    <ID>CyclomaticComplexMethod:NetworkTransactionStore.kt$private fun NetworkTransaction.matches(filters: NetworkTransactionFilters): Boolean</ID>
+    <ID>MagicNumber:NetworkCapture.kt$NetworkCaptureLimits$1024</ID>
+    <ID>MagicNumber:NetworkCapture.kt$NetworkCaptureLimits$16</ID>
+    <ID>MagicNumber:NetworkCapture.kt$NetworkCaptureLimits$256</ID>
+    <ID>MagicNumber:NetworkCapture.kt$NetworkCaptureLimits$512</ID>
+    <ID>MagicNumber:NetworkExport.kt$NetworkExport$16</ID>
+    <ID>MagicNumber:NetworkExport.kt$NetworkExport$4</ID>
+    <ID>MagicNumber:NetworkTransactionStore.kt$InMemoryNetworkTransactionStore$100</ID>
+    <ID>MagicNumber:NetworkTransactionStore.kt$NetworkCursorCodec$16</ID>
+    <ID>MaxLineLength:InMemoryNetworkTransactionStoreTest.kt$InMemoryNetworkTransactionStoreTest$val secondPage = store.page(NetworkTransactionQuery(limit = 1, hosts = setOf("api.test"), cursor = firstPage.nextCursor))</ID>
+    <ID>MaxLineLength:NetworkCapture.kt$NetworkCaptureFactory$type.startsWith("text/") || type.contains("json") || type.contains("xml") || type.contains("x-www-form-urlencoded")</ID>
+    <ID>MaxLineLength:NetworkCapture.kt$NetworkTransactionRecorder$fun withSessionIdProvider(provider: () -> String?): NetworkTransactionRecorder</ID>
+    <ID>MaxLineLength:NetworkExport.kt$NetworkExport$append("{\"log\":{\"version\":\"1.2\",\"creator\":{\"name\":\"DevConsole\",\"version\":\"1\"},\"entries\":[")</ID>
+    <ID>MaxLineLength:NetworkExport.kt$NetworkExport$if</ID>
+    <ID>MaxLineLength:NetworkTransactionStore.kt$InMemoryNetworkTransactionStore$.</ID>
+    <ID>MaxLineLength:NetworkTransactionStore.kt$InMemoryNetworkTransactionStore$}</ID>
+    <ID>MaxLineLength:NetworkTransactionStore.kt$NetworkCursorCodec$val (rawOffset, scopeHash) = payload.decodeToString().split(':', limit = 2).takeIf { it.size == 2 } ?: return null</ID>
+    <ID>ReturnCount:NetworkCapture.kt$NetworkCaptureFactory$private fun ByteArray?.preview( contentType: String?, limit: Int, ): BodyPreview</ID>
+    <ID>ReturnCount:NetworkCapture.kt$NetworkCaptureFactory$private fun NetworkCapture.constrainedTo(maxBytes: Int): NetworkCapture</ID>
+    <ID>ReturnCount:NetworkTransactionStore.kt$NetworkCursorCodec$fun decode( cursor: String, scope: String, ): Int?</ID>
+    <ID>ReturnCount:NetworkTransactionStore.kt$private fun NetworkTransaction.matches(filters: NetworkTransactionFilters): Boolean</ID>
+    <ID>TooManyFunctions:NetworkCapture.kt$io.devconsole.network.NetworkCapture.kt</ID>
+  </CurrentIssues>
+</SmellBaseline>

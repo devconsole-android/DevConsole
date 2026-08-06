@@ -1,0 +1,18 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- ACCESS_LOCAL_NETWORK is DevConsole-specific (required only by its embedded dashboard
+         server) and is kept out of src/main so a release build (sdk:noop, no server, no
+         dashboard) never carries it. INTERNET is NOT DevConsole-specific - this sample uses it
+         for its own real network calls - so it lives in src/main instead. See
+         docs/THREAT_MODEL.md and the pre-release security audit (sample security hygiene). -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <!-- Keep-alive opt-in (docs/BACKGROUND_KEEPALIVE.md): lets DevConsole run its foreground
+         service so the dashboard server survives backgrounding. DevConsole itself declares NO
+         permissions for this - a host that omits this block simply doesn't get the feature.
+         Debug-only for the same reason as ACCESS_LOCAL_NETWORK above: release builds (sdk:noop)
+         have no server and must not carry any of it. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Optional: makes the keep-alive notification visible on Android 13+. Without it the
+         service still runs; the notification is just hidden and DevConsole never asks. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+</manifest>

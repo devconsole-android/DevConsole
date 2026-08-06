@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- INTERNET is not DevConsole-specific: this sample makes its own real HTTPS calls to
+         jsonplaceholder.typicode.com (see MainActivity.kt), so release builds need it too. Only
+         ACCESS_LOCAL_NETWORK - required solely for DevConsole's embedded dashboard server - is
+         confined to src/debug/AndroidManifest.xml. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:theme="@style/AppTheme" android:label="DevConsole Foundation">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

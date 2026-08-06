@@ -1,0 +1,19 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$0.08f</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$0.12f</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$12</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$12f</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$13f</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$14</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$16</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$20</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$20f</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$6</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$8</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$addView(button("Send mocked request") { sendRequest("https://example.test/orders", "Mocked response") })</ID>
+    <ID>TooManyFunctions:MainActivity.kt$MainActivity : Activity</ID>
+  </CurrentIssues>
+</SmellBaseline>

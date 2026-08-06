@@ -1,0 +1,35 @@
+public final class io/devconsole/security/RedactionEngine {
+	public static final field Companion Lio/devconsole/security/RedactionEngine$Companion;
+	public static final field DEFAULT_TEXT_LIMIT I
+	public fun <init> (Lio/devconsole/security/RedactionPolicy;)V
+	public final fun redactFields (Ljava/util/Map;)Ljava/util/Map;
+	public final fun redactText (Ljava/lang/String;I)Ljava/lang/String;
+	public static synthetic fun redactText$default (Lio/devconsole/security/RedactionEngine;Ljava/lang/String;IILjava/lang/Object;)Ljava/lang/String;
+	public final fun replacement ()Ljava/lang/String;
+	public final fun updatePolicy (Lio/devconsole/security/RedactionPolicy;)V
+}
+
+public final class io/devconsole/security/RedactionEngine$Companion {
+}
+
+public final class io/devconsole/security/RedactionPolicy {
+	public static final field Companion Lio/devconsole/security/RedactionPolicy$Companion;
+	public fun <init> (Ljava/util/Set;Ljava/lang/String;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/util/Set;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/Set;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Ljava/util/Set;Ljava/lang/String;Ljava/util/List;)Lio/devconsole/security/RedactionPolicy;
+	public static synthetic fun copy$default (Lio/devconsole/security/RedactionPolicy;Ljava/util/Set;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lio/devconsole/security/RedactionPolicy;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getReplacement ()Ljava/lang/String;
+	public final fun getSensitiveFieldNames ()Ljava/util/Set;
+	public final fun getTextPatterns ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/security/RedactionPolicy$Companion {
+	public final fun default ()Lio/devconsole/security/RedactionPolicy;
+}
+

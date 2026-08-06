@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>LongMethod:MainActivity.kt$MainActivity$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SampleScreen(scope: CoroutineScope)</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFF0B0E0D</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFF151A18</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFF1B231E</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFF29371C</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFF344039</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFF6B726A</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFF92968E</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFF9DB08F</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFFB7ED65</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFFD3F0A8</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFFE7E5D8</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFFF0B45C</ID>
+    <ID>MagicNumber:MainActivity.kt$0xFFFF715E</ID>
+    <ID>TooGenericExceptionCaught:MainActivity.kt$MainActivity$error: Exception</ID>
+    <ID>TooManyFunctions:MainActivity.kt$io.devconsole.sample.compose.MainActivity.kt</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -1,0 +1,8 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>MaxLineLength:SocketCapture.kt$InMemorySocketStore$connections[connection.id] = connection.copy(messages = connection.messages.takeLast(maxMessagesPerConnection))</ID>
+    <ID>MaxLineLength:SocketCapture.kt$InMemorySocketStore$while (connections.size &gt; maxConnections) connections.remove(connections.entries.minBy { it.value.openedAtEpochMs }.key)</ID>
+  </CurrentIssues>
+</SmellBaseline>

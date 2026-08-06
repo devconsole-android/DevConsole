@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:LocalServerEngine.kt$StartRequest$8080</ID>
+    <ID>MagicNumber:LocalServerEngine.kt$StartRequest$8099</ID>
+    <ID>MagicNumber:LocalServerEngine.kt$StartRequest.Companion$8080</ID>
+    <ID>MagicNumber:LocalServerEngine.kt$StartRequest.Companion$8099</ID>
+    <ID>MaxLineLength:CommandAuditLogTest.kt$CommandAuditLogTest$log.record(CommandAuditEvent(10, "browser-1", "flag.override", "new_ui", CommandAuditResult.SUCCESS, parameters))</ID>
+  </CurrentIssues>
+</SmellBaseline>

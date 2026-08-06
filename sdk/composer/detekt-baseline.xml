@@ -1,0 +1,15 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:ComposerImportAndCollections.kt$ComposerCurlImporter$fun import(command: String): Result&lt;ComposerRequest&gt;</ID>
+    <ID>CyclomaticComplexMethod:ComposerImportAndCollections.kt$ComposerCurlImporter$private fun tokenize(command: String): List&lt;String&gt;</ID>
+    <ID>MagicNumber:ComposerImportAndCollections.kt$ComposerCurlImporter$15_000</ID>
+    <ID>MagicNumber:ComposerImportAndCollections.kt$ComposerCurlImporter$1_000</ID>
+    <ID>MagicNumber:UrlConnectionComposerTransport.kt$UrlConnectionComposerTransport$400</ID>
+    <ID>MaxLineLength:ComposerExecutorTest.kt$ComposerExecutorTest$ComposerResponse(statusCode = 201, headers = mapOf("Content-Type" to "application/json"), body = "{\"ok\":true}")</ID>
+    <ID>MaxLineLength:ComposerImportAndCollections.kt$ComposerCurlImporter$private fun List&lt;String&gt;.valueAfter(index: Int): String</ID>
+    <ID>MaxLineLength:ComposerRequestTest.kt$ComposerRequestTest$ComposerRequest("GET", "https://api.test", variables = listOf(ComposerVariable("token", "secret", secret = true)))</ID>
+    <ID>MaxLineLength:ComposerRequestTest.kt$ComposerRequestTest$variables = listOf(ComposerVariable("tenant", "alpha"), ComposerVariable("token", "private", secret = true))</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Test-only host window for ScreenshotCaptureInstrumentedTest: a real, laid-out Activity
+             is what PixelCopy and the FLAG_SECURE detection both need to be verified against an
+             actual device compositor rather than a JVM shadow. -->
+        <activity
+            android:name="io.devconsole.ScreenshotProbeActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.NoTitleBar" />
+    </application>
+</manifest>

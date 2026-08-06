@@ -1,0 +1,39 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Declared only in the internal full runtime; host code requests it only after user action. -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <!-- Normal permission used only to record coarse connectivity-change timeline markers. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application>
+        <provider
+            android:name="io.devconsole.DevConsoleInitializer"
+            android:authorities="${applicationId}.devconsoleinitializer"
+            android:exported="false"
+            android:initOrder="100" />
+        <!-- Backs the Files screen's Share action (ACTION_SEND). Paths mirror AndroidFileInspector's
+             sandbox roots exactly, see res/xml/devconsole_file_provider_paths.xml, so a shared
+             file is always inside a root that inspector already permits browsing. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.devconsole.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/devconsole_file_provider_paths" />
+        </provider>
+        <!-- Keep-alive shell for the embedded dashboard server (docs/BACKGROUND_KEEPALIVE.md).
+             The SDK deliberately declares NO permissions for it: the host opts in by declaring
+             FOREGROUND_SERVICE (+ FOREGROUND_SERVICE_SPECIAL_USE on API 34+) in its own debug
+             manifest; KeepAliveGate checks the merged manifest before this service is ever
+             started. Never reaches release builds; sdk:full is a debugImplementation artifact. -->
+        <service
+            android:name="io.devconsole.DevConsoleForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="devconsole-local-debug-server" />
+        </service>
+    </application>
+</manifest>
