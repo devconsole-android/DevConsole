@@ -18,6 +18,8 @@ kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 binary-compatibility-validator = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version = "0.18.1" }
 dokka = { id = "org.jetbrains.dokka", version = "2.2.0" }
+# Must match the version on build-logic's classpath (build-logic/build.gradle.kts).
+vanniktech-maven-publish = { id = "com.vanniktech.maven.publish", version = "0.37.0" }
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }

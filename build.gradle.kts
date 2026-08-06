@@ -4,6 +4,10 @@ plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.binary.compatibility.validator)
     alias(libs.plugins.dokka)
+    // Loaded (not applied) here so every sdk module shares one classloader copy of the plugin —
+    // its MavenCentralBuildService is a shared build service, and per-module loading puts the
+    // service class in sibling classloaders that cannot exchange it.
+    alias(libs.plugins.vanniktech.maven.publish) apply false
 }
 
 // Every module under sdk/ is published to Maven, so every one should carry a committed ABI, and
