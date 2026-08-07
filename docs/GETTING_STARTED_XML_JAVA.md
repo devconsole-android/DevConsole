@@ -5,8 +5,8 @@ async variants are `@JvmOverloads`), so it reads like a plain Java utility class
 
 1. Apply the production-safety plugin and split the dependency by variant (same `build.gradle.kts`
    shape as the Kotlin guide — see [GETTING_STARTED_XML_KOTLIN.md](GETTING_STARTED_XML_KOTLIN.md)
-   step 1). The two coordinates are `io.github.shakibuzzaman3104:devconsole` for debug and
-   `io.github.shakibuzzaman3104:devconsole-noop` for release; there is no BOM.
+   step 1). The two coordinates are `io.github.devconsole-android:devconsole` for debug and
+   `io.github.devconsole-android:devconsole-noop` for release; there is no BOM.
 
 2. Add `INTERNET` to your own app's manifest. The SDK's manifests auto-merge
    `ACCESS_LOCAL_NETWORK`/`ACCESS_NETWORK_STATE`, but not `INTERNET` — without it, the embedded

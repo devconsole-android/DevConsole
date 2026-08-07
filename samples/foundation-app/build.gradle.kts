@@ -1,7 +1,7 @@
 plugins {
     id("devconsole.android.application")
     id("devconsole.quality")
-    id("io.github.shakibuzzaman3104.android")
+    id("io.github.devconsole-android")
 }
 
 dependencies {

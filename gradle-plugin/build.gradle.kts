@@ -8,7 +8,7 @@ plugins {
 
 // Must share a top-level namespace with the plugin ID (a Plugin Portal requirement) and match
 // the SDK's Maven group.
-group = "io.github.shakibuzzaman3104"
+group = "io.github.devconsole-android"
 version = "0.1.0"
 
 // Targets Java 17: this plugin JAR runs inside the Gradle daemon (Gradle 9.5
@@ -38,13 +38,13 @@ gradlePlugin {
     // Required by com.gradle.plugin-publish for Plugin Portal submission; matches the repo URL used
     // in build-logic/convention-publishing's PublishingConventionPlugin (PROJECT_URL) for the SDK
     // Maven POMs.
-    website.set("https://github.com/Shakibuzzaman3104/DevConsole")
-    vcsUrl.set("https://github.com/Shakibuzzaman3104/DevConsole")
+    website.set("https://github.com/devconsole-android/DevConsole")
+    vcsUrl.set("https://github.com/devconsole-android/DevConsole")
     plugins {
         register("devConsoleVariantPolicy") {
             // Namespaced under the GitHub-based Maven group so it can be published to the Gradle
             // Plugin Portal; `io.devconsole` would require owning that domain.
-            id = "io.github.shakibuzzaman3104.android"
+            id = "io.github.devconsole-android"
             implementationClass = "io.devconsole.gradle.DevConsoleVariantPolicyPlugin"
             displayName = "DevConsole Variant Policy"
             description =

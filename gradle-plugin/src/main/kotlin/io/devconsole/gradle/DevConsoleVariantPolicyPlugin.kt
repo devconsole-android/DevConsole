@@ -150,7 +150,7 @@ abstract class VerifyDevConsoleProtectedArtifactsTask : DefaultTask() {
         /** Enabled runtime/adapters that must never reach a protected variant. */
         val FULL_RUNTIME_COORDINATE =
             Regex(
-                "^io\\.github\\.shakibuzzaman3104:" +
+                "^io\\.github\\.devconsole-android:" +
                     "(?:devconsole|devconsole-network-okhttp|devconsole-mocks-okhttp|" +
                     "devconsole-socket-okhttp|devconsole-socket-paho|devconsole-push-firebase):.+",
             )
@@ -395,7 +395,7 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
 }
 
 private const val DEFAULT_SDK_VERSION = "0.1.0-SNAPSHOT"
-private const val DEVCONSOLE_GROUP = "io.github.shakibuzzaman3104"
+private const val DEVCONSOLE_GROUP = "io.github.devconsole-android"
 
 class DevConsoleVariantPolicyPlugin : Plugin<Project> {
     override fun apply(target: Project) = with(target) {
@@ -443,7 +443,7 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
             // actualVariantBuildTypes is populated by the AndroidComponentsExtension#onVariants
             // callbacks registered in registerPackagedArtifactScans above. Those callbacks fire during
             // AGP's own variant computation, which AGP schedules via its own afterEvaluate/finalizeDsl
-            // hooks -- if io.github.shakibuzzaman3104.android is applied *before* com.android.application
+            // hooks -- if io.github.devconsole-android is applied *before* com.android.application
             // (or com.android.library) in the `plugins {}` block, this plugin's afterEvaluate is queued
             // first and runs before AGP's variant computation has happened, so actualVariantBuildTypes
             // is still empty here even though onVariants will (uselessly) fire moments later. The old
@@ -452,12 +452,12 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
             // classpath walk and the packaged APK/AAB scan then vanish with no error at all. Fail
             // loudly instead: this is a plugin-ordering mistake, not a valid configuration.
             check(actualVariantBuildTypes.isNotEmpty()) {
-                "DevConsole: io.github.shakibuzzaman3104.android observed no Android build variants " +
+                "DevConsole: io.github.devconsole-android observed no Android build variants " +
                     "for project '${project.path}', even though it has an Android extension " +
-                    "configured. This almost always means io.github.shakibuzzaman3104.android was " +
+                    "configured. This almost always means io.github.devconsole-android was " +
                     "applied before com.android.application (or com.android.library) in the " +
                     "`plugins {}` block. Apply com.android.application (or com.android.library) " +
-                    "before io.github.shakibuzzaman3104.android so its variant callbacks register in " +
+                    "before io.github.devconsole-android so its variant callbacks register in " +
                     "time -- otherwise the transitive classpath and packaged-artifact checks silently " +
                     "do not run."
             }
@@ -642,12 +642,12 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
                 ?: error(
                     "DevConsole: protected variant '$variant' has no '${variant}RuntimeClasspath' " +
                         "configuration, so its transitive dependency graph cannot be verified. This " +
-                        "usually means io.github.shakibuzzaman3104.android was applied before " +
+                        "usually means io.github.devconsole-android was applied before " +
                         "com.android.application (or com.android.library) in the `plugins {}` block, " +
                         "or '$variant' is a build-type name that does not correspond to a real " +
                         "variant on a flavored project (e.g. 'release' instead of " +
                         "'productionRelease'). Apply com.android.application (or com.android.library) " +
-                        "before io.github.shakibuzzaman3104.android, or ensure enabledVariants / " +
+                        "before io.github.devconsole-android, or ensure enabledVariants / " +
                         "protectedVariantPatterns reference actual variant names.",
                 )
             variant to classpath.incoming.resolutionResult.rootComponent.map { root ->

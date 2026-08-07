@@ -12,12 +12,12 @@ ever ships to production, and the Gradle plugin fails the build if it would.
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.shakibuzzaman3104.android") version "0.1.0"
+    id("io.github.devconsole-android") version "0.1.0"
 }
 
 dependencies {
-    debugImplementation("io.github.shakibuzzaman3104:devconsole:0.1.0")
-    releaseImplementation("io.github.shakibuzzaman3104:devconsole-noop:0.1.0")
+    debugImplementation("io.github.devconsole-android:devconsole:0.1.0")
+    releaseImplementation("io.github.devconsole-android:devconsole-noop:0.1.0")
 }
 ```
 
@@ -87,7 +87,7 @@ default).
 `devconsole` (debug) and `devconsole-noop` (release) expose the **same public API**. The no-op
 twin records nothing, serves nothing, and links no server code — production safety comes from
 dependency selection, not a runtime flag. The Gradle plugin
-(`io.github.shakibuzzaman3104.android`) auto-wires the debug/release split if you omit the
+(`io.github.devconsole-android`) auto-wires the debug/release split if you omit the
 dependencies, and verifies — declared dependencies, resolved runtime classpath, and final
 APK/AAB bytes — that the full runtime never reaches a protected variant.
 
@@ -187,7 +187,7 @@ Java equivalents exist throughout (e.g. `DevConsoleOkHttp.install(builder, recor
 
 ## Artifacts
 
-Group `io.github.shakibuzzaman3104`, one version for everything. Two coordinates cover a normal
+Group `io.github.devconsole-android`, one version for everything. Two coordinates cover a normal
 integration (there is deliberately no BOM):
 
 | Coordinate | Scope | What it is |

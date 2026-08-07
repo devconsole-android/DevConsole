@@ -4,13 +4,13 @@
 
 ```kotlin
 plugins {
-    id("io.github.shakibuzzaman3104.android")
+    id("io.github.devconsole-android")
 }
 
 dependencies {
-    debugImplementation("io.github.shakibuzzaman3104:devconsole:<version>")
-    releaseImplementation("io.github.shakibuzzaman3104:devconsole-noop:<version>")
-    debugImplementation("io.github.shakibuzzaman3104:devconsole-ui-compose:<version>") // optional, only for the launcher panel
+    debugImplementation("io.github.devconsole-android:devconsole:<version>")
+    releaseImplementation("io.github.devconsole-android:devconsole-noop:<version>")
+    debugImplementation("io.github.devconsole-android:devconsole-ui-compose:<version>") // optional, only for the launcher panel
 }
 
 devConsole {

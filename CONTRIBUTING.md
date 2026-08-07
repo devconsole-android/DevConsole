@@ -44,7 +44,7 @@ All commands run from the repository root.
 # (does not publish anywhere real)
 ./gradlew publishToMavenLocal
 
-# gradle-plugin (the io.github.shakibuzzaman3104.android plugin) has its own test suite;
+# gradle-plugin (the io.github.devconsole-android plugin) has its own test suite;
 # build-logic (convention plugins only, no tests of its own) is checked via ./gradlew build above
 ./gradlew -p gradle-plugin test
 

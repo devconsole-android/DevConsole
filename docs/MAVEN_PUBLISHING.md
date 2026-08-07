@@ -3,7 +3,7 @@
 All 31 modules under `sdk/` are wired with the
 [Vanniktech Maven Publish plugin](https://github.com/vanniktech/gradle-maven-publish-plugin)
 (via the `devconsole.publishing` convention), targeting the Sonatype **Central Portal** under the
-group `io.github.shakibuzzaman3104`. Artifact IDs follow the mapping in
+group `io.github.devconsole-android`. Artifact IDs follow the mapping in
 `PublishingConventionPlugin`: `:sdk:full` → `devconsole`, `:sdk:noop` → `devconsole-noop`,
 everything else → `devconsole-<module>`. Each publication carries sources, a Dokka-generated
 javadoc jar, and a signed POM.
@@ -13,12 +13,14 @@ no-ops when no key is configured. A real publish needs the three things below.
 
 ## 1. Verify the namespace (browser, one-time)
 
-`io.github.shakibuzzaman3104` is a GitHub-verified namespace — no domain or DNS needed:
+`io.github.devconsole-android` is a GitHub-verified namespace tied to the `devconsole-android`
+GitHub **organization** — no domain or DNS needed:
 
-1. Go to [central.sonatype.com](https://central.sonatype.com) and **sign in with GitHub** (the
-   `Shakibuzzaman3104` account). Signing in with GitHub verifies the
-   `io.github.shakibuzzaman3104` namespace automatically.
-2. Confirm it appears under **Namespaces** as verified.
+1. Go to [central.sonatype.com](https://central.sonatype.com), sign in, and under **Namespaces**
+   add `io.github.devconsole-android`. The portal shows a short **verification key**.
+2. Create a public repository named exactly that key under the org
+   (`github.com/devconsole-android/<key>`), click **Verify Namespace**, then delete the
+   temporary repository.
 3. Under your account icon → **View Account** → **Generate User Token**. The token is a
    username/password pair — this is `mavenCentralUsername` / `mavenCentralPassword`. It is *not*
    your Sonatype login password.
@@ -75,7 +77,7 @@ search.maven.org within a few hours.
 
 ## The Gradle plugin is published separately
 
-`io.github.shakibuzzaman3104.android` lives in the `gradle-plugin` included build and goes to the
+`io.github.devconsole-android` lives in the `gradle-plugin` included build and goes to the
 **Gradle Plugin Portal**, not Central. One-time: create an account at
 [plugins.gradle.org](https://plugins.gradle.org), generate an API key, and put
 `gradle.publish.key` / `gradle.publish.secret` in `~/.gradle/gradle.properties`. Then:
@@ -91,11 +93,11 @@ Portal side.
 
 ```kotlin
 plugins {
-    id("io.github.shakibuzzaman3104.android") version "<version>"
+    id("io.github.devconsole-android") version "<version>"
 }
 dependencies {
-    debugImplementation("io.github.shakibuzzaman3104:devconsole:<version>")
-    releaseImplementation("io.github.shakibuzzaman3104:devconsole-noop:<version>")
+    debugImplementation("io.github.devconsole-android:devconsole:<version>")
+    releaseImplementation("io.github.devconsole-android:devconsole-noop:<version>")
 }
 ```
 

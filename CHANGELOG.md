@@ -128,7 +128,7 @@ intermediate steps.
 - **Dashboard assets split.** The dashboard is served as `index.html` plus
   `/assets/dashboard.css` and `/assets/dashboard.js`, under a tightened CSP (`script-src 'self'`)
   instead of one inline-scripted document.
-- **Coordinates moved to `io.github.shakibuzzaman3104`** (group and the `io.github.shakibuzzaman3104.android`
+- **Coordinates moved to `io.github.devconsole-android`** (group and the `io.github.devconsole-android`
   Gradle plugin id), a namespace this project can actually claim; `io.devconsole` was never publishable.
 - **Publishing is Maven Central-ready.** Every publishable module now emits a sources jar and a
   javadoc jar, a POM with license/developer/SCM metadata, and a signature when a signing key is
@@ -138,8 +138,8 @@ intermediate steps.
   a full runtime arriving transitively is caught, not just a directly declared one.
 - **The SDK is installable.** Every module the umbrella depends on is now published; previously
   `io.devconsole:devconsole` referenced ten artifacts under a group that was never published.
-- **Two coordinates**: `io.github.shakibuzzaman3104:devconsole` (debug) and
-  `io.github.shakibuzzaman3104:devconsole-noop` (release).
+- **Two coordinates**: `io.github.devconsole-android:devconsole` (debug) and
+  `io.github.devconsole-android:devconsole-noop` (release).
 - **`minSdk` is 24.**
 - **The Composer is off by default.** It can make the device issue arbitrary outbound requests, so
   the browser route now requires `composerEnabled`, with an optional host allowlist; the in-app

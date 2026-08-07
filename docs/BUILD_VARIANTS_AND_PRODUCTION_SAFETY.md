@@ -15,7 +15,7 @@ so not requiring you to write it is better than catching it afterwards.
 
 ```kotlin
 plugins {
-    id("io.github.shakibuzzaman3104.android")
+    id("io.github.devconsole-android")
 }
 ```
 
@@ -48,7 +48,7 @@ patterns with `.*` (as `(?i).*release` above does) so they match regardless of w
 prefixes onto the build type.
 
 **A variant that already names a DevConsole dependency is left alone.** Auto-wiring only fills a
-gap, so an explicit `debugImplementation("io.github.shakibuzzaman3104:devconsole:...")` — or a
+gap, so an explicit `debugImplementation("io.github.devconsole-android:devconsole:...")` — or a
 `project(":sdk:full")` dependency inside this repository — wins over anything the plugin would have
 added.
 
@@ -110,8 +110,8 @@ that doesn't exist in that build.
 
 ## Publication status
 
-The artifacts are `io.github.shakibuzzaman3104:devconsole` (the full runtime, from `:sdk:full`) and
-`io.github.shakibuzzaman3104:devconsole-noop` (from `:sdk:noop`); there is no BOM and never was a
+The artifacts are `io.github.devconsole-android:devconsole` (the full runtime, from `:sdk:full`) and
+`io.github.devconsole-android:devconsole-noop` (from `:sdk:noop`); there is no BOM and never was a
 `-full` coordinate. The publishing pipeline is wired — every publishable module produces a POM with
 license/developer/SCM metadata, a sources jar, a javadoc jar, and a signature when a key is provided
 — but nothing is on Maven Central yet: the version is a pre-1.0 `-SNAPSHOT`, and a release still

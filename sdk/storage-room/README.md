@@ -6,7 +6,7 @@
 
 1. Add dependency to your build file:
 ```kotlin
-debugImplementation("io.github.shakibuzzaman3104:devconsole-storage-room:<version>")
+debugImplementation("io.github.devconsole-android:devconsole-storage-room:<version>")
 ```
 
 `sdk:full` wires this module in automatically for durable timeline storage — no additional

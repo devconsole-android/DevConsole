@@ -26,7 +26,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         applicationIdLine: String = "",
         androidBlock: String = "",
         /**
-         * When false, lists io.github.shakibuzzaman3104.android *before* the Android plugin in the
+         * When false, lists io.github.devconsole-android *before* the Android plugin in the
          * `plugins {}` block, reproducing the misordering that used to silently disable the deep
          * transitive-classpath and packaged-artifact checks (see the "applied before" functional tests).
          */
@@ -51,11 +51,11 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
             if (androidPluginFirst) {
                 """
                 id("$androidPlugin") version "9.3.0"
-                id("io.github.shakibuzzaman3104.android")
+                id("io.github.devconsole-android")
                 """.trimIndent()
             } else {
                 """
-                id("io.github.shakibuzzaman3104.android")
+                id("io.github.devconsole-android")
                 id("$androidPlugin") version "9.3.0"
                 """.trimIndent()
             }
@@ -677,7 +677,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         assertTrue(result.output, result.output.contains("BUILD SUCCESSFUL"))
         assertTrue(result.output, result.output.contains(":stub-full"))
-        assertTrue(result.output, !result.output.contains("io.github.shakibuzzaman3104:devconsole"))
+        assertTrue(result.output, !result.output.contains("io.github.devconsole-android:devconsole"))
     }
 
     @Test
