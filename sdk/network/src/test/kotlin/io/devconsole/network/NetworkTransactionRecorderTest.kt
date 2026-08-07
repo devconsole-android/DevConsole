@@ -3,7 +3,6 @@ package io.devconsole.network
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
@@ -174,7 +173,7 @@ class NetworkTransactionRecorderTest {
     }
 
     @Test
-    fun `binary and oversized bodies are handed off as bounded redacted attachments`() {
+    fun `binary and oversized bodies are handed off as bounded attachments`() {
         val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
         val attachments = CopyOnWriteArrayList<NetworkAttachmentPayload>()
         val recorder =
@@ -186,8 +185,11 @@ class NetworkTransactionRecorderTest {
                 attachments += payload
                 "attachment-${payload.role.name.lowercase()}"
             }
-        val secretPrefix = "token=body-secret&".encodeToByteArray()
-        val binaryResponse = secretPrefix + ByteArray(3 * 1024 * 1024) { 1 }
+        // A non-textual content type (application/octet-stream) must never be run through text-field
+        // redaction -- even when its bytes happen to look like a sensitive field, as here -- because
+        // round-tripping genuinely binary bytes through UTF-8 would corrupt them.
+        val secretLookingPrefix = "token=body-secret&".encodeToByteArray()
+        val binaryResponse = secretLookingPrefix + ByteArray(3 * 1024 * 1024) { 1 }
 
         recorder.record(
             request =
@@ -215,7 +217,8 @@ class NetworkTransactionRecorderTest {
                 NetworkCaptureLimits.DEFAULT_TOTAL_CAPTURE_BYTES,
         )
         val responseAttachment = attachments.single { it.role == NetworkAttachmentRole.RESPONSE }
-        assertFalse(responseAttachment.bytes.decodeToString().contains("body-secret"))
+        // Bytes are preserved verbatim (bounded to the attachment cap), not redacted as text.
+        assertTrue(responseAttachment.bytes.contentEquals(binaryResponse.copyOf(responseAttachment.bytes.size)))
         assertEquals(binaryResponse.size.toLong(), responseAttachment.originalLength)
         assertTrue(responseAttachment.truncated)
         assertEquals("attachment-request", transaction.capture.request.attachmentId)

@@ -14,6 +14,13 @@ callbacks without changing socket control flow. If you need to also react to soc
 yourself, wrap `DevConsole.socketRecorder()`'s owning listener rather than replacing it — every
 callback is fail-open (a recording error never propagates to your socket code).
 
+**⚠️ Avoid reusing an instrumented OkHttpClient for WebSockets:** If the client has
+`DevConsoleOkHttpInterceptor` installed (for network capture), `client.newWebSocket(...)` will
+double-capture the upgrade handshake: once in the Network tab (as an HTTP request), and again in
+the WebSocket tab (as a connection). Create a separate plain `OkHttpClient` for WebSocket traffic,
+or use a different HTTP client for WebSockets if your main client is instrumented. See
+[`samples/foundation-app`](../samples/foundation-app) for an example.
+
 If you use a different transport, `SocketRecorder` is the generic manual entry point:
 `onOpen(connectionId, url, reconnectAttempt)`, `onMessage(connectionId, direction, text,
 contentType)`, `onBinaryMessage(connectionId, direction, length, contentType)`, and
@@ -23,7 +30,7 @@ contentType)`, `onBinaryMessage(connectionId, direction, length, contentType)`, 
 
 Connection lifecycle (open/closed/failed, with reconnect attempt count) and per-message previews.
 Text frames are redacted and bounded to 64 KiB; binary frames record only length and a truncation
-flag (`length > 2 MiB`), never raw bytes. The full working example is
+flag (`length > 4 KiB`), never raw bytes. The full working example is
 [`samples/foundation-app`](../samples/foundation-app/src/main/kotlin/io/devconsole/sample/MainActivity.kt).
 
 ## Dashboard

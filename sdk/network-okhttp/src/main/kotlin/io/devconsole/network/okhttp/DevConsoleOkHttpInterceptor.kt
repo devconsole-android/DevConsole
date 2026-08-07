@@ -171,22 +171,21 @@ class DevConsoleOkHttpInterceptor
         }
 
         /**
-         * SSE (`text/event-stream`) and NDJSON bodies are effectively unbounded and are often held
-         * open indefinitely; peeking one synchronously on the request thread would block until either
-         * the peek bound is reached (which a live stream may never hit) or the read times out.
-         * `text/event-stream` is always treated as streaming regardless of declared length (a real SSE
-         * response is for all practical purposes never a small fixed-length body); NDJSON is only
-         * treated as streaming when its length is unknown (chunked/unbounded) -- a length-bounded
-         * NDJSON body is just a regular small body and is safe to peek like any other.
+         * A body with no declared `Content-Length` (chunked transfer or otherwise unbounded, e.g. a
+         * long-poll response, `application/x-json-stream`, or a live `text/plain` feed) is treated as
+         * streaming regardless of its content type: [Response.peekBody] on such a body would block
+         * synchronously inside [intercept] -- before the host ever sees the response -- until either
+         * [MAX_RESPONSE_PEEK_BYTES] is buffered or the stream ends, which for a genuinely long-lived
+         * connection may be never. `text/event-stream` is always treated as streaming even when a
+         * length happens to be declared, since a real SSE response is for all practical purposes never
+         * a small fixed-length body. Any other body with a known, bounded length is safe to peek and is
+         * not considered streaming.
          */
         private fun isStreamingBody(
             contentType: String?,
             declaredLength: Long?,
         ): Boolean {
-            val type = contentType?.lowercase().orEmpty()
-            val isEventStream = type.startsWith("text/event-stream")
-            val isNdjson = type.contains("ndjson")
-            if (!isEventStream && !isNdjson) return false
+            val isEventStream = contentType?.lowercase().orEmpty().startsWith("text/event-stream")
             return isEventStream || declaredLength == null
         }
 

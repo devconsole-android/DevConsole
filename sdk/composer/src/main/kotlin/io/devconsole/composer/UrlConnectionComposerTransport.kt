@@ -1,6 +1,8 @@
 package io.devconsole.composer
 
 import java.net.HttpURLConnection
+import java.net.InetAddress
+import java.net.URI
 import java.net.URL
 
 /**
@@ -9,12 +11,14 @@ import java.net.URL
  */
 class UrlConnectionComposerTransport(
     private val maxResponseBytes: Int = DEFAULT_MAX_RESPONSE_BYTES,
+    private val permitPrivateNetworkTargets: Boolean = false,
 ) : ComposerTransport {
     init {
         require(maxResponseBytes > 0) { "Maximum response bytes must be positive" }
     }
 
     override fun execute(request: ResolvedComposerRequest): ComposerResponse {
+        rejectUnsafeDestination(request.url)
         val startedAt = System.nanoTime()
         val connection =
             (URL(request.url).openConnection() as HttpURLConnection).apply {
@@ -44,6 +48,39 @@ class UrlConnectionComposerTransport(
         } finally {
             connection.disconnect()
         }
+    }
+
+    /**
+     * Defence in depth on top of the hostname allowlist: resolve the host and fail closed if any
+     * resolved address is loopback, link-local (incl. the 169.254.169.254 cloud metadata endpoint),
+     * site-local, or IPv6 unique-local. This blocks the common case of an allowlisted host that
+     * simply resolves to a private address. It does NOT fully close a live DNS-rebinding attack: the
+     * underlying [HttpURLConnection] re-resolves the host independently at connect time, so a
+     * TTL-0 resolver could still answer public here and private there. Pinning the connection to the
+     * vetted address would break TLS SNI/cert validation, so it is not attempted; the residual risk
+     * is bounded by the allowlist (the attacker must already own DNS for an allowlisted host).
+     * [ComposerExecutor] re-invokes this transport once per redirect hop, so every hop is re-checked.
+     */
+    private fun rejectUnsafeDestination(url: String) {
+        if (permitPrivateNetworkTargets) return
+        val host = runCatching { URI(url).host }.getOrNull()
+        if (host.isNullOrBlank()) throw ComposerDestinationRejectedException(url)
+        val addresses = runCatching { InetAddress.getAllByName(host) }.getOrNull()
+        if (addresses.isNullOrEmpty() || addresses.any { it.isPrivateNetworkAddress() }) {
+            throw ComposerDestinationRejectedException(url)
+        }
+    }
+
+    private fun InetAddress.isPrivateNetworkAddress(): Boolean {
+        val flaggedPrivate =
+            listOf(isLoopbackAddress, isLinkLocalAddress, isSiteLocalAddress, isAnyLocalAddress)
+        return flaggedPrivate.any { it } || isUniqueLocalIpv6()
+    }
+
+    /** IPv6 unique local addresses (`fc00::/7`) are not covered by [InetAddress.isSiteLocalAddress]. */
+    private fun InetAddress.isUniqueLocalIpv6(): Boolean {
+        val firstByte = address.firstOrNull()?.toInt()?.and(BYTE_MASK) ?: return false
+        return address.size == IPV6_ADDRESS_BYTES && (firstByte and UNIQUE_LOCAL_PREFIX_MASK) == UNIQUE_LOCAL_PREFIX
     }
 
     private fun HttpURLConnection.writeBody(request: ResolvedComposerRequest) {
@@ -116,5 +153,13 @@ class UrlConnectionComposerTransport(
 
     private companion object {
         const val DEFAULT_MAX_RESPONSE_BYTES = 1_024 * 1_024
+
+        /** Low byte of a raw IPv6 address, masked to an unsigned value. */
+        const val BYTE_MASK = 0xFF
+        const val IPV6_ADDRESS_BYTES = 16
+
+        /** `fc00::/7`: match the top 7 bits of the first byte against the unique-local prefix. */
+        const val UNIQUE_LOCAL_PREFIX_MASK = 0xFE
+        const val UNIQUE_LOCAL_PREFIX = 0xFC
     }
 }

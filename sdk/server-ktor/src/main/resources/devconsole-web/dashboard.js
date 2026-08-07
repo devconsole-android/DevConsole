@@ -47,6 +47,13 @@
   let selectedFilePath = '';
   let stream = null;
   let streamRetry = null;
+  // Highest Timeline event.sequence this browser has taken delivery of, whether via a live WS
+  // frame or a full /api/v1/events refetch -- compared against server.welcome's currentSequence on
+  // every (re)connect so a reconnect that missed events while the socket was down can tell that
+  // apart from a fresh connect with nothing to backfill (see reconcileStreamGap).
+  let lastKnownSequence = -1;
+  let sessionExpired = false;
+  let consecutiveAuthFailures = 0;
   let timelineSeverityFilter = '';
   let timelineSourceFilter = '';
   let timelineBookmarkedOnly = false;
@@ -223,6 +230,24 @@
     String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = (name, cls) => `<svg class="ic${cls ? ' ' + esc(cls) : ''}" aria-hidden="true"><use href="#dc-${esc(name)}"/></svg>`;
   const hasSession = () => Boolean(token);
+  // Wrapped once, globally, instead of at each of this file's ~100 fetch call sites: a stray 401 on
+  // an authenticated request can just be a request racing a fresh reconnect, but several in a row
+  // is the generic signal that the session died server-side outside of a WS close (e.g. the tab was
+  // backgrounded through the token's TTL) -- see handleSessionExpired.
+  const SESSION_DEAD_AFTER_CONSECUTIVE_401S = 3;
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = async (input, init) => {
+    const response = await nativeFetch(input, init);
+    if (init?.headers?.Authorization && token) {
+      if (response.status === 401) {
+        consecutiveAuthFailures += 1;
+        if (consecutiveAuthFailures >= SESSION_DEAD_AFTER_CONSECUTIVE_401S) handleSessionExpired();
+      } else {
+        consecutiveAuthFailures = 0;
+      }
+    }
+    return response;
+  };
   const time = (ms) => new Date(ms || 0).toLocaleTimeString();
   /** Coarse "3m ago" style relative time for mock rule last-hit stamps — falls back to days once
    * past a day rather than growing more units, matching the density of the rest of the panel. */
@@ -1406,6 +1431,14 @@
     }
     refreshMockBodyEditor();
   }
+  /** Only a plain (optionally delayed) static response with an untruncated body survives a round
+   * trip through this dialog -- richer actions (ConnectionFailure/Timeout/TemplateResponse/etc.)
+   * and truncated bodies have no representation in the form, so saving one back would silently
+   * collapse it into StaticResponse(200, ""). Shared by the mock-rule-list edit-button gate, the
+   * open guard, and the save-time id-collision guard below so all three agree on the same rule. */
+  function isMockRuleEditable(rule) {
+    return Boolean(rule) && (rule.action === 'StaticResponse' || rule.action === 'Delay') && rule.bodyTruncated !== true;
+  }
   function openMockRuleDialog(rule, { editing = false } = {}) {
     const overlay = $('mockRuleModal');
     if (!overlay) return;
@@ -1460,6 +1493,13 @@
   function editMockRule(id) {
     const rule = mockRulesCache.find((r) => r.id === id);
     if (!rule) return;
+    // Defense in depth alongside the pencil button's own `editable` gate (cardTogglesHtml/
+    // loadMockRules) -- this is the only function that actually opens the dialog for an existing
+    // rule, so it refuses on its own rather than trusting the button was never reachable.
+    if (!isMockRuleEditable(rule)) {
+      toast('This rule uses ' + rule.action + ' and can’t be edited here — saving would replace it with a plain 200 response. Delete and recreate it instead.', 'error');
+      return;
+    }
     openMockRuleDialog(
       {
         id: rule.id, method: rule.method || '', scheme: rule.scheme || '', host: rule.host || '',
@@ -1488,6 +1528,17 @@
     if (!idValid || !statusValid) {
       setMockDialogError(!idValid ? 'Rule id must start with a letter or digit and contain only letters, digits, dot, underscore, or hyphen.' : 'Status must be an integer between 100 and 599.');
       (!idValid ? f.id : f.status).focus();
+      return;
+    }
+    // POST /api/v1/mocks/rules upserts by id, so a "new rule" save whose id happens to collide
+    // with an existing non-editable rule (a fault-injection/template action, or a truncated body)
+    // would silently replace it with this form's plain StaticResponse -- exactly the destructive
+    // save the pencil-button gate exists to prevent, just reached from the New-rule dialog instead.
+    const collision = mockRulesCache.find((r) => r.id === id);
+    if (collision && !isMockRuleEditable(collision)) {
+      const msg = 'A rule named "' + id + '" already exists as ' + collision.action + ' — saving here would replace it with a plain 200 response. Delete it first or choose a different id.';
+      setMockDialogError(msg);
+      toast(msg, 'error');
       return;
     }
     const headerErr = f.headers.value.trim() ? validateMockRuleHeaders(f.headers.value) : null;
@@ -2604,6 +2655,20 @@
     $('status').textContent = paused ? 'LIVE / PAUSED' : 'LIVE / TAILING';
   }
 
+  function noteSequenceSeen(seq) {
+    if (typeof seq === 'number' && seq > lastKnownSequence) lastKnownSequence = seq;
+  }
+  /** Fired only on a *reconnect* whose server.welcome reports a currentSequence past what this
+   * browser last saw (see connectStream) -- events were appended to the Timeline while the socket
+   * was down, and the WS frames that would have delivered them are gone for good, so this pulls a
+   * fresh page instead of leaving a silent gap. Timeline always re-syncs via load(); Network/
+   * Sockets/Push reuse their own live-tail loaders (which already respect "paged into history",
+   * scroll position, etc.) but only for whichever of them is actually on screen. */
+  function reconcileStreamGap() {
+    load();
+    const backfill = LIVE_TAIL_LOADERS[currentView];
+    if (backfill) backfill();
+  }
   function connectStream() {
     if (!token || stream?.readyState === WebSocket.OPEN || stream?.readyState === WebSocket.CONNECTING) return;
     clearTimeout(streamRetry);
@@ -2618,11 +2683,19 @@
         return;
       }
       if (value.type === 'server.welcome') {
+        $('lamp').classList.remove('expired');
         $('lamp').classList.add('live');
         $('status').textContent = paused ? 'LIVE / PAUSED' : 'LIVE / TAILING';
+        // lastKnownSequence starts at -1, so this only fires on a genuine reconnect (one that
+        // already saw at least one sequence number before now) -- a fresh first connect has
+        // nothing to backfill and every view loads its own initial data anyway.
+        if (typeof value.currentSequence === 'number' && lastKnownSequence >= 0 && value.currentSequence > lastKnownSequence) {
+          reconcileStreamGap();
+        }
         return;
       }
       if (value.type !== 'event.appended' || !value.event) return;
+      noteSequenceSeen(value.event.sequence);
       if (paused) {
         const queued = new Map(pendingLiveEvents.map((e) => [e.id, e]));
         queued.set(value.event.id, value.event);
@@ -2635,7 +2708,7 @@
       const liveTailKind = LIVE_TAIL_KIND_BY_PLUGIN[value.event.pluginId];
       if (liveTailKind) scheduleLiveTailRefresh(liveTailKind);
     };
-    stream.onclose = () => {
+    stream.onclose = (event) => {
       $('lamp').classList.remove('live');
       // A queued merge flush must not fire after the socket that queued it is gone -- but the
       // frames it buffered were already delivered by that socket, so flush them synchronously now
@@ -2644,11 +2717,47 @@
       clearTimeout(timelineMergeTimer);
       timelineMergeTimer = null;
       flushTimelineMerge();
+      // 1008 (VIOLATED_POLICY) + AUTH_REQUIRED/AUTH_REVOKED means the server itself has given up on
+      // this session -- blindly retrying every 1.5s would just collect the same close forever, so
+      // this is routed to the same dead-session state repeated 401s reach (handleSessionExpired)
+      // instead of the ordinary reconnect loop below. ORIGIN_REJECTED shares the 1008 code but is a
+      // config problem, not an expired session, so it deliberately falls through to that loop.
+      if (event.code === 1008 && (event.reason === 'AUTH_REQUIRED' || event.reason === 'AUTH_REVOKED')) {
+        handleSessionExpired();
+        return;
+      }
       if (token) {
         $('status').textContent = 'RECONNECTING LIVE STREAM';
         streamRetry = setTimeout(connectStream, 1500);
       }
     };
+  }
+
+  // ================================================================
+  // Session expiry
+  // ================================================================
+  // The session rides its server-side TTL (30 minutes); the dashboard does NOT proactively rotate
+  // the token. Rotating in place would invalidate the already-open /api/v1/stream socket (it
+  // re-checks the original token server-side every ~100ms), closing it 1008/AUTH_REVOKED — i.e.
+  // auto-refresh destroyed the very session it renewed. Instead, expiry is handled gracefully below.
+  /** Reached from two independent signals that the session died server-side: a WS close carrying
+   * AUTH_REQUIRED/AUTH_REVOKED (connectStream's onclose) and repeated 401s from ordinary
+   * authenticated requests (the fetch wrapper near hasSession). Stops every retry loop instead of
+   * spinning forever and leaves a state the operator can actually act on. */
+  function handleSessionExpired() {
+    if (sessionExpired) return;
+    sessionExpired = true;
+    consecutiveAuthFailures = 0;
+    clearTimeout(streamRetry);
+    token = '';
+    csrf = '';
+    stream?.close();
+    stream = null;
+    $('lamp').classList.remove('live');
+    $('lamp').classList.add('expired');
+    setStatus('Session expired', "Session expired — get a fresh connect code from the device's More screen");
+    toast('Session expired — get a fresh connect code from the device.', 'error');
+    updateControlUi();
   }
 
   // Raised from the historical limit=100 to the server's own TimelineQuery.MAX_PAGE_LIMIT (500) —
@@ -2668,6 +2777,7 @@
     events = (body.data || [])
       .map((raw) => ({ ...raw, wallTimeMs: raw.wallTimeMs ?? raw.timestampEpochMs ?? 0 }))
       .sort((a, b) => (a.monotonicNanos ?? 0) - (b.monotonicNanos ?? 0) || (a.sequence ?? 0) - (b.sequence ?? 0) || String(a.id).localeCompare(String(b.id)));
+    events.forEach((e) => noteSequenceSeen(e.sequence));
     timelineCursor = body.page?.nextCursor || null;
     $('timelineOlder').disabled = !body.page?.hasMore;
     paused = Boolean(cursor) || paused;
@@ -2699,6 +2809,7 @@
       const merged = new Map(events.map((e) => [e.id, e]));
       (body.data || []).forEach((raw) => merged.set(raw.id, { ...raw, wallTimeMs: raw.wallTimeMs ?? raw.timestampEpochMs ?? 0 }));
       events = [...merged.values()].sort((a, b) => (a.monotonicNanos ?? 0) - (b.monotonicNanos ?? 0) || (a.sequence ?? 0) - (b.sequence ?? 0) || String(a.id).localeCompare(String(b.id)));
+      events.forEach((e) => noteSequenceSeen(e.sequence));
       timelineCursor = body.page?.nextCursor || null;
       $('timelineOlder').disabled = !body.page?.hasMore;
       refreshSources();
@@ -2771,11 +2882,17 @@
         (r.status === 401 ? 'Code expired or invalid' : 'Code rejected') + " — get a fresh one from the device's More screen (codes are single-use and expire after five minutes)",
       );
       if (source === 'manual') toast('Session code rejected.', 'error');
+      // Codes are single-use, so a code that just failed exchange is burned either way — strip it
+      // from the URL on the auto-connect path same as the success branch below does, or a refresh
+      // just resubmits the same dead code and repeats this failure forever.
+      if (source !== 'manual') history.replaceState(null, '', location.pathname);
       return;
     }
     const b = await r.json();
     token = b.accessToken;
     csrf = b.csrfToken;
+    sessionExpired = false;
+    consecutiveAuthFailures = 0;
     if (source !== 'manual') history.replaceState(null, '', location.pathname);
     setStatus('Connected');
     toast('Connected to DevConsole session.');
@@ -4492,7 +4609,18 @@
     if (!canEditDatabase() || rowId === '' || rowId == null) return;
     if (!(await openConfirm('Delete row', 'Delete rowid ' + rowId + ' from ' + tableName + '? This cannot be undone.', 'Delete'))) return;
     const name = $('dbName').value;
-    const sql = 'DELETE FROM ' + tableName + ' WHERE rowid = ' + rowId + ';';
+    // tableName (from the table list) and rowId (from the rowIds column) are both server-derived,
+    // but this still splices them into a raw SQL string, so neither is trusted as-is: the table
+    // name is identifier-quoted (doubling any embedded `"`, standard SQL escaping) and the row id
+    // is required to be a plain integer literal -- sqlite rowids always are -- before it's spliced
+    // in unquoted.
+    const quotedTable = '"' + String(tableName).replace(/"/g, '""') + '"';
+    const rowIdNum = Number(rowId);
+    if (!Number.isInteger(rowIdNum)) {
+      toast('Delete failed: invalid row id.', 'error');
+      return;
+    }
+    const sql = 'DELETE FROM ' + quotedTable + ' WHERE rowid = ' + rowIdNum + ';';
     const r = await fetch('/api/v1/database/' + encodeURIComponent(name) + '/sql', {
       method: 'POST',
       headers: { ...controlHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -5816,7 +5944,7 @@
               // fault-injection/template rule here would silently rewrite it as a static 200,
               // and a truncated body would save the truncation as content.
               id: rule.id, checked: rule.enabled, disabled: !canEditMocks(), deletable: canEditMocks(),
-              editable: (rule.action === 'StaticResponse' || rule.action === 'Delay') && rule.bodyTruncated !== true,
+              editable: isMockRuleEditable(rule),
               k: rule.id,
               sub: (rule.method || '*') + ' ' + rule.path + ' → ' + rule.action + (rule.statusCode != null ? ' ' + rule.statusCode : '') + ' · ' + rule.scope
                 + (rule.hitCount ? ' · ' + rule.hitCount + ' hit' + (rule.hitCount === 1 ? '' : 's') + (rule.lastHitEpochMs ? ' · ' + relativeTime(rule.lastHitEpochMs) : '') : ''),

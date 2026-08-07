@@ -70,6 +70,11 @@ connection performs no DNS lookup or TCP handshake, a plaintext request has no T
 cached response that never touches the network has no phases at all. That reflects what actually
 happened on the wire, not a wiring mistake.
 
+**⚠️ Do not reuse an instrumented OkHttpClient for WebSocket upgrades:** If you wire this client for
+network capture and then call `client.newWebSocket(...)` on the same instance, the upgrade handshake
+will be double-captured — once in the Network tab as an HTTP request, and again in the WebSocket tab
+as a connection. Create a separate plain `OkHttpClient` for WebSocket traffic instead.
+
 ## Ktor client (`sdk:network-ktor`)
 
 ```kotlin

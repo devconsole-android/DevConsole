@@ -37,11 +37,6 @@ dependencies {
 }
 ```
 
-*(The Gradle plugin is awaiting the Plugin Portal's one-time approval for newly published
-plugins. If the `id("io.github.devconsole-android")` line doesn't resolve yet, just omit it — the
-two dependencies work on their own; the plugin only adds automatic debug/release wiring and
-build-time enforcement of the split.)*
-
 **2. Open the inspector on the device.** The SDK auto-initializes on debuggable builds, so this
 works immediately — from any button in your debug UI:
 
@@ -171,7 +166,8 @@ Java is fully supported via async variants and builders:
 DevConsole.initialize(getApplication(), DevConsoleConfig.builder().build());
 StartRequest request = new StartRequest(BindingMode.LAN, new kotlin.ranges.IntRange(8080, 8099));
 DevConsole.startBrowserAsync(request, result -> runOnUiThread(() -> {
-    if (result instanceof StartResult.Started started) {
+    if (result instanceof StartResult.Started) {
+        StartResult.Started started = (StartResult.Started) result;
         String url = started.getAccess().getConnectUrl();
     }
 }));

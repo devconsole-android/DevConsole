@@ -14,6 +14,7 @@ import io.devconsole.network.NetworkExport
 import io.devconsole.network.NetworkTransaction
 import io.devconsole.network.NetworkTransactionStore
 import io.devconsole.network.resolveExportSelection
+import io.devconsole.security.RedactionEngine
 import io.devconsole.server.api.ServerMetadata
 import io.devconsole.storage.api.StoredEvent
 import io.devconsole.timeline.InMemoryTimelineAnnotations
@@ -91,12 +92,19 @@ internal class AndroidInspectorExporter(
      */
     internal var maxSessionZipBytes: Long = DEFAULT_EXPORT_LIMIT_BYTES
 
+    /**
+     * When set, exported HAR/Postman bodies are re-redacted with the current policy at export time;
+     * null keeps only the capture-time redaction. A `var` (like [maxSessionZipBytes]) so the
+     * constructor stays under the parameter-count threshold.
+     */
+    internal var exportRedaction: RedactionEngine? = null
+
     override fun exportHar(selection: ExportSelection): ExportOutcome {
         val transactions =
             networkTransactionStore.resolveExportSelection(selection)
                 ?: return ExportOutcome.Failed(INVALID_SELECTION_MESSAGE)
         return write("devconsole-${System.currentTimeMillis()}-${nextExportSuffix()}.har") {
-            NetworkExport.toHarTransactions(transactions)
+            NetworkExport.toHarTransactions(transactions, exportRedaction)
         }
     }
 
@@ -105,7 +113,7 @@ internal class AndroidInspectorExporter(
             networkTransactionStore.resolveExportSelection(selection)
                 ?: return ExportOutcome.Failed(INVALID_SELECTION_MESSAGE)
         return write("devconsole-${System.currentTimeMillis()}-${nextExportSuffix()}.postman_collection.json") {
-            NetworkExport.toPostman(transactions)
+            NetworkExport.toPostman(transactions, exportRedaction)
         }
     }
 
@@ -225,8 +233,8 @@ internal class AndroidInspectorExporter(
                     output.closeEntry()
                 }
             }
-            output.writeText("network.har", NetworkExport.toHarTransactions(transactions))
-            output.writeText("network.postman_collection.json", NetworkExport.toPostman(transactions))
+            output.writeText("network.har", NetworkExport.toHarTransactions(transactions, exportRedaction))
+            output.writeText("network.postman_collection.json", NetworkExport.toPostman(transactions, exportRedaction))
             output.writeText("metadata.json", metadataSupplier().toJson())
         }
     }

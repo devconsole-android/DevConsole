@@ -22,7 +22,10 @@ The practical consequences:
 
 ## Retention
 
-`EventQuotaPruner` caps the store at 50,000 events, dropping oldest-first. Attachments are stored on
+Two separate mechanisms enforce two retention policies. `EventQuotaPruner` (invoked by the live event
+store) applies **`StoragePolicy`**, capping the live store at 50,000 events, 100 MB, and 24 hours
+(oldest-first drop). `RoomSessionStore` independently applies **`RetentionPolicy`** to historical
+app-run sessions, capping them at 7 days. Attachments are stored on
 disk under the app's no-backup directory with their own quota, and are written via an atomic rename
 so a partial file is never visible.
 

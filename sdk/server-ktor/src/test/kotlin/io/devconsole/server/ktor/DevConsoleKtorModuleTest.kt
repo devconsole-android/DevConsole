@@ -1666,6 +1666,7 @@ class DevConsoleKtorModuleTest {
             application {
                 devConsoleModule(sessions, sessionCodes) {
                     featureFlags = flags
+                    featureFlagsEditable = true
                     commandAuditLog = audit
                     timeline = testTimeline
                 }
@@ -1682,20 +1683,16 @@ class DevConsoleKtorModuleTest {
                 }
             assertEquals(HttpStatusCode.OK, update.status)
             assertTrue(flags.booleanValue("new_ui"))
-            assertEquals("flag.override", audit.events().single().commandType)
-            assertEquals(
-                "<redacted>",
-                audit
-                    .events()
-                    .single()
-                    .parameters
-                    .getValue("before"),
-            )
+            val auditEvent = audit.events().single()
+            assertEquals("flag.override", auditEvent.commandType)
+            // A non-sensitively-named flag records its real prior/new value, not "<redacted>".
+            assertEquals("false", auditEvent.parameters.getValue("before"))
+            assertEquals("true", auditEvent.parameters.getValue("after"))
             val flagEvent = (testTimeline.page(TimelineQuery()).let { it as TimelinePage.Success }).events.single()
             assertEquals("flag.override", flagEvent.type)
-            assertFalse(flagEvent.payloadJson.orEmpty().contains("\"before\":\"false\""))
-            assertFalse(flagEvent.payloadJson.orEmpty().contains("\"after\":\"true\""))
-            assertTrue(flagEvent.payloadJson.orEmpty().contains("<redacted>"))
+            assertTrue(flagEvent.payloadJson.orEmpty().contains("\"before\":\"false\""))
+            assertTrue(flagEvent.payloadJson.orEmpty().contains("\"after\":\"true\""))
+            assertFalse(flagEvent.payloadJson.orEmpty().contains("<redacted>"))
 
             val listing =
                 client.get("/api/v1/flags") {
@@ -2188,6 +2185,7 @@ class DevConsoleKtorModuleTest {
                         )
                     stateMutationsEnabled = true
                     mocksEditable = true
+                    featureFlagsEditable = true
                 }
             }
             val session = client.exchangeSession(sessions, sessionCodes, "Chrome")

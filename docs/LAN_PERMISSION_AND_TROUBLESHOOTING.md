@@ -88,8 +88,9 @@ actually authenticates the session.
 **`StartResult.DisabledForBuild`** — you're running against `devconsole-noop` (production/protected
 variant). See [BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md](BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md).
 
-**Session expired / browser suddenly logged out** — sessions expire after inactivity and are
-revoked immediately on server stop; issue a fresh session code from the device and reconnect.
+**Session expired / browser suddenly logged out** — sessions have an absolute 30-minute TTL (refreshable
+via `/auth/refresh`); they are also revoked immediately on server stop. Issue a fresh session code
+from the device and reconnect.
 
 ## Session codes ("SESSION_CODE_EXPIRED" / "SESSION_CODE_INVALID")
 

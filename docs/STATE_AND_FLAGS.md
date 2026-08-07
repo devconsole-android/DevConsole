@@ -1,8 +1,10 @@
 # State and feature flags
 
-Both are declared once, at `initialize()` time, via `DevConsoleConfig` — there is no method to
-register a state provider or feature flag later in the session. This is deliberate: it avoids a
-race between a late registration and the dashboard already having read an earlier snapshot.
+Both are declared once, at `initialize()` time, via `DevConsoleConfig`. State providers can also be
+registered later via `DevConsole.registerStateProvider()`, gated by the `CaptureCategory.STATE`
+permission. Feature flags, however, are fixed at initialization — late registration is not supported
+for flags to avoid a race between a late registration and the dashboard already having read an
+earlier snapshot.
 
 ## State providers
 

@@ -2,6 +2,8 @@ package io.devconsole
 
 import android.app.Application
 import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import io.devconsole.storage.room.DevConsoleDatabase
 import java.io.File
 import java.io.FileInputStream
@@ -65,7 +67,36 @@ internal class RecoveringDevConsoleDatabase(
             .addMigrations(DevConsoleDatabase.MIGRATION_2_3)
             .addMigrations(DevConsoleDatabase.MIGRATION_3_4)
             .addMigrations(DevConsoleDatabase.MIGRATION_4_5)
+            .addCallback(IncrementalVacuumCallback)
             .build()
+
+    /**
+     * Switches the database to `auto_vacuum=INCREMENTAL`, which is what lets `RoomEventStore`'s
+     * `PRAGMA incremental_vacuum` after a large prune actually return freed pages to the filesystem
+     * instead of leaving the file permanently grown. SQLite only changes `auto_vacuum` on an empty
+     * database or through a full `VACUUM` (a whole-file rewrite), and `VACUUM` cannot run inside a
+     * transaction -- so it is applied lazily on open, and ONLY while the database is still small
+     * (a fresh install, where the `VACUUM` is instant). A large pre-existing database keeps its
+     * current mode: reclaiming its pages is not worth blocking startup -- and the `startBrowser`
+     * bootstrap timeout -- on a multi-second one-time migration. New installs get incremental
+     * auto-vacuum from the start.
+     */
+    private object IncrementalVacuumCallback : RoomDatabase.Callback() {
+        override fun onOpen(db: SupportSQLiteDatabase) {
+            val mode =
+                db.query("PRAGMA auto_vacuum").use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getInt(0) else AUTO_VACUUM_INCREMENTAL
+                }
+            if (mode == AUTO_VACUUM_INCREMENTAL || db.inTransaction()) return
+            val pageCount =
+                db.query("PRAGMA page_count").use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getLong(0) else Long.MAX_VALUE
+                }
+            if (pageCount > MAX_VACUUM_MIGRATION_PAGES) return
+            db.execSQL("PRAGMA auto_vacuum=INCREMENTAL")
+            db.execSQL("VACUUM")
+        }
+    }
 
     private fun databaseFiles(): List<File> {
         val databaseFile = application.getDatabasePath(databaseName)
@@ -125,6 +156,16 @@ internal class RecoveringDevConsoleDatabase(
     companion object {
         private const val QUARANTINE_DIRECTORY = "devconsole/corrupt"
         private const val DEFAULT_MAX_QUARANTINES = 3
+
+        /** SQLite's `PRAGMA auto_vacuum` value for the INCREMENTAL mode. */
+        private const val AUTO_VACUUM_INCREMENTAL = 2
+
+        /**
+         * Only migrate a database to incremental auto-vacuum while it is at most this many pages
+         * (~8 MiB at the 4 KiB default page size), so the one-time `VACUUM` stays fast. Larger,
+         * already-populated databases keep their existing mode instead of blocking startup.
+         */
+        private const val MAX_VACUUM_MIGRATION_PAGES = 2048L
     }
 }
 

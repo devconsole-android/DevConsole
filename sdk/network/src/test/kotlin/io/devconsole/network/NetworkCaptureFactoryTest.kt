@@ -201,6 +201,42 @@ class NetworkCaptureFactoryTest {
     }
 
     @Test
+    fun `PNG magic bytes survive attachment capture byte-for-byte instead of a lossy UTF-8 round trip`() {
+        // 0x89 is not a valid UTF-8 lead byte on its own, so a decodeToString().encodeToByteArray()
+        // round trip (the bug in redactedAttachmentBytes) would replace it -- and any other invalid
+        // sequence -- with the U+FFFD replacement character, corrupting both the bytes and the length
+        // of a genuinely binary attachment such as this PNG.
+        val pngSignature = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+        val pngBody = pngSignature + ByteArray(256) { it.toByte() }
+        val request = NetworkRequestInput(method = "GET", url = "https://example.test/avatar.png")
+        val response = NetworkResponseInput(statusCode = 200, body = pngBody, contentType = "image/png")
+        val capture = factory.capture(request, response)
+
+        val attachments = factory.attachmentPayloads("tx-png", request, response, capture)
+
+        val responseAttachment = attachments.single { it.role == NetworkAttachmentRole.RESPONSE }
+        assertTrue(responseAttachment.bytes.contentEquals(pngBody))
+    }
+
+    @Test
+    fun `oversized textual attachment bodies still get text redaction`() {
+        val oversizedJson = "{\"password\":\"leak-me\",\"pad\":\"" + "a".repeat(300 * 1024) + "\"}"
+        val request =
+            NetworkRequestInput(
+                method = "POST",
+                url = "https://example.test/orders",
+                body = oversizedJson.encodeToByteArray(),
+                contentType = "application/json",
+            )
+        val capture = factory.capture(request, null)
+
+        val attachments = factory.attachmentPayloads("tx-text", request, null, capture)
+
+        val requestAttachment = attachments.single { it.role == NetworkAttachmentRole.REQUEST }
+        assertFalse(requestAttachment.bytes.decodeToString().contains("leak-me"))
+    }
+
+    @Test
     fun `recorder fails open when capture sink throws`() {
         val recorder = NetworkRecorder(factory) { error("storage unavailable") }
 

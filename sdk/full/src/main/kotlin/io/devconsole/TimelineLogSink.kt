@@ -1,24 +1,36 @@
 package io.devconsole
 
+import io.devconsole.api.EventSeverity
 import io.devconsole.logs.LogEntry
+import io.devconsole.logs.LogLevel
 import io.devconsole.logs.LogSink
-import io.devconsole.storage.api.StoredEvent
 import io.devconsole.timeline.TimelineAppender
-import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Turns captured log lines into timeline events, so logs sit in the same correlated stream as
  * network calls and crashes rather than in a tab of their own.
  *
- * Sequence numbers come from a counter rather than by querying the timeline for its last event:
- * logging is high-frequency, and a page query per line would be quadratic.
+ * Emits through [CaptureTimelineBridge] -- the same path the network/socket/push tees use -- rather
+ * than appending to a raw [TimelineAppender] directly, because the bridge is the only place that
+ * also records a [Breadcrumb] into the shared ring buffer [CrashCapture] reads at crash/ANR time.
+ * Appending straight to the appender (the previous shape of this class) put logs on the timeline
+ * but silently left them out of every crash's breadcrumb lead-up.
  */
 internal class TimelineLogSink(
-    private val sessionId: () -> String,
-    private val appender: () -> TimelineAppender?,
-    private val nextSequence: () -> Long = AtomicLong(0)::incrementAndGet,
+    private val bridge: CaptureTimelineBridge,
 ) : LogSink {
+    /**
+     * Back-compat shape for callers that only have an appender, not a shared [CaptureTimelineBridge]
+     * (and so no shared breadcrumb ring or live-stream hub). Prefer the primary constructor -- wiring
+     * the caller's own [CaptureTimelineBridge] here is what makes log breadcrumbs actually appear.
+     */
+    constructor(
+        sessionId: () -> String,
+        appender: () -> TimelineAppender?,
+        nextSequence: () -> Long = AtomicLong(0)::incrementAndGet,
+    ) : this(CaptureTimelineBridge(sessionId, appender, { null }, nextSequence))
+
     constructor(
         sessionId: String,
         appender: () -> TimelineAppender?,
@@ -26,21 +38,15 @@ internal class TimelineLogSink(
     ) : this({ sessionId }, appender, nextSequence)
 
     override fun emit(entry: LogEntry) {
-        val sink = appender() ?: return
-        sink.append(
-            StoredEvent(
-                id = UUID.randomUUID().toString(),
-                sessionId = sessionId(),
-                sequence = nextSequence(),
-                pluginId = PLUGIN_ID,
-                type = EVENT_TYPE,
-                wallTimeMs = entry.timestampEpochMs,
-                monoTimeNs = System.nanoTime(),
-                severity = entry.level.ordinal,
-                summary = entry.message.take(SUMMARY_CHARS),
-                tagsJson = """{"tag":"${entry.tag.escapeJson()}","level":"${entry.level.name}"}""",
-                payloadJson = payloadJson(entry),
-            ),
+        bridge.emit(
+            pluginId = PLUGIN_ID,
+            type = EVENT_TYPE,
+            severity = entry.level.toEventSeverity(),
+            summary = entry.message.take(SUMMARY_CHARS),
+            tagsJson = """{"tag":"${entry.tag.escapeJson()}","level":"${entry.level.name}"}""",
+            tags = mapOf("tag" to entry.tag, "level" to entry.level.name),
+            payloadJson = payloadJson(entry),
+            wallTimeMsOverride = entry.timestampEpochMs,
         )
     }
 
@@ -57,6 +63,15 @@ internal class TimelineLogSink(
         const val SUMMARY_CHARS = 200
     }
 }
+
+/** [LogLevel] has six levels, [EventSeverity] four; VERBOSE folds into DEBUG and ASSERT into ERROR. */
+private fun LogLevel.toEventSeverity(): EventSeverity =
+    when (this) {
+        LogLevel.VERBOSE, LogLevel.DEBUG -> EventSeverity.DEBUG
+        LogLevel.INFO -> EventSeverity.INFO
+        LogLevel.WARN -> EventSeverity.WARN
+        LogLevel.ERROR, LogLevel.ASSERT -> EventSeverity.ERROR
+    }
 
 /** RFC 8259 requires every character below 0x20 to be escaped, not just the named ones. */
 internal fun String.escapeJson(): String =

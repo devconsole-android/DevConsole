@@ -69,10 +69,10 @@ inspector tell an MQTT connection apart from a WebSocket one on the same list.
 Connection lifecycle (created/open/closed/failed) and per-message previews, with the same
 redaction, size caps, and text/binary handling as WebSocket capture — see
 [WEBSOCKET_INSPECTOR.md](WEBSOCKET_INSPECTOR.md) and
-[SECURITY_AND_REDACTION.md](SECURITY_AND_REDACTION.md). A received payload is stored as text only
-if it decodes as valid UTF-8; anything else is stored as binary. Sends are recorded only after the
-delegate client itself returns a token, mirroring the "record on the delegate's own success signal"
-rule the OkHttp WebSocket adapter uses.
+[SECURITY_AND_REDACTION.md](SECURITY_AND_REDACTION.md). MQTT topics are also redacted per the same
+policy. A received payload is stored as text only if it decodes as valid UTF-8; anything else is
+stored as binary. Sends are recorded only after the delegate client itself returns a token,
+mirroring the "record on the delegate's own success signal" rule the OkHttp WebSocket adapter uses.
 
 See `samples/compose-app`'s "Open sample MQTT connection" action for a complete, crash-safe example
 against a public test broker.

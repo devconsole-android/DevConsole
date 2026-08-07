@@ -340,7 +340,7 @@ class NetworkCaptureFactory(
                 }?.let { body ->
                     val maxBytes = minOf(NetworkAttachmentPayload.MAX_BYTES, remainingBytes)
                     if (maxBytes > 0) {
-                        val bytes = body.redactedAttachmentBytes(maxBytes)
+                        val bytes = body.redactedAttachmentBytes(maxBytes, request.contentType)
                         if (bytes.isNotEmpty()) {
                             add(
                                 NetworkAttachmentPayload(
@@ -367,7 +367,7 @@ class NetworkCaptureFactory(
                 }?.let { body ->
                     val maxBytes = minOf(NetworkAttachmentPayload.MAX_BYTES, remainingBytes)
                     if (maxBytes > 0) {
-                        val bytes = body.redactedAttachmentBytes(maxBytes)
+                        val bytes = body.redactedAttachmentBytes(maxBytes, response.contentType)
                         if (bytes.isNotEmpty()) {
                             add(
                                 NetworkAttachmentPayload(
@@ -387,8 +387,22 @@ class NetworkCaptureFactory(
         }
     }
 
-    private fun ByteArray.redactedAttachmentBytes(maxBytes: Int): ByteArray {
+    /**
+     * Text redaction round-trips through [String] (decode, pattern-match, re-encode), which is lossy
+     * for bytes that aren't valid UTF-8 -- an invalid sequence gets replaced with U+FFFD on decode, so
+     * a binary attachment (PNG, PDF, protobuf, zip, ...) would come back corrupted rather than merely
+     * unredacted. Mirrors [preview]'s textual/binary split: a declared non-textual [contentType] (or an
+     * absent one whose bytes fail to decode) skips the round-trip entirely and keeps the raw, bounded
+     * bytes; only genuinely textual content is redacted.
+     */
+    private fun ByteArray.redactedAttachmentBytes(
+        maxBytes: Int,
+        contentType: String?,
+    ): ByteArray {
         val boundedInput = copyOf(minOf(size, maxBytes))
+        val decodable = runCatching { boundedInput.decodeToString(throwOnInvalidSequence = true) }.isSuccess
+        val decodableFallback = contentType.isNullOrBlank() && decodable
+        if (!contentType.isTextual() && !decodableFallback) return boundedInput
         val redacted = redaction.redactText(boundedInput.decodeToString(), maxBytes).encodeToByteArray()
         return redacted.copyOfAtMost(maxBytes)
     }
@@ -594,8 +608,13 @@ private fun CapturedRequest.withoutQuery(): CapturedRequest =
         it.metadata = metadata
     }
 
-/** Generic manual recorder. Capture failures are swallowed so host network behavior is untouched. */
-class NetworkRecorder(
+/**
+ * Generic manual recorder. Capture failures are swallowed so host network behavior is untouched.
+ * Internal: unreferenced by any production integration (every adapter goes through
+ * [NetworkTransactionRecorder], which offloads capture to a background executor instead of blocking
+ * the caller) and kept only for [NetworkCaptureFactoryTest] coverage of [NetworkCaptureFactory].
+ */
+internal class NetworkRecorder(
     private val factory: NetworkCaptureFactory,
     private val sink: (NetworkCapture) -> Unit,
 ) {

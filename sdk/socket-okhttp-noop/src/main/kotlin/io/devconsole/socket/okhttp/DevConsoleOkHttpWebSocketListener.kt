@@ -11,49 +11,65 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 
 /**
- * Protected-build adapter: overrides every callback the full-side listener declares with a no-op
- * so the two modules' public shapes stay identical (see `OkHttpAdapterFullNoopParityTest`), but
- * never inspects socket data or touches [connectionIdProvider] -- functionally these are exactly
- * what [WebSocketListener]'s own empty defaults already do.
+ * Protected-build adapter: keeps the full-side listener's public shape (see
+ * `OkHttpAdapterFullNoopParityTest`) but never inspects socket data or touches
+ * [connectionIdProvider]. It still forwards every callback to a supplied [delegate], so a host that
+ * composes its own listener through this adapter keeps receiving callbacks identically in release.
  */
-class DevConsoleOkHttpWebSocketListener(
-    @Suppress("UNUSED_PARAMETER") recorder: SocketRecorder,
-    @Suppress("UNUSED_PARAMETER")
-    connectionIdProvider: (WebSocket) -> String = { "" },
-) : WebSocketListener() {
-    override fun onOpen(
-        webSocket: WebSocket,
-        response: Response,
-    ) = Unit
+class DevConsoleOkHttpWebSocketListener
+    @JvmOverloads
+    constructor(
+        @Suppress("UNUSED_PARAMETER")
+        recorder: SocketRecorder,
+        @Suppress("UNUSED_PARAMETER")
+        connectionIdProvider: (WebSocket) -> String = { "" },
+        private val delegate: WebSocketListener? = null,
+    ) : WebSocketListener() {
+        override fun onOpen(
+            webSocket: WebSocket,
+            response: Response,
+        ) {
+            delegate?.onOpen(webSocket, response)
+        }
 
-    override fun onMessage(
-        webSocket: WebSocket,
-        text: String,
-    ) = Unit
+        override fun onMessage(
+            webSocket: WebSocket,
+            text: String,
+        ) {
+            delegate?.onMessage(webSocket, text)
+        }
 
-    override fun onMessage(
-        webSocket: WebSocket,
-        bytes: ByteString,
-    ) = Unit
+        override fun onMessage(
+            webSocket: WebSocket,
+            bytes: ByteString,
+        ) {
+            delegate?.onMessage(webSocket, bytes)
+        }
 
-    override fun onClosing(
-        webSocket: WebSocket,
-        code: Int,
-        reason: String,
-    ) = Unit
+        override fun onClosing(
+            webSocket: WebSocket,
+            code: Int,
+            reason: String,
+        ) {
+            delegate?.onClosing(webSocket, code, reason)
+        }
 
-    override fun onClosed(
-        webSocket: WebSocket,
-        code: Int,
-        reason: String,
-    ) = Unit
+        override fun onClosed(
+            webSocket: WebSocket,
+            code: Int,
+            reason: String,
+        ) {
+            delegate?.onClosed(webSocket, code, reason)
+        }
 
-    override fun onFailure(
-        webSocket: WebSocket,
-        t: Throwable,
-        response: Response?,
-    ) = Unit
-}
+        override fun onFailure(
+            webSocket: WebSocket,
+            t: Throwable,
+            response: Response?,
+        ) {
+            delegate?.onFailure(webSocket, t, response)
+        }
+    }
 
 /**
  * Protected-build counterpart to the full-side `DevConsoleRecordingWebSocket`: same public shape

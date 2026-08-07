@@ -100,10 +100,18 @@ internal class CrashCapture(
         }
     }
 
+    /**
+     * Called from [AnrWatchdog]'s own daemon thread. Wrapped in [runCatching] exactly like the
+     * uncaught-exception path in [install] -- a failure while *capturing* an ANR must never itself
+     * become an uncaught exception on the watchdog thread, which (once [install] has run) would take
+     * the whole host process down over a capture-path bug instead of just skipping this ANR record.
+     */
     fun recordAnr(
         threadName: String,
         stackTrace: String,
-    ) = record(CrashKind.ANR, threadName, stackTrace, "Main thread unresponsive")
+    ) {
+        runCatching { record(CrashKind.ANR, threadName, stackTrace, "Main thread unresponsive") }
+    }
 
     private fun record(
         kind: CrashKind,
@@ -125,7 +133,11 @@ internal class CrashCapture(
                 tagsJson = """{"kind":"${kind.name}","thread":"${threadName.escapeJson()}"}""",
                 payloadJson = payloadJson(stackTrace),
             )
-        appender()?.append(event)
+        // A throwing appender must never escape record(): on the ANR watchdog thread there is no
+        // caller-side try/catch the way install()'s uncaught-exception handler has one, so an
+        // unguarded throw here would itself become an uncaught exception and -- once install() has
+        // run -- take the whole host process down over a failed *capture* of a stall.
+        runCatching { appender()?.append(event) }
         persistNow(event, kind, threadName)
     }
 
@@ -339,7 +351,11 @@ internal class AnrWatchdog(
                     val mainThread = Looper.getMainLooper().thread
                     val samples = Thread.getAllStackTraces().toOrderedStackSamples(mainThread)
                     val dump = ThreadDumpFormatter.format(samples, maxThreadsInDump, maxFramesPerThread, maxStackChars)
-                    onAnr(mainThread.name, dump)
+                    // A throwing onAnr must never escape loop(): this thread has no other caller-side
+                    // try/catch, and an uncaught exception here would kill the whole host process once
+                    // CrashCapture.install() has run -- exactly the outcome an ANR watchdog exists to
+                    // report, not cause.
+                    runCatching { onAnr(mainThread.name, dump) }
                     alreadyReported = true
                 }
             } else {

@@ -23,6 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.system.measureTimeMillis
 
 /** Robolectric only for a real `org.json` implementation to validate emitted payload JSON. */
@@ -410,6 +411,71 @@ class CrashCaptureTest {
             )
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(original)
+        }
+    }
+
+    // ============================================================================================
+    // ANR self-crash fix -- a throwing appender/onAnr callback must never escape record()/recordAnr(),
+    // since neither runs on a thread with a caller-side try/catch the way install()'s handler does.
+    // ============================================================================================
+
+    @Test
+    fun `a throwing appender during ANR capture does not escape recordAnr`() {
+        val throwingAppender =
+            object : TimelineAppender {
+                override fun append(event: StoredEvent): Unit = error("appender exploded")
+            }
+        val capture =
+            CrashCapture(
+                sessionId = { "session" },
+                redaction = RedactionEngine(RedactionPolicy.default()),
+                appender = { throwingAppender },
+                store = { store },
+                sessionStore = { null },
+            )
+
+        capture.recordAnr("main", "\tat Foo.bar")
+
+        // The record itself is still lost to the failed appender, but the watchdog thread that called
+        // recordAnr must survive -- and the crash record still reaches durable storage independently.
+        assertEquals(1, persisted.size)
+    }
+
+    @Test
+    fun `AnrWatchdog keeps polling after a throwing onAnr callback instead of dying`() {
+        // A background UncaughtExceptionHandler proves the throw inside loop() never escapes: if
+        // runCatching around onAnr(...) were removed, this handler would fire and record the thread's
+        // death, since `error(...)` inside the callback would otherwise propagate off loop() uncaught.
+        val threadDeaths = mutableListOf<Throwable>()
+        val callCount = AtomicInteger(0)
+        val watchdog =
+            AnrWatchdog(
+                thresholdMs = 30,
+                pollIntervalMs = 10,
+                onAnr = { _, _ ->
+                    callCount.incrementAndGet()
+                    error("onAnr exploded")
+                },
+            )
+        val deathHandler =
+            Thread.UncaughtExceptionHandler { _, throwable -> synchronized(threadDeaths) { threadDeaths += throwable } }
+        val originalDefault = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler(deathHandler)
+
+        try {
+            watchdog.start()
+            val deadline = System.currentTimeMillis() + 5_000
+            while (callCount.get() == 0 && System.currentTimeMillis() < deadline) {
+                Thread.sleep(20)
+            }
+            assertTrue("expected onAnr to have been invoked at least once", callCount.get() > 0)
+            // Give the worker thread time to keep looping (and, pre-fix, to die uncaught) before
+            // asserting nothing was ever reported dead.
+            Thread.sleep(200)
+            assertTrue("the watchdog thread must never die from a throwing onAnr callback", threadDeaths.isEmpty())
+        } finally {
+            watchdog.stop()
+            Thread.setDefaultUncaughtExceptionHandler(originalDefault)
         }
     }
 

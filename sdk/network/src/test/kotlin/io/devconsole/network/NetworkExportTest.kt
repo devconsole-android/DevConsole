@@ -140,6 +140,122 @@ class NetworkExportTest {
     }
 
     @Test
+    fun `har request cookies parsing skips a fully-redacted Cookie header instead of fabricating an entry`() {
+        val capture =
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                NetworkRequestInput(
+                    method = "GET",
+                    url = "https://example.test/orders",
+                    headers = mapOf("Cookie" to "session=raw-secret"),
+                ),
+                NetworkResponseInput(statusCode = 200),
+            )
+
+        val har = NetworkExport.toHar(listOf(capture))
+
+        har.assertIsValidJson()
+        // The whole Cookie header value was replaced by the redaction marker at capture time (no '='
+        // in it at all), so cookie parsing must not fabricate a HarCookie whose "name" is that marker.
+        assertFalse(har.contains("\"name\":\"<redacted>\""))
+    }
+
+    @Test
+    fun `har statusText and postman status use the http reason phrase not the captured error text`() {
+        val transaction =
+            NetworkTransaction(
+                "tx-1",
+                1_000,
+                1_010,
+                NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                    NetworkRequestInput("GET", "https://example.test/orders"),
+                    NetworkResponseInput(statusCode = 404, error = "socket timeout"),
+                ),
+            )
+
+        val har = NetworkExport.toHarTransactions(listOf(transaction))
+        val postman = NetworkExport.toPostman(listOf(transaction))
+
+        har.assertIsValidJson()
+        assertTrue(har.contains("\"statusText\":\"Not Found\""))
+        assertFalse(har.contains("socket timeout"))
+        assertTrue(postman.contains("\"status\":\"Not Found\""))
+        assertFalse(postman.contains("socket timeout"))
+    }
+
+    @Test
+    fun `har content object includes the response body size`() {
+        val capture =
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                NetworkRequestInput("GET", "https://example.test/orders"),
+                NetworkResponseInput(
+                    statusCode = 200,
+                    body = "{\"id\":1}".encodeToByteArray(),
+                    contentType = "application/json",
+                ),
+            )
+
+        val har = NetworkExport.toHar(listOf(capture))
+
+        har.assertIsValidJson()
+        assertTrue(har.contains("\"size\":8"))
+    }
+
+    @Test
+    fun `har redirectURL is populated from the Location header on a redirect and stays empty otherwise`() {
+        val redirect =
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                NetworkRequestInput("GET", "https://example.test/old"),
+                NetworkResponseInput(statusCode = 302, headers = mapOf("Location" to "https://example.test/new")),
+            )
+        val nonRedirect =
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                NetworkRequestInput("GET", "https://example.test/orders"),
+                NetworkResponseInput(statusCode = 200, headers = mapOf("Location" to "https://example.test/ignored")),
+            )
+
+        val redirectHar = NetworkExport.toHar(listOf(redirect))
+        val nonRedirectHar = NetworkExport.toHar(listOf(nonRedirect))
+
+        redirectHar.assertIsValidJson()
+        assertTrue(redirectHar.contains("\"redirectURL\":\"https://example.test/new\""))
+        assertTrue(nonRedirectHar.contains("\"redirectURL\":\"\""))
+    }
+
+    @Test
+    fun `export-time redaction re-runs the current policy over headers and bodies capture-time redaction missed`() {
+        val permissive = RedactionEngine(RedactionPolicy(sensitiveFieldNames = emptySet(), textPatterns = emptyList()))
+        val capture =
+            NetworkCaptureFactory(permissive).capture(
+                NetworkRequestInput(
+                    method = "POST",
+                    url = "https://example.test/orders",
+                    headers = mapOf("X-Api-Key" to "still-raw-secret"),
+                    body = "{\"token\":\"still-raw-secret\"}".encodeToByteArray(),
+                    contentType = "application/json",
+                ),
+                NetworkResponseInput(statusCode = 200),
+            )
+        // Sanity check: nothing was redacted at capture time under the permissive policy.
+        assertTrue(
+            capture.request.headers
+                .getValue("X-Api-Key")
+                .contains("still-raw-secret"),
+        )
+        val transaction = NetworkTransaction("tx-1", 1_000, 1_010, capture)
+        val stricter = RedactionEngine(RedactionPolicy.default())
+
+        val unredactedHar = NetworkExport.toHarTransactions(listOf(transaction))
+        val redactedHar = NetworkExport.toHarTransactions(listOf(transaction), stricter)
+        val redactedPostman = NetworkExport.toPostman(listOf(transaction), stricter)
+        val redactedCurl = NetworkExport.toCurl(capture, stricter)
+
+        assertTrue(unredactedHar.contains("still-raw-secret"))
+        assertFalse(redactedHar.contains("still-raw-secret"))
+        assertFalse(redactedPostman.contains("still-raw-secret"))
+        assertFalse(redactedCurl.contains("still-raw-secret"))
+    }
+
+    @Test
     fun `transaction HAR uses real start duration and timing phases`() {
         val capture =
             NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(

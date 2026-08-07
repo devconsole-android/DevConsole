@@ -817,4 +817,71 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         // productionDebug stays ENABLED via the build-type fallback, so it gets no such verifier.
         assertTrue(result.output, !result.output.contains("verifyProductionDebugDevConsolePackagedArtifact"))
     }
+
+    @Test
+    fun `auto-wired coordinate resolves to the released non-snapshot version`() {
+        writeFixture(
+            devConsoleBlock = "",
+            androidPlugin = "com.android.application",
+            applicationIdLine =
+                """
+                applicationId = "io.devconsole.fixture"
+                versionCode = 1
+                """.trimIndent(),
+        )
+
+        // release is PROTECTED by default, so auto-wire adds the noop core coordinate. The published
+        // coordinate is 0.2.0 -- the DEFAULT_SDK_VERSION must not point at a 0.2.0-SNAPSHOT that was
+        // never published, which would make every zero-config release build fail to resolve.
+        val result = runner("dependencies", "--configuration", "releaseImplementation").build()
+
+        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-noop:0.2.0"))
+        assertTrue(result.output, !result.output.contains("0.2.0-SNAPSHOT"))
+    }
+
+    @Test
+    fun `dynamic-feature module fails loudly because the plugin does not protect it`() {
+        writeFixture(
+            devConsoleBlock = "",
+            androidPlugin = "com.android.dynamic-feature",
+        )
+
+        val result = runner("devConsoleVariantReport").buildAndFail()
+
+        // A dynamic-feature module has neither an ApplicationExtension nor a LibraryExtension, so it
+        // used to silently fall through with zero protection and zero warning. It must now fail loudly.
+        assertTrue(
+            result.output,
+            result.output.contains("does not protect") &&
+                result.output.contains("dynamic-feature"),
+        )
+    }
+
+    @Test
+    fun `declaring only an add-on coordinate still auto-wires the core runtime`() {
+        writeFixture(
+            devConsoleBlock = "",
+            androidPlugin = "com.android.application",
+            applicationIdLine =
+                """
+                applicationId = "io.devconsole.fixture"
+                versionCode = 1
+                """.trimIndent(),
+            // An add-on coordinate in the DevConsole group but NOT the core runtime. It must not be
+            // mistaken for "the core runtime is already declared" and suppress core auto-wire.
+            extraBuildScript =
+                """
+                dependencies {
+                    add("debugImplementation", "io.github.devconsole-android:devconsole-ui-compose:0.2.0")
+                }
+                """.trimIndent(),
+        )
+
+        val result = runner("dependencies", "--configuration", "debugImplementation").build()
+
+        // debug is ENABLED, so the core runtime ("devconsole") must still be auto-wired alongside the
+        // host's add-on declaration -- the add-on alone does not count as declaring the core runtime.
+        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole:0.2.0"))
+        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-ui-compose"))
+    }
 }

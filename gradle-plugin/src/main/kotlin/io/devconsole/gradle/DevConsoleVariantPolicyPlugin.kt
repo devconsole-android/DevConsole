@@ -6,6 +6,7 @@ package io.devconsole.gradle
 
 import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.dsl.DynamicFeatureExtension
 import com.android.build.api.dsl.LibraryExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.api.variant.LibraryAndroidComponentsExtension
@@ -394,8 +395,15 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
     }
 }
 
-private const val DEFAULT_SDK_VERSION = "0.1.0-SNAPSHOT"
+private const val DEFAULT_SDK_VERSION = "0.2.0"
 private const val DEVCONSOLE_GROUP = "io.github.devconsole-android"
+
+/**
+ * Core runtime coordinate names whose presence means a host already declared the DevConsole runtime,
+ * so core auto-wiring must stand down. An add-on coordinate in the same group (e.g. `devconsole-ui-compose`,
+ * `devconsole-ui-views`, `devconsole-network-ktor`) is *not* the core runtime and must not suppress it.
+ */
+private val CORE_RUNTIME_COORDINATE_NAMES = setOf("devconsole", "devconsole-noop")
 
 class DevConsoleVariantPolicyPlugin : Plugin<Project> {
     override fun apply(target: Project) = with(target) {
@@ -437,6 +445,24 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
         registerPackagedArtifactScans(extension, packagedVerificationTasks, actualVariantBuildTypes)
 
         afterEvaluate {
+            // A com.android.dynamic-feature module has neither an ApplicationExtension nor a
+            // LibraryExtension, so the findByType chain below used to `return@afterEvaluate` and leave
+            // the module with zero protection and zero warning -- the full runtime could ride into a
+            // release dynamic-feature split completely unchecked. This plugin does not model the
+            // dynamic-feature packaging path, so fail loudly (mirroring the applied-before-AGP case
+            // below) rather than pretend to protect it.
+            extensions.findByType<DynamicFeatureExtension>()?.let {
+                error(
+                    "DevConsole: io.github.devconsole-android does not protect " +
+                        "com.android.dynamic-feature modules (project '${project.path}'). The variant " +
+                        "policy, transitive classpath walk and packaged-artifact scan only cover " +
+                        "com.android.application and com.android.library modules, so a dynamic-feature " +
+                        "split would carry the full DevConsole runtime with no verification at all. " +
+                        "Keep the DevConsole runtime out of dynamic-feature modules and apply " +
+                        "io.github.devconsole-android on the base com.android.application module (and " +
+                        "any com.android.library modules) instead.",
+                )
+            }
             extensions.findByType<ApplicationExtension>()
                 ?: extensions.findByType<LibraryExtension>()
                 ?: return@afterEvaluate
@@ -610,7 +636,10 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
     private fun org.gradle.api.artifacts.Dependency.isDevConsole(protectedProjectPaths: Set<String>): Boolean =
         when (this) {
             is ProjectDependency -> path.startsWith(":sdk:") || path in protectedProjectPaths
-            else -> group == DEVCONSOLE_GROUP
+            // Only the core runtime coordinates count as "already declared" for the purpose of skipping
+            // core auto-wire. Declaring only an add-on (devconsole-ui-compose / devconsole-ui-views /
+            // devconsole-network-ktor) in the same group must NOT suppress wiring the core runtime.
+            else -> group == DEVCONSOLE_GROUP && name in CORE_RUNTIME_COORDINATE_NAMES
         }
 
     private fun Project.registerProtectedVerifier(

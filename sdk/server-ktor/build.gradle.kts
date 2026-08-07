@@ -6,7 +6,10 @@ plugins {
     id("devconsole.publishing")
 }
 
-android { namespace = "io.devconsole.server.ktor" }
+android {
+    namespace = "io.devconsole.server.ktor"
+    defaultConfig { consumerProguardFiles("consumer-rules.pro") }
+}
 
 dependencies {
     implementation(project(":sdk:api"))

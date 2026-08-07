@@ -164,6 +164,9 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Collections
 import java.util.UUID
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -195,6 +198,13 @@ class DevConsoleModuleConfig {
      */
     var captureRulesEditable: Boolean = false
     var featureFlags: SessionFeatureFlags = SessionFeatureFlags(emptyList())
+
+    /**
+     * Mirrors `EditingCapabilities.featureFlags`. Listing flags stays available to any authenticated
+     * session whenever the `state` capture category is enabled; the flag-override route answers 403
+     * while this is false.
+     */
+    var featureFlagsEditable: Boolean = false
     var stateRegistry: StateRegistry = StateRegistry()
     var stateMutationsEnabled: Boolean = false
 
@@ -298,6 +308,7 @@ fun Application.devConsoleModule(
     val captureRules = config.captureRules
     val captureRulesEditable = config.captureRulesEditable
     val featureFlags = config.featureFlags
+    val featureFlagsEditable = config.featureFlagsEditable
     val stateRegistry = config.stateRegistry
     val stateMutationsEnabled = config.stateMutationsEnabled
     val preferencesInspector = config.preferencesInspector
@@ -872,6 +883,7 @@ fun Application.devConsoleModule(
                         attachmentReader = attachmentReader,
                         attachmentMetadataReader = attachmentMetadataReader,
                         sessionSnapshotProvider = sessionSnapshotProvider,
+                        redaction = redaction,
                     )
                 if (evidenceRequest == null) {
                     commandAuditLog.recordExport(session.id, CommandAuditResult.FAILED, "unavailable")
@@ -943,18 +955,38 @@ fun Application.devConsoleModule(
                         CommandAuditResult.SUCCESS,
                         prepared.scope.javaClass.simpleName,
                     )
+                    // Mirror AndroidInspectorExporter.exportSessionZip: the browser bundle carries the
+                    // same network.har / network.postman_collection.json / metadata.json the on-device
+                    // session ZIP includes, generated over this session's captured transactions.
+                    val sessionTransactions =
+                        networkTransactions
+                            .resolveExportSelection(ExportSelection.All)
+                            ?.filter { it.sessionId == prepared.exportSessionId }
+                            .orEmpty()
+                    val bundle = File(exportDirectory, "devconsole-bundle-${UUID.randomUUID()}.zip")
+                    try {
+                        appendSessionBundleEntries(result.file, bundle, sessionTransactions, metadata, redaction)
+                    } catch (failure: Throwable) {
+                        // A merge failure must not leak either temp file; pruneStaleExports would only
+                        // reclaim them an hour later. The partial bundle is deleted here; result.file
+                        // is deleted by the shared finally below.
+                        bundle.delete()
+                        throw failure
+                    } finally {
+                        result.file.delete()
+                    }
                     call.response.headers.append(
                         HttpHeaders.ContentDisposition,
                         "attachment; filename=\"devconsole-export.zip\"",
                     )
                     call.respondOutputStream(
                         contentType = ContentType.parse("application/zip"),
-                        contentLength = result.file.length(),
+                        contentLength = bundle.length(),
                     ) {
                         try {
-                            result.file.inputStream().use { input -> input.copyTo(this) }
+                            bundle.inputStream().use { input -> input.copyTo(this) }
                         } finally {
-                            result.file.delete()
+                            bundle.delete()
                         }
                     }
                 }
@@ -1000,6 +1032,7 @@ fun Application.devConsoleModule(
                         attachmentReader = attachmentReader,
                         attachmentMetadataReader = attachmentMetadataReader,
                         sessionSnapshotProvider = sessionSnapshotProvider,
+                        redaction = redaction,
                     )
                 if (evidenceRequest == null) {
                     call.respondText("{\"code\":\"EXPORT_UNAVAILABLE\"}", status = HttpStatusCode.ServiceUnavailable)
@@ -1416,6 +1449,12 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@get
             }
+            // Feature flags live under the "state" capture category (state providers + feature flags),
+            // so listing them is gated exactly like the state-provider routes.
+            if (!categoryEnabled("state")) {
+                call.respondCategoryDisabled("state")
+                return@get
+            }
             val flags =
                 featureFlags.flags().joinToString(",") { flag ->
                     val allowed = flag.allowedValues.joinToString(",") { "\"${it.escapeJson()}\"" }
@@ -1436,27 +1475,40 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@post
             }
+            val key = call.parameters["key"].orEmpty()
             if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
                 call.request.headers[CSRF_HEADER] != session.csrfToken
             ) {
-                commandAuditLog.recordControlFailure(
-                    session.id,
-                    "flag.override",
-                    call.parameters["key"].orEmpty().ifBlank { "flag" },
-                )
+                commandAuditLog.recordControlFailure(session.id, "flag.override", key.ifBlank { "flag" })
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
+                return@post
+            }
+            // Feature flags live under the "state" capture category; overriding one is gated by that
+            // category and then by the featureFlags editing capability, mirroring the mock-rule routes.
+            if (!categoryEnabled("state")) {
+                commandAuditLog.recordControlFailure(session.id, "flag.override", key.ifBlank { "flag" })
+                call.respondCategoryDisabled("state")
+                return@post
+            }
+            if (!featureFlagsEditable) {
+                commandAuditLog.recordControlFailure(session.id, "flag.override", key.ifBlank { "flag" })
+                call.respondText("{\"code\":\"FEATURE_FLAGS_DISABLED\"}", status = HttpStatusCode.Forbidden)
                 return@post
             }
             // Accepts a bare value, so "true" still works and "staging" now does too. Quotes are
             // tolerated because a browser posting JSON is the common case.
             val value = call.receiveText().trim().trim('"')
-            val key = call.parameters["key"].orEmpty()
+            val previousValue = featureFlags.value(key)
             val changed = runCatching { featureFlags.override(key, value) }.isSuccess
             if (!changed) {
                 commandAuditLog.recordControlFailure(session.id, "flag.override", key.ifBlank { "flag" })
                 call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
                 return@post
             }
+            // Redact before/after through the engine keyed on the flag KEY as its field name: a flag
+            // named like a secret stays masked, while an ordinary flag records its real prior and new value.
+            val redactedBefore = redaction.redactFields(mapOf(key to previousValue)).getValue(key)
+            val redactedAfter = redaction.redactFields(mapOf(key to featureFlags.value(key))).getValue(key)
             commandAuditLog.record(
                 CommandAuditEvent(
                     timestampEpochMs = System.currentTimeMillis(),
@@ -1466,13 +1518,13 @@ fun Application.devConsoleModule(
                     result = CommandAuditResult.SUCCESS,
                     parameters =
                         mapOf(
-                            "before" to redaction.replacement(),
-                            "after" to redaction.replacement(),
+                            "before" to redactedBefore,
+                            "after" to redactedAfter,
                             "changed" to "true",
                         ),
                 ),
             )
-            timeline.appendFlagOverride(session.id, key, redaction.replacement())
+            timeline.appendFlagOverride(session.id, key, redactedBefore, redactedAfter)
             call.respondText("{\"status\":\"updated\"}", contentType = io.ktor.http.ContentType.Application.Json)
         }
         get("/api/v1/capture-rules") {
@@ -2966,7 +3018,7 @@ fun Application.devConsoleModule(
                 return@get
             }
             call.respondText(
-                NetworkExport.toCurl(transaction.capture),
+                NetworkExport.toCurl(transaction.capture, redaction),
                 contentType = io.ktor.http.ContentType.Text.Plain,
             )
         }
@@ -3108,7 +3160,7 @@ fun Application.devConsoleModule(
             val resolution = call.resolveNetworkExportTransactions(networkTransactions) ?: return@get
             call.applyExportTruncationHeaders(resolution)
             call.respondText(
-                NetworkExport.toHarTransactions(resolution.transactions),
+                NetworkExport.toHarTransactions(resolution.transactions, redaction),
                 contentType = io.ktor.http.ContentType.Application.Json,
             )
         }
@@ -3126,7 +3178,7 @@ fun Application.devConsoleModule(
             val resolution = call.resolveNetworkExportTransactions(networkTransactions) ?: return@get
             call.applyExportTruncationHeaders(resolution)
             call.respondText(
-                NetworkExport.toPostman(resolution.transactions),
+                NetworkExport.toPostman(resolution.transactions, redaction),
                 contentType = io.ktor.http.ContentType.Application.Json,
             )
         }
@@ -3149,7 +3201,7 @@ fun Application.devConsoleModule(
             }
             call.applyExportTruncationHeaders(resolution)
             call.respondText(
-                NetworkExport.toHarTransactions(resolution.transactions),
+                NetworkExport.toHarTransactions(resolution.transactions, redaction),
                 contentType = io.ktor.http.ContentType.Application.Json,
             )
         }
@@ -3163,7 +3215,7 @@ fun Application.devConsoleModule(
             }
             call.applyExportTruncationHeaders(resolution)
             call.respondText(
-                NetworkExport.toPostman(resolution.transactions),
+                NetworkExport.toPostman(resolution.transactions, redaction),
                 contentType = io.ktor.http.ContentType.Application.Json,
             )
         }
@@ -3306,6 +3358,7 @@ class KtorLocalServerEngine(
     private val pushStore: PushStore = InMemoryPushStore(),
     private val stateRegistry: StateRegistry = StateRegistry(),
     featureFlags: SessionFeatureFlags = SessionFeatureFlags(emptyList()),
+    featureFlagsEditable: Boolean = false,
     private val mockEngine: MockEngine = MockEngine(emptyList()),
     mocksEditable: Boolean = false,
     private val captureRules: CaptureRuleEngine = CaptureRuleEngine(),
@@ -3369,6 +3422,7 @@ class KtorLocalServerEngine(
     private var runtimeConfiguration =
         RuntimeConfiguration(
             featureFlags = featureFlags,
+            featureFlagsEditable = featureFlagsEditable,
             composerEnabled = composerEnabled,
             composerAllowedHosts = composerAllowedHosts,
             stateMutationsEnabled = stateMutationsEnabled,
@@ -3393,10 +3447,12 @@ class KtorLocalServerEngine(
         preferencesEditable: Boolean = false,
         databaseEditable: Boolean = false,
         filesEditable: Boolean = false,
+        featureFlagsEditable: Boolean = false,
     ) {
         runtimeConfiguration =
             RuntimeConfiguration(
                 featureFlags = featureFlags,
+                featureFlagsEditable = featureFlagsEditable,
                 composerEnabled = composerEnabled,
                 composerAllowedHosts = composerAllowedHosts,
                 stateMutationsEnabled = stateMutationsEnabled,
@@ -3467,6 +3523,7 @@ class KtorLocalServerEngine(
                                 this.pushStore = this@KtorLocalServerEngine.pushStore
                                 this.stateRegistry = this@KtorLocalServerEngine.stateRegistry
                                 this.featureFlags = configuration.featureFlags
+                                this.featureFlagsEditable = configuration.featureFlagsEditable
                                 this.mockEngine = this@KtorLocalServerEngine.mockEngine
                                 this.mocksEditable = configuration.mocksEditable
                                 this.captureRules = this@KtorLocalServerEngine.captureRules
@@ -3539,6 +3596,7 @@ class KtorLocalServerEngine(
 
     private data class RuntimeConfiguration(
         val featureFlags: SessionFeatureFlags,
+        val featureFlagsEditable: Boolean,
         val composerEnabled: Boolean,
         val composerAllowedHosts: Set<String>,
         val stateMutationsEnabled: Boolean,
@@ -3863,6 +3921,49 @@ private suspend fun prepareExport(
         }
     return ExportPreparation(scope, metadataOnly, maxBytes, exportSessionId, scopedEvents, attachments)
 }
+
+/**
+ * Copies every entry [timelineZip] already holds into [destination], then appends the network HAR and
+ * Postman exports (over this session's transactions) plus app metadata -- the same enrichment
+ * [io.devconsole.InspectorExporter]'s on-device session ZIP carries, so the browser and on-device
+ * bundles agree. Entry names are constant literals, so no caller input can introduce a traversal entry.
+ */
+private fun appendSessionBundleEntries(
+    timelineZip: File,
+    destination: File,
+    transactions: List<NetworkTransaction>,
+    metadata: ServerMetadata,
+    redaction: RedactionEngine,
+) {
+    ZipOutputStream(destination.outputStream().buffered()).use { output ->
+        ZipInputStream(timelineZip.inputStream().buffered()).use { input ->
+            generateSequence(input.nextEntry) { input.nextEntry }.forEach { entry ->
+                output.putNextEntry(ZipEntry(entry.name))
+                input.copyTo(output)
+                output.closeEntry()
+            }
+        }
+        output.putBundleEntry("network.har", NetworkExport.toHarTransactions(transactions, redaction))
+        output.putBundleEntry("network.postman_collection.json", NetworkExport.toPostman(transactions, redaction))
+        output.putBundleEntry("metadata.json", metadata.bundleMetadataJson())
+    }
+}
+
+private fun ZipOutputStream.putBundleEntry(
+    name: String,
+    content: String,
+) {
+    putNextEntry(ZipEntry(name))
+    write(content.encodeToByteArray())
+    closeEntry()
+}
+
+/** Non-sensitive app metadata, matching the shape `AndroidInspectorExporter` writes into `metadata.json`. */
+private fun ServerMetadata.bundleMetadataJson(): String =
+    "{\"appDisplayName\":\"${appDisplayName.escapeJson()}\"," +
+        "\"appPackageName\":\"${appPackageName.escapeJson()}\"," +
+        "\"appVersionName\":\"${appVersionName.escapeJson()}\"," +
+        "\"buildVariant\":\"${buildVariant.escapeJson()}\"}"
 
 private fun String.commandAuditIdentity(method: String): Pair<String, String>? =
     when {
@@ -4379,7 +4480,8 @@ private fun SdkHealthSnapshot.json(): String =
 private fun Timeline.appendFlagOverride(
     browserSessionId: String,
     key: String,
-    redactedValue: String,
+    redactedBefore: String,
+    redactedAfter: String,
 ) {
     val sink = this as? TimelineAppender ?: return
     val previous =
@@ -4402,8 +4504,8 @@ private fun Timeline.appendFlagOverride(
             tagsJson = "{\"source\":\"flag\"}",
             payloadJson =
                 "{\"key\":\"${key.escapeJson()}\"," +
-                    "\"before\":\"${redactedValue.escapeJson()}\"," +
-                    "\"after\":\"${redactedValue.escapeJson()}\",\"changed\":true}",
+                    "\"before\":\"${redactedBefore.escapeJson()}\"," +
+                    "\"after\":\"${redactedAfter.escapeJson()}\",\"changed\":true}",
         ),
     )
 }
@@ -5532,6 +5634,7 @@ private suspend fun buildEvidenceExportRequest(
     attachmentReader: suspend (String) -> ByteArray?,
     attachmentMetadataReader: suspend (String) -> StoredAttachment?,
     sessionSnapshotProvider: suspend () -> StoredSession?,
+    redaction: RedactionEngine,
 ): ExportRequest? {
     val store = evidenceStore ?: return null
     val items = store.items(sessionId)
@@ -5594,8 +5697,8 @@ private suspend fun buildEvidenceExportRequest(
             reportJson =
                 "{\"report\":${report.json()}," +
                     "\"items\":[${items.map { it.json(attachmentMetadataReader) }.joinToString(",")}]}",
-            networkHar = NetworkExport.toHarTransactions(networkTransactionsForItems),
-            postmanCollection = NetworkExport.toPostman(networkTransactionsForItems),
+            networkHar = NetworkExport.toHarTransactions(networkTransactionsForItems, redaction),
+            postmanCollection = NetworkExport.toPostman(networkTransactionsForItems, redaction),
             sessionJson = evidenceSessionJson(metadata, sessionSnapshot),
             itemCount = items.size,
             attachments = attachments,
