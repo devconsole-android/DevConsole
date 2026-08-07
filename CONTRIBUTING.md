@@ -8,8 +8,8 @@ runs — see [Verify](.github/workflows/verify.yml).
 
 - JDK 17 (matches `compileOptions`/`setup-java` in CI; the `build-logic` and `gradle-plugin`
   included builds target the same toolchain).
-- Android SDK with `compileSdk`/`targetSdk` 37 installed (Android Gradle Plugin 9.3.0, `minSdk`
-  24). See the [compatibility table](README.md#compatibility) in the README for the full matrix.
+- Android SDK with `compileSdk`/`targetSdk` 35 installed (Android Gradle Plugin 8.13.0, `minSdk`
+  23). See the [compatibility table](README.md#compatibility) in the README for the full matrix.
 - No emulator or device is required to build, run unit tests, or lint — only the three sample
   apps' instrumented tests would need one, and those aren't part of the default `build`/`test`
   path below.

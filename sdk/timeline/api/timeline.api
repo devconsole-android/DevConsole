@@ -1,0 +1,177 @@
+public final class io/devconsole/timeline/CursorCodec {
+	public static final field CURRENT_CURSOR_PART_COUNT I
+	public static final field CURRENT_CURSOR_SIGNATURE_INDEX I
+	public static final field CURSOR_VERSION Ljava/lang/String;
+	public fun <init> ([B)V
+	public final fun decode (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/timeline/CursorDecodeResult;
+	public final fun encode (Lio/devconsole/timeline/CursorMarker;Ljava/lang/String;)Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/timeline/CursorDecodeResult {
+}
+
+public final class io/devconsole/timeline/CursorDecodeResult$Invalid : io/devconsole/timeline/CursorDecodeResult {
+	public static final field INSTANCE Lio/devconsole/timeline/CursorDecodeResult$Invalid;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/timeline/CursorDecodeResult$Missing : io/devconsole/timeline/CursorDecodeResult {
+	public static final field INSTANCE Lio/devconsole/timeline/CursorDecodeResult$Missing;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/timeline/CursorDecodeResult$Valid : io/devconsole/timeline/CursorDecodeResult {
+	public fun <init> (Lio/devconsole/timeline/CursorMarker;)V
+	public final fun component1 ()Lio/devconsole/timeline/CursorMarker;
+	public final fun copy (Lio/devconsole/timeline/CursorMarker;)Lio/devconsole/timeline/CursorDecodeResult$Valid;
+	public static synthetic fun copy$default (Lio/devconsole/timeline/CursorDecodeResult$Valid;Lio/devconsole/timeline/CursorMarker;ILjava/lang/Object;)Lio/devconsole/timeline/CursorDecodeResult$Valid;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMarker ()Lio/devconsole/timeline/CursorMarker;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/timeline/CursorMarker {
+	public fun <init> (JLjava/lang/String;)V
+	public final fun component1 ()J
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (JLjava/lang/String;)Lio/devconsole/timeline/CursorMarker;
+	public static synthetic fun copy$default (Lio/devconsole/timeline/CursorMarker;JLjava/lang/String;ILjava/lang/Object;)Lio/devconsole/timeline/CursorMarker;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMonotonicNanos ()J
+	public final fun getSequence ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun withMonotonicNanos (J)Lio/devconsole/timeline/CursorMarker;
+}
+
+public final class io/devconsole/timeline/InMemoryTimeline : io/devconsole/timeline/Timeline, io/devconsole/timeline/TimelineAppender {
+	public static final field LEGACY_MONOTONIC_NANOS J
+	public fun <init> (Ljava/util/List;Lio/devconsole/timeline/CursorCodec;)V
+	public fun append (Lio/devconsole/storage/api/StoredEvent;)V
+	public fun contains (Ljava/lang/String;)Z
+	public fun page (Lio/devconsole/timeline/TimelineQuery;)Lio/devconsole/timeline/TimelinePage;
+	public final fun replace (Ljava/util/List;)V
+	public final fun replaceSession (Ljava/lang/String;Ljava/util/List;)V
+}
+
+public final class io/devconsole/timeline/InMemoryTimelineAnnotations : io/devconsole/timeline/TimelineAnnotations {
+	public static final field Companion Lio/devconsole/timeline/InMemoryTimelineAnnotations$Companion;
+	public static final field MAX_NOTE_LENGTH I
+	public fun <init> ()V
+	public fun bookmark (Ljava/lang/String;)V
+	public fun get (Ljava/lang/String;)Lio/devconsole/timeline/TimelineAnnotation;
+	public fun removeBookmark (Ljava/lang/String;)V
+	public fun setNote (Ljava/lang/String;Ljava/lang/String;)V
+}
+
+public final class io/devconsole/timeline/InMemoryTimelineAnnotations$Companion {
+}
+
+public abstract interface class io/devconsole/timeline/Timeline {
+	public abstract fun contains (Ljava/lang/String;)Z
+	public abstract fun page (Lio/devconsole/timeline/TimelineQuery;)Lio/devconsole/timeline/TimelinePage;
+}
+
+public final class io/devconsole/timeline/TimelineAnnotation {
+	public fun <init> ()V
+	public fun <init> (ZLjava/lang/String;)V
+	public synthetic fun <init> (ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (ZLjava/lang/String;)Lio/devconsole/timeline/TimelineAnnotation;
+	public static synthetic fun copy$default (Lio/devconsole/timeline/TimelineAnnotation;ZLjava/lang/String;ILjava/lang/Object;)Lio/devconsole/timeline/TimelineAnnotation;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBookmarked ()Z
+	public final fun getNote ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/timeline/TimelineAnnotations {
+	public abstract fun bookmark (Ljava/lang/String;)V
+	public abstract fun get (Ljava/lang/String;)Lio/devconsole/timeline/TimelineAnnotation;
+	public abstract fun removeBookmark (Ljava/lang/String;)V
+	public abstract fun setNote (Ljava/lang/String;Ljava/lang/String;)V
+}
+
+public abstract interface class io/devconsole/timeline/TimelineAppender {
+	public abstract fun append (Lio/devconsole/storage/api/StoredEvent;)V
+}
+
+public abstract interface class io/devconsole/timeline/TimelinePage {
+}
+
+public final class io/devconsole/timeline/TimelinePage$InvalidCursor : io/devconsole/timeline/TimelinePage {
+	public static final field INSTANCE Lio/devconsole/timeline/TimelinePage$InvalidCursor;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/timeline/TimelinePage$Success : io/devconsole/timeline/TimelinePage {
+	public fun <init> (Ljava/util/List;Ljava/lang/String;Z)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Z
+	public final fun copy (Ljava/util/List;Ljava/lang/String;Z)Lio/devconsole/timeline/TimelinePage$Success;
+	public static synthetic fun copy$default (Lio/devconsole/timeline/TimelinePage$Success;Ljava/util/List;Ljava/lang/String;ZILjava/lang/Object;)Lio/devconsole/timeline/TimelinePage$Success;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEvents ()Ljava/util/List;
+	public final fun getHasMore ()Z
+	public final fun getNextCursor ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/timeline/TimelineQuery {
+	public static final field Companion Lio/devconsole/timeline/TimelineQuery$Companion;
+	public static final field DEFAULT_PAGE_LIMIT I
+	public static final field MAX_PAGE_LIMIT I
+	public fun <init> ()V
+	public fun <init> (ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/timeline/TimelineSort;)V
+	public synthetic fun <init> (ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/timeline/TimelineSort;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/Set;
+	public final fun component4 ()Ljava/util/Set;
+	public final fun component5 ()Ljava/util/Set;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Lio/devconsole/timeline/TimelineSort;
+	public final fun copy (ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/timeline/TimelineSort;)Lio/devconsole/timeline/TimelineQuery;
+	public static synthetic fun copy$default (Lio/devconsole/timeline/TimelineQuery;ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/timeline/TimelineSort;ILjava/lang/Object;)Lio/devconsole/timeline/TimelineQuery;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCorrelationId ()Ljava/lang/String;
+	public final fun getCursor ()Ljava/lang/String;
+	public final fun getFromEpochMs ()Ljava/lang/Long;
+	public final fun getLimit ()I
+	public final fun getPluginIds ()Ljava/util/Set;
+	public final fun getQuery ()Ljava/lang/String;
+	public final fun getSeverities ()Ljava/util/Set;
+	public final fun getSort ()Lio/devconsole/timeline/TimelineSort;
+	public final fun getToEpochMs ()Ljava/lang/Long;
+	public final fun getTypes ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun withCursor (Ljava/lang/String;)Lio/devconsole/timeline/TimelineQuery;
+	public final fun withTimeRange (Ljava/lang/Long;Ljava/lang/Long;)Lio/devconsole/timeline/TimelineQuery;
+	public static synthetic fun withTimeRange$default (Lio/devconsole/timeline/TimelineQuery;Ljava/lang/Long;Ljava/lang/Long;ILjava/lang/Object;)Lio/devconsole/timeline/TimelineQuery;
+}
+
+public final class io/devconsole/timeline/TimelineQuery$Companion {
+}
+
+public final class io/devconsole/timeline/TimelineSort : java/lang/Enum {
+	public static final field ASC Lio/devconsole/timeline/TimelineSort;
+	public static final field DESC Lio/devconsole/timeline/TimelineSort;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/timeline/TimelineSort;
+	public static fun values ()[Lio/devconsole/timeline/TimelineSort;
+}
+

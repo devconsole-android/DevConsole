@@ -1,0 +1,29 @@
+public final class io/devconsole/socket/okhttp/DevConsoleOkHttpWebSocketListener : okhttp3/WebSocketListener {
+	public fun <init> (Lio/devconsole/socket/SocketRecorder;)V
+	public fun <init> (Lio/devconsole/socket/SocketRecorder;Lkotlin/jvm/functions/Function1;)V
+	public fun <init> (Lio/devconsole/socket/SocketRecorder;Lkotlin/jvm/functions/Function1;Lokhttp3/WebSocketListener;)V
+	public synthetic fun <init> (Lio/devconsole/socket/SocketRecorder;Lkotlin/jvm/functions/Function1;Lokhttp3/WebSocketListener;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun onClosed (Lokhttp3/WebSocket;ILjava/lang/String;)V
+	public fun onClosing (Lokhttp3/WebSocket;ILjava/lang/String;)V
+	public fun onFailure (Lokhttp3/WebSocket;Ljava/lang/Throwable;Lokhttp3/Response;)V
+	public fun onMessage (Lokhttp3/WebSocket;Ljava/lang/String;)V
+	public fun onMessage (Lokhttp3/WebSocket;Lokio/ByteString;)V
+	public fun onOpen (Lokhttp3/WebSocket;Lokhttp3/Response;)V
+}
+
+public final class io/devconsole/socket/okhttp/DevConsoleRecordingWebSocket : okhttp3/WebSocket {
+	public static final field Companion Lio/devconsole/socket/okhttp/DevConsoleRecordingWebSocket$Companion;
+	public synthetic fun <init> (Lokhttp3/WebSocket;Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun cancel ()V
+	public fun close (ILjava/lang/String;)Z
+	public fun queueSize ()J
+	public fun request ()Lokhttp3/Request;
+	public fun send (Ljava/lang/String;)Z
+	public fun send (Lokio/ByteString;)Z
+}
+
+public final class io/devconsole/socket/okhttp/DevConsoleRecordingWebSocket$Companion {
+	public final fun wrap (Lokhttp3/WebSocket;Lio/devconsole/socket/SocketRecorder;Lkotlin/jvm/functions/Function1;)Lokhttp3/WebSocket;
+	public static synthetic fun wrap$default (Lio/devconsole/socket/okhttp/DevConsoleRecordingWebSocket$Companion;Lokhttp3/WebSocket;Lio/devconsole/socket/SocketRecorder;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lokhttp3/WebSocket;
+}
+

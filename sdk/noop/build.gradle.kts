@@ -23,5 +23,5 @@ dependencies {
     api(project(":sdk:network-okhttp-noop"))
     api(project(":sdk:mocks-okhttp-noop"))
     api(project(":sdk:socket-okhttp-noop"))
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }

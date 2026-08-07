@@ -1,0 +1,36 @@
+public final class io/devconsole/DevConsole {
+	public static final field INSTANCE Lio/devconsole/DevConsole;
+	public static final fun accessInfo ()Lio/devconsole/api/AccessInfo;
+	public static final fun captureScreenshot (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun captureScreenshotAsync (Lio/devconsole/DevConsoleCallback;)V
+	public static final fun createIntent (Landroid/content/Context;)Landroid/content/Intent;
+	public static final fun endpoint ()Lio/devconsole/api/BrowserEndpoint;
+	public static final fun featureFlagStringValue (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun featureFlagValue (Ljava/lang/String;)Z
+	public static final fun initialize (Landroid/app/Application;Lio/devconsole/api/DevConsoleConfig;)Lio/devconsole/api/InitResult;
+	public static synthetic fun initialize$default (Landroid/app/Application;Lio/devconsole/api/DevConsoleConfig;ILjava/lang/Object;)Lio/devconsole/api/InitResult;
+	public static final fun logRecorder ()Lio/devconsole/logs/LogRecorder;
+	public static final fun mockEngine ()Lio/devconsole/mocks/MockEngine;
+	public static final fun networkRecorder ()Lio/devconsole/network/NetworkTransactionRecorder;
+	public static final fun open (Landroid/content/Context;)Lio/devconsole/api/InspectorOpenResult;
+	public static final fun recordPush (Lio/devconsole/push/PushInput;)Lio/devconsole/push/PushEvent;
+	public static final fun registerStateProvider (Lio/devconsole/state/StateProvider;)Z
+	public static final fun socketRecorder ()Lio/devconsole/socket/SocketRecorder;
+	public static final fun startBrowser (Lio/devconsole/api/StartRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun startBrowser$default (Lio/devconsole/api/StartRequest;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static final fun startBrowserAsync (Lio/devconsole/DevConsoleCallback;)V
+	public static final fun startBrowserAsync (Lio/devconsole/api/StartRequest;Lio/devconsole/DevConsoleCallback;)V
+	public static synthetic fun startBrowserAsync$default (Lio/devconsole/api/StartRequest;Lio/devconsole/DevConsoleCallback;ILjava/lang/Object;)V
+	public static final fun state ()Lkotlinx/coroutines/flow/StateFlow;
+	public static final fun stop (Lio/devconsole/api/StopReason;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun stop$default (Lio/devconsole/api/StopReason;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static final fun stopAsync ()V
+	public static final fun stopAsync (Lio/devconsole/api/StopReason;)V
+	public static final fun stopAsync (Lio/devconsole/api/StopReason;Lio/devconsole/DevConsoleCallback;)V
+	public static synthetic fun stopAsync$default (Lio/devconsole/api/StopReason;Lio/devconsole/DevConsoleCallback;ILjava/lang/Object;)V
+}
+
+public abstract interface class io/devconsole/DevConsoleCallback {
+	public abstract fun onResult (Ljava/lang/Object;)V
+}
+

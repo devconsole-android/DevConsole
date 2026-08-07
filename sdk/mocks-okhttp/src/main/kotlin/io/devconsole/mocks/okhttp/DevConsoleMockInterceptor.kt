@@ -87,8 +87,10 @@ class DevConsoleMockInterceptor(
 
             is MockAction.BodyReplacement -> {
                 val hostResponse = chain.proceed(request)
-                val mediaType = hostResponse.body.contentType()
-                hostResponse.close()
+                val mediaType = hostResponse.body?.contentType()
+                // Not Response.close(): in OkHttp 4 it throws IllegalStateException when body is null,
+                // which is legal for a Response built by an upstream interceptor without a body.
+                hostResponse.body?.close()
                 hostResponse.newBuilder().body(action.body.toResponseBody(mediaType)).build()
             }
 

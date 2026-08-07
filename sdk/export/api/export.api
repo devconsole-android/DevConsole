@@ -1,0 +1,165 @@
+public final class io/devconsole/export/EventExportWriter {
+	public static final field ATTACHMENT_NAME_HASH_CHARS I
+	public static final field ZIP_ENTRY_OVERHEAD_BYTES J
+	public fun <init> ()V
+	public fun <init> (Lio/devconsole/security/RedactionEngine;)V
+	public synthetic fun <init> (Lio/devconsole/security/RedactionEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun estimateBytes (Lio/devconsole/export/ExportRequest;)J
+	public final fun write (Lio/devconsole/export/ExportRequest;)Lio/devconsole/export/ExportResult;
+	public final fun writeAsync (Lio/devconsole/export/ExportRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/devconsole/export/EventExportWriterKt {
+	public static final field DEFAULT_EXPORT_LIMIT_BYTES J
+}
+
+public final class io/devconsole/export/EvidenceBundleAttachment {
+	public fun <init> (Ljava/lang/String;JLio/devconsole/storage/api/RedactionApplicability;Lkotlin/jvm/functions/Function1;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()J
+	public final fun component3 ()Lio/devconsole/storage/api/RedactionApplicability;
+	public final fun component4 ()Lkotlin/jvm/functions/Function1;
+	public final fun copy (Ljava/lang/String;JLio/devconsole/storage/api/RedactionApplicability;Lkotlin/jvm/functions/Function1;)Lio/devconsole/export/EvidenceBundleAttachment;
+	public static synthetic fun copy$default (Lio/devconsole/export/EvidenceBundleAttachment;Ljava/lang/String;JLio/devconsole/storage/api/RedactionApplicability;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lio/devconsole/export/EvidenceBundleAttachment;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOpen ()Lkotlin/jvm/functions/Function1;
+	public final fun getPath ()Ljava/lang/String;
+	public final fun getRedactionApplicability ()Lio/devconsole/storage/api/RedactionApplicability;
+	public final fun getSizeBytes ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/export/EvidenceBundleContent {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()I
+	public final fun component7 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/util/List;)Lio/devconsole/export/EvidenceBundleContent;
+	public static synthetic fun copy$default (Lio/devconsole/export/EvidenceBundleContent;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/util/List;ILjava/lang/Object;)Lio/devconsole/export/EvidenceBundleContent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttachments ()Ljava/util/List;
+	public final fun getItemCount ()I
+	public final fun getNetworkHar ()Ljava/lang/String;
+	public final fun getPostmanCollection ()Ljava/lang/String;
+	public final fun getReportJson ()Ljava/lang/String;
+	public final fun getReportMarkdown ()Ljava/lang/String;
+	public final fun getSessionJson ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/export/ExportRequest {
+	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/io/File;J)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/io/File;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Ljava/io/File;
+	public final fun component4 ()J
+	public final fun copy (Ljava/lang/String;Ljava/util/List;Ljava/io/File;J)Lio/devconsole/export/ExportRequest;
+	public static synthetic fun copy$default (Lio/devconsole/export/ExportRequest;Ljava/lang/String;Ljava/util/List;Ljava/io/File;JILjava/lang/Object;)Lio/devconsole/export/ExportRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAnnotations ()Ljava/util/Map;
+	public final fun getAttachments ()Ljava/util/Map;
+	public final fun getDestination ()Ljava/io/File;
+	public final fun getEvents ()Ljava/util/List;
+	public final fun getEvidenceBundle ()Lio/devconsole/export/EvidenceBundleContent;
+	public final fun getMaxBytes ()J
+	public final fun getMetadataOnly ()Z
+	public final fun getScope ()Lio/devconsole/export/ExportScope;
+	public final fun getSessionId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public final fun withAnnotations (Ljava/util/Map;)Lio/devconsole/export/ExportRequest;
+	public final fun withAttachments (Ljava/util/Map;)Lio/devconsole/export/ExportRequest;
+	public final fun withEvidenceBundle (Lio/devconsole/export/EvidenceBundleContent;)Lio/devconsole/export/ExportRequest;
+	public final fun withMetadataOnly (Z)Lio/devconsole/export/ExportRequest;
+	public static synthetic fun withMetadataOnly$default (Lio/devconsole/export/ExportRequest;ZILjava/lang/Object;)Lio/devconsole/export/ExportRequest;
+	public final fun withScope (Lio/devconsole/export/ExportScope;)Lio/devconsole/export/ExportRequest;
+}
+
+public abstract interface class io/devconsole/export/ExportResult {
+}
+
+public final class io/devconsole/export/ExportResult$ExceedsSizeLimit : io/devconsole/export/ExportResult {
+	public static final field GUIDANCE Ljava/lang/String;
+	public static final field INSTANCE Lio/devconsole/export/ExportResult$ExceedsSizeLimit;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/export/ExportResult$Success : io/devconsole/export/ExportResult {
+	public fun <init> (Ljava/io/File;I)V
+	public final fun component1 ()Ljava/io/File;
+	public final fun component2 ()I
+	public final fun copy (Ljava/io/File;I)Lio/devconsole/export/ExportResult$Success;
+	public static synthetic fun copy$default (Lio/devconsole/export/ExportResult$Success;Ljava/io/File;IILjava/lang/Object;)Lio/devconsole/export/ExportResult$Success;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEventCount ()I
+	public final fun getFile ()Ljava/io/File;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/export/ExportResult$Unavailable : io/devconsole/export/ExportResult {
+	public static final field INSTANCE Lio/devconsole/export/ExportResult$Unavailable;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/export/ExportScope {
+	public static final field Companion Lio/devconsole/export/ExportScope$Companion;
+	public static final field MAX_EVENT_IDS I
+	public static final field MAX_EVENT_ID_LENGTH I
+}
+
+public final class io/devconsole/export/ExportScope$Companion {
+	public static final field MAX_EVENT_IDS I
+	public static final field MAX_EVENT_ID_LENGTH I
+}
+
+public final class io/devconsole/export/ExportScope$EventIds : io/devconsole/export/ExportScope {
+	public fun <init> (Ljava/util/Set;)V
+	public final fun component1 ()Ljava/util/Set;
+	public final fun copy (Ljava/util/Set;)Lio/devconsole/export/ExportScope$EventIds;
+	public static synthetic fun copy$default (Lio/devconsole/export/ExportScope$EventIds;Ljava/util/Set;ILjava/lang/Object;)Lio/devconsole/export/ExportScope$EventIds;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getIds ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/export/ExportScope$Evidence : io/devconsole/export/ExportScope {
+	public static final field INSTANCE Lio/devconsole/export/ExportScope$Evidence;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/export/ExportScope$TimeRange : io/devconsole/export/ExportScope {
+	public fun <init> (JJ)V
+	public final fun component1 ()J
+	public final fun component2 ()J
+	public final fun copy (JJ)Lio/devconsole/export/ExportScope$TimeRange;
+	public static synthetic fun copy$default (Lio/devconsole/export/ExportScope$TimeRange;JJILjava/lang/Object;)Lio/devconsole/export/ExportScope$TimeRange;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFromEpochMs ()J
+	public final fun getToEpochMs ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/export/ExportScope$WholeSession : io/devconsole/export/ExportScope {
+	public static final field INSTANCE Lio/devconsole/export/ExportScope$WholeSession;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+

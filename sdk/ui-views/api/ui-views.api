@@ -1,0 +1,16 @@
+public final class io/devconsole/ui/views/DevConsolePanelView : android/widget/LinearLayout {
+	public static final field KEEP_ALIVE_PERMISSION_REQUEST_CODE I
+	public fun <init> (Landroid/content/Context;)V
+	public fun <init> (Landroid/content/Context;Landroid/util/AttributeSet;)V
+	public synthetic fun <init> (Landroid/content/Context;Landroid/util/AttributeSet;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun bind (Lkotlinx/coroutines/flow/StateFlow;Lkotlinx/coroutines/CoroutineScope;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;)Lkotlinx/coroutines/Job;
+	public final fun render (Lio/devconsole/api/DevConsoleState;)V
+	public final fun setEndpoint (Lio/devconsole/api/BrowserEndpoint;)V
+}
+
+public final class io/devconsole/ui/views/DevConsoleStatusText {
+	public static final field INSTANCE Lio/devconsole/ui/views/DevConsoleStatusText;
+	public final fun forState (Lio/devconsole/api/DevConsoleState;Lio/devconsole/api/BrowserEndpoint;)Ljava/lang/String;
+	public static synthetic fun forState$default (Lio/devconsole/ui/views/DevConsoleStatusText;Lio/devconsole/api/DevConsoleState;Lio/devconsole/api/BrowserEndpoint;ILjava/lang/Object;)Ljava/lang/String;
+}
+

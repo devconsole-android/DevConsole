@@ -25,7 +25,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import java.util.function.Consumer
 
 object DevConsole {
     private val provider = PlatformFacadeProvider()
@@ -129,12 +128,12 @@ object DevConsole {
     @JvmOverloads
     fun startBrowserAsync(
         request: StartRequest = StartRequest(),
-        callback: Consumer<StartResult>,
+        callback: DevConsoleCallback<StartResult>,
     ) {
         asyncScope.launch {
             runCatching { provider.startBrowser(request) }
-                .onSuccess { callback.accept(it) }
-                .onFailure { callback.accept(StartResult.Failed(it.message ?: "Unknown error")) }
+                .onSuccess { callback.onResult(it) }
+                .onFailure { callback.onResult(StartResult.Failed(it.message ?: "Unknown error")) }
         }
     }
 
@@ -153,11 +152,11 @@ object DevConsole {
     @JvmOverloads
     fun stopAsync(
         reason: StopReason = StopReason.UserRequested,
-        callback: Consumer<Unit> = Consumer {},
+        callback: DevConsoleCallback<Unit> = DevConsoleCallback {},
     ) {
         asyncScope.launch {
             runCatching { provider.stop(reason) }
-            callback.accept(Unit)
+            callback.onResult(Unit)
         }
     }
 
@@ -176,11 +175,11 @@ object DevConsole {
 
     /** Java-friendly counterpart to [captureScreenshot]; the [callback] is invoked on a background thread with a sealed result. */
     @JvmStatic
-    fun captureScreenshotAsync(callback: Consumer<ScreenshotResult>) {
+    fun captureScreenshotAsync(callback: DevConsoleCallback<ScreenshotResult>) {
         asyncScope.launch {
             runCatching { provider.captureScreenshot() }
-                .onSuccess { callback.accept(it) }
-                .onFailure { callback.accept(ScreenshotResult.Failed(it.message ?: "Unknown error")) }
+                .onSuccess { callback.onResult(it) }
+                .onFailure { callback.onResult(ScreenshotResult.Failed(it.message ?: "Unknown error")) }
         }
     }
 

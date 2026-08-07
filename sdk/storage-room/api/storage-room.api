@@ -1,0 +1,449 @@
+public abstract interface class io/devconsole/storage/room/AttachmentDao {
+	public abstract fun attachment (Ljava/lang/String;)Lio/devconsole/storage/room/AttachmentEntity;
+	public abstract fun clearPendingDeletion (Ljava/lang/String;)I
+	public abstract fun contains (Ljava/lang/String;)I
+	public abstract fun deleteById (Ljava/lang/String;)V
+	public abstract fun deleteSession (Ljava/lang/String;)V
+	public abstract fun insert (Lio/devconsole/storage/room/AttachmentEntity;)V
+	public abstract fun markPendingDeletion (Ljava/lang/String;)I
+	public abstract fun markSessionPendingDeletion (Ljava/lang/String;)V
+	public abstract fun oldestUnbookmarked ()Ljava/util/List;
+	public abstract fun oldestUnbookmarkedForSession (Ljava/lang/String;)Ljava/util/List;
+	public abstract fun pendingDeletion ()Ljava/util/List;
+	public abstract fun pendingDeletionForSession (Ljava/lang/String;)Ljava/util/List;
+	public abstract fun totalStoredBytes ()J
+}
+
+public final class io/devconsole/storage/room/AttachmentDao_Impl : io/devconsole/storage/room/AttachmentDao {
+	public fun <init> (Landroidx/room/RoomDatabase;)V
+	public fun attachment (Ljava/lang/String;)Lio/devconsole/storage/room/AttachmentEntity;
+	public fun clearPendingDeletion (Ljava/lang/String;)I
+	public fun contains (Ljava/lang/String;)I
+	public fun deleteById (Ljava/lang/String;)V
+	public fun deleteSession (Ljava/lang/String;)V
+	public static fun getRequiredConverters ()Ljava/util/List;
+	public fun insert (Lio/devconsole/storage/room/AttachmentEntity;)V
+	public fun markPendingDeletion (Ljava/lang/String;)I
+	public fun markSessionPendingDeletion (Ljava/lang/String;)V
+	public fun oldestUnbookmarked ()Ljava/util/List;
+	public fun oldestUnbookmarkedForSession (Ljava/lang/String;)Ljava/util/List;
+	public fun pendingDeletion ()Ljava/util/List;
+	public fun pendingDeletionForSession (Ljava/lang/String;)Ljava/util/List;
+	public fun totalStoredBytes ()J
+}
+
+public final class io/devconsole/storage/room/AttachmentEntity {
+	public final field createdWallTimeMs J
+	public final field eventId Ljava/lang/String;
+	public final field id Ljava/lang/String;
+	public final field isBookmarked Z
+	public final field isRedacted Z
+	public final field mimeType Ljava/lang/String;
+	public final field originalLength J
+	public final field pendingDeletion Z
+	public final field redactionApplicability Ljava/lang/String;
+	public final field relativePath Ljava/lang/String;
+	public final field sessionId Ljava/lang/String;
+	public final field sha256 Ljava/lang/String;
+	public final field storedLength J
+	public final field truncated Z
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JJZLjava/lang/String;ZLjava/lang/String;JZZLjava/lang/String;)V
+}
+
+public final class io/devconsole/storage/room/AttachmentQuotaPruner {
+	public fun <init> (Lio/devconsole/storage/room/AttachmentDao;Lio/devconsole/storage/room/FileAttachmentStore;Lkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Lio/devconsole/storage/room/AttachmentDao;Lio/devconsole/storage/room/FileAttachmentStore;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun pruneTo (JJLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun pruneTo (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class io/devconsole/storage/room/CaptureRuleDao {
+	public abstract fun deleteAll ()V
+	public abstract fun insertAll (Ljava/util/List;)V
+	public fun replaceAll (Ljava/util/List;)V
+	public abstract fun rules ()Ljava/util/List;
+}
+
+public final class io/devconsole/storage/room/CaptureRuleDao_Impl : io/devconsole/storage/room/CaptureRuleDao {
+	public fun <init> (Landroidx/room/RoomDatabase;)V
+	public fun deleteAll ()V
+	public static fun getRequiredConverters ()Ljava/util/List;
+	public fun insertAll (Ljava/util/List;)V
+	public fun replaceAll (Ljava/util/List;)V
+	public fun rules ()Ljava/util/List;
+}
+
+public final class io/devconsole/storage/room/CaptureRuleEntity {
+	public final field enabled Z
+	public final field host Ljava/lang/String;
+	public final field id Ljava/lang/String;
+	public final field method Ljava/lang/String;
+	public final field pathPrefix Ljava/lang/String;
+	public final field position I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZI)V
+}
+
+public abstract class io/devconsole/storage/room/DevConsoleDatabase : androidx/room/RoomDatabase {
+	public static final field MIGRATION_1_2 Landroidx/room/migration/Migration;
+	public static final field MIGRATION_2_3 Landroidx/room/migration/Migration;
+	public static final field MIGRATION_3_4 Landroidx/room/migration/Migration;
+	public static final field MIGRATION_4_5 Landroidx/room/migration/Migration;
+	public fun <init> ()V
+	public abstract fun attachmentDao ()Lio/devconsole/storage/room/AttachmentDao;
+	public abstract fun captureRuleDao ()Lio/devconsole/storage/room/CaptureRuleDao;
+	public abstract fun eventDao ()Lio/devconsole/storage/room/EventDao;
+	public abstract fun evidenceItemDao ()Lio/devconsole/storage/room/EvidenceItemDao;
+	public abstract fun evidenceReportDao ()Lio/devconsole/storage/room/EvidenceReportDao;
+	public abstract fun sessionDao ()Lio/devconsole/storage/room/SessionDao;
+	public abstract fun timelineAnnotationDao ()Lio/devconsole/storage/room/TimelineAnnotationDao;
+}
+
+public final class io/devconsole/storage/room/DevConsoleDatabase_Impl : io/devconsole/storage/room/DevConsoleDatabase {
+	public fun <init> ()V
+	public fun attachmentDao ()Lio/devconsole/storage/room/AttachmentDao;
+	public fun captureRuleDao ()Lio/devconsole/storage/room/CaptureRuleDao;
+	public fun clearAllTables ()V
+	public fun eventDao ()Lio/devconsole/storage/room/EventDao;
+	public fun evidenceItemDao ()Lio/devconsole/storage/room/EvidenceItemDao;
+	public fun evidenceReportDao ()Lio/devconsole/storage/room/EvidenceReportDao;
+	public fun getAutoMigrations (Ljava/util/Map;)Ljava/util/List;
+	public fun getRequiredAutoMigrationSpecs ()Ljava/util/Set;
+	public fun sessionDao ()Lio/devconsole/storage/room/SessionDao;
+	public fun timelineAnnotationDao ()Lio/devconsole/storage/room/TimelineAnnotationDao;
+}
+
+public abstract interface class io/devconsole/storage/room/EventDao {
+	public abstract fun deleteByIds (Ljava/util/List;)V
+	public abstract fun deleteOlderThan (J)I
+	public abstract fun deleteSession (Ljava/lang/String;)V
+	public abstract fun estimatedStoredBytes ()J
+	public abstract fun eventCount ()J
+	public abstract fun eventsForSession (Ljava/lang/String;)Ljava/util/List;
+	public abstract fun insertAll (Ljava/util/List;)V
+	public abstract fun oldestLowSeverityFirst (I)Ljava/util/List;
+	public abstract fun oldestUnbookmarkedLowSeverityFirstForSession (Ljava/lang/String;I)Ljava/util/List;
+	public abstract fun recentEvents (I)Ljava/util/List;
+	public abstract fun recentEventsByPlugin (Ljava/util/List;I)Ljava/util/List;
+	public abstract fun recentEventsForSession (Ljava/lang/String;I)Ljava/util/List;
+	public abstract fun recentEventsForSessionByPlugin (Ljava/lang/String;Ljava/util/List;I)Ljava/util/List;
+	public abstract fun sessionIdsForIds (Ljava/util/List;)Ljava/util/List;
+	public abstract fun sessionIdsOlderThan (J)Ljava/util/List;
+}
+
+public final class io/devconsole/storage/room/EventDao_Impl : io/devconsole/storage/room/EventDao {
+	public fun <init> (Landroidx/room/RoomDatabase;)V
+	public fun deleteByIds (Ljava/util/List;)V
+	public fun deleteOlderThan (J)I
+	public fun deleteSession (Ljava/lang/String;)V
+	public fun estimatedStoredBytes ()J
+	public fun eventCount ()J
+	public fun eventsForSession (Ljava/lang/String;)Ljava/util/List;
+	public static fun getRequiredConverters ()Ljava/util/List;
+	public fun insertAll (Ljava/util/List;)V
+	public fun oldestLowSeverityFirst (I)Ljava/util/List;
+	public fun oldestUnbookmarkedLowSeverityFirstForSession (Ljava/lang/String;I)Ljava/util/List;
+	public fun recentEvents (I)Ljava/util/List;
+	public fun recentEventsByPlugin (Ljava/util/List;I)Ljava/util/List;
+	public fun recentEventsForSession (Ljava/lang/String;I)Ljava/util/List;
+	public fun recentEventsForSessionByPlugin (Ljava/lang/String;Ljava/util/List;I)Ljava/util/List;
+	public fun sessionIdsForIds (Ljava/util/List;)Ljava/util/List;
+	public fun sessionIdsOlderThan (J)Ljava/util/List;
+}
+
+public final class io/devconsole/storage/room/EventEntity {
+	public final field attachmentId Ljava/lang/String;
+	public final field correlationId Ljava/lang/String;
+	public final field id Ljava/lang/String;
+	public final field monoTimeNs J
+	public final field payloadJson Ljava/lang/String;
+	public final field pluginId Ljava/lang/String;
+	public final field schemaVersion I
+	public final field sequence J
+	public final field sessionId Ljava/lang/String;
+	public final field severity I
+	public final field summary Ljava/lang/String;
+	public final field tagsJson Ljava/lang/String;
+	public final field type Ljava/lang/String;
+	public final field wallTimeMs J
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;JJILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V
+}
+
+public final class io/devconsole/storage/room/EventPruneResult {
+	public fun <init> (IIJJ)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()J
+	public final fun component4 ()J
+	public final fun copy (IIJJ)Lio/devconsole/storage/room/EventPruneResult;
+	public static synthetic fun copy$default (Lio/devconsole/storage/room/EventPruneResult;IIJJILjava/lang/Object;)Lio/devconsole/storage/room/EventPruneResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getExpiredCount ()I
+	public final fun getQuotaCount ()I
+	public final fun getRemainingBytes ()J
+	public final fun getRemainingCount ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/storage/room/EventQuotaPruner {
+	public static final field PRUNE_BATCH_SIZE I
+	public fun <init> (Lio/devconsole/storage/room/EventDao;Lkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Lio/devconsole/storage/room/EventDao;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun pruneTo (JJJLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun pruneTo (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/devconsole/storage/room/EventUsageEstimate {
+	public static final field BYTE_MARGIN_DIVISOR J
+	public static final field EVENT_MARGIN J
+	public static final field MIN_BYTE_MARGIN J
+	public static final field UNKNOWN J
+	public fun <init> ()V
+	public final fun absorb (IJ)V
+	public final fun canAbsorb (IJJJ)Z
+	public final fun invalidate ()V
+	public final fun resetTo (JJ)V
+}
+
+public abstract interface class io/devconsole/storage/room/EvidenceItemDao {
+	public abstract fun countForSession (Ljava/lang/String;)I
+	public abstract fun delete (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public abstract fun deleteSession (Ljava/lang/String;)V
+	public abstract fun existsCount (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I
+	public abstract fun insert (Lio/devconsole/storage/room/EvidenceItemEntity;)V
+	public abstract fun items (Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class io/devconsole/storage/room/EvidenceItemDao_Impl : io/devconsole/storage/room/EvidenceItemDao {
+	public fun <init> (Landroidx/room/RoomDatabase;)V
+	public fun countForSession (Ljava/lang/String;)I
+	public fun delete (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public fun deleteSession (Ljava/lang/String;)V
+	public fun existsCount (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I
+	public static fun getRequiredConverters ()Ljava/util/List;
+	public fun insert (Lio/devconsole/storage/room/EvidenceItemEntity;)V
+	public fun items (Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class io/devconsole/storage/room/EvidenceItemEntity {
+	public final field attachmentId Ljava/lang/String;
+	public final field flaggedAtMs J
+	public final field id Ljava/lang/String;
+	public final field kind Ljava/lang/String;
+	public final field label Ljava/lang/String;
+	public final field sessionId Ljava/lang/String;
+	public final field snapshotJson Ljava/lang/String;
+	public final field subjectId Ljava/lang/String;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;)V
+}
+
+public abstract interface class io/devconsole/storage/room/EvidenceReportDao {
+	public abstract fun deleteSession (Ljava/lang/String;)V
+	public abstract fun report (Ljava/lang/String;)Lio/devconsole/storage/room/EvidenceReportEntity;
+	public abstract fun upsert (Lio/devconsole/storage/room/EvidenceReportEntity;)V
+}
+
+public final class io/devconsole/storage/room/EvidenceReportDao_Impl : io/devconsole/storage/room/EvidenceReportDao {
+	public fun <init> (Landroidx/room/RoomDatabase;)V
+	public fun deleteSession (Ljava/lang/String;)V
+	public static fun getRequiredConverters ()Ljava/util/List;
+	public fun report (Ljava/lang/String;)Lio/devconsole/storage/room/EvidenceReportEntity;
+	public fun upsert (Lio/devconsole/storage/room/EvidenceReportEntity;)V
+}
+
+public final class io/devconsole/storage/room/EvidenceReportEntity {
+	public final field actual Ljava/lang/String;
+	public final field expected Ljava/lang/String;
+	public final field sessionId Ljava/lang/String;
+	public final field severity Ljava/lang/String;
+	public final field summary Ljava/lang/String;
+	public final field updatedAtMs J
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;J)V
+}
+
+public final class io/devconsole/storage/room/FileAttachmentStore : io/devconsole/storage/api/AttachmentStore {
+	public static final field Companion Lio/devconsole/storage/room/FileAttachmentStore$Companion;
+	public static final field DEFAULT_MAX_ATTACHMENT_BYTES I
+	public fun <init> (Ljava/io/File;I)V
+	public synthetic fun <init> (Ljava/io/File;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun deleteSession (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun write (Lio/devconsole/storage/api/AttachmentWriteRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/devconsole/storage/room/FileAttachmentStore$Companion {
+}
+
+public final class io/devconsole/storage/room/RoomAttachmentStore : io/devconsole/storage/api/AttachmentStore {
+	public static final field MAX_ATTACHMENT_ID_LENGTH I
+	public fun <init> (Lio/devconsole/storage/room/DevConsoleDatabase;Lio/devconsole/storage/room/FileAttachmentStore;Lio/devconsole/storage/room/RoomRetentionCoordinator;Lkotlin/jvm/functions/Function0;J)V
+	public synthetic fun <init> (Lio/devconsole/storage/room/DevConsoleDatabase;Lio/devconsole/storage/room/FileAttachmentStore;Lio/devconsole/storage/room/RoomRetentionCoordinator;Lkotlin/jvm/functions/Function0;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun deleteSession (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun metadata (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun read (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun withPolicy (JJ)Lio/devconsole/storage/room/RoomAttachmentStore;
+	public final fun withRecovery (Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)Lio/devconsole/storage/room/RoomAttachmentStore;
+	public final fun withSessionFirstRetention (Z)Lio/devconsole/storage/room/RoomAttachmentStore;
+	public static synthetic fun withSessionFirstRetention$default (Lio/devconsole/storage/room/RoomAttachmentStore;ZILjava/lang/Object;)Lio/devconsole/storage/room/RoomAttachmentStore;
+	public fun write (Lio/devconsole/storage/api/AttachmentWriteRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/devconsole/storage/room/RoomEventStore : io/devconsole/storage/api/EventStore {
+	public static final field Companion Lio/devconsole/storage/room/RoomEventStore$Companion;
+	public static final field DEFAULT_MAX_AGE_MS J
+	public static final field DEFAULT_MAX_BYTES J
+	public fun <init> (Lio/devconsole/storage/room/DevConsoleDatabase;Lio/devconsole/storage/room/RoomRetentionCoordinator;J)V
+	public synthetic fun <init> (Lio/devconsole/storage/room/DevConsoleDatabase;Lio/devconsole/storage/room/RoomRetentionCoordinator;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun deleteSession (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun eventCount (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun eventsForSession (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun insert (Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun recentEvents (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun recentEvents$default (Lio/devconsole/storage/room/RoomEventStore;ILkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun recentEventsForPlugins (Ljava/util/Set;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun recentEventsForSession (Ljava/lang/String;ILjava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun withPolicy (JJJ)Lio/devconsole/storage/room/RoomEventStore;
+	public final fun withRecovery (Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)Lio/devconsole/storage/room/RoomEventStore;
+	public final fun withSessionFirstRetention (Z)Lio/devconsole/storage/room/RoomEventStore;
+	public static synthetic fun withSessionFirstRetention$default (Lio/devconsole/storage/room/RoomEventStore;ZILjava/lang/Object;)Lio/devconsole/storage/room/RoomEventStore;
+}
+
+public final class io/devconsole/storage/room/RoomEventStore$Companion {
+}
+
+public final class io/devconsole/storage/room/RoomEventStore$Limits {
+	public fun <init> (JJJ)V
+	public final fun component1 ()J
+	public final fun component2 ()J
+	public final fun component3 ()J
+	public final fun copy (JJJ)Lio/devconsole/storage/room/RoomEventStore$Limits;
+	public static synthetic fun copy$default (Lio/devconsole/storage/room/RoomEventStore$Limits;JJJILjava/lang/Object;)Lio/devconsole/storage/room/RoomEventStore$Limits;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxAgeMs ()J
+	public final fun getMaxBytes ()J
+	public final fun getMaxEvents ()J
+	public final fun getMaxEventsAsInt ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/storage/room/RoomEvidenceStore : io/devconsole/storage/api/EvidenceStore {
+	public fun <init> (Lio/devconsole/storage/room/DevConsoleDatabase;)V
+	public fun clear (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun deleteSession (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun flag (Lio/devconsole/storage/api/StoredEvidenceItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun items (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun report (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun saveReport (Lio/devconsole/storage/api/StoredEvidenceReport;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun unflag (Ljava/lang/String;Lio/devconsole/storage/api/EvidenceKind;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun withRecovery (Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)Lio/devconsole/storage/room/RoomEvidenceStore;
+}
+
+public final class io/devconsole/storage/room/RoomRetentionCoordinator {
+	public fun <init> ()V
+	public final fun exclusive (Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/devconsole/storage/room/RoomSessionStore : io/devconsole/storage/api/SessionStore {
+	public fun <init> (Lio/devconsole/storage/room/DevConsoleDatabase;Lio/devconsole/storage/room/FileAttachmentStore;Lio/devconsole/storage/api/SessionRetentionPolicy;Lio/devconsole/storage/room/RoomRetentionCoordinator;Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Lio/devconsole/storage/room/DevConsoleDatabase;Lio/devconsole/storage/room/FileAttachmentStore;Lio/devconsole/storage/api/SessionRetentionPolicy;Lio/devconsole/storage/room/RoomRetentionCoordinator;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun crash (Ljava/lang/String;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun end (Ljava/lang/String;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun enforceRetention (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun session (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun sessions (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun start (Lio/devconsole/storage/api/StoredSession;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun withPolicy (Lio/devconsole/storage/api/SessionRetentionPolicy;)Lio/devconsole/storage/room/RoomSessionStore;
+	public final fun withRecovery (Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)Lio/devconsole/storage/room/RoomSessionStore;
+}
+
+public final class io/devconsole/storage/room/RoomTimelineAnnotations : io/devconsole/timeline/TimelineAnnotations {
+	public fun <init> (Lio/devconsole/storage/room/DevConsoleDatabase;)V
+	public fun bookmark (Ljava/lang/String;)V
+	public fun get (Ljava/lang/String;)Lio/devconsole/timeline/TimelineAnnotation;
+	public fun removeBookmark (Ljava/lang/String;)V
+	public fun setNote (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun withRecovery (Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)Lio/devconsole/storage/room/RoomTimelineAnnotations;
+}
+
+public abstract interface class io/devconsole/storage/room/SessionDao {
+	public abstract fun completedOldestFirst ()Ljava/util/List;
+	public abstract fun delete (Ljava/lang/String;)V
+	public abstract fun deletingSessions ()Ljava/util/List;
+	public abstract fun expiredCompleted (J)Ljava/util/List;
+	public abstract fun finish (Ljava/lang/String;Ljava/lang/String;J)V
+	public abstract fun incrementUsage (Ljava/lang/String;JJ)V
+	public abstract fun insertIfAbsent (Lio/devconsole/storage/room/SessionEntity;)J
+	public abstract fun markDeleting (Ljava/lang/String;)I
+	public abstract fun refreshUsage (Ljava/lang/String;)V
+	public abstract fun session (Ljava/lang/String;)Lio/devconsole/storage/room/SessionEntity;
+	public abstract fun sessionCount ()J
+	public abstract fun sessions ()Ljava/util/List;
+	public abstract fun totalEstimatedBytes ()J
+}
+
+public final class io/devconsole/storage/room/SessionDao_Impl : io/devconsole/storage/room/SessionDao {
+	public fun <init> (Landroidx/room/RoomDatabase;)V
+	public fun completedOldestFirst ()Ljava/util/List;
+	public fun delete (Ljava/lang/String;)V
+	public fun deletingSessions ()Ljava/util/List;
+	public fun expiredCompleted (J)Ljava/util/List;
+	public fun finish (Ljava/lang/String;Ljava/lang/String;J)V
+	public static fun getRequiredConverters ()Ljava/util/List;
+	public fun incrementUsage (Ljava/lang/String;JJ)V
+	public fun insertIfAbsent (Lio/devconsole/storage/room/SessionEntity;)J
+	public fun markDeleting (Ljava/lang/String;)I
+	public fun refreshUsage (Ljava/lang/String;)V
+	public fun session (Ljava/lang/String;)Lio/devconsole/storage/room/SessionEntity;
+	public fun sessionCount ()J
+	public fun sessions ()Ljava/util/List;
+	public fun totalEstimatedBytes ()J
+}
+
+public final class io/devconsole/storage/room/SessionEntity {
+	public final field appVersionCode Ljava/lang/Long;
+	public final field appVersionName Ljava/lang/String;
+	public final field applicationId Ljava/lang/String;
+	public final field buildType Ljava/lang/String;
+	public final field deviceApiLevel Ljava/lang/Integer;
+	public final field deviceModel Ljava/lang/String;
+	public final field deviceOsVersion Ljava/lang/String;
+	public final field endedAtMs Ljava/lang/Long;
+	public final field estimatedBytes J
+	public final field id Ljava/lang/String;
+	public final field recordCount J
+	public final field startedAtMonotonicNs J
+	public final field startedAtMs J
+	public final field status Ljava/lang/String;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;JJLjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;JJ)V
+}
+
+public final class io/devconsole/storage/room/SessionRetentionPruner {
+	public fun <init> (Lio/devconsole/storage/room/DevConsoleDatabase;Lio/devconsole/storage/room/FileAttachmentStore;)V
+	public final fun prune (Lio/devconsole/storage/api/SessionRetentionPolicy;Ljava/lang/String;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class io/devconsole/storage/room/TimelineAnnotationDao {
+	public abstract fun annotation (Ljava/lang/String;)Lio/devconsole/storage/room/TimelineAnnotationEntity;
+	public abstract fun delete (Ljava/lang/String;)V
+	public abstract fun deleteEvents (Ljava/util/List;)V
+	public abstract fun deleteSession (Ljava/lang/String;)V
+	public abstract fun upsert (Lio/devconsole/storage/room/TimelineAnnotationEntity;)V
+}
+
+public final class io/devconsole/storage/room/TimelineAnnotationDao_Impl : io/devconsole/storage/room/TimelineAnnotationDao {
+	public fun <init> (Landroidx/room/RoomDatabase;)V
+	public fun annotation (Ljava/lang/String;)Lio/devconsole/storage/room/TimelineAnnotationEntity;
+	public fun delete (Ljava/lang/String;)V
+	public fun deleteEvents (Ljava/util/List;)V
+	public fun deleteSession (Ljava/lang/String;)V
+	public static fun getRequiredConverters ()Ljava/util/List;
+	public fun upsert (Lio/devconsole/storage/room/TimelineAnnotationEntity;)V
+}
+
+public final class io/devconsole/storage/room/TimelineAnnotationEntity {
+	public final field bookmarked Z
+	public final field eventId Ljava/lang/String;
+	public final field note Ljava/lang/String;
+	public fun <init> (Ljava/lang/String;ZLjava/lang/String;)V
+}
+

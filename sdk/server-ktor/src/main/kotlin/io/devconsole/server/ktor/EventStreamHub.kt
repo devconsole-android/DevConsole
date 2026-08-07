@@ -26,7 +26,11 @@ class EventStreamHub(
     }
 
     fun publish(event: EventEnvelope): Boolean {
-        sequence.accumulateAndGet(event.sequence) { existing, candidate -> maxOf(existing, candidate) }
+        // Not AtomicLong.accumulateAndGet (API 24): CAS-loop the running max so it works below minSdk 24.
+        while (true) {
+            val existing = sequence.get()
+            if (event.sequence <= existing || sequence.compareAndSet(existing, event.sequence)) break
+        }
         return mutableEvents.tryEmit(event)
     }
 

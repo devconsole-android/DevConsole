@@ -110,6 +110,10 @@ class InMemoryTimeline(
             compareBy<StoredEvent> { it.monoTimeNs }
                 .thenBy { it.sequence }
                 .thenBy { it.id }
+        // Not comparator.reversed(): that resolves to java.util.Comparator's default method
+        // (API 24) over the Kotlin extension, which crashes below minSdk 24.
+        val directedComparator =
+            if (query.sort == TimelineSort.ASC) comparator else Comparator { a, b -> comparator.compare(b, a) }
         val matching =
             events
                 .asSequence()
@@ -120,7 +124,7 @@ class InMemoryTimeline(
                 .filter { event -> query.query == null || event.summary.contains(query.query, ignoreCase = true) }
                 .filter { event -> query.fromEpochMs == null || event.wallTimeMs >= query.fromEpochMs!! }
                 .filter { event -> query.toEpochMs == null || event.wallTimeMs <= query.toEpochMs!! }
-                .sortedWith(if (query.sort == TimelineSort.ASC) comparator else comparator.reversed())
+                .sortedWith(directedComparator)
                 .filter { event -> marker == null || event.isAfter(marker, query.sort) }
                 .take(query.limit + 1)
                 .toList()
@@ -163,7 +167,8 @@ class InMemoryTimeline(
     ) {
         val merged = LinkedHashMap<String, StoredEvent>()
         persisted.filter { it.sessionId == sessionId }.forEach { merged[it.id] = it }
-        events.filter { it.sessionId == sessionId }.forEach { merged.putIfAbsent(it.id, it) }
+        // Not Map.putIfAbsent: that is API 24 (java.util.Map default method) and crashes below minSdk 24.
+        events.filter { it.sessionId == sessionId }.forEach { if (it.id !in merged) merged[it.id] = it }
         events.clear()
         events.addAll(merged.values)
     }

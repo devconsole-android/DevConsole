@@ -5,10 +5,10 @@ import io.devconsole.mocks.MockEngine
 import io.devconsole.mocks.MockOutcome
 import io.devconsole.mocks.MockRule
 import io.devconsole.network.NetworkCaptureContext
-import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -34,7 +34,7 @@ class DevConsoleMockInterceptorTest {
                 ).build()
         val response = client.newCall(Request.Builder().url("https://api.test/orders").build()).execute()
         assertEquals(201, response.code)
-        assertEquals("mocked", response.body.string())
+        assertEquals("mocked", response.body!!.string())
         assertEquals("orders", (outcomes.single() as MockOutcome.Matched).ruleId)
         assertEquals("orders", response.request.tag(NetworkCaptureContext::class.java)!!.tags["mockRuleId"])
     }
@@ -44,11 +44,9 @@ class DevConsoleMockInterceptorTest {
         server.start()
         try {
             server.enqueue(
-                MockResponse
-                    .Builder()
-                    .code(202)
-                    .body("original")
-                    .build(),
+                MockResponse()
+                    .setResponseCode(202)
+                    .setBody("original"),
             )
             val client =
                 OkHttpClient
@@ -66,7 +64,7 @@ class DevConsoleMockInterceptorTest {
             val response = client.newCall(Request.Builder().url(server.url("/orders")).build()).execute()
 
             assertEquals(299, response.code)
-            assertEquals("original", response.body.string())
+            assertEquals("original", response.body!!.string())
             assertEquals(1, server.requestCount)
         } finally {
             server.close()
@@ -77,7 +75,7 @@ class DevConsoleMockInterceptorTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("original").build())
+            server.enqueue(MockResponse().setBody("original"))
             val client =
                 OkHttpClient
                     .Builder()
@@ -98,7 +96,7 @@ class DevConsoleMockInterceptorTest {
 
             val response = client.newCall(Request.Builder().url(server.url("/orders")).build()).execute()
 
-            assertEquals("replacement", response.body.string())
+            assertEquals("replacement", response.body!!.string())
             assertEquals(1, server.requestCount)
         } finally {
             server.close()
@@ -139,6 +137,6 @@ class DevConsoleMockInterceptorTest {
                         .build(),
                 ).execute()
 
-        assertEquals("a, b|a", response.body.string())
+        assertEquals("a, b|a", response.body!!.string())
     }
 }

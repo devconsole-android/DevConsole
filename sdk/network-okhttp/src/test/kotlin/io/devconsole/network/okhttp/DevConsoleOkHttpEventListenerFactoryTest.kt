@@ -12,10 +12,10 @@ import io.devconsole.network.NetworkTransactionQuery
 import io.devconsole.network.NetworkTransactionRecorder
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
-import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -37,14 +37,14 @@ class DevConsoleOkHttpEventListenerFactoryTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("first").build())
+            server.enqueue(MockResponse().setBody("first"))
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("event-listener-key-1".encodeToByteArray()))
             val listenerFactory = DevConsoleOkHttpEventListenerFactory()
             val client = clientRecordingTo(transactions, listenerFactory)
 
             client.newCall(Request.Builder().url(server.url("/first")).build()).execute().use {
-                assertEquals("first", it.body.string())
+                assertEquals("first", it.body!!.string())
             }
 
             val timings =
@@ -71,18 +71,18 @@ class DevConsoleOkHttpEventListenerFactoryTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("first").build())
-            server.enqueue(MockResponse.Builder().body("second").build())
+            server.enqueue(MockResponse().setBody("first"))
+            server.enqueue(MockResponse().setBody("second"))
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("event-listener-key-2".encodeToByteArray()))
             val listenerFactory = DevConsoleOkHttpEventListenerFactory()
             val client = clientRecordingTo(transactions, listenerFactory)
 
             client.newCall(Request.Builder().url(server.url("/first")).build()).execute().use {
-                assertEquals("first", it.body.string())
+                assertEquals("first", it.body!!.string())
             }
             client.newCall(Request.Builder().url(server.url("/second")).build()).execute().use {
-                assertEquals("second", it.body.string())
+                assertEquals("second", it.body!!.string())
             }
 
             val recorded = awaitTransactions(transactions, expectedCount = 2)
@@ -105,14 +105,14 @@ class DevConsoleOkHttpEventListenerFactoryTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("ok").build())
+            server.enqueue(MockResponse().setBody("ok"))
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("event-listener-key-3".encodeToByteArray()))
             val listenerFactory = DevConsoleOkHttpEventListenerFactory()
             val client = clientRecordingTo(transactions, listenerFactory)
 
             client.newCall(Request.Builder().url(server.url("/ok")).build()).execute().use {
-                assertEquals("ok", it.body.string())
+                assertEquals("ok", it.body!!.string())
             }
             awaitTransactions(transactions)
 
@@ -155,7 +155,7 @@ class DevConsoleOkHttpEventListenerFactoryTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("no interceptor").build())
+            server.enqueue(MockResponse().setBody("no interceptor"))
             val listenerFactory = DevConsoleOkHttpEventListenerFactory()
             val client =
                 OkHttpClient
@@ -164,7 +164,7 @@ class DevConsoleOkHttpEventListenerFactoryTest {
                     .build()
 
             client.newCall(Request.Builder().url(server.url("/no-interceptor")).build()).execute().use {
-                assertEquals("no interceptor", it.body.string())
+                assertEquals("no interceptor", it.body!!.string())
             }
 
             // callEnd only fires once the response body is exhausted or closed; `.use {}` above
@@ -180,8 +180,8 @@ class DevConsoleOkHttpEventListenerFactoryTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("a").build())
-            server.enqueue(MockResponse.Builder().body("b").build())
+            server.enqueue(MockResponse().setBody("a"))
+            server.enqueue(MockResponse().setBody("b"))
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("event-listener-key-5".encodeToByteArray()))
             val listenerFactory = DevConsoleOkHttpEventListenerFactory()
@@ -190,8 +190,8 @@ class DevConsoleOkHttpEventListenerFactoryTest {
             val callA = client.newCall(Request.Builder().url(server.url("/a")).build())
             val callB = client.newCall(Request.Builder().url(server.url("/b")).build())
 
-            val threadA = Thread { callA.execute().use { it.body.string() } }
-            val threadB = Thread { callB.execute().use { it.body.string() } }
+            val threadA = Thread { callA.execute().use { it.body!!.string() } }
+            val threadB = Thread { callB.execute().use { it.body!!.string() } }
             threadA.start()
             threadB.start()
             threadA.join()

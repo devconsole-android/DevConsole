@@ -6,7 +6,6 @@
 
 package io.devconsole.sample.compose
 
-import android.content.ClipData
 import android.content.ContentValues
 import android.content.Context
 import android.database.DatabaseUtils
@@ -60,8 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -69,6 +67,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -814,8 +813,7 @@ private fun ConnectUrlPanel(
     connectUrl: String,
     showLanWarning: Boolean,
 ) {
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -843,12 +841,9 @@ private fun ConnectUrlPanel(
             )
             TextButton(
                 onClick = {
-                    scope.launch {
-                        val clip = ClipData.newPlainText("DevConsole session credential", connectUrl)
-                        clipboard.setClipEntry(ClipEntry(clip))
-                        val message = "Session credential copied -- keep it private"
-                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                    }
+                    clipboard.setText(AnnotatedString(connectUrl))
+                    val message = "Session credential copied -- keep it private"
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.align(Alignment.End),
             ) { Text("Copy session credential") }

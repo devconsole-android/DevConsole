@@ -121,7 +121,8 @@ private fun diffObjects(
     // First occurrence wins for a duplicate key -- an edge case, but the one a standard-conforming
     // JSON consumer would also land on if it re-parsed this same document into a real map.
     val originalByKey = LinkedHashMap<String, JsonValue>()
-    original.entries.forEach { (key, value) -> originalByKey.putIfAbsent(key, value) }
+    // Not Map.putIfAbsent (API 24); first occurrence wins for a duplicate key.
+    original.entries.forEach { (key, value) -> if (key !in originalByKey) originalByKey[key] = value }
     val mockedKeys = mutableSetOf<String>()
     mocked.entries.forEachIndexed { index, (key, mockedChild) ->
         mockedKeys += key

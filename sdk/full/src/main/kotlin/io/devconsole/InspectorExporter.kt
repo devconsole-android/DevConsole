@@ -281,7 +281,7 @@ internal class AndroidInspectorExporter(
         const val INVALID_SELECTION_MESSAGE = "Export selection could not be resolved"
 
         /**
-         * `java.nio.file` is API 26 and this SDK's `minSdk` is 24, so the previous `Files.move`
+         * `java.nio.file` is API 26 and this SDK's `minSdk` is 23, so the previous `Files.move`
          * crashed on Android 7 the first time an export was published. `renameTo` is the API-1
          * equivalent and is atomic here for the same reason the old call was: source and
          * destination always live in the same export directory, so the rename never crosses a

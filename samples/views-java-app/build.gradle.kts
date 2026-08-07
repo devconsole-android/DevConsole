@@ -9,7 +9,7 @@ android {
     defaultConfig {
         applicationId = "io.devconsole.sample.viewsjava"
         versionCode = 1
-        versionName = "0.2.0-SNAPSHOT"
+        versionName = "0.3.0-SNAPSHOT"
     }
 }
 
@@ -28,7 +28,7 @@ dependencies {
     // DevConsolePanelController seam (src/main) instead of DevConsolePanelView directly, with a
     // debug and a release DevConsolePanelControllerFactory supplying the real panel or a no-op.
     debugImplementation(project(":sdk:ui-views"))
-    implementation("com.squareup.okhttp3:okhttp:5.4.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
 
 // No devConsole {} override here: this sample has no product flavors, so the plugin's own

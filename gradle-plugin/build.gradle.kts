@@ -1,5 +1,5 @@
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "2.4.10"
+    id("org.jetbrains.kotlin.jvm") version "2.2.20"
     id("java-gradle-plugin")
     id("maven-publish")
     // Latest 1.x release: 2.x raises the minimum Gradle version this repo isn't ready to require yet.
@@ -9,10 +9,10 @@ plugins {
 // Must share a top-level namespace with the plugin ID (a Plugin Portal requirement) and match
 // the SDK's Maven group.
 group = "io.github.devconsole-android"
-version = "0.2.0"
+version = "0.3.0"
 
-// Targets Java 17: this plugin JAR runs inside the Gradle daemon (Gradle 9.5
-// requires JDK 17) and compiles against com.android.tools.build:gradle:9.3.0,
+// Targets Java 17: this plugin JAR runs inside the Gradle daemon (AGP 8.13.0
+// requires JDK 17) and compiles against com.android.tools.build:gradle:8.13.0,
 // whose published variants require org.gradle.jvm.version = 17. This is
 // independent of the Android product modules' JVM 11 bytecode floor.
 java {
@@ -25,12 +25,12 @@ kotlin {
 }
 
 dependencies {
-    compileOnly("com.android.tools.build:gradle:9.3.0")
+    compileOnly("com.android.tools.build:gradle:8.13.0")
     // org.gradle.kotlin.dsl.create / findByType extension functions live here;
     // the plain kotlin.jvm plugin doesn't pull this in the way build-logic's
     // `kotlin-dsl` plugin does.
     compileOnly(gradleKotlinDsl())
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.10")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.2.20")
     testImplementation(gradleTestKit())
 }
 
@@ -59,24 +59,25 @@ gradlePlugin {
 
 // GradleRunner.withPluginClasspath() derives its classpath from
 // pluginUnderTestMetadata, which defaults to runtimeClasspath and therefore
-// omits compileOnly dependencies. Our plugin references AGP's DSL types
-// (ApplicationExtension/LibraryExtension), so those classes must be added
-// explicitly or the functional-test fixture fails with
-// "Type com.android.build.api.dsl.ApplicationExtension not present".
+// omits compileOnly dependencies. Our plugin both references AGP's DSL types
+// (ApplicationExtension/LibraryExtension) at load time and, at apply time,
+// looks the `androidComponents` extensions up by type
+// (getByType<LibraryAndroidComponentsExtension>()). For that lookup to match,
+// the plugin and AGP must resolve the SAME Class object for those interfaces.
 //
-// Only the narrow `gradle-api` artifact is added (not the full
-// `com.android.tools.build:gradle` implementation jar pulled in by
-// compileOnly): the full jar ships META-INF/gradle-plugins plugin-marker
-// files, and injecting it alongside the fixture's own normally-resolved
-// `com.android.library` plugin makes AGP think two different copies of
-// itself are active in the same build, which it refuses to run under
-// ("Using different versions of the Android Gradle plugin ... not
-// allowed"). gradle-api ships only the DSL interfaces we reference, with no
-// plugin registrations, so it doesn't trigger that guard.
-val agpDslApi: Configuration by configurations.creating
+// The full AGP runtime is injected here and the functional-test fixtures apply
+// `com.android.library`/`com.android.application` WITHOUT a version, so AGP is
+// loaded from this injected classpath rather than resolved fresh from a
+// repository. That guarantees a single AGP classloader shared with the plugin
+// under test -- the type-based extension lookups resolve against the exact
+// interfaces AGP registered. (Injecting the full jar while ALSO letting the
+// fixture resolve its own versioned `com.android.library` would instead trip
+// AGP's "Using different versions of the Android Gradle plugin ... not allowed"
+// guard, which is why the fixtures must omit the version.)
+val agpFunctionalTestRuntime: Configuration by configurations.creating
 dependencies {
-    agpDslApi("com.android.tools.build:gradle-api:9.3.0")
+    agpFunctionalTestRuntime("com.android.tools.build:gradle:8.13.0")
 }
 tasks.named<org.gradle.plugin.devel.tasks.PluginUnderTestMetadata>("pluginUnderTestMetadata") {
-    pluginClasspath.from(agpDslApi)
+    pluginClasspath.from(agpFunctionalTestRuntime)
 }

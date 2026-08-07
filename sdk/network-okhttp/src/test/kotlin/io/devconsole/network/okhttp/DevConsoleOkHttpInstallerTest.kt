@@ -12,12 +12,12 @@ import io.devconsole.network.NetworkTransactionQuery
 import io.devconsole.network.NetworkTransactionRecorder
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
-import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
 import okhttp3.Call
 import okhttp3.EventListener
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -37,7 +37,7 @@ class DevConsoleOkHttpInstallerTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("installed").build())
+            server.enqueue(MockResponse().setBody("installed"))
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("installer-test-key-1".encodeToByteArray()))
             val recorder =
@@ -52,7 +52,7 @@ class DevConsoleOkHttpInstallerTest {
                     .build()
 
             client.newCall(Request.Builder().url(server.url("/installed")).build()).execute().use {
-                assertEquals("installed", it.body.string())
+                assertEquals("installed", it.body!!.string())
             }
 
             val timings =
@@ -74,7 +74,7 @@ class DevConsoleOkHttpInstallerTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("installed-java").build())
+            server.enqueue(MockResponse().setBody("installed-java"))
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("installer-test-key-2".encodeToByteArray()))
             val recorder =
@@ -88,7 +88,7 @@ class DevConsoleOkHttpInstallerTest {
                     .build()
 
             client.newCall(Request.Builder().url(server.url("/installed-java")).build()).execute().use {
-                assertEquals("installed-java", it.body.string())
+                assertEquals("installed-java", it.body!!.string())
             }
 
             val timings =
@@ -108,7 +108,7 @@ class DevConsoleOkHttpInstallerTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("delegated").build())
+            server.enqueue(MockResponse().setBody("delegated"))
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("installer-test-key-3".encodeToByteArray()))
             val recorder =
@@ -125,7 +125,7 @@ class DevConsoleOkHttpInstallerTest {
                     .build()
 
             client.newCall(Request.Builder().url(server.url("/delegated")).build()).execute().use {
-                assertEquals("delegated", it.body.string())
+                assertEquals("delegated", it.body!!.string())
             }
             awaitTransactions(transactions)
 

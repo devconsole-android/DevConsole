@@ -3,6 +3,7 @@
  * @since 04/08/26
  */
 @file:Suppress("FunctionNaming", "MagicNumber", "MatchingDeclarationName")
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package io.devconsole.ui.compose
 
@@ -35,7 +36,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.invisibleToUser
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -80,7 +81,7 @@ internal fun InspectorGlyphIcon(
                     if (contentDescription != null) {
                         Modifier.semantics { this.contentDescription = contentDescription }
                     } else {
-                        Modifier.semantics { hideFromAccessibility() }
+                        Modifier.semantics { invisibleToUser() }
                     },
                 ),
     ) {

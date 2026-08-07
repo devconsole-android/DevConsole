@@ -4558,7 +4558,7 @@ private fun String.hostOrEmpty(): String =
 private val BASE64_BODY_PATTERN = Regex("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$")
 
 /**
- * `java.util.Base64` is API 26 and this module's `minSdk` is 24, so decoding through it crashes on
+ * `java.util.Base64` is API 26 and this module's `minSdk` is 23, so decoding through it crashes on
  * Android 7 the first time the composer sends a binary body. Ktor's decoder is pure Kotlin and
  * available at every API level, but it recovers from malformed input rather than rejecting it, so
  * the shape is checked first — bad input has to fail the request, as it did before, instead of

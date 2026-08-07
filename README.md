@@ -6,7 +6,7 @@
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.devconsole-android/devconsole)](https://central.sonatype.com/artifact/io.github.devconsole-android/devconsole)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![minSdk 24](https://img.shields.io/badge/minSdk-24-3DDC84?logo=android&logoColor=white)](#compatibility)
+[![minSdk 23](https://img.shields.io/badge/minSdk-23-3DDC84?logo=android&logoColor=white)](#compatibility)
 [![CI](https://github.com/devconsole-android/DevConsole/actions/workflows/verify.yml/badge.svg)](https://github.com/devconsole-android/DevConsole/actions/workflows/verify.yml)
 
 <br />
@@ -28,12 +28,12 @@ code ever ships to production, and the Gradle plugin fails the build if it would
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.devconsole-android") version "0.2.0"
+    id("io.github.devconsole-android") version "0.3.0"
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:0.2.0")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:0.2.0")
+    debugImplementation("io.github.devconsole-android:devconsole:0.3.0")
+    releaseImplementation("io.github.devconsole-android:devconsole-noop:0.3.0")
 }
 ```
 
@@ -296,10 +296,11 @@ includes a hazard section that triggers a real crash and a real ANR.
 
 | | |
 |---|---|
-| `minSdk` | 24 |
-| `compileSdk` / `targetSdk` | 37 |
-| Android Gradle Plugin | 9.3.0 |
-| Kotlin | 2.4.10 |
+| `minSdk` | 23 |
+| `compileSdk` / `targetSdk` | 35 |
+| Android Gradle Plugin | 8.13.0 (built against; the Gradle plugin supports AGP 8.x–9.x hosts) |
+| Gradle | 8.9+ (including 9.x) |
+| Kotlin | 2.2.20 |
 
 ## Documentation
 

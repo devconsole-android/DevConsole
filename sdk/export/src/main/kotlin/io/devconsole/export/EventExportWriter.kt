@@ -631,7 +631,7 @@ class EventExportWriter(
 
         /**
          * Publishes [source] as [destination] without `java.nio.file` (whose `Files.move` requires API
-         * 26+ core library desugaring at this module's minSdk 24). `File.renameTo` is atomic on POSIX
+         * 26+ core library desugaring at this module's minSdk 23). `File.renameTo` is atomic on POSIX
          * filesystems -- true for every real Android deployment target -- when both files share a
          * volume, which they always do here since [source] is created inside `destination`'s own parent
          * directory. The fallbacks below only matter on filesystems where rename-over-existing isn't
