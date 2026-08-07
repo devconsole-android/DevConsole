@@ -5,6 +5,7 @@ import io.devconsole.mocks.MockDecision
 import io.devconsole.mocks.MockEngine
 import io.devconsole.mocks.MockRequest
 import io.devconsole.network.NetworkCaptureContext
+import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Protocol
 import okhttp3.Response
@@ -28,7 +29,7 @@ class DevConsoleMockInterceptor(
                         request.url.queryParameterNames.associateWith { name ->
                             request.url.queryParameter(name).orEmpty()
                         },
-                    headers = request.headers.names().associateWith { name -> request.headers[name].orEmpty() },
+                    headers = request.headers.toFoldedMap(),
                 ),
             )
         val matched = decision as? MockDecision.Matched
@@ -94,4 +95,7 @@ class DevConsoleMockInterceptor(
             is MockAction.TemplateResponse -> chain.proceed(request) // Template actions are resolved by MockEngine.
             MockAction.Passthrough -> chain.proceed(request)
         }
+
+    /** `Headers.get` returns only the last value for a repeated name; fold repeats like HTTP does. */
+    private fun Headers.toFoldedMap(): Map<String, String> = names().associateWith { values(it).joinToString(", ") }
 }

@@ -104,4 +104,41 @@ class DevConsoleMockInterceptorTest {
             server.close()
         }
     }
+
+    @Test fun `repeated headers are folded but a repeated query param keeps its first value`() {
+        val client =
+            OkHttpClient
+                .Builder()
+                .addInterceptor(
+                    DevConsoleMockInterceptor(
+                        MockEngine(
+                            listOf(
+                                MockRule(
+                                    "template",
+                                    1,
+                                    path = "/orders",
+                                    action =
+                                        MockAction.TemplateResponse(
+                                            200,
+                                            "{{header.X-Tag}}|{{query.tag}}",
+                                        ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ).build()
+
+        val response =
+            client
+                .newCall(
+                    Request
+                        .Builder()
+                        .url("https://api.test/orders?tag=a&tag=b")
+                        .addHeader("X-Tag", "a")
+                        .addHeader("X-Tag", "b")
+                        .build(),
+                ).execute()
+
+        assertEquals("a, b|a", response.body.string())
+    }
 }

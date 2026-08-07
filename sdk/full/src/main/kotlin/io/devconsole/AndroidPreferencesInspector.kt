@@ -42,6 +42,8 @@ internal class AndroidPreferencesInspector(
                 TYPE_LONG -> editor.putLong(key, value.toLong())
                 TYPE_FLOAT -> editor.putFloat(key, value.toFloat())
                 TYPE_STRING -> editor.putString(key, value)
+                // String sets are read-only: the ", "-joined display form can't be reversed without
+                // corrupting elements that themselves contain ", " (or a single empty-string member).
                 else -> return false
             }
             editor.commit()

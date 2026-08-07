@@ -7,7 +7,18 @@ enum class SocketDirection { SENT, RECEIVED }
 
 enum class SocketConnectionState { CREATED, OPEN, CLOSING, CLOSED, FAILED }
 
-enum class SocketLifecycleType { CREATED, OPENED, CLOSING, CLOSED, FAILED }
+/** Ordering used to reconcile a re-`open()` on an already-known connection: never regress state. */
+@Suppress("MagicNumber") // Small, self-evident ordinal ranks for a 5-value lifecycle enum.
+private val SocketConnectionState.rank: Int
+    get() =
+        when (this) {
+            SocketConnectionState.CREATED -> 0
+            SocketConnectionState.OPEN -> 1
+            SocketConnectionState.CLOSING -> 2
+            SocketConnectionState.CLOSED, SocketConnectionState.FAILED -> 3
+        }
+
+enum class SocketLifecycleType { CREATED, OPENED, CLOSING, CLOSED, FAILED, CANCELLED }
 
 enum class SocketFrameType { TEXT, BINARY, PING, PONG }
 
@@ -197,8 +208,23 @@ class InMemorySocketStore(
     override fun open(connection: SocketConnection) =
         synchronized(lock) {
             val existing = connections[connection.id]
+            // Re-opening an already-known connection (e.g. the documented dual-wiring of a
+            // listener plus DevConsoleRecordingWebSocket.wrap on the same socket) must not
+            // regress state or clobber timestamps/error with this call's CREATED-state defaults.
+            val reconciled =
+                if (existing != null) {
+                    connection.copy(
+                        openedAtEpochMs = existing.openedAtEpochMs,
+                        closedAtEpochMs = existing.closedAtEpochMs ?: connection.closedAtEpochMs,
+                        state = if (existing.state.rank > connection.state.rank) existing.state else connection.state,
+                        error = existing.error ?: connection.error,
+                        reconnectAttempt = maxOf(existing.reconnectAttempt, connection.reconnectAttempt),
+                    )
+                } else {
+                    connection
+                }
             val updated =
-                connection
+                reconciled
                     .copy(
                         messages =
                             (
@@ -528,6 +554,9 @@ class SocketRecorder(
         reconnectAttempt: Int = 0,
     ) {
         guarded {
+            // Dual-wiring (a listener plus a later wrap() call on the same socket) calls this
+            // twice for one connection -- only the first call is a real CREATED transition.
+            val alreadyExists = store.connection(connectionId) != null
             val timestamp = clock()
             store.open(
                 SocketConnection(
@@ -539,7 +568,9 @@ class SocketRecorder(
                     protocol = protocol,
                 ),
             )
-            store.appendLifecycle(SocketLifecycleEvent(connectionId, SocketLifecycleType.CREATED, timestamp))
+            if (!alreadyExists) {
+                store.appendLifecycle(SocketLifecycleEvent(connectionId, SocketLifecycleType.CREATED, timestamp))
+            }
         }
     }
 
@@ -572,7 +603,7 @@ class SocketRecorder(
                         redaction.redactText(text, MAX_TEXT_PREVIEW_CHARS),
                         text.length > MAX_TEXT_PREVIEW_CHARS,
                     ),
-                    contentType,
+                    redactContentType(contentType),
                 ).withMetadata(
                     SocketMessageMetadata(
                         frameType = SocketFrameType.TEXT,
@@ -595,8 +626,8 @@ class SocketRecorder(
                     connectionId,
                     direction,
                     clock(),
-                    SocketPayload.Binary(length, length > MAX_BINARY_PREVIEW_BYTES),
-                    contentType,
+                    SocketPayload.Binary(length, length > MAX_BINARY_FRAME_PREVIEW_BYTES),
+                    redactContentType(contentType),
                 ).withMetadata(SocketMessageMetadata(frameType = SocketFrameType.BINARY)),
             )
         }
@@ -615,7 +646,7 @@ class SocketRecorder(
                     direction,
                     clock(),
                     bytes.binaryPayload(binaryPreviewPolicy),
-                    contentType,
+                    redactContentType(contentType),
                 ).withMetadata(SocketMessageMetadata(frameType = SocketFrameType.BINARY)),
             )
         }
@@ -679,6 +710,38 @@ class SocketRecorder(
         error: Throwable,
     ) = onClosed(connectionId, failed = true, error = error.message ?: error.javaClass.simpleName)
 
+    /**
+     * A host-initiated cancel is not a failure: it closes the connection like [onClosed] but with
+     * its own [SocketLifecycleType.CANCELLED] event so it reads as intentional, not an error.
+     */
+    fun onCancelled(
+        connectionId: String,
+        reason: String? = null,
+    ) {
+        guarded {
+            val timestamp = clock()
+            val safeReason = reason?.let(redaction::redactText)
+            store.close(connectionId, SocketConnectionState.CLOSED, timestamp)
+            store.appendLifecycle(
+                SocketLifecycleEvent(connectionId, SocketLifecycleType.CANCELLED, timestamp, reason = safeReason),
+            )
+        }
+    }
+
+    /**
+     * Redacts the MQTT topic embedded in an `application/mqtt` [contentType] (see
+     * [MqttFrameMetadata]) so a sensitive topic segment (e.g. a device token) doesn't bypass
+     * redaction just because it travels in this field instead of the message body. Non-MQTT
+     * content types pass through unchanged.
+     */
+    private fun redactContentType(contentType: String?): String? {
+        val topic = if (MqttFrameMetadata.isMqtt(contentType)) MqttFrameMetadata.topic(contentType) else null
+        topic ?: return contentType
+        val qos = MqttFrameMetadata.qos(contentType) ?: 0
+        val retained = MqttFrameMetadata.retained(contentType) ?: false
+        return MqttFrameMetadata.format(redaction.redactText(topic), qos, retained)
+    }
+
     private fun onControlFrame(
         connectionId: String,
         direction: SocketDirection,
@@ -700,7 +763,8 @@ class SocketRecorder(
 
     companion object {
         const val MAX_TEXT_PREVIEW_CHARS = 64 * 1024
-        const val MAX_BINARY_PREVIEW_BYTES = 2L * 1024L * 1024L
+
+        /** Also the length-only [onBinaryMessage] overload's truncation threshold -- one number, one meaning. */
         const val MAX_BINARY_FRAME_PREVIEW_BYTES = 4 * 1024
     }
 }

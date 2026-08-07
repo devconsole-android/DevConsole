@@ -308,14 +308,14 @@ public final class io/devconsole/network/NetworkCursorCodec {
 public final class io/devconsole/network/NetworkExport {
 	public static final field INSTANCE Lio/devconsole/network/NetworkExport;
 	public final fun toCurl (Lio/devconsole/network/NetworkCapture;)Ljava/lang/String;
-	public final fun toHar (Ljava/util/List;)Ljava/lang/String;
+	public final fun toCurl (Lio/devconsole/network/NetworkCapture;Lio/devconsole/security/RedactionEngine;)Ljava/lang/String;
+	public static synthetic fun toCurl$default (Lio/devconsole/network/NetworkExport;Lio/devconsole/network/NetworkCapture;Lio/devconsole/security/RedactionEngine;ILjava/lang/Object;)Ljava/lang/String;
 	public final fun toHarTransactions (Ljava/util/List;)Ljava/lang/String;
+	public final fun toHarTransactions (Ljava/util/List;Lio/devconsole/security/RedactionEngine;)Ljava/lang/String;
+	public static synthetic fun toHarTransactions$default (Lio/devconsole/network/NetworkExport;Ljava/util/List;Lio/devconsole/security/RedactionEngine;ILjava/lang/Object;)Ljava/lang/String;
 	public final fun toPostman (Ljava/util/List;)Ljava/lang/String;
-}
-
-public final class io/devconsole/network/NetworkRecorder {
-	public fun <init> (Lio/devconsole/network/NetworkCaptureFactory;Lkotlin/jvm/functions/Function1;)V
-	public final fun record (Lio/devconsole/network/NetworkRequestInput;Lio/devconsole/network/NetworkResponseInput;)V
+	public final fun toPostman (Ljava/util/List;Lio/devconsole/security/RedactionEngine;)Ljava/lang/String;
+	public static synthetic fun toPostman$default (Lio/devconsole/network/NetworkExport;Ljava/util/List;Lio/devconsole/security/RedactionEngine;ILjava/lang/Object;)Ljava/lang/String;
 }
 
 public final class io/devconsole/network/NetworkRequestInput {

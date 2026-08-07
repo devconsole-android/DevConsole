@@ -21,6 +21,12 @@ and everything else is a patch.
 
 ## Unreleased
 
+## 0.2.0 — 2026-08-07
+
+A follow-up release driven by a full independent audit of the SDK and browser dashboard. It adds
+the open triggers and More-screen server controls that were pending, and fixes a set of
+correctness and security issues that audit surfaced. No `sdk:api` breaking changes.
+
 ### Added
 
 - **Opt-in open triggers.** `DevConsoleConfig.openTriggers` lets the SDK itself open the in-app
@@ -33,13 +39,61 @@ and everything else is a patch.
   `startBrowser`/`stop`. The card — like the hero CTA before it — only renders on builds that
   actually wire the control.
 
+### Changed
+
+- **ANR detection now starts when the on-device inspector is opened**, in addition to when the
+  browser server starts — so hosts that use only the on-device inspector (never calling
+  `startBrowser`) now get ANR capture.
+- **Feature-flag override audit records now show the real before/after values** (redacted by the
+  flag key as a field name, so a flag named like a secret still masks), instead of a fixed
+  `<redacted>` placeholder for both.
+
+### Security
+
+- **Browser feature-flag overrides are now gated server-side** by the `featureFlags` editing
+  capability and the `STATE` capture category. Previously the `POST /api/v1/flags/{key}` route
+  enforced neither, so any authenticated browser could flip a declared flag even on a read-only
+  config.
+- **Diagnostic exports re-apply the current redaction policy at export time.** HAR, Postman, the
+  session ZIP, and the evidence bundle no longer rely solely on capture-time redaction.
+- **Composer requests are refused when the target host resolves to a loopback, link-local (incl.
+  the cloud metadata address), site-local, or IPv6 unique-local address**, unless private-network
+  targets are explicitly permitted — hardening against SSRF via an allowlisted hostname. (A live
+  TTL-0 DNS-rebinding attacker is only partially mitigated; see the transport's docs.)
+- **MQTT topics are now redacted** with the same policy as other captured fields.
+
 ### Fixed
 
-- **Docs: the port-bridging command is `adb forward`, not `adb reverse`.** The server runs on the
-  device, so reaching it from a computer's browser needs a host-side listener
-  (`adb forward tcp:<port> tcp:<port>`); `adb reverse` binds on the device and collides with the
-  running server. Corrected across the README, docs, sample comments, and the dashboard's own
-  connect help.
+- **Binary request/response bodies are no longer corrupted** when captured as attachments (a lossy
+  UTF-8 round-trip mangled non-text bodies; downloads from the dashboard/session ZIP now match the
+  original bytes).
+- **The OkHttp interceptor no longer blocks the response** on chunked / unknown-length (e.g.
+  long-poll) streams while trying to buffer a body preview.
+- **WebSocket connection state is no longer corrupted** when a `DevConsoleOkHttpWebSocketListener`
+  and `DevConsoleRecordingWebSocket.wrap` are wired on the same socket (the documented pattern).
+  The OkHttp listener also gained an optional host `WebSocketListener` delegate.
+- **Gradle plugin:** zero-config auto-wiring now targets the released SDK coordinate (it previously
+  defaulted to a nonexistent `-SNAPSHOT`, breaking the headline setup); applying it to an
+  unsupported `com.android.dynamic-feature` module now fails loudly instead of silently skipping
+  protection; and declaring only an add-on coordinate no longer suppresses auto-wiring of the core
+  runtime.
+- **Browser session-ZIP exports now include** `network.har`, `network.postman_collection.json`, and
+  app metadata, matching the on-device export.
+- **Crash/ANR breadcrumbs now include recent log lines**, and a failure inside ANR capture can no
+  longer crash the host process.
+- **HAR/Postman export correctness:** the HAR `content.size` field is emitted, `statusText`/`status`
+  use the HTTP reason phrase instead of the captured error text, `redirectURL` is populated from the
+  `Location` header, and a fully-redacted `Cookie` header no longer produces a bogus cookie entry.
+- **Dashboard:** an expired session now shows a clear "get a fresh connect code" state instead of
+  reconnecting forever; the mock-rule editor refuses to overwrite a fault-injection rule with an
+  empty response; live-tail reconciles the gap after a reconnect.
+- **Storage retention** no longer runs a full-table scan on every write, and its byte accounting is
+  more accurate; a stale usage estimate could previously let the store grow past its cap across a
+  stop/start cycle.
+- **Docs: the port-bridging command is `adb forward`, not `adb reverse`.** Plus corrections to the
+  session TTL, storage retention, WebSocket binary-preview size, MQTT redaction, SQL-console
+  `sqlite_master` access, `registerStateProvider`, the migration plugin id, and the Java sample
+  snippet's Java-11 compatibility.
 
 ## 0.1.0 — 2026-08-07
 

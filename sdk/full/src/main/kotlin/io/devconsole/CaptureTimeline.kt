@@ -332,16 +332,23 @@ internal class TeeingPushStore(
     override fun append(event: PushEvent) {
         synchronized(liveCaptureLock) {
             delegate.append(event)
-            bridge.emit(
-                pluginId = "push",
-                type = "push.received",
-                severity = EventSeverity.INFO,
-                summary = "Push ${event.lifecycle.name.lowercase()}: ${event.messageId ?: event.provider}",
-                tagsJson =
-                    "{\"provider\":\"${event.provider.escapeJson()}\",\"simulated\":\"${event.simulated}\"}",
-                payloadJson = CapturePayloadCodec.push(event),
-                wallTimeMsOverride = event.receivedAtEpochMs,
-            )
+            // Fail-open: a push can be recorded before the runtime session exists (no
+            // sessionIdOverride here, so bridge.emit falls back to resolving one), which throws
+            // IllegalStateException("Capture before runtime session") pre-initialize. The push itself
+            // is already durably kept by delegate.append above; only the timeline mirror is skipped,
+            // matching every other capture category's fail-open gating rather than crashing the caller.
+            runCatching {
+                bridge.emit(
+                    pluginId = "push",
+                    type = "push.${event.lifecycle.name.lowercase()}",
+                    severity = EventSeverity.INFO,
+                    summary = "Push ${event.lifecycle.name.lowercase()}: ${event.messageId ?: event.provider}",
+                    tagsJson =
+                        "{\"provider\":\"${event.provider.escapeJson()}\",\"simulated\":\"${event.simulated}\"}",
+                    payloadJson = CapturePayloadCodec.push(event),
+                    wallTimeMsOverride = event.receivedAtEpochMs,
+                )
+            }
         }
     }
 }

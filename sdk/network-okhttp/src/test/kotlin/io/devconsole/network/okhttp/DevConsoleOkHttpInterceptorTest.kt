@@ -257,6 +257,45 @@ class DevConsoleOkHttpInterceptorTest {
         }
     }
 
+    @Test
+    fun `skips peeking a chunked unknown-length text response so intercept returns without blocking`() {
+        val server = MockWebServer()
+        server.start()
+        try {
+            // No Content-Length header: chunkedBody makes OkHttp report an unknown content length,
+            // the same shape as a long-poll or line-delimited streaming response that isn't SSE or
+            // NDJSON. Before the fix this fell into the peekBody(512KiB) branch and blocked inside
+            // intercept() until the peek bound was hit or the stream ended.
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .chunkedBody("{\"event\":\"tick\"}\n", 16)
+                    .addHeader("Content-Type", "text/plain")
+                    .build(),
+            )
+            val transactions =
+                InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
+            val client = clientRecordingTo(transactions)
+
+            val started = System.currentTimeMillis()
+            val response = client.newCall(Request.Builder().url(server.url("/long-poll")).build()).execute()
+            val elapsedMs = System.currentTimeMillis() - started
+            assertTrue("intercept() must return promptly instead of blocking on the peek", elapsedMs < 2000L)
+            // The host's own read of the real body must be completely unaffected by skipping the peek.
+            assertEquals("{\"event\":\"tick\"}\n", response.body.string())
+
+            val transaction = awaitTransactions(transactions).single()
+            assertEquals(
+                "streaming",
+                transaction.capture.response!!
+                    .metadata.body.omittedReason,
+            )
+            assertEquals(BodyPreview.Absent, transaction.capture.response!!.body)
+        } finally {
+            server.close()
+        }
+    }
+
     private fun taggedPostRequest(server: MockWebServer): Request =
         Request
             .Builder()

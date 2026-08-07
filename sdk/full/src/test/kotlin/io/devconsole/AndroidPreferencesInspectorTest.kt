@@ -80,6 +80,22 @@ class AndroidPreferencesInspectorTest {
     }
 
     @Test
+    fun `put refuses a string set (read-only) and leaves the stored value untouched`() {
+        application
+            .getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putStringSet("tags", setOf("old"))
+            .commit()
+
+        assertFalse(inspector.put("user_prefs", "tags", "alpha, beta", "STRING_SET"))
+
+        assertEquals(
+            setOf("old"),
+            application.getSharedPreferences("user_prefs", Context.MODE_PRIVATE).getStringSet("tags", null),
+        )
+    }
+
+    @Test
     fun `put rejects a value that cannot be coerced to the declared type`() {
         application
             .getSharedPreferences("user_prefs", Context.MODE_PRIVATE)

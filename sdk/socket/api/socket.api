@@ -137,6 +137,7 @@ public final class io/devconsole/socket/SocketLifecycleEvent {
 }
 
 public final class io/devconsole/socket/SocketLifecycleType : java/lang/Enum {
+	public static final field CANCELLED Lio/devconsole/socket/SocketLifecycleType;
 	public static final field CLOSED Lio/devconsole/socket/SocketLifecycleType;
 	public static final field CLOSING Lio/devconsole/socket/SocketLifecycleType;
 	public static final field CREATED Lio/devconsole/socket/SocketLifecycleType;
@@ -261,7 +262,6 @@ public final class io/devconsole/socket/SocketProtocol$Companion {
 public final class io/devconsole/socket/SocketRecorder {
 	public static final field Companion Lio/devconsole/socket/SocketRecorder$Companion;
 	public static final field MAX_BINARY_FRAME_PREVIEW_BYTES I
-	public static final field MAX_BINARY_PREVIEW_BYTES J
 	public static final field MAX_TEXT_PREVIEW_CHARS I
 	public fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/socket/SocketStore;ZLkotlin/jvm/functions/Function0;)V
 	public synthetic fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/socket/SocketStore;ZLkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -272,6 +272,8 @@ public final class io/devconsole/socket/SocketRecorder {
 	public final fun onBinaryMessage (Ljava/lang/String;Lio/devconsole/socket/SocketDirection;[BLjava/lang/String;)V
 	public static synthetic fun onBinaryMessage$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Lio/devconsole/socket/SocketDirection;JLjava/lang/String;ILjava/lang/Object;)V
 	public static synthetic fun onBinaryMessage$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Lio/devconsole/socket/SocketDirection;[BLjava/lang/String;ILjava/lang/Object;)V
+	public final fun onCancelled (Ljava/lang/String;Ljava/lang/String;)V
+	public static synthetic fun onCancelled$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)V
 	public final fun onClosed (Ljava/lang/String;ZLjava/lang/String;)V
 	public static synthetic fun onClosed$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;ZLjava/lang/String;ILjava/lang/Object;)V
 	public final fun onClosing (Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;)V

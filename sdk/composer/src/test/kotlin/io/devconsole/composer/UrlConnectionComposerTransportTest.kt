@@ -29,7 +29,8 @@ class UrlConnectionComposerTransportTest {
                     followRedirects = false,
                 ).resolve()
 
-            val response = UrlConnectionComposerTransport().execute(request)
+            val response =
+                UrlConnectionComposerTransport(permitPrivateNetworkTargets = true).execute(request)
 
             assertEquals(201, response.statusCode)
             assertEquals("POST|order=42", response.body)
@@ -59,7 +60,7 @@ class UrlConnectionComposerTransportTest {
             val permittedPort = source.address.port
 
             assertThrows(ComposerDestinationRejectedException::class.java) {
-                ComposerExecutor(UrlConnectionComposerTransport()).execute(
+                ComposerExecutor(UrlConnectionComposerTransport(permitPrivateNetworkTargets = true)).execute(
                     ComposerRequest(
                         method = "GET",
                         url = "http://127.0.0.1:$permittedPort/redirect",
@@ -74,6 +75,24 @@ class UrlConnectionComposerTransportTest {
         } finally {
             source.stop(0)
             target.stop(0)
+        }
+    }
+
+    @Test
+    fun `request to a loopback address is rejected without an explicit override`() {
+        assertThrows(ComposerDestinationRejectedException::class.java) {
+            UrlConnectionComposerTransport().execute(
+                ComposerRequest(method = "GET", url = "http://127.0.0.1:1/blocked").resolve(),
+            )
+        }
+    }
+
+    @Test
+    fun `request to the link-local cloud metadata address is rejected without an explicit override`() {
+        assertThrows(ComposerDestinationRejectedException::class.java) {
+            UrlConnectionComposerTransport().execute(
+                ComposerRequest(method = "GET", url = "http://169.254.169.254/latest/meta-data/").resolve(),
+            )
         }
     }
 }

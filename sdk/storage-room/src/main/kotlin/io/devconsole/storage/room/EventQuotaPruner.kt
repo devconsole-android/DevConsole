@@ -81,3 +81,72 @@ class EventQuotaPruner(
         const val PRUNE_BATCH_SIZE = 256
     }
 }
+
+/**
+ * Running totals [RoomEventStore] keeps between inserts so most writes can skip
+ * [EventDao.eventCount]/[EventDao.estimatedStoredBytes] -- a full-table scan (the latter sums nine
+ * `LENGTH(CAST(... AS BLOB))` expressions per row) that [EventQuotaPruner.pruneTo] would otherwise
+ * run on every single insert, steady-state or not.
+ *
+ * The totals are an estimate, not a cache of ground truth: [canAbsorb] only reports "safe to skip"
+ * when the projected totals, plus a safety margin, still land comfortably under both caps, so the
+ * bound between quota checks is the margin, not unbounded drift. [resetTo] replaces the estimate
+ * with the authoritative post-prune totals every time a real check does run, so error never
+ * compounds across skipped checks. Not thread-safe on its own; callers must serialize access (see
+ * [RoomRetentionCoordinator]).
+ */
+class EventUsageEstimate {
+    private var count: Long = UNKNOWN
+    private var bytes: Long = UNKNOWN
+
+    private val isKnown: Boolean
+        get() = count >= 0 && bytes >= 0
+
+    /** Whether adding this batch would still leave both totals comfortably under their caps. */
+    fun canAbsorb(
+        batchCount: Int,
+        batchBytes: Long,
+        maxEvents: Long,
+        maxBytes: Long,
+    ): Boolean {
+        if (!isKnown) return false
+        val projectedCount = count + batchCount
+        val projectedBytes = bytes + batchBytes
+        return projectedCount + EVENT_MARGIN < maxEvents && projectedBytes + byteMargin(maxBytes) < maxBytes
+    }
+
+    /** Moves the running totals by this batch's delta, without touching the database. */
+    fun absorb(
+        batchCount: Int,
+        batchBytes: Long,
+    ) {
+        count += batchCount
+        bytes += batchBytes
+    }
+
+    /** Replaces the estimate with the authoritative totals a real prune just computed. */
+    fun resetTo(
+        count: Long,
+        bytes: Long,
+    ) {
+        this.count = count
+        this.bytes = bytes
+    }
+
+    /** Forces the next [canAbsorb] call to fail, so a full recompute happens before trusting the estimate again. */
+    fun invalidate() {
+        count = UNKNOWN
+        bytes = UNKNOWN
+    }
+
+    private companion object {
+        const val UNKNOWN = -1L
+        const val EVENT_MARGIN = 256L
+        const val MIN_BYTE_MARGIN = 64L * 1024L
+
+        /** The byte-margin is 1% of the cap (i.e. cap / 100), floored at [MIN_BYTE_MARGIN]. */
+        const val BYTE_MARGIN_DIVISOR = 100L
+
+        fun byteMargin(maxBytes: Long): Long = (maxBytes / BYTE_MARGIN_DIVISOR).coerceAtLeast(MIN_BYTE_MARGIN)
+    }
+}

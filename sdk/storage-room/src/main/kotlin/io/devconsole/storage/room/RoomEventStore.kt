@@ -6,6 +6,7 @@
 
 package io.devconsole.storage.room
 
+import androidx.sqlite.db.SimpleSQLiteQuery
 import io.devconsole.storage.api.EventStore
 import io.devconsole.storage.api.EventStoreWriteResult
 import io.devconsole.storage.api.StoredEvent
@@ -46,6 +47,13 @@ class RoomEventStore(
     @Volatile
     private var sessionFirstRetention = false
 
+    /**
+     * Row-first retention's running totals, see [EventUsageEstimate]. Only touched from [insert] and
+     * [deleteSession], both of which run inside [coordinator], so a single instance never has two
+     * writers racing this state.
+     */
+    private val usageEstimate = EventUsageEstimate()
+
     fun withPolicy(
         maxEvents: Long,
         maxAgeMs: Long,
@@ -62,6 +70,12 @@ class RoomEventStore(
 
     fun withSessionFirstRetention(enabled: Boolean = true): RoomEventStore =
         apply {
+            // While session-first retention is on, row-first inserts still land in the table but skip
+            // the usage estimate, so on any mode change the estimate is stale -- invalidate it to force
+            // a fresh authoritative scan on the next row-first insert rather than trusting a baseline
+            // captured before an unbounded number of session-first inserts. Without this the row-first
+            // quota can be silently defeated across a stop/startBrowser cycle.
+            if (sessionFirstRetention != enabled) usageEstimate.invalidate()
             sessionFirstRetention = enabled
         }
 
@@ -103,15 +117,28 @@ class RoomEventStore(
                         if (!sessionFirstRetention) {
                             val current = limits
                             val attachmentBytes = activeDatabase.attachmentDao().totalStoredBytes()
-                            EventQuotaPruner(activeDatabase.eventDao()) { prunedSessionIds ->
-                                // Prune is rare and cross-session, so a full recompute per affected
-                                // session here is fine -- unlike the per-batch increment above.
-                                prunedSessionIds.forEach(activeDatabase.sessionDao()::refreshUsage)
-                            }.pruneTo(
-                                maxEvents = current.maxEvents,
-                                maxBytes = (current.maxBytes - attachmentBytes).coerceAtLeast(0),
-                                cutoffEpochMs = (clock() - current.maxAgeMs).coerceAtLeast(0),
-                            )
+                            val adjustedMaxBytes = (current.maxBytes - attachmentBytes).coerceAtLeast(0)
+                            val batchBytes = events.sumOf(StoredEvent::estimatedStorageBytes)
+                            if (usageEstimate.canAbsorb(events.size, batchBytes, current.maxEvents, adjustedMaxBytes)) {
+                                // Steady-state fast path: stay well under both caps without paying for
+                                // EventQuotaPruner.pruneTo's full-table COUNT/SUM scans on this insert.
+                                usageEstimate.absorb(events.size, batchBytes)
+                            } else {
+                                val result =
+                                    EventQuotaPruner(activeDatabase.eventDao()) { prunedSessionIds ->
+                                        // Prune is rare and cross-session, so a full recompute per affected
+                                        // session here is fine -- unlike the per-batch increment above.
+                                        prunedSessionIds.forEach(activeDatabase.sessionDao()::refreshUsage)
+                                    }.pruneTo(
+                                        maxEvents = current.maxEvents,
+                                        maxBytes = adjustedMaxBytes,
+                                        cutoffEpochMs = (clock() - current.maxAgeMs).coerceAtLeast(0),
+                                    )
+                                usageEstimate.resetTo(result.remainingCount, result.remainingBytes)
+                                if (result.expiredCount + result.quotaCount >= INCREMENTAL_VACUUM_THRESHOLD) {
+                                    reclaimFreedPages(activeDatabase)
+                                }
+                            }
                         }
                     }
                     EventStoreWriteResult.Success(events.size)
@@ -165,6 +192,9 @@ class RoomEventStore(
             withContext(Dispatchers.IO) {
                 executeWithRecovery(Unit) { it.eventDao().deleteSession(sessionId) }
             }
+            // An unknown number of this session's rows were just removed; force the next insert to
+            // recompute the real totals rather than trusting a now-stale estimate.
+            usageEstimate.invalidate()
         }
     }
 
@@ -227,7 +257,26 @@ class RoomEventStore(
     companion object {
         const val DEFAULT_MAX_AGE_MS: Long = 24L * 60L * 60L * 1000L
         const val DEFAULT_MAX_BYTES: Long = 100L * 1024L * 1024L
+
+        /** Only worth an incremental_vacuum pass once a prune freed at least a full delete batch. */
+        private const val INCREMENTAL_VACUUM_THRESHOLD = 256
     }
+}
+
+/**
+ * Reclaims pages freed by a large prune, keeping the on-disk file from drifting past [DevConsoleDatabase]'s
+ * logical [EventDao.estimatedStoredBytes] estimate as index/free-list/WAL overhead accumulates.
+ *
+ * `PRAGMA incremental_vacuum` only returns pages once `PRAGMA auto_vacuum=INCREMENTAL` is set, which
+ * SQLite honors only on an empty database or right after a full `VACUUM`. That pragma is wired in
+ * `RecoveringDevConsoleDatabase` (module `sdk/full`, outside this module's Room schema ownership)
+ * via a `RoomDatabase.Callback.onOpen` hook that enables it for new/small databases -- so this
+ * reclaims space for those hosts, and is a harmless no-op for a large pre-existing database that
+ * kept the default mode. `runCatching` because a failed housekeeping PRAGMA must never fail the
+ * insert it rides along with.
+ */
+private fun reclaimFreedPages(database: DevConsoleDatabase) {
+    runCatching { database.query(SimpleSQLiteQuery("PRAGMA incremental_vacuum")).close() }
 }
 
 internal fun Throwable.isSqliteCorruption(): Boolean =

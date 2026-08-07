@@ -44,12 +44,13 @@ value. See [PROTOCOL_REFERENCE.md](PROTOCOL_REFERENCE.md#3-rest-routes) for the 
 ## Database inspector
 
 Lists the app's SQLite databases and, per database, its tables with row counts (internal
-`sqlite_%` tables are excluded/refused throughout). `GET
+`sqlite_%` tables are excluded from the table/row browser). `GET
 /api/v1/database/{name}/tables/{table}` returns the first 200 rows with column-name-based
 redaction applied. The `database` capability is required for **every** statement against `POST
 /api/v1/database/{name}/sql`, including `SELECT` — a caller who controls the SQL text can alias
 any column past name-based redaction (`SELECT password AS p ...`), so enabling this capability is
-enabling raw, unredacted database access over the session, not just "editing." Non-`SELECT`
+enabling raw, unredacted database access over the session, not just "editing." The SQL console can
+read `sqlite_master` and other system tables if the database capability is enabled. Non-`SELECT`
 statements are classified by leading keyword; everything else runs read-only.
 
 ## Files inspector

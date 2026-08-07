@@ -99,4 +99,21 @@ class InMemorySocketStoreTest {
         store.open(SocketConnection("mqtt-conn", "tcp://broker.test:1883", 1, protocol = SocketProtocol.MQTT))
         assertEquals(SocketProtocol.MQTT, store.connection("mqtt-conn")!!.protocol)
     }
+
+    @Test
+    fun `re-opening an existing connection preserves state timestamps and error instead of overwriting them`() {
+        val store = InMemorySocketStore()
+        store.open(SocketConnection("one", "wss://api.test/socket", 10, state = SocketConnectionState.OPEN))
+        store.transition("one", SocketConnectionState.FAILED, 20, error = "boom")
+
+        // A later re-open (e.g. dual-wiring calling onCreated again on an already-known
+        // connection) must not downgrade FAILED back to CREATED, nor reset the original
+        // openedAtEpochMs or clear the recorded error.
+        store.open(SocketConnection("one", "wss://api.test/socket", 30, state = SocketConnectionState.CREATED))
+
+        val connection = store.connection("one")!!
+        assertEquals(SocketConnectionState.FAILED, connection.state)
+        assertEquals(10L, connection.openedAtEpochMs)
+        assertEquals("boom", connection.error)
+    }
 }

@@ -1,5 +1,7 @@
 package io.devconsole
 
+import io.devconsole.logs.LogEntry
+import io.devconsole.logs.LogLevel
 import io.devconsole.network.InMemoryNetworkTransactionStore
 import io.devconsole.network.NetworkCaptureFactory
 import io.devconsole.network.NetworkCursorCodec
@@ -9,6 +11,7 @@ import io.devconsole.network.NetworkResponseInput
 import io.devconsole.network.NetworkTransaction
 import io.devconsole.push.InMemoryPushStore
 import io.devconsole.push.PushEvent
+import io.devconsole.push.PushLifecycle
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
 import io.devconsole.socket.InMemorySocketStore
@@ -133,5 +136,87 @@ class CaptureTimelineTest {
         push.append(PushEvent(provider = "local", data = emptyMap(), messageId = "m1"))
 
         assertEquals(listOf(1L, 2L), collected.map { it.sequence })
+    }
+
+    // ============================================================================================
+    // Push timeline type -- every lifecycle stage must be distinguishable in timeline filters, not
+    // collapsed onto a single hardcoded "push.received" regardless of what actually happened.
+    // ============================================================================================
+
+    @Test
+    fun `the timeline type is derived from the push lifecycle stage`() {
+        val store = TeeingPushStore(InMemoryPushStore(), bridge)
+
+        store.append(PushEvent(provider = "local", data = emptyMap(), lifecycle = PushLifecycle.OPENED))
+        store.append(PushEvent(provider = "local", data = emptyMap(), lifecycle = PushLifecycle.DISPLAYED))
+
+        assertEquals(listOf("push.opened", "push.displayed"), collected.map(StoredEvent::type))
+    }
+
+    // ============================================================================================
+    // recordPush-before-initialize -- resolving a session id can throw IllegalStateException before
+    // the runtime session exists; the timeline mirror must fail open, never take the push append down.
+    // ============================================================================================
+
+    @Test
+    fun `a push append never throws even when the timeline bridge cannot resolve a session id`() {
+        val throwingBridge =
+            CaptureTimelineBridge(
+                sessionId = { error("Capture before runtime session") },
+                appender = { appender },
+                streamHub = { null },
+                nextSequence = sequence::incrementAndGet,
+            )
+        val store = TeeingPushStore(InMemoryPushStore(), throwingBridge)
+
+        store.append(PushEvent(provider = "local", data = emptyMap(), messageId = "m1"))
+
+        assertEquals(1, store.events().size)
+        assertTrue("the timeline mirror should have been skipped, not recorded", collected.isEmpty())
+    }
+}
+
+/**
+ * Proves logs feed crash/ANR breadcrumbs -- the fix for logs bypassing [CaptureTimelineBridge] and
+ * so never appearing in a breadcrumb trail (see [TimelineLogSink]).
+ */
+class TimelineLogSinkBreadcrumbTest {
+    private val collected = mutableListOf<StoredEvent>()
+    private val appender =
+        object : TimelineAppender {
+            override fun append(event: StoredEvent) {
+                collected.add(event)
+            }
+        }
+    private val breadcrumbs = BreadcrumbRingBuffer(10)
+    private val bridge =
+        CaptureTimelineBridge(
+            sessionId = { "session-1" },
+            appender = { appender },
+            streamHub = { null },
+            nextSequence = AtomicLong(0)::incrementAndGet,
+            breadcrumbs = breadcrumbs,
+        )
+
+    @Test
+    fun `a captured log line lands on the timeline and feeds the breadcrumb trail`() {
+        TimelineLogSink(bridge).emit(
+            LogEntry(
+                level = LogLevel.WARN,
+                tag = "Network",
+                message = "retrying request",
+                timestampEpochMs = 42L,
+            ),
+        )
+
+        val event = collected.single()
+        assertEquals("logs", event.pluginId)
+        assertEquals("log", event.type)
+        assertTrue(event.summary, event.summary.contains("retrying request"))
+
+        val crumb = breadcrumbs.snapshot().single()
+        assertEquals("logs", crumb.pluginId)
+        assertEquals("log", crumb.type)
+        assertEquals("retrying request", crumb.summary)
     }
 }

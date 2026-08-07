@@ -259,8 +259,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     private val activityTrackerRegistered = AtomicBoolean(false)
     private var openTriggerController: OpenTriggerController? = null
     private val screenshotCaptureInstance = ScreenshotCapture()
-    private val timelineLogSink =
-        TimelineLogSink(::activeSessionId, { timelineAppender }, timelineSequence::incrementAndGet)
+    private val timelineLogSink = TimelineLogSink(captureBridge)
     private val logRecorderInstance =
         LogRecorder(
             redaction,
@@ -350,10 +349,13 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
      * during [initialize] costs no disk I/O on the calling thread. Left null if construction fails —
      * the console then runs in memory only rather than taking the host down with it.
      */
-    private var batchWriter: EventBatchWriter? = null
-    private var batchWriterCapacity: Int? = null
-    private var roomEventStore: RoomEventStore? = null
-    private var roomAttachmentStore: RoomAttachmentStore? = null
+    @Volatile private var batchWriter: EventBatchWriter? = null
+
+    @Volatile private var batchWriterCapacity: Int? = null
+
+    @Volatile private var roomEventStore: RoomEventStore? = null
+
+    @Volatile private var roomAttachmentStore: RoomAttachmentStore? = null
 
     /**
      * Exposed via [evidenceStore] for the evidence-tray HTTP routes the server engine wires onto
@@ -361,12 +363,13 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
      * inspector's own flag/unflag reach the identical durable store -- a flag made on this device and
      * one made from the dashboard are the same fact, never two independent copies.
      */
-    private var roomEvidenceStore: EvidenceStore? = null
+    @Volatile private var roomEvidenceStore: EvidenceStore? = null
 
     @Volatile private var sessionStore: RoomSessionStore? = null
 
     @Volatile private var storedSessions: List<StoredSession> = emptyList()
-    private var timelineAnnotations: TimelineAnnotations = InMemoryTimelineAnnotations()
+
+    @Volatile private var timelineAnnotations: TimelineAnnotations = InMemoryTimelineAnnotations()
 
     /**
      * Built once and reused. `initialize()` runs again whenever a host config supersedes the one
@@ -722,7 +725,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                                 annotationsSupplier = { timelineAnnotations },
                                 attachmentReader = { attachmentId -> roomAttachmentStore?.read(attachmentId) },
                             ),
-                    ),
+                    ).apply { exportRedaction = redaction },
                 healthSupplier = { runtime.health.value.toInspectorHealthUi() },
                 sessionsSupplier = { storedSessions.toInspectorSessions() },
                 browserSupplier = {
@@ -767,6 +770,8 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
         val mocksEditable = config.editingCapabilities.mocks && config.capturesCategory(CaptureCategory.MOCKS)
         val captureRulesEditable =
             config.editingCapabilities.captureRules && config.capturesCategory(CaptureCategory.MOCKS)
+        val featureFlagsEditable =
+            config.editingCapabilities.featureFlags && config.capturesCategory(CaptureCategory.STATE)
         if (!::serverEngine.isInitialized) {
             serverEngine =
                 createServerEngine(
@@ -777,6 +782,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                     gatedDatabaseInspector,
                     mocksEditable,
                     captureRulesEditable,
+                    featureFlagsEditable,
                 )
         } else {
             serverEngine.reconfigure(
@@ -787,6 +793,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 redactionPolicy = config.redactionPolicy,
                 mocksEditable = mocksEditable,
                 captureRulesEditable = captureRulesEditable,
+                featureFlagsEditable = featureFlagsEditable,
                 preferencesEditable = config.editingCapabilities.preferences,
                 databaseEditable = config.editingCapabilities.database,
                 filesEditable = config.editingCapabilities.files,
@@ -804,6 +811,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
         gatedDatabaseInspector: AndroidDatabaseInspector?,
         mocksEditable: Boolean,
         captureRulesEditable: Boolean,
+        featureFlagsEditable: Boolean,
     ): KtorLocalServerEngine =
         KtorLocalServerEngine(
             sessionAuthority = sessionAuthority,
@@ -824,6 +832,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             pushStore = pushStore,
             stateRegistry = stateRegistry,
             featureFlags = featureFlags,
+            featureFlagsEditable = featureFlagsEditable,
             mockEngine = mockEngineInstance,
             mocksEditable = mocksEditable,
             captureRules = captureRuleEngineInstance,
@@ -1050,6 +1059,11 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
 
     override fun openInspector(context: Context): InspectorOpenResult {
         val intent = createInspectorIntent(context) ?: return InspectorOpenResult.NotInitialized
+        // A host that never starts the browser server still gets ANR detection once it opens the
+        // on-device inspector. start() is idempotent, so this composes with the startBrowser path.
+        if (activeConfig?.crashPolicy?.anrWatchdogEnabled == true && categoryEnabled(CaptureCategory.CRASHES)) {
+            anrWatchdog.start()
+        }
         return runCatching { context.startActivity(intent) }
             .fold(
                 onSuccess = { InspectorOpenResult.Opened },
@@ -1278,7 +1292,10 @@ private fun DevConsoleConfig.toInspectorBrowserUi(
     bindAddressChanged: Boolean,
 ): InspectorBrowserUi =
     InspectorBrowserUi(
-        binding = browserConfig.binding.name,
+        // The mode the server actually bound to, not the (not-yet-consumed) browserConfig.binding
+        // declaration -- so the "LAN MODE — UNENCRYPTED" banner matches reality. Falls back to the
+        // configured declaration only before a server has started.
+        binding = endpoint?.bindingMode?.name ?: browserConfig.binding.name,
         endpoint = endpoint?.let { "${it.host}:${it.port}" },
         principals = principals.map { it.toInspectorPrincipalUi() },
         sessionCodeUrl = sessionCode?.browserUrl,

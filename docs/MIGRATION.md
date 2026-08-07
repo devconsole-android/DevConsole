@@ -2,7 +2,7 @@
 
 ## From the original DevConsole integration
 
-1. Apply `io.devconsole.android` to the Android application module.
+1. Apply the `io.github.devconsole-android` Gradle plugin to the Android application module.
 2. Depend on `:sdk:full` only in explicitly allowlisted debug/internal variants and on `:sdk:noop` in every protected variant.
 3. Call `DevConsole.initialize(application)` once during application startup.
 4. Start the server with `DevConsole.startBrowser()` (or Java's `startBrowserAsync()`), inspect the typed result, and stop it with `DevConsole.stop()` when the debug session ends.

@@ -128,6 +128,48 @@ class SocketRecorderTest {
     }
 
     @Test
+    fun `onCreated after onOpen keeps OPEN state and openedAtEpochMs with no duplicate CREATED event`() {
+        var time = 0L
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { ++time })
+
+        recorder.onOpen("connection", "wss://api.test/socket")
+        val openedAt = store.connection("connection")!!.openedAtEpochMs
+
+        // The documented dual-wiring scenario: a second onCreated (e.g. a later wrap() call)
+        // on the same connection id must not regress it back to CREATED.
+        recorder.onCreated("connection", "wss://api.test/socket")
+
+        val connection = store.connection("connection")!!
+        assertEquals(SocketConnectionState.OPEN, connection.state)
+        assertEquals(openedAt, connection.openedAtEpochMs)
+        assertEquals(
+            listOf(SocketLifecycleType.CREATED, SocketLifecycleType.OPENED),
+            store.lifecycleEvents("connection").map(SocketLifecycleEvent::type),
+        )
+    }
+
+    @Test
+    fun `redacts the MQTT topic embedded in an application-mqtt content type`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+        recorder.onOpen("connection", "tcp://broker.test:1883")
+
+        val contentType = MqttFrameMetadata.format("devices/Bearer socket-secret/status", qos = 1, retained = true)
+        recorder.onMessage("connection", SocketDirection.RECEIVED, "payload", contentType)
+
+        val storedContentType =
+            store
+                .connection("connection")!!
+                .messages
+                .single()
+                .contentType
+        assertFalse(storedContentType!!.contains("socket-secret"))
+        assertEquals(1, MqttFrameMetadata.qos(storedContentType))
+        assertEquals(true, MqttFrameMetadata.retained(storedContentType))
+    }
+
+    @Test
     fun `a throwing protocol gate still records -- fail-open`() {
         val store = InMemorySocketStore()
         val recorder =

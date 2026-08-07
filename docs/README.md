@@ -38,6 +38,9 @@
 - [Security and redaction](SECURITY_AND_REDACTION.md)
 - [Vulnerability reporting](../SECURITY.md)
 
+**Design**
+- [Dashboard design spec](DESIGN_SPEC.md) — UI tokens, components, constraints, and all screens
+
 **Reference**
 - [Protocol reference](PROTOCOL_REFERENCE.md) — the embedded server's REST/WebSocket wire protocol
 - API reference is generated from source via Dokka, not hand-written (hand-written prose would
