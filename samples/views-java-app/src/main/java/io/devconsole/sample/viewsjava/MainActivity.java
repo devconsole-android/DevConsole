@@ -271,7 +271,7 @@ public final class MainActivity extends Activity {
 
     private void startServer() {
         // LAN so the connect URL carries the device's own address and a browser on the same network
-        // can reach it without `adb reverse`. That exposure is real: the dashboard speaks plaintext
+        // can reach it without `adb forward`. That exposure is real: the dashboard speaks plaintext
         // HTTP, so anyone who can see these packets reads every captured header, token and body.
         // Swap to LOOPBACK below on any network you do not control. See docs/THREAT_MODEL.md.
         StartRequest startRequest = new StartRequest(BindingMode.LAN, new kotlin.ranges.IntRange(8080, 8099));

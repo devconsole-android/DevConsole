@@ -77,6 +77,6 @@ panel.bind(
 
 5. Tap Start — the panel now shows the bound address (e.g. `DevConsole server is running at 192.168.0.15:8080`)
    — then open that address (or the connect URL with its `#code=` fragment) in a browser on the same machine (or
-   `adb reverse tcp:8080 tcp:8080` first if the device isn't local).
+   `adb forward tcp:8080 tcp:8080` first if the device isn't local).
 
 Every SDK entry point used above is also directly Java-callable — see [GETTING_STARTED_XML_JAVA.md](GETTING_STARTED_XML_JAVA.md) if your project is Java rather than Kotlin. [`samples/foundation-app`](../samples/foundation-app/src/main/kotlin/io/devconsole/sample/MainActivity.kt) exercises every capability (network + WebSocket capture, mocks, push, a feature flag, a state provider) using only stock Android widgets, no UI toolkit dependency at all. See [NETWORK_INSPECTOR.md](NETWORK_INSPECTOR.md), [WEBSOCKET_INSPECTOR.md](WEBSOCKET_INSPECTOR.md), [PUSH.md](PUSH.md), [COMPOSER_AND_MOCKS.md](COMPOSER_AND_MOCKS.md), and [STATE_AND_FLAGS.md](STATE_AND_FLAGS.md) for wiring the actual inspectors once the panel is working.

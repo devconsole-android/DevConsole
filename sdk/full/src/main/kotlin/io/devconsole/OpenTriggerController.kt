@@ -92,11 +92,9 @@ internal class OpenTriggerController(
 
     private fun currentResumed(): Activity? {
         while (resumedActivities.isNotEmpty()) {
-            val activity = resumedActivities.last().get() ?: run {
-                resumedActivities.removeLast()
-                null
-            }
+            val activity = resumedActivities.last().get()
             if (activity != null) return activity
+            resumedActivities.removeLast()
         }
         return null
     }

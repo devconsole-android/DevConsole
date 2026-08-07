@@ -2,7 +2,7 @@
 
 **Can I connect from another machine on the same network?** Yes — pass
 `BindingMode.LAN` to `startBrowser(...)` and open the connect URL (or scan the QR code) from
-another device on the same network. Loopback + `adb reverse` is still the safer default; only use
+another device on the same network. Loopback + `adb forward` is still the safer default; only use
 LAN mode on a network you trust, since the dashboard speaks plaintext HTTP. See
 [LAN_PERMISSION_AND_TROUBLESHOOTING.md](LAN_PERMISSION_AND_TROUBLESHOOTING.md) and
 [THREAT_MODEL.md](THREAT_MODEL.md).

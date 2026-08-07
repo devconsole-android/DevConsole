@@ -1,4 +1,19 @@
+<div align="center">
+
 # DevConsole
+
+**Debug your Android app from inside the app — or from any browser.**
+
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.devconsole-android/devconsole)](https://central.sonatype.com/artifact/io.github.devconsole-android/devconsole)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![minSdk 24](https://img.shields.io/badge/minSdk-24-3DDC84?logo=android&logoColor=white)](#compatibility)
+[![CI](https://github.com/devconsole-android/DevConsole/actions/workflows/verify.yml/badge.svg)](https://github.com/devconsole-android/DevConsole/actions/workflows/verify.yml)
+
+<br />
+
+<img src="docs/images/inspector-android.png" width="236" alt="In-app inspector — live traffic on the device" />&nbsp;&nbsp;<img src="docs/images/dashboard-web.png" width="614" alt="Web dashboard — overview with traffic health and signals" />
+
+</div>
 
 An on-device developer console for Android. Open a full inspector — network traffic, crashes,
 storage, feature flags, exports — right inside your **debug** app, by shake, floating button, or
@@ -51,8 +66,9 @@ SharedPreferences, SQLite, and files (read-only by default); wire your HTTP clie
 MQTT traffic appears too.
 
 **3. Want a bigger screen? Start the browser dashboard** — the same data live-tailing in any
-browser, plus mock-rule editing and one-click HAR / Postman / bug-report exports. Make sure your
-manifest has `INTERNET` (most apps already do), then:
+browser, plus mock-rule editing and one-click HAR / Postman / bug-report exports. The easiest way:
+tap **Start server** on the inspector's **More** screen, which then shows the connect URL and a QR
+code. Or from code (either way, make sure your manifest has `INTERNET` — most apps already do):
 
 ```kotlin
 lifecycleScope.launch { // startBrowser is a suspend function; the server never starts on its own
@@ -63,7 +79,7 @@ lifecycleScope.launch { // startBrowser is a suspend function; the server never 
 ```
 
 ```bash
-adb reverse tcp:8080 tcp:8080   # use the port from the DevConsole log line
+adb forward tcp:8080 tcp:8080   # use the port from the DevConsole log line
 ```
 
 then open the **whole URL** — the `#code=` fragment is the credential.
@@ -72,7 +88,7 @@ then open the **whole URL** — the `#code=` fragment is the credential.
 
 | Area | What it does |
 |---|---|
-| **In-app inspector** | `DevConsole.open(context)` shows every inspector below as an on-device screen (included with `devconsole`), plus a QR code for pairing the browser. Opens by shake (adjustable intensity) or draggable floating button via the opt-in `DevConsoleConfig.openTriggers` flags. |
+| **In-app inspector** | `DevConsole.open(context)` shows every inspector below as an on-device screen (included with `devconsole`), plus a QR code for pairing the browser. Opens by shake (adjustable intensity) or draggable floating button via the opt-in `DevConsoleConfig.openTriggers` flags. Its More screen can also start and stop the dashboard server. |
 | **Network inspector** | Every HTTP call with headers, bodies, and a DNS/TCP/TLS/send/wait/receive timing bar. Live-tails as traffic happens. |
 | **WebSocket & MQTT inspectors** | Connection lifecycles and every frame, inbound and outbound. MQTT rides the Eclipse Paho adapter. |
 | **Mock rules** | Serve canned responses for matching requests (OkHttp), toggled from the dashboard, with deterministic priority matching. |
@@ -124,6 +140,13 @@ Java: `DevConsoleConfig.builder().openTriggers(OpenTriggers.builder().shakeToOpe
 
 ### Start and stop the dashboard server
 
+No code required: the inspector's **More** screen has Start/Stop buttons, and once running it
+shows the live connect URL — as text, a copy button, and a QR code to scan from another machine.
+
+<p align="center"><img src="docs/images/inspector-more-server.png" width="300" alt="More screen — server started from the device, showing the connect URL" /></p>
+
+From code:
+
 ```kotlin
 // Optional — auto-init already ran on debuggable builds. Call it yourself to customize:
 DevConsole.initialize(application, DevConsoleConfig.default())
@@ -170,7 +193,7 @@ rather than assuming 8080.
 
 ### Connect from your browser
 
-- **Loopback (default):** run `adb reverse tcp:<port> tcp:<port>`, then open the connect URL.
+- **Loopback (default):** run `adb forward tcp:<port> tcp:<port>`, then open the connect URL.
 - **LAN:** pass `BindingMode.LAN` and open the URL from any device on the same network — read
   [the threat model](docs/THREAT_MODEL.md) first; the dashboard speaks plaintext HTTP. A LAN start
   that finds no eligible network interface returns `StartResult.NoEligibleNetwork` — it never
@@ -240,7 +263,7 @@ The design keeps that safe by default, but you should know exactly where the edg
 
 - **The dashboard speaks plaintext HTTP.** There is no TLS. In LAN mode, anyone who can observe
   your network packets can read everything the dashboard shows — headers, tokens, bodies, exports.
-  Loopback + `adb reverse` is the default for this reason; LAN is always an explicit opt-in.
+  Loopback + `adb forward` is the default for this reason; LAN is always an explicit opt-in.
 - **The connect URL is a credential.** Possession of a live `#code=` fragment creates a session —
   no on-device approval step. Codes are single-use with a five-minute TTL; sessions last 30
   minutes. Treat the URL like a password; the device's More screen can revoke sessions.

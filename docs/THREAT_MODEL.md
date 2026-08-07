@@ -10,7 +10,7 @@ The dashboard is served over **plaintext HTTP**. There is no TLS anywhere in thi
 the bearer token, every captured request and response header, every WebSocket frame, every push
 payload, and every HAR export cross the network unencrypted. Anyone in a position to observe that
 traffic — another device on the same Wi-Fi, a compromised router, a guest network operator, someone
-running a packet capture in a café — reads all of it. **Loopback plus `adb reverse` avoids this
+running a packet capture in a café — reads all of it. **Loopback plus `adb forward` avoids this
 entirely and should be your default.**
 
 ## Screenshots are unredactable by construction
@@ -100,7 +100,7 @@ Because of that, several design decisions in this feature are deliberately unfor
 None of this is a defect to be fixed later — a screenshot that could be selectively redacted wouldn't
 be a screenshot. If your app ever displays session tokens, unmasked PII, payment details, or anything
 else you would not want to leave the device unencrypted, either leave screenshot capture off, or only
-enable it on `BindingMode.LOOPBACK` + `adb reverse` where the capture never crosses a network at all —
+enable it on `BindingMode.LOOPBACK` + `adb forward` where the capture never crosses a network at all —
 the same recommendation this document makes for every other sensitive artifact this SDK can produce.
 
 ## What is protected, and against what
@@ -127,7 +127,7 @@ indefinitely — watching the code expire on the device tells you nothing about 
 already traded it in. Audit and revoke live sessions from the More screen or
 `DELETE /api/v1/auth/principals/{id}`. Because there is no approval step, treat the code's delivery
 channel as the entire security boundary -- SESSION_CODE only belongs where that channel is itself
-trusted (typically loopback + `adb reverse`, where the code never crosses a network at all). Also
+trusted (typically loopback + `adb forward`, where the code never crosses a network at all). Also
 count the clipboard among the places the code lands: copying the connect URL to paste it somewhere
 hands a complete credential to every app with clipboard access.
 
@@ -181,10 +181,10 @@ DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))
 ```
 
 ```bash
-adb reverse tcp:8080 tcp:8080   # use the port from the logged URL, not always 8080
+adb forward tcp:8080 tcp:8080   # use the port from the logged URL, not always 8080
 ```
 
-The server binds `127.0.0.1`, so nothing is reachable over the network at all. `adb reverse` tunnels
+The server binds `127.0.0.1`, so nothing is reachable over the network at all. `adb forward` tunnels
 the port over the USB/ADB connection. You lose cross-device connection; you gain the entire class of
 network attacks not applying.
 

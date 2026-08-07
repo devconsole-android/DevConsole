@@ -27,6 +27,19 @@ and everything else is a patch.
   inspector on a device shake (`ShakeIntensity` — `LIGHT`/`MEDIUM`/`FIRM` — sets how hard) or from a
   draggable floating button. Both default to off, and neither has any path to starting the embedded
   server — triggers only open the inspector UI.
+- **Start/Stop the server from the inspector's More screen.** A dedicated control card at the top
+  of More (the same Start/Stop pair the sample apps put on their home screens) now drives the real
+  server lifecycle: `sdk:full` wires `InspectorDataSource.setServerRunning` through to
+  `startBrowser`/`stop`. The card — like the hero CTA before it — only renders on builds that
+  actually wire the control.
+
+### Fixed
+
+- **Docs: the port-bridging command is `adb forward`, not `adb reverse`.** The server runs on the
+  device, so reaching it from a computer's browser needs a host-side listener
+  (`adb forward tcp:<port> tcp:<port>`); `adb reverse` binds on the device and collides with the
+  running server. Corrected across the README, docs, sample comments, and the dashboard's own
+  connect help.
 
 ## 0.1.0 — 2026-08-07
 

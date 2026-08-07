@@ -2824,14 +2824,14 @@
           icon: 'lock', iconTone: 'warn', title: 'Connect this browser', span: 2,
           // fieldsHtml (unlike `lede`) is inserted raw, not HTML-escaped — the only field on this
           // card that can carry the <code>/<strong> markup task E2 asks for (device path, the
-          // adb reverse command, and the #code= credential note) ahead of the actual connect
+          // adb forward command, and the #code= credential note) ahead of the actual connect
           // input, since cardHtml() always renders fieldsHtml before its own buttons/lede order
           // isn't ours to change (it's shared by every card-grid view, not scoped to Overview).
           fieldsHtml: `
             <p class="card-lede">This session is unauthenticated. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code that expires after five minutes. Scan the QR, or paste the code below.</p>
             <ul class="connect-steps">
               <li>The <code class="inline-code">#code=</code> fragment in that link is the credential — a bare <code class="inline-code">http://host:port/</code> address alone stays unauthenticated forever.</li>
-              <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb reverse tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
+              <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
               <li>Logcat deliberately never prints the code — read it from the device screen, not the log.</li>
             </ul>
             <div class="card-fields mt-12"><label class="field"><span>Session code</span><input id="connectCode" placeholder="e.g. 7K2QF9" maxlength="12" autocomplete="off"></label></div>`,

@@ -1013,7 +1013,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
    plain block and wraps exactly like a paragraph. Verified at 375px: see the E1 report. */
 .connect-steps li { position: relative; padding-left: 16px; }
 .connect-steps li::before { content: "\2192"; position: absolute; left: 0; top: 0; color: var(--signal); font-weight: 700; }
-/* Inline copyable command/credential fragments in connect copy (adb reverse, #code=, bare URLs) —
+/* Inline copyable command/credential fragments in connect copy (adb forward, #code=, bare URLs) —
    the terminal-panel equivalent of `kbd`, sized to sit inline in a sentence rather than a block. */
 .inline-code {
   font-family: var(--font-mono); font-size: 0.92em; color: var(--ink);

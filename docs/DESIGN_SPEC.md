@@ -421,7 +421,7 @@ and cross-surface consistency (web ↔ Android) — inside the tokens and constr
   wide content (tables, JSON/code, the crash dump) scrolls inside its own `overflow-x` container
   rather than pushing the page wide.
 - **Empty/first-run states were thin (E2)** — every list view's empty state now names the concrete
-  next step: the device's More screen, the `adb reverse tcp:8080 tcp:8080` command (with its caveat
+  next step: the device's More screen, the `adb forward tcp:8080 tcp:8080` command (with its caveat
   that 8080 is only the first port tried), and that the `#code=` fragment is the credential without
   which the page sits unauthenticated forever.
 - **Cross-surface parity was undecided** — resolved and documented in §4c, with a full 16-row table

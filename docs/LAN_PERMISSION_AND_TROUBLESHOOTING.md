@@ -53,7 +53,7 @@ The server binds `127.0.0.1` on the first free port in `8080..8099`. On a physic
 emulator that isn't already loopback-reachable from your machine, run:
 
 ```bash
-adb reverse tcp:8080 tcp:8080
+adb forward tcp:8080 tcp:8080
 ```
 
 then open the connect URL from `StartResult.Started.access.connectUrl` in a browser on the host
@@ -71,7 +71,7 @@ airplane mode, a VPN-only connection, or a cellular-only connection will all tri
 
 **Connect URL doesn't load** — for LAN mode, confirm the other device is actually on the same
 subnet/network (a guest Wi-Fi network with client isolation enabled will block this even though
-both devices show "connected"). For loopback mode, confirm `adb reverse` targets the same port the
+both devices show "connected"). For loopback mode, confirm `adb forward` targets the same port the
 SDK actually bound (`StartResult.Started.endpoint.port`), not a hardcoded `8080` — the SDK picks
 the first free port in the range, which may not be the first one.
 

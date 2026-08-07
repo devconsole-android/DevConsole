@@ -97,9 +97,9 @@ class KtorLocalServerEngineTest {
         }
 
     @Test
-    fun `content security policy connect-src follows the localhost alias under the adb reverse workflow`() =
+    fun `content security policy connect-src follows the localhost alias under the adb forward workflow`() =
         runBlocking {
-            // `adb reverse` forwards the host machine's http://localhost:<port> to the device's
+            // `adb forward` forwards the host machine's http://localhost:<port> to the device's
             // LOOPBACK bind address -- KtorLocalServerEngine wires `allowedHosts = setOf("localhost",
             // endpoint.host)` specifically to support that documented workflow. A browser sitting at
             // http://localhost:<port> has `location.host == "localhost:<port>"`, which is what

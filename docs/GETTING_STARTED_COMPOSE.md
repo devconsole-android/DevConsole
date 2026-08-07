@@ -85,6 +85,6 @@ setContent {
 
 5. Tap Start — the panel now shows the bound address (e.g. `DevConsole server is running at 192.168.0.15:8080`)
    — then open that address (or the connect URL from `StartResult.Started.access.connectUrl`) in a
-   browser on the same machine (or `adb reverse tcp:8080 tcp:8080` first if the device isn't local).
+   browser on the same machine (or `adb forward tcp:8080 tcp:8080` first if the device isn't local).
 
 The full working example — network and WebSocket capture, mocks, push simulation, a feature flag, and a state provider, one button per capability — is [`samples/compose-app`](../samples/compose-app/src/main/kotlin/io/devconsole/sample/compose/MainActivity.kt). See [NETWORK_INSPECTOR.md](NETWORK_INSPECTOR.md), [WEBSOCKET_INSPECTOR.md](WEBSOCKET_INSPECTOR.md), [COMPOSER_AND_MOCKS.md](COMPOSER_AND_MOCKS.md), [PUSH.md](PUSH.md), and [STATE_AND_FLAGS.md](STATE_AND_FLAGS.md) for how each piece works.
