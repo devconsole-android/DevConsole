@@ -21,6 +21,11 @@ dependencies {
 }
 ```
 
+*(The Gradle plugin is awaiting the Plugin Portal's one-time approval for newly published
+plugins. If the `id("io.github.devconsole-android")` line doesn't resolve yet, just omit it — the
+two dependencies work on their own; the plugin only adds automatic debug/release wiring and
+build-time enforcement of the split.)*
+
 **2. Make sure your manifest has `INTERNET`** (most apps already do):
 
 ```xml
