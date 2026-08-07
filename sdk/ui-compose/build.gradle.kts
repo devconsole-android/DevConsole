@@ -17,7 +17,7 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
     // FileProvider, for the Files screen's Share action (androidx.core.content.FileProvider).
-    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.core:core-ktx:1.19.0")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)

@@ -29,7 +29,7 @@ dependencies {
     // to be a declared dependency rather than one inherited by luck through ui-compose's Compose
     // graph. A manifest-referenced provider whose class goes missing fails in the host app at
     // instantiation, not here.
-    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.core:core-ktx:1.19.0")
     // OkHttp adapters stay on the umbrella: OkHttp (and Retrofit, which delegates to it) is the
     // integration the overwhelming majority of hosts need, so it belongs in the two-coordinate story.
     api(project(":sdk:network-okhttp"))
