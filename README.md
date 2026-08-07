@@ -28,12 +28,12 @@ code ever ships to production, and the Gradle plugin fails the build if it would
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.devconsole-android") version "0.1.0"
+    id("io.github.devconsole-android") version "0.2.0"
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:0.1.0")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:0.1.0")
+    debugImplementation("io.github.devconsole-android:devconsole:0.2.0")
+    releaseImplementation("io.github.devconsole-android:devconsole-noop:0.2.0")
 }
 ```
 

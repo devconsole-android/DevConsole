@@ -37,7 +37,7 @@ devConsole {
     protectedDependencyPaths.set(setOf(":sdk:full"))        // default; override for a differently-pathed module
     failBuildOnUnsafeVariant.set(true)                      // default; false downgrades to a warning
     autoWireDependencies.set(true)                          // default; false to declare coordinates yourself
-    sdkVersion.set("0.1.0-SNAPSHOT")                        // default; the plugin's own version
+    sdkVersion.set("0.2.0")                                 // default; the plugin's own version
 }
 ```
 
