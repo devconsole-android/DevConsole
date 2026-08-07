@@ -21,7 +21,7 @@ internal fun <T> uniqueKeys(
     val occurrences = HashMap<String, Int>()
     return items.map { item ->
         val base = baseKey(item)
-        val occurrence = occurrences.getOrDefault(base, 0)
+        val occurrence = occurrences[base] ?: 0 // Not Map.getOrDefault (API 24).
         occurrences[base] = occurrence + 1
         if (occurrence == 0) base else "$base#$occurrence"
     }

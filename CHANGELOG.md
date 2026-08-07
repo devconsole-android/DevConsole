@@ -9,17 +9,46 @@ Notable changes to the DevConsole SDK. Format loosely follows
 Until **1.0.0**, the public API may change in any release — that is the point of the pre-1.0 window,
 and breaking changes made now are cheaper than the ones made later.
 
-`sdk:api` carries a committed ABI checked on every build, along with `mocks`, `network`, `push`,
-`security`, `socket`, and `state`. Any change to those surfaces shows up as a failing `apiCheck` and
-must be accepted deliberately with `./gradlew apiDump`. The remaining Android library modules are
-not yet gated; see the comment on the `apiValidation` block in the root build file for why. (There
-was briefly a separate `sdk:plugin-api` module for a generic third-party plugin framework; it was
-removed before ever shipping — see Removed, below — so it never joined this list.)
+Since 0.3.0, every published `sdk/` module carries a committed ABI baseline
+(`sdk/<module>/api/<module>.api`) checked on every build. Any change to those surfaces shows up as
+a failing `apiCheck` and must be accepted deliberately with `./gradlew apiDump`. (There was briefly
+a separate `sdk:plugin-api` module for a generic third-party plugin framework; it was removed
+before ever shipping — see Removed, below — so it never joined this list.)
 
 From 1.0.0 onward: breaking changes to `sdk:api` require a major version, new API requires a minor,
 and everything else is a patch.
 
 ## Unreleased
+
+## 0.3.0 — 2026-08-08
+
+A compatibility-focused release: the SDK and Gradle plugin now build against a broadly adopted
+toolchain instead of the newest one, and the runtime floor drops to Android 6.0.
+
+### Breaking
+
+- The Java-friendly async facade methods (`DevConsole.startBrowserAsync`, `DevConsole.stopAsync`,
+  `DevConsole.captureScreenshotAsync`) now take `io.devconsole.DevConsoleCallback<T>` instead of
+  `java.util.function.Consumer<T>`. `Consumer` is API 24+ and would have required core-library
+  desugaring at the new `minSdk 23`; `DevConsoleCallback` is a plain `fun interface`, so Java
+  callers keep passing the same lambda shape (`result -> ...`) but must recompile.
+
+### Changed
+
+- `minSdk` lowered from 24 to 23. All API 24+ platform calls were replaced with minSdk-23-safe
+  equivalents (`Map.putIfAbsent`/`getOrDefault`, `Comparator.reversed`,
+  `AtomicLong.accumulateAndGet`, `java.util.Base64`, `java.time` in the HAR exporter) — no
+  core-library desugaring required.
+- Toolchain moved to a broadly available matrix: Gradle 8.14.3, AGP 8.13.0, Kotlin 2.2.20,
+  `compileSdk`/`targetSdk` 35, OkHttp 4.12.0, Ktor 3.0.3, coroutines 1.9.0, Room 2.7.1,
+  Compose BOM 2024.10.01.
+- The published Gradle plugin resolves project-dependency paths reflectively so one artifact works
+  on Gradle 8.9 through 9.x hosts (`ProjectDependency.getPath()` on 8.11+, with a
+  `getDependencyProject()` fallback for 8.9/8.10). Note: the plugin's functional-test rig now runs
+  on Gradle 8.14.3 + AGP 8.13.0, so the Gradle 9 / AGP 9 consumer path is covered by the
+  reflection design rather than an automated TestKit leg.
+- Binary-compatibility validation now gates every published `sdk/` module (previously only the
+  Kotlin/JVM modules); each module's ABI baseline is committed under `sdk/<module>/api/`.
 
 ## 0.2.0 — 2026-08-07
 

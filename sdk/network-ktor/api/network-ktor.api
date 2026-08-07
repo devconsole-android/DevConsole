@@ -1,0 +1,10 @@
+public final class io/devconsole/network/ktor/DevConsoleKtorClientConfig {
+	public fun <init> ()V
+	public final fun getRecorder ()Lio/devconsole/network/NetworkTransactionRecorder;
+	public final fun setRecorder (Lio/devconsole/network/NetworkTransactionRecorder;)V
+}
+
+public final class io/devconsole/network/ktor/DevConsoleKtorClientPluginKt {
+	public static final fun getDevConsoleKtorClientPlugin ()Lio/ktor/client/plugins/api/ClientPlugin;
+}
+

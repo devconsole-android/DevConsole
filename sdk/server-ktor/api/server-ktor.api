@@ -1,0 +1,118 @@
+public final class io/devconsole/server/ktor/DevConsoleKtorModuleKt {
+	public static final fun devConsoleModule (Lio/ktor/server/application/Application;Lio/devconsole/server/api/SessionAuthority;Lio/devconsole/server/api/SessionCodeAuthority;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun devConsoleModule$default (Lio/ktor/server/application/Application;Lio/devconsole/server/api/SessionAuthority;Lio/devconsole/server/api/SessionCodeAuthority;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+}
+
+public final class io/devconsole/server/ktor/DevConsoleModuleConfig {
+	public fun <init> ()V
+	public final fun getAllowedHosts ()Ljava/util/Set;
+	public final fun getAnnotations ()Lio/devconsole/timeline/TimelineAnnotations;
+	public final fun getAttachmentMetadataReader ()Lkotlin/jvm/functions/Function2;
+	public final fun getAttachmentReader ()Lkotlin/jvm/functions/Function2;
+	public final fun getBoundEndpoint ()Lkotlin/jvm/functions/Function0;
+	public final fun getCaptureRules ()Lio/devconsole/api/CaptureRuleEngine;
+	public final fun getCaptureRulesEditable ()Z
+	public final fun getCommandAuditLog ()Lio/devconsole/server/api/CommandAuditLog;
+	public final fun getComposerAllowedHosts ()Ljava/util/Set;
+	public final fun getComposerCollections ()Lio/devconsole/composer/ComposerCollectionStore;
+	public final fun getComposerEnabled ()Z
+	public final fun getComposerExecutor ()Lio/devconsole/composer/ComposerExecutor;
+	public final fun getCurrentSessionId ()Lkotlin/jvm/functions/Function0;
+	public final fun getDatabaseEditable ()Z
+	public final fun getDatabaseInspector ()Lio/devconsole/server/api/DatabaseInspector;
+	public final fun getEvidenceStore ()Lio/devconsole/storage/api/EvidenceStore;
+	public final fun getExportDirectory ()Ljava/io/File;
+	public final fun getFeatureFlags ()Lio/devconsole/state/SessionFeatureFlags;
+	public final fun getFeatureFlagsEditable ()Z
+	public final fun getFileInspector ()Lio/devconsole/server/api/FileInspector;
+	public final fun getFilesEditable ()Z
+	public final fun getMetadata ()Lio/devconsole/server/api/ServerMetadata;
+	public final fun getMockEngine ()Lio/devconsole/mocks/MockEngine;
+	public final fun getMocksEditable ()Z
+	public final fun getNetworkTransactions ()Lio/devconsole/network/NetworkTransactionStore;
+	public final fun getPreferencesEditable ()Z
+	public final fun getPreferencesInspector ()Lio/devconsole/server/api/PreferencesInspector;
+	public final fun getPushSimulator ()Lio/devconsole/push/PushSimulator;
+	public final fun getPushStore ()Lio/devconsole/push/PushStore;
+	public final fun getRedactionPolicy ()Lio/devconsole/security/RedactionPolicy;
+	public final fun getRetainedCaptures ()Lio/devconsole/storage/api/RetainedCaptureQuery;
+	public final fun getScreenshotCapture ()Lkotlin/jvm/functions/Function1;
+	public final fun getSdkHealth ()Lkotlin/jvm/functions/Function0;
+	public final fun getSessionSnapshotProvider ()Lkotlin/jvm/functions/Function1;
+	public final fun getSessionsProvider ()Lkotlin/jvm/functions/Function1;
+	public final fun getSocketStore ()Lio/devconsole/socket/SocketStore;
+	public final fun getStateMutationsEnabled ()Z
+	public final fun getStateRegistry ()Lio/devconsole/state/StateRegistry;
+	public final fun getStreamHub ()Lio/devconsole/server/ktor/EventStreamHub;
+	public final fun getTimeline ()Lio/devconsole/timeline/Timeline;
+	public final fun setAllowedHosts (Ljava/util/Set;)V
+	public final fun setAnnotations (Lio/devconsole/timeline/TimelineAnnotations;)V
+	public final fun setAttachmentMetadataReader (Lkotlin/jvm/functions/Function2;)V
+	public final fun setAttachmentReader (Lkotlin/jvm/functions/Function2;)V
+	public final fun setBoundEndpoint (Lkotlin/jvm/functions/Function0;)V
+	public final fun setCaptureRules (Lio/devconsole/api/CaptureRuleEngine;)V
+	public final fun setCaptureRulesEditable (Z)V
+	public final fun setCommandAuditLog (Lio/devconsole/server/api/CommandAuditLog;)V
+	public final fun setComposerAllowedHosts (Ljava/util/Set;)V
+	public final fun setComposerCollections (Lio/devconsole/composer/ComposerCollectionStore;)V
+	public final fun setComposerEnabled (Z)V
+	public final fun setComposerExecutor (Lio/devconsole/composer/ComposerExecutor;)V
+	public final fun setCurrentSessionId (Lkotlin/jvm/functions/Function0;)V
+	public final fun setDatabaseEditable (Z)V
+	public final fun setDatabaseInspector (Lio/devconsole/server/api/DatabaseInspector;)V
+	public final fun setEvidenceStore (Lio/devconsole/storage/api/EvidenceStore;)V
+	public final fun setExportDirectory (Ljava/io/File;)V
+	public final fun setFeatureFlags (Lio/devconsole/state/SessionFeatureFlags;)V
+	public final fun setFeatureFlagsEditable (Z)V
+	public final fun setFileInspector (Lio/devconsole/server/api/FileInspector;)V
+	public final fun setFilesEditable (Z)V
+	public final fun setMetadata (Lio/devconsole/server/api/ServerMetadata;)V
+	public final fun setMockEngine (Lio/devconsole/mocks/MockEngine;)V
+	public final fun setMocksEditable (Z)V
+	public final fun setNetworkTransactions (Lio/devconsole/network/NetworkTransactionStore;)V
+	public final fun setPreferencesEditable (Z)V
+	public final fun setPreferencesInspector (Lio/devconsole/server/api/PreferencesInspector;)V
+	public final fun setPushSimulator (Lio/devconsole/push/PushSimulator;)V
+	public final fun setPushStore (Lio/devconsole/push/PushStore;)V
+	public final fun setRedactionPolicy (Lio/devconsole/security/RedactionPolicy;)V
+	public final fun setRetainedCaptures (Lio/devconsole/storage/api/RetainedCaptureQuery;)V
+	public final fun setScreenshotCapture (Lkotlin/jvm/functions/Function1;)V
+	public final fun setSdkHealth (Lkotlin/jvm/functions/Function0;)V
+	public final fun setSessionSnapshotProvider (Lkotlin/jvm/functions/Function1;)V
+	public final fun setSessionsProvider (Lkotlin/jvm/functions/Function1;)V
+	public final fun setSocketStore (Lio/devconsole/socket/SocketStore;)V
+	public final fun setStateMutationsEnabled (Z)V
+	public final fun setStateRegistry (Lio/devconsole/state/StateRegistry;)V
+	public final fun setStreamHub (Lio/devconsole/server/ktor/EventStreamHub;)V
+	public final fun setTimeline (Lio/devconsole/timeline/Timeline;)V
+}
+
+public final class io/devconsole/server/ktor/EventStreamHub {
+	public static final field Companion Lio/devconsole/server/ktor/EventStreamHub$Companion;
+	public static final field DEFAULT_CAPACITY I
+	public fun <init> ()V
+	public fun <init> (I)V
+	public synthetic fun <init> (IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCurrentSequence ()J
+	public final fun getEvents ()Lkotlinx/coroutines/flow/SharedFlow;
+	public final fun publish (Lio/devconsole/api/EventEnvelope;)Z
+}
+
+public final class io/devconsole/server/ktor/EventStreamHub$Companion {
+}
+
+public final class io/devconsole/server/ktor/KtorLocalServerEngine : io/devconsole/server/api/LocalServerEngine {
+	public fun <init> ()V
+	public fun <init> (Lio/devconsole/server/api/SessionAuthority;Lio/devconsole/server/api/SessionCodeAuthority;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lio/devconsole/network/NetworkTransactionStore;Lio/devconsole/socket/SocketStore;Lio/devconsole/push/PushStore;Lio/devconsole/state/StateRegistry;Lio/devconsole/state/SessionFeatureFlags;ZLio/devconsole/mocks/MockEngine;ZLio/devconsole/api/CaptureRuleEngine;ZLio/devconsole/server/api/PreferencesInspector;ZLio/devconsole/server/api/DatabaseInspector;ZLio/devconsole/server/api/FileInspector;ZLio/devconsole/timeline/Timeline;ZLjava/util/Set;ZLio/devconsole/security/RedactionPolicy;Lio/devconsole/push/PushSimulator;Lio/devconsole/server/api/CommandAuditLog;Lio/devconsole/timeline/TimelineAnnotations;Lio/devconsole/composer/ComposerCollectionStore;Lio/devconsole/composer/ComposerExecutor;Lio/devconsole/storage/api/EvidenceStore;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Lio/devconsole/server/api/SessionAuthority;Lio/devconsole/server/api/SessionCodeAuthority;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lio/devconsole/network/NetworkTransactionStore;Lio/devconsole/socket/SocketStore;Lio/devconsole/push/PushStore;Lio/devconsole/state/StateRegistry;Lio/devconsole/state/SessionFeatureFlags;ZLio/devconsole/mocks/MockEngine;ZLio/devconsole/api/CaptureRuleEngine;ZLio/devconsole/server/api/PreferencesInspector;ZLio/devconsole/server/api/DatabaseInspector;ZLio/devconsole/server/api/FileInspector;ZLio/devconsole/timeline/Timeline;ZLjava/util/Set;ZLio/devconsole/security/RedactionPolicy;Lio/devconsole/push/PushSimulator;Lio/devconsole/server/api/CommandAuditLog;Lio/devconsole/timeline/TimelineAnnotations;Lio/devconsole/composer/ComposerCollectionStore;Lio/devconsole/composer/ComposerExecutor;Lio/devconsole/storage/api/EvidenceStore;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun bindAddressChanged ()Z
+	public final fun getStreamHub ()Lio/devconsole/server/ktor/EventStreamHub;
+	public final fun reconfigure (Lio/devconsole/state/SessionFeatureFlags;ZLjava/util/Set;ZLio/devconsole/security/RedactionPolicy;ZZZZZZ)V
+	public static synthetic fun reconfigure$default (Lio/devconsole/server/ktor/KtorLocalServerEngine;Lio/devconsole/state/SessionFeatureFlags;ZLjava/util/Set;ZLio/devconsole/security/RedactionPolicy;ZZZZZZILjava/lang/Object;)V
+	public fun start (Lio/devconsole/server/api/StartRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun stop (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun withAttachmentMetadataReader (Lkotlin/jvm/functions/Function2;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
+	public final fun withAttachmentReader (Lkotlin/jvm/functions/Function2;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
+	public final fun withRetainedCaptures (Lio/devconsole/storage/api/RetainedCaptureQuery;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
+}
+

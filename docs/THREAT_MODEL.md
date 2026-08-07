@@ -50,7 +50,7 @@ Because of that, several design decisions in this feature are deliberately unfor
   flag is **re-checked a second time on the main thread, immediately before the draw/copy is issued,
   inside the same posted block**, closing that window. On API 26+, `PixelCopy.ERROR_SOURCE_NO_DATA`
   maps to `ScreenshotResult.SecureWindow`; any other `PixelCopy` error maps to a generic `Failed`, so a
-  secure-window rejection is never confused with an ordinary capture failure. On `minSdk`'s API 24–25
+  secure-window rejection is never confused with an ordinary capture failure. On `minSdk`'s API 23–25
   fallback — a hand-drawn `Canvas` against the decor view, since there is no `PixelCopy` overload for a
   `Window` that old — `FLAG_SECURE` is not enforced by the platform at all; this class's own re-check is
   the *only* protection on that path, and if the decor view's attachment state is ambiguous at draw time

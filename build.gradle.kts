@@ -10,13 +10,13 @@ plugins {
     alias(libs.plugins.vanniktech.maven.publish) apply false
 }
 
-// Every module under sdk/ is published to Maven, so every one should carry a committed ABI, and
-// only the sample apps are exempt here. In practice the binary-compatibility-validator only emits
-// dumps for the Kotlin/JVM modules: it detects targets via the Kotlin Gradle plugin, which AGP 9
-// no longer applies separately for Android libraries, so it skips them silently rather than
-// failing. That leaves 8 of 25 modules gated -- including, notably, not the `DevConsole` facade in
-// sdk:full. Removing a module from this list is therefore not enough to guarantee it is covered;
-// check that a matching sdk/<module>/api/<module>.api file actually exists.
+// Every module under sdk/ is published to Maven, so every one carries a committed ABI, and only the
+// sample apps are exempt here. The binary-compatibility-validator detects targets via the Kotlin
+// Gradle plugin; because the Android library/application convention plugins now apply
+// `org.jetbrains.kotlin.android` explicitly (AGP 8.x has no built-in Kotlin), bcv sees a Kotlin
+// target on every Android module and gates all of them -- including the `DevConsole` facade in
+// sdk:full and sdk:noop -- not just the Kotlin/JVM modules. Each gated module therefore has a
+// committed sdk/<module>/api/<module>.api baseline that `apiCheck` verifies against.
 apiValidation {
     ignoredProjects.addAll(subprojects.filter { it.path.startsWith(":samples:") }.map { it.name })
 }

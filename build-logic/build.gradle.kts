@@ -8,9 +8,17 @@ repositories {
     gradlePluginPortal()
 }
 
+// build-logic is compiled by Gradle 8.14.3's embedded Kotlin (~2.0), whose metadata reader predates
+// the 2.2 metadata now shipped by several plugin dependencies (vanniktech maven-publish, Dokka, AGP);
+// skip the version check so their (simple) DSL APIs can be referenced from the convention plugins.
+// This only affects how build-logic reads those plugins, not any shipped artifact.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions.freeCompilerArgs.add("-Xskip-metadata-version-check")
+}
+
 dependencies {
-    implementation("com.android.tools.build:gradle:9.3.0")
-    implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.10")
+    implementation("com.android.tools.build:gradle:8.13.0")
+    implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.20")
     implementation("org.jlleitschuh.gradle:ktlint-gradle:14.2.0")
     implementation("io.gitlab.arturbosch.detekt:detekt-gradle-plugin:1.23.8")
     // Matches the `dokka` version in gradle/libs.versions.toml. Applied by

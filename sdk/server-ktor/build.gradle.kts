@@ -23,11 +23,11 @@ dependencies {
     implementation(project(":sdk:state"))
     implementation(project(":sdk:export"))
     implementation(project(":sdk:storage-api"))
-    implementation("io.ktor:ktor-server-core:3.5.1")
-    implementation("io.ktor:ktor-server-cio:3.5.1")
-    implementation("io.ktor:ktor-server-websockets:3.5.1")
-    testImplementation("io.ktor:ktor-server-test-host:3.5.1")
-    testImplementation("io.ktor:ktor-client-websockets:3.5.1")
+    implementation("io.ktor:ktor-server-core:3.0.3")
+    implementation("io.ktor:ktor-server-cio:3.0.3")
+    implementation("io.ktor:ktor-server-websockets:3.0.3")
+    testImplementation("io.ktor:ktor-server-test-host:3.0.3")
+    testImplementation("io.ktor:ktor-client-websockets:3.0.3")
 }
 
 val dashboardAssetFiles: List<File> =

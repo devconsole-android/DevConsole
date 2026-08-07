@@ -86,6 +86,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.plugin
 import io.ktor.server.testing.runTestApplication
 import io.ktor.server.testing.testApplication
+import io.ktor.server.websocket.pingInterval
+import io.ktor.server.websocket.timeout
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import kotlinx.coroutines.test.runTest
@@ -2606,15 +2608,20 @@ class DevConsoleKtorModuleTest {
     @Test
     fun `websocket plugin is configured with a ping period and timeout so dead connections are reaped`() =
         testApplication {
-            application { devConsoleModule(SessionAuthority()) }
+            // ApplicationTestBuilder.application is internal, so the installed plugin can only be
+            // read from inside the module lambda itself, where the receiver is the real, public
+            // Application.
+            lateinit var webSockets: ServerWebSockets
+            application {
+                devConsoleModule(SessionAuthority())
+                webSockets = plugin(ServerWebSockets)
+            }
             // The plugin instance is only installed once the application has actually started;
             // issuing any request forces that startup.
             client.get("/health") { header(HttpHeaders.Host, "localhost") }
 
-            val webSockets = application.plugin(ServerWebSockets)
-
-            assertEquals(30_000L, webSockets.pingIntervalMillis)
-            assertEquals(60_000L, webSockets.timeoutMillis)
+            assertEquals(30_000L, webSockets.pingInterval?.inWholeMilliseconds)
+            assertEquals(60_000L, webSockets.timeout.inWholeMilliseconds)
         }
 
     @Test

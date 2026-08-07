@@ -395,7 +395,7 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
     }
 }
 
-private const val DEFAULT_SDK_VERSION = "0.2.0"
+private const val DEFAULT_SDK_VERSION = "0.3.0"
 private const val DEVCONSOLE_GROUP = "io.github.devconsole-android"
 
 /**
@@ -633,9 +633,28 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
         }
     }
 
+    // ProjectDependency.getPath() was added in Gradle 8.11; getDependencyProject() was deprecated in
+    // 8.11 and REMOVED in 9.0. Bind to neither at compile time so the published plugin works across
+    // the broadest consumer range (Gradle 8.9 -> 9.x): prefer getPath(), fall back to
+    // getDependencyProject().getPath() only when getPath() is absent (Gradle 8.9/8.10). Reflection
+    // targets the public interfaces (not the concrete impl class) so invoke() never trips over a
+    // package-private implementation type.
+    private fun ProjectDependency.projectPathCompat(): String {
+        ProjectDependency::class.java.methods.firstOrNull { it.name == "getPath" && it.parameterCount == 0 }
+            ?.let { return it.invoke(this) as String }
+        val getDependencyProject = runCatching { ProjectDependency::class.java.getMethod("getDependencyProject") }
+            .getOrNull()
+            ?: error("Neither ProjectDependency.getPath() nor getDependencyProject() exists on this Gradle version")
+        val dependencyProject = getDependencyProject.invoke(this)
+        return org.gradle.api.Project::class.java.getMethod("getPath").invoke(dependencyProject) as String
+    }
+
     private fun org.gradle.api.artifacts.Dependency.isDevConsole(protectedProjectPaths: Set<String>): Boolean =
         when (this) {
-            is ProjectDependency -> path.startsWith(":sdk:") || path in protectedProjectPaths
+            is ProjectDependency -> {
+                val path = projectPathCompat()
+                path.startsWith(":sdk:") || path in protectedProjectPaths
+            }
             // Only the core runtime coordinates count as "already declared" for the purpose of skipping
             // core auto-wire. Declaring only an add-on (devconsole-ui-compose / devconsole-ui-views /
             // devconsole-network-ktor) in the same group must NOT suppress wiring the core runtime.
@@ -656,7 +675,10 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
             val allDeps = (variantConfig?.dependencies.orEmpty() + implConfig?.dependencies.orEmpty())
             allDeps.mapNotNull { dep ->
                 when {
-                    dep is ProjectDependency && dep.path in protectedPaths -> "$variant -> ${dep.path}"
+                    dep is ProjectDependency -> {
+                        val path = dep.projectPathCompat()
+                        if (path in protectedPaths) "$variant -> $path" else null
+                    }
                     dep is org.gradle.api.artifacts.ExternalModuleDependency && dep.group == DEVCONSOLE_GROUP && dep.name == "devconsole" -> "$variant -> ${dep.group}:${dep.name}"
                     else -> null
                 }

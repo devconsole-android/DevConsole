@@ -1,0 +1,1677 @@
+public final class io/devconsole/ui/compose/ComposableSingletons$CollapsibleSectionKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$CollapsibleSectionKt;
+	public fun <init> ()V
+	public final fun getLambda$-1132852660$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$DevConsoleActivityKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$DevConsoleActivityKt;
+	public fun <init> ()V
+	public final fun getLambda$244810118$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$DevConsolePanelKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$DevConsolePanelKt;
+	public fun <init> ()V
+	public final fun getLambda$217145131$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$889180653$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorControlScreenKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorControlScreenKt;
+	public fun <init> ()V
+	public final fun getLambda$-1373757892$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-153603954$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-1946392255$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-320721125$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-63518038$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-703251647$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1476698320$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorDataScreenKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorDataScreenKt;
+	public fun <init> ()V
+	public final fun getLambda$-1044807204$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-677010572$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$477918812$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorDatabaseSectionKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorDatabaseSectionKt;
+	public fun <init> ()V
+	public final fun getLambda$-282003444$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-682765494$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorDesignSystemPreviewsKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorDesignSystemPreviewsKt;
+	public fun <init> ()V
+	public final fun getLambda$-1000694899$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-1502723395$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-1632587973$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-1653499697$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-1712236940$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-1721840425$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-1854085260$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-2009051545$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-2082092133$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-340653286$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-905408250$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$101096390$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$579827964$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorDetailHeaderKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorDetailHeaderKt;
+	public fun <init> ()V
+	public final fun getLambda$844457626$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorDetailPreviewsKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorDetailPreviewsKt;
+	public fun <init> ()V
+	public final fun getLambda$102583745$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1051213960$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$141092982$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$307009779$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$506757289$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$838729754$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$916258535$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorFilesSectionKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorFilesSectionKt;
+	public fun <init> ()V
+	public final fun getLambda$663131892$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorMockRuleEditorKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorMockRuleEditorKt;
+	public fun <init> ()V
+	public final fun getLambda$-1129187906$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$228882824$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorMoreScreenKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorMoreScreenKt;
+	public fun <init> ()V
+	public final fun getLambda$-1671241350$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-1807268647$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-996758428$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1129667334$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1180200415$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1347851092$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1403158116$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$272598894$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$538904397$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$636091227$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$908145821$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorNavComponentsKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorNavComponentsKt;
+	public fun <init> ()V
+	public final fun getLambda$1070396343$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObserveCrashesTabKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorObserveCrashesTabKt;
+	public fun <init> ()V
+	public final fun getLambda$-1421458169$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1866586438$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$208432142$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObservePreviewsKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorObservePreviewsKt;
+	public fun <init> ()V
+	public final fun getLambda$-1017166837$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-1550195010$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-1782394095$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-650102098$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-970086269$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-998201989$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1735444109$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$506389634$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$59331127$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$924899110$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObserveSignalsKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorObserveSignalsKt;
+	public fun <init> ()V
+	public final fun getLambda$-221440175$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-464977038$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-724470528$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-89809548$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1361372287$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$2068262215$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$2119314933$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$268215722$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$617080380$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObserveTrafficTabKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorObserveTrafficTabKt;
+	public fun <init> ()V
+	public final fun getLambda$-2007802131$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1510917611$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$2040262323$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+}
+
+public final class io/devconsole/ui/compose/DatabaseBrowserActions {
+	public static final field $stable I
+	public fun <init> (Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;)V
+	public final fun component1 ()Lkotlin/jvm/functions/Function1;
+	public final fun component2 ()Lkotlin/jvm/functions/Function2;
+	public final fun component3 ()Lkotlin/jvm/functions/Function2;
+	public final fun copy (Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;)Lio/devconsole/ui/compose/DatabaseBrowserActions;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/DatabaseBrowserActions;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Lio/devconsole/ui/compose/DatabaseBrowserActions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOnExecuteSql ()Lkotlin/jvm/functions/Function2;
+	public final fun getOnOpenDatabase ()Lkotlin/jvm/functions/Function1;
+	public final fun getOnOpenTable ()Lkotlin/jvm/functions/Function2;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/DevConsoleActivity : androidx/activity/ComponentActivity {
+	public static final field $stable I
+	public fun <init> ()V
+}
+
+public final class io/devconsole/ui/compose/DevConsoleComposeStatus {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/DevConsoleComposeStatus;
+	public final fun forState (Lio/devconsole/api/DevConsoleState;Lio/devconsole/api/BrowserEndpoint;)Ljava/lang/String;
+	public static synthetic fun forState$default (Lio/devconsole/ui/compose/DevConsoleComposeStatus;Lio/devconsole/api/DevConsoleState;Lio/devconsole/api/BrowserEndpoint;ILjava/lang/Object;)Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/DevConsoleInspectorBridge {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/DevConsoleInspectorBridge;
+	public final fun install (Lio/devconsole/ui/compose/InspectorDataSource;)V
+	public final fun reset ()V
+	public final fun source ()Lio/devconsole/ui/compose/InspectorDataSource;
+}
+
+public final class io/devconsole/ui/compose/DevConsolePanelKt {
+	public static final fun DevConsolePanel (Lio/devconsole/api/DevConsoleState;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Landroidx/compose/ui/Modifier;Lio/devconsole/api/BrowserEndpoint;Landroidx/compose/runtime/Composer;II)V
+	public static final fun DevConsoleStatusChip (Lio/devconsole/api/DevConsoleState;Landroidx/compose/ui/Modifier;Lio/devconsole/api/BrowserEndpoint;Landroidx/compose/runtime/Composer;II)V
+}
+
+public final class io/devconsole/ui/compose/DevConsoleWorkspaceKt {
+	public static final fun DevConsoleWorkspace (Landroidx/compose/runtime/Composer;I)V
+}
+
+public final class io/devconsole/ui/compose/FileBrowserActions {
+	public static final field $stable I
+	public fun <init> (Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;)V
+	public synthetic fun <init> (Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lkotlin/jvm/functions/Function2;
+	public final fun component2 ()Lkotlin/jvm/functions/Function2;
+	public final fun component3 ()Lkotlin/jvm/functions/Function0;
+	public final fun component4 ()Lkotlin/jvm/functions/Function2;
+	public final fun component5 ()Lkotlin/jvm/functions/Function2;
+	public final fun copy (Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;)Lio/devconsole/ui/compose/FileBrowserActions;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/FileBrowserActions;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Lio/devconsole/ui/compose/FileBrowserActions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOnClosePreview ()Lkotlin/jvm/functions/Function0;
+	public final fun getOnDelete ()Lkotlin/jvm/functions/Function2;
+	public final fun getOnOpenPath ()Lkotlin/jvm/functions/Function2;
+	public final fun getOnPreview ()Lkotlin/jvm/functions/Function2;
+	public final fun getOnShare ()Lkotlin/jvm/functions/Function2;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/ui/compose/InspectorAction {
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$CaptureScreenshot : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$CaptureScreenshot;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ClearTransactionSelection : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$ClearTransactionSelection;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$CloseFilePreview : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$CloseFilePreview;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ConsumeShareFile : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$ConsumeShareFile;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$DeleteCaptureRule : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$DeleteCaptureRule;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$DeleteCaptureRule;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$DeleteCaptureRule;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$DeleteFile : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$DeleteFile;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$DeleteFile;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$DeleteFile;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRelativePath ()Ljava/lang/String;
+	public final fun getRoot ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$DeleteMockRule : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$DeleteMockRule;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$DeleteMockRule;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$DeleteMockRule;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$DismissCommandResult : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$DismissCommandResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$DismissScreenshotResult : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$DismissScreenshotResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ExecuteComposer : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Lio/devconsole/ui/compose/InspectorComposerRequest;)V
+	public final fun component1 ()Lio/devconsole/ui/compose/InspectorComposerRequest;
+	public final fun copy (Lio/devconsole/ui/compose/InspectorComposerRequest;)Lio/devconsole/ui/compose/InspectorAction$ExecuteComposer;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$ExecuteComposer;Lio/devconsole/ui/compose/InspectorComposerRequest;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$ExecuteComposer;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRequest ()Lio/devconsole/ui/compose/InspectorComposerRequest;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ExecuteSql : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$ExecuteSql;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$ExecuteSql;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$ExecuteSql;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDatabase ()Ljava/lang/String;
+	public final fun getSql ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ExportHar : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$ExportHar;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ExportPostman : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$ExportPostman;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ExportSessionZip : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$ExportSessionZip;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$OpenDatabase : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$OpenDatabase;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$OpenDatabase;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$OpenDatabase;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDatabase ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$OpenFilePath : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$OpenFilePath;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$OpenFilePath;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$OpenFilePath;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRelativePath ()Ljava/lang/String;
+	public final fun getRoot ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$OpenTable : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$OpenTable;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$OpenTable;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$OpenTable;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDatabase ()Ljava/lang/String;
+	public final fun getTable ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$PreviewFile : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$PreviewFile;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$PreviewFile;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$PreviewFile;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRelativePath ()Ljava/lang/String;
+	public final fun getRoot ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$Refresh : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$Refresh;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$RemovePreference : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$RemovePreference;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$RemovePreference;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$RemovePreference;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFile ()Ljava/lang/String;
+	public final fun getKey ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$RevokePrincipal : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$RevokePrincipal;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$RevokePrincipal;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$RevokePrincipal;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$SelectObserveTab : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Lio/devconsole/ui/compose/ObserveTab;)V
+	public final fun component1 ()Lio/devconsole/ui/compose/ObserveTab;
+	public final fun copy (Lio/devconsole/ui/compose/ObserveTab;)Lio/devconsole/ui/compose/InspectorAction$SelectObserveTab;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$SelectObserveTab;Lio/devconsole/ui/compose/ObserveTab;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$SelectObserveTab;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getTab ()Lio/devconsole/ui/compose/ObserveTab;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$SelectSession : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$SelectSession;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$SelectSession;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$SelectSession;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$SelectTransactions : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/util/Set;)V
+	public final fun component1 ()Ljava/util/Set;
+	public final fun copy (Ljava/util/Set;)Lio/devconsole/ui/compose/InspectorAction$SelectTransactions;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$SelectTransactions;Ljava/util/Set;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$SelectTransactions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getIds ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$SetCaptureRuleEnabled : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/lang/String;Z)Lio/devconsole/ui/compose/InspectorAction$SetCaptureRuleEnabled;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$SetCaptureRuleEnabled;Ljava/lang/String;ZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$SetCaptureRuleEnabled;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnabled ()Z
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$SetFeatureFlag : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$SetFeatureFlag;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$SetFeatureFlag;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$SetFeatureFlag;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getKey ()Ljava/lang/String;
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$SetMockRuleEnabled : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/lang/String;Z)Lio/devconsole/ui/compose/InspectorAction$SetMockRuleEnabled;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$SetMockRuleEnabled;Ljava/lang/String;ZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$SetMockRuleEnabled;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnabled ()Z
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$SetMocksEnabled : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Z)V
+	public final fun component1 ()Z
+	public final fun copy (Z)Lio/devconsole/ui/compose/InspectorAction$SetMocksEnabled;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$SetMocksEnabled;ZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$SetMocksEnabled;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnabled ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$SetPreference : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$SetPreference;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$SetPreference;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$SetPreference;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFile ()Ljava/lang/String;
+	public final fun getKey ()Ljava/lang/String;
+	public final fun getType ()Ljava/lang/String;
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$SetServerRunning : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Z)V
+	public final fun component1 ()Z
+	public final fun copy (Z)Lio/devconsole/ui/compose/InspectorAction$SetServerRunning;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$SetServerRunning;ZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$SetServerRunning;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRunning ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ShareFile : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$ShareFile;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$ShareFile;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$ShareFile;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRelativePath ()Ljava/lang/String;
+	public final fun getRoot ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ToggleCrashFlag : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$ToggleCrashFlag;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$ToggleCrashFlag;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$ToggleCrashFlag;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ToggleTransactionFlag : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$ToggleTransactionFlag;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$ToggleTransactionFlag;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$ToggleTransactionFlag;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ToggleTransactionSelection : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorAction$ToggleTransactionSelection;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$ToggleTransactionSelection;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$ToggleTransactionSelection;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$UpsertCaptureRule : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Lio/devconsole/ui/compose/InspectorCaptureRuleUi;)V
+	public final fun component1 ()Lio/devconsole/ui/compose/InspectorCaptureRuleUi;
+	public final fun copy (Lio/devconsole/ui/compose/InspectorCaptureRuleUi;)Lio/devconsole/ui/compose/InspectorAction$UpsertCaptureRule;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$UpsertCaptureRule;Lio/devconsole/ui/compose/InspectorCaptureRuleUi;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$UpsertCaptureRule;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRule ()Lio/devconsole/ui/compose/InspectorCaptureRuleUi;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$UpsertMockRule : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Lio/devconsole/ui/compose/InspectorMockRuleUi;)V
+	public final fun component1 ()Lio/devconsole/ui/compose/InspectorMockRuleUi;
+	public final fun copy (Lio/devconsole/ui/compose/InspectorMockRuleUi;)Lio/devconsole/ui/compose/InspectorAction$UpsertMockRule;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$UpsertMockRule;Lio/devconsole/ui/compose/InspectorMockRuleUi;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$UpsertMockRule;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRule ()Lio/devconsole/ui/compose/InspectorMockRuleUi;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorBodyKind : java/lang/Enum {
+	public static final field ABSENT Lio/devconsole/ui/compose/InspectorBodyKind;
+	public static final field BINARY Lio/devconsole/ui/compose/InspectorBodyKind;
+	public static final field TEXT Lio/devconsole/ui/compose/InspectorBodyKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorBodyKind;
+	public static fun values ()[Lio/devconsole/ui/compose/InspectorBodyKind;
+}
+
+public final class io/devconsole/ui/compose/InspectorBreadcrumbUi {
+	public static final field $stable I
+	public fun <init> (JLjava/lang/String;Ljava/lang/String;ILjava/lang/String;)V
+	public final fun component1 ()J
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()I
+	public final fun component5 ()Ljava/lang/String;
+	public final fun copy (JLjava/lang/String;Ljava/lang/String;ILjava/lang/String;)Lio/devconsole/ui/compose/InspectorBreadcrumbUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorBreadcrumbUi;JLjava/lang/String;Ljava/lang/String;ILjava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorBreadcrumbUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPlugin ()Ljava/lang/String;
+	public final fun getSeverity ()I
+	public final fun getSummary ()Ljava/lang/String;
+	public final fun getTimestampEpochMs ()J
+	public final fun getType ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorBrowserPrincipalUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;J)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()J
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;J)Lio/devconsole/ui/compose/InspectorBrowserPrincipalUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorBrowserPrincipalUi;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorBrowserPrincipalUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getExpiresAtEpochMs ()J
+	public final fun getId ()Ljava/lang/String;
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getSourceIp ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorBrowserUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/Long;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/Long;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/Long;
+	public final fun component7 ()Ljava/lang/Long;
+	public final fun component8 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/Long;Z)Lio/devconsole/ui/compose/InspectorBrowserUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorBrowserUi;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/Long;ZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorBrowserUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBindAddressChanged ()Z
+	public final fun getBinding ()Ljava/lang/String;
+	public final fun getEndpoint ()Ljava/lang/String;
+	public final fun getPrincipals ()Ljava/util/List;
+	public final fun getSessionCode ()Ljava/lang/String;
+	public final fun getSessionCodeExpiresAtEpochMs ()Ljava/lang/Long;
+	public final fun getSessionCodeRemainingTtlMs ()Ljava/lang/Long;
+	public final fun getSessionCodeUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorCaptureRuleUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)Lio/devconsole/ui/compose/InspectorCaptureRuleUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorCaptureRuleUi;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorCaptureRuleUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnabled ()Z
+	public final fun getHost ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getPathPrefix ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/ui/compose/InspectorCommandResult {
+}
+
+public final class io/devconsole/ui/compose/InspectorCommandResult$Disabled : io/devconsole/ui/compose/InspectorCommandResult {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult$Disabled;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorCommandResult$Disabled;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorCommandResult$Disabled;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCapability ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorCommandResult$Failed : io/devconsole/ui/compose/InspectorCommandResult {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult$Failed;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorCommandResult$Failed;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorCommandResult$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorCommandResult$Invalid : io/devconsole/ui/compose/InspectorCommandResult {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult$Invalid;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorCommandResult$Invalid;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorCommandResult$Invalid;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorCommandResult$Success : io/devconsole/ui/compose/InspectorCommandResult {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/Integer;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult$Success;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorCommandResult$Success;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorCommandResult$Success;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBody ()Ljava/lang/String;
+	public final fun getSharePath ()Ljava/lang/String;
+	public final fun getStatusCode ()Ljava/lang/Integer;
+	public final fun getSummary ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorCommandResult$Unavailable : io/devconsole/ui/compose/InspectorCommandResult {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorCommandResult$Unavailable;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorComposerRequest {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorComposerRequest;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorComposerRequest;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorComposerRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBody ()Ljava/lang/String;
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorCrashUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()J
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/util/List;)Lio/devconsole/ui/compose/InspectorCrashUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorCrashUi;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorCrashUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBreadcrumbs ()Ljava/util/List;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getKind ()Ljava/lang/String;
+	public final fun getStackTrace ()Ljava/lang/String;
+	public final fun getSummary ()Ljava/lang/String;
+	public final fun getThread ()Ljava/lang/String;
+	public final fun getTimestampEpochMs ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/ui/compose/InspectorDataSource {
+	public fun captureRules ()Ljava/util/List;
+	public fun captureScreenshot (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun crashesForSession (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun deleteCaptureRule (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public abstract fun deleteFile (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public abstract fun deleteMockRule (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public abstract fun execute (Lio/devconsole/ui/compose/InspectorComposerRequest;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public abstract fun executeSql (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorSqlResultUi;
+	public abstract fun exportHar (Ljava/util/Set;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public static synthetic fun exportHar$default (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/util/Set;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public abstract fun exportPostman (Ljava/util/Set;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public static synthetic fun exportPostman$default (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/util/Set;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public fun exportSessionZip ()Lio/devconsole/ui/compose/InspectorCommandResult;
+	public fun flagCrash (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun flagCrash$default (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun flagTransaction (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun flaggedCrashIds (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun flaggedCrashIds$default (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun flaggedTransactionIds (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun listFiles (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorFileListingUi;
+	public abstract fun listTables (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorDatabaseListingUi;
+	public fun logsForSession (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun mockRules ()Ljava/util/List;
+	public abstract fun previewFile (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorFilePreviewUi;
+	public abstract fun queryTable (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorQueryResultUi;
+	public abstract fun removePreference (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public fun revokePrincipal (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public abstract fun setCaptureRuleEnabled (Ljava/lang/String;Z)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public abstract fun setFeatureFlag (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public abstract fun setMockRuleEnabled (Ljava/lang/String;Z)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public abstract fun setMocksEnabled (Z)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public abstract fun setPreference (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public fun setServerRunning (Z)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public fun shareableFilePath (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public abstract fun snapshot ()Lio/devconsole/ui/compose/InspectorSnapshot;
+	public fun snapshot (Lio/devconsole/ui/compose/InspectorTrafficQuery;)Lio/devconsole/ui/compose/InspectorSnapshot;
+	public fun supportsServerControl ()Z
+	public fun unflagCrash (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun unflagCrash$default (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun unflagTransaction (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun upsertCaptureRule (Lio/devconsole/ui/compose/InspectorCaptureRuleUi;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public abstract fun upsertMockRule (Lio/devconsole/ui/compose/InspectorMockRuleUi;)Lio/devconsole/ui/compose/InspectorCommandResult;
+}
+
+public final class io/devconsole/ui/compose/InspectorDataSource$DefaultImpls {
+	public static fun captureRules (Lio/devconsole/ui/compose/InspectorDataSource;)Ljava/util/List;
+	public static fun captureScreenshot (Lio/devconsole/ui/compose/InspectorDataSource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun crashesForSession (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun exportHar$default (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/util/Set;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public static synthetic fun exportPostman$default (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/util/Set;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public static fun exportSessionZip (Lio/devconsole/ui/compose/InspectorDataSource;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public static fun flagCrash (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun flagCrash$default (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun flagTransaction (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun flaggedCrashIds (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun flaggedCrashIds$default (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun flaggedTransactionIds (Lio/devconsole/ui/compose/InspectorDataSource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun logsForSession (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun mockRules (Lio/devconsole/ui/compose/InspectorDataSource;)Ljava/util/List;
+	public static fun revokePrincipal (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public static fun setServerRunning (Lio/devconsole/ui/compose/InspectorDataSource;Z)Lio/devconsole/ui/compose/InspectorCommandResult;
+	public static fun shareableFilePath (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public static fun snapshot (Lio/devconsole/ui/compose/InspectorDataSource;Lio/devconsole/ui/compose/InspectorTrafficQuery;)Lio/devconsole/ui/compose/InspectorSnapshot;
+	public static fun supportsServerControl (Lio/devconsole/ui/compose/InspectorDataSource;)Z
+	public static fun unflagCrash (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun unflagCrash$default (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun unflagTransaction (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/devconsole/ui/compose/InspectorDatabaseListingUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/util/List;J)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()J
+	public final fun copy (Ljava/lang/String;Ljava/util/List;J)Lio/devconsole/ui/compose/InspectorDatabaseListingUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Ljava/lang/String;Ljava/util/List;JILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorDatabaseListingUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getName ()Ljava/lang/String;
+	public final fun getSizeBytes ()J
+	public final fun getTables ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorDatabaseTableUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;J)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()J
+	public final fun copy (Ljava/lang/String;J)Lio/devconsole/ui/compose/InspectorDatabaseTableUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorDatabaseTableUi;Ljava/lang/String;JILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorDatabaseTableUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getName ()Ljava/lang/String;
+	public final fun getRowCount ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorEditingUi {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (ZZZZZZZ)V
+	public synthetic fun <init> (ZZZZZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun component6 ()Z
+	public final fun component7 ()Z
+	public final fun copy (ZZZZZZZ)Lio/devconsole/ui/compose/InspectorEditingUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorEditingUi;ZZZZZZZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorEditingUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCaptureRules ()Z
+	public final fun getDatabase ()Z
+	public final fun getFeatureFlags ()Z
+	public final fun getFiles ()Z
+	public final fun getMocks ()Z
+	public final fun getPreferences ()Z
+	public final fun getRequestExecution ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorFeatureFlagUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ZLjava/lang/String;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/util/List;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Z
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ZLjava/lang/String;Z)Lio/devconsole/ui/compose/InspectorFeatureFlagUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorFeatureFlagUi;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ZLjava/lang/String;ZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorFeatureFlagUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllowedValues ()Ljava/util/List;
+	public final fun getDefaultValue ()Ljava/lang/String;
+	public final fun getDescription ()Ljava/lang/String;
+	public final fun getKey ()Ljava/lang/String;
+	public final fun getMutable ()Z
+	public final fun getType ()Ljava/lang/String;
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isOverridden ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorFileEntryUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ZJJ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Z
+	public final fun component4 ()J
+	public final fun component5 ()J
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ZJJ)Lio/devconsole/ui/compose/InspectorFileEntryUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorFileEntryUi;Ljava/lang/String;Ljava/lang/String;ZJJILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorFileEntryUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLastModifiedEpochMs ()J
+	public final fun getName ()Ljava/lang/String;
+	public final fun getRelativePath ()Ljava/lang/String;
+	public final fun getSizeBytes ()J
+	public fun hashCode ()I
+	public final fun isDirectory ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorFileListingUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Lio/devconsole/ui/compose/InspectorFileListingUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorFileListingUi;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorFileListingUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEntries ()Ljava/util/List;
+	public final fun getRelativePath ()Ljava/lang/String;
+	public final fun getRoot ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/ui/compose/InspectorFilePreviewUi {
+}
+
+public final class io/devconsole/ui/compose/InspectorFilePreviewUi$Binary : io/devconsole/ui/compose/InspectorFilePreviewUi {
+	public static final field $stable I
+	public fun <init> (J)V
+	public final fun component1 ()J
+	public final fun copy (J)Lio/devconsole/ui/compose/InspectorFilePreviewUi$Binary;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorFilePreviewUi$Binary;JILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorFilePreviewUi$Binary;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getSizeBytes ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorFilePreviewUi$Text : io/devconsole/ui/compose/InspectorFilePreviewUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/lang/String;Z)Lio/devconsole/ui/compose/InspectorFilePreviewUi$Text;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorFilePreviewUi$Text;Ljava/lang/String;ZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorFilePreviewUi$Text;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContent ()Ljava/lang/String;
+	public final fun getTruncated ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorFilePreviewUi$Unavailable : io/devconsole/ui/compose/InspectorFilePreviewUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorFilePreviewUi$Unavailable;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorFilePreviewUi$Unavailable;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorFilePreviewUi$Unavailable;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorHealthUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;JJJ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()J
+	public final fun component3 ()J
+	public final fun component4 ()J
+	public final fun copy (Ljava/lang/String;JJJ)Lio/devconsole/ui/compose/InspectorHealthUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorHealthUi;Ljava/lang/String;JJJILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorHealthUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDroppedEventCount ()J
+	public final fun getInitializationCount ()J
+	public final fun getPublishedEventCount ()J
+	public final fun getState ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorLogUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()J
+	public final fun component6 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;)Lio/devconsole/ui/compose/InspectorLogUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorLogUi;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorLogUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDetail ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getKind ()Ljava/lang/String;
+	public final fun getSource ()Ljava/lang/String;
+	public final fun getSummary ()Ljava/lang/String;
+	public final fun getTimestampEpochMs ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorMockRuleUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILjava/lang/String;ZLjava/util/Map;Ljava/lang/Long;JLjava/lang/Long;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILjava/lang/String;ZLjava/util/Map;Ljava/lang/Long;JLjava/lang/Long;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Ljava/lang/String;
+	public final fun component11 ()Z
+	public final fun component12 ()Ljava/util/Map;
+	public final fun component13 ()Ljava/lang/Long;
+	public final fun component14 ()J
+	public final fun component15 ()Ljava/lang/Long;
+	public final fun component16 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()I
+	public final fun component8 ()Ljava/lang/String;
+	public final fun component9 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILjava/lang/String;ZLjava/util/Map;Ljava/lang/Long;JLjava/lang/Long;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorMockRuleUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorMockRuleUi;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILjava/lang/String;ZLjava/util/Map;Ljava/lang/Long;JLjava/lang/Long;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorMockRuleUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActionLabel ()Ljava/lang/String;
+	public final fun getBody ()Ljava/lang/String;
+	public final fun getDelayMs ()Ljava/lang/Long;
+	public final fun getEnabled ()Z
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getHitCount ()J
+	public final fun getHost ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getLastHitEpochMs ()Ljava/lang/Long;
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getPathPattern ()Ljava/lang/String;
+	public final fun getPriority ()I
+	public final fun getScheme ()Ljava/lang/String;
+	public final fun getScope ()Ljava/lang/String;
+	public final fun getSourceBodySnapshot ()Ljava/lang/String;
+	public final fun getStatusCode ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorPreferenceEntryUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)Lio/devconsole/ui/compose/InspectorPreferenceEntryUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorPreferenceEntryUi;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorPreferenceEntryUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getKey ()Ljava/lang/String;
+	public final fun getRedacted ()Z
+	public final fun getType ()Ljava/lang/String;
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorPreferenceFileUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/util/List;)Lio/devconsole/ui/compose/InspectorPreferenceFileUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorPreferenceFileUi;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorPreferenceFileUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEntries ()Ljava/util/List;
+	public final fun getName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorPushUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZJLjava/util/Map;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZJLjava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Z
+	public final fun component5 ()J
+	public final fun component6 ()Ljava/util/Map;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZJLjava/util/Map;)Lio/devconsole/ui/compose/InspectorPushUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorPushUi;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZJLjava/util/Map;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorPushUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDataPreview ()Ljava/util/Map;
+	public final fun getLifecycle ()Ljava/lang/String;
+	public final fun getMessageId ()Ljava/lang/String;
+	public final fun getProvider ()Ljava/lang/String;
+	public final fun getReceivedAtEpochMs ()J
+	public final fun getSimulated ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorQueryResultUi {
+	public static final field $stable I
+	public fun <init> (Ljava/util/List;Ljava/util/List;Z)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Z
+	public final fun copy (Ljava/util/List;Ljava/util/List;Z)Lio/devconsole/ui/compose/InspectorQueryResultUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorQueryResultUi;Ljava/util/List;Ljava/util/List;ZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorQueryResultUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getColumns ()Ljava/util/List;
+	public final fun getRows ()Ljava/util/List;
+	public final fun getTruncated ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorRetentionUi {
+	public static final field $stable I
+	public fun <init> (IJJ)V
+	public final fun component1 ()I
+	public final fun component2 ()J
+	public final fun component3 ()J
+	public final fun copy (IJJ)Lio/devconsole/ui/compose/InspectorRetentionUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorRetentionUi;IJJILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorRetentionUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxAgeMs ()J
+	public final fun getMaxBytes ()J
+	public final fun getMaxSessions ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorSessionUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;JJ)V
+	public synthetic fun <init> (Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;JJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()J
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()J
+	public final fun component6 ()J
+	public final fun copy (Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;JJ)Lio/devconsole/ui/compose/InspectorSessionUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorSessionUi;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;JJILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorSessionUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEstimatedBytes ()J
+	public final fun getId ()Ljava/lang/String;
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getRecordCount ()J
+	public final fun getStartedAtEpochMs ()J
+	public final fun getStatus ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorSnapshot {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (ZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;ZLjava/util/Set;)V
+	public synthetic fun <init> (ZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;ZLjava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component10 ()Ljava/util/List;
+	public final fun component11 ()Ljava/util/List;
+	public final fun component12 ()Ljava/util/List;
+	public final fun component13 ()Ljava/util/List;
+	public final fun component14 ()Ljava/util/List;
+	public final fun component15 ()Ljava/util/List;
+	public final fun component16 ()Ljava/util/List;
+	public final fun component17 ()Lio/devconsole/ui/compose/InspectorHealthUi;
+	public final fun component18 ()Lio/devconsole/ui/compose/InspectorBrowserUi;
+	public final fun component19 ()Lio/devconsole/ui/compose/InspectorRetentionUi;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component20 ()Z
+	public final fun component21 ()Ljava/util/Set;
+	public final fun component3 ()Lio/devconsole/ui/compose/InspectorEditingUi;
+	public final fun component4 ()Z
+	public final fun component5 ()Ljava/util/List;
+	public final fun component6 ()Ljava/util/List;
+	public final fun component7 ()Ljava/util/List;
+	public final fun component8 ()Ljava/util/List;
+	public final fun component9 ()Ljava/util/List;
+	public final fun copy (ZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;ZLjava/util/Set;)Lio/devconsole/ui/compose/InspectorSnapshot;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorSnapshot;ZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;ZLjava/util/Set;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorSnapshot;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAvailable ()Z
+	public final fun getBrowser ()Lio/devconsole/ui/compose/InspectorBrowserUi;
+	public final fun getCapabilities ()Lio/devconsole/ui/compose/InspectorEditingUi;
+	public final fun getCaptureCategories ()Ljava/util/Set;
+	public final fun getCaptureRules ()Ljava/util/List;
+	public final fun getCrashes ()Ljava/util/List;
+	public final fun getDatabases ()Ljava/util/List;
+	public final fun getFeatureFlags ()Ljava/util/List;
+	public final fun getFileRoots ()Ljava/util/List;
+	public final fun getHealth ()Lio/devconsole/ui/compose/InspectorHealthUi;
+	public final fun getKeepAlivePromptNeeded ()Z
+	public final fun getLogs ()Ljava/util/List;
+	public final fun getMockRules ()Ljava/util/List;
+	public final fun getMocksEnabled ()Z
+	public final fun getPreferenceFiles ()Ljava/util/List;
+	public final fun getPushEvents ()Ljava/util/List;
+	public final fun getRetention ()Lio/devconsole/ui/compose/InspectorRetentionUi;
+	public final fun getSessions ()Ljava/util/List;
+	public final fun getSockets ()Ljava/util/List;
+	public final fun getStateProviders ()Ljava/util/List;
+	public final fun getTransactions ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorSocketFrameUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/Long;ZLjava/lang/String;Ljava/lang/Integer;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/Long;ZLjava/lang/String;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()J
+	public final fun component5 ()Ljava/lang/Long;
+	public final fun component6 ()Z
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ljava/lang/Integer;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/Long;ZLjava/lang/String;Ljava/lang/Integer;)Lio/devconsole/ui/compose/InspectorSocketFrameUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorSocketFrameUi;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLjava/lang/Long;ZLjava/lang/String;Ljava/lang/Integer;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorSocketFrameUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getByteLength ()Ljava/lang/Long;
+	public final fun getDirection ()Ljava/lang/String;
+	public final fun getFrameType ()Ljava/lang/String;
+	public final fun getPreview ()Ljava/lang/String;
+	public final fun getQos ()Ljava/lang/Integer;
+	public final fun getTimestampEpochMs ()J
+	public final fun getTopic ()Ljava/lang/String;
+	public final fun getTruncated ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorSocketUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIJLjava/lang/Long;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIJLjava/lang/Long;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun component6 ()J
+	public final fun component7 ()Ljava/lang/Long;
+	public final fun component8 ()Ljava/lang/String;
+	public final fun component9 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIJLjava/lang/Long;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorSocketUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorSocketUi;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIJLjava/lang/Long;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorSocketUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getClosedAtEpochMs ()Ljava/lang/Long;
+	public final fun getError ()Ljava/lang/String;
+	public final fun getFrames ()Ljava/util/List;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getOpenedAtEpochMs ()J
+	public final fun getProtocol ()Ljava/lang/String;
+	public final fun getReceivedCount ()I
+	public final fun getSentCount ()I
+	public final fun getState ()Ljava/lang/String;
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/ui/compose/InspectorSqlResultUi {
+}
+
+public final class io/devconsole/ui/compose/InspectorSqlResultUi$Failed : io/devconsole/ui/compose/InspectorSqlResultUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorSqlResultUi$Failed;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorSqlResultUi$Failed;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorSqlResultUi$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorSqlResultUi$Rows : io/devconsole/ui/compose/InspectorSqlResultUi {
+	public static final field $stable I
+	public fun <init> (Lio/devconsole/ui/compose/InspectorQueryResultUi;)V
+	public final fun component1 ()Lio/devconsole/ui/compose/InspectorQueryResultUi;
+	public final fun copy (Lio/devconsole/ui/compose/InspectorQueryResultUi;)Lio/devconsole/ui/compose/InspectorSqlResultUi$Rows;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorSqlResultUi$Rows;Lio/devconsole/ui/compose/InspectorQueryResultUi;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorSqlResultUi$Rows;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getResult ()Lio/devconsole/ui/compose/InspectorQueryResultUi;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorSqlResultUi$WriteBlocked : io/devconsole/ui/compose/InspectorSqlResultUi {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorSqlResultUi$WriteBlocked;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorSqlResultUi$Wrote : io/devconsole/ui/compose/InspectorSqlResultUi {
+	public static final field $stable I
+	public fun <init> (I)V
+	public final fun component1 ()I
+	public final fun copy (I)Lio/devconsole/ui/compose/InspectorSqlResultUi$Wrote;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorSqlResultUi$Wrote;IILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorSqlResultUi$Wrote;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAffectedRows ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorState {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (ZZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorCommandResult;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Lio/devconsole/ui/compose/ObserveTab;Ljava/util/Set;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorFileListingUi;Lio/devconsole/ui/compose/InspectorFilePreviewUi;Ljava/lang/String;Ljava/util/List;Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Lio/devconsole/ui/compose/InspectorQueryResultUi;Lio/devconsole/ui/compose/InspectorSqlResultUi;Ljava/util/List;Ljava/lang/String;ZLio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;Lio/devconsole/api/ScreenshotResult;ZLjava/util/Set;)V
+	public synthetic fun <init> (ZZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorCommandResult;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Lio/devconsole/ui/compose/ObserveTab;Ljava/util/Set;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorFileListingUi;Lio/devconsole/ui/compose/InspectorFilePreviewUi;Ljava/lang/String;Ljava/util/List;Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Lio/devconsole/ui/compose/InspectorQueryResultUi;Lio/devconsole/ui/compose/InspectorSqlResultUi;Ljava/util/List;Ljava/lang/String;ZLio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;Lio/devconsole/api/ScreenshotResult;ZLjava/util/Set;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component10 ()Ljava/util/List;
+	public final fun component11 ()Ljava/util/List;
+	public final fun component12 ()Ljava/util/List;
+	public final fun component13 ()Ljava/util/Set;
+	public final fun component14 ()Ljava/util/Set;
+	public final fun component15 ()Lio/devconsole/ui/compose/ObserveTab;
+	public final fun component16 ()Ljava/util/Set;
+	public final fun component17 ()Ljava/util/List;
+	public final fun component18 ()Ljava/util/List;
+	public final fun component19 ()Ljava/util/List;
+	public final fun component2 ()Z
+	public final fun component20 ()Ljava/util/List;
+	public final fun component21 ()Lio/devconsole/ui/compose/InspectorFileListingUi;
+	public final fun component22 ()Lio/devconsole/ui/compose/InspectorFilePreviewUi;
+	public final fun component23 ()Ljava/lang/String;
+	public final fun component24 ()Ljava/util/List;
+	public final fun component25 ()Lio/devconsole/ui/compose/InspectorDatabaseListingUi;
+	public final fun component26 ()Lio/devconsole/ui/compose/InspectorQueryResultUi;
+	public final fun component27 ()Lio/devconsole/ui/compose/InspectorSqlResultUi;
+	public final fun component28 ()Ljava/util/List;
+	public final fun component29 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component30 ()Z
+	public final fun component31 ()Lio/devconsole/ui/compose/InspectorHealthUi;
+	public final fun component32 ()Lio/devconsole/ui/compose/InspectorBrowserUi;
+	public final fun component33 ()Lio/devconsole/ui/compose/InspectorRetentionUi;
+	public final fun component34 ()Lio/devconsole/api/ScreenshotResult;
+	public final fun component35 ()Z
+	public final fun component36 ()Ljava/util/Set;
+	public final fun component4 ()Lio/devconsole/ui/compose/InspectorEditingUi;
+	public final fun component5 ()Z
+	public final fun component6 ()Ljava/util/List;
+	public final fun component7 ()Ljava/util/List;
+	public final fun component8 ()Lio/devconsole/ui/compose/InspectorCommandResult;
+	public final fun component9 ()Ljava/util/List;
+	public final fun copy (ZZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorCommandResult;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Lio/devconsole/ui/compose/ObserveTab;Ljava/util/Set;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorFileListingUi;Lio/devconsole/ui/compose/InspectorFilePreviewUi;Ljava/lang/String;Ljava/util/List;Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Lio/devconsole/ui/compose/InspectorQueryResultUi;Lio/devconsole/ui/compose/InspectorSqlResultUi;Ljava/util/List;Ljava/lang/String;ZLio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;Lio/devconsole/api/ScreenshotResult;ZLjava/util/Set;)Lio/devconsole/ui/compose/InspectorState;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorState;ZZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorCommandResult;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Lio/devconsole/ui/compose/ObserveTab;Ljava/util/Set;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorFileListingUi;Lio/devconsole/ui/compose/InspectorFilePreviewUi;Ljava/lang/String;Ljava/util/List;Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Lio/devconsole/ui/compose/InspectorQueryResultUi;Lio/devconsole/ui/compose/InspectorSqlResultUi;Ljava/util/List;Ljava/lang/String;ZLio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;Lio/devconsole/api/ScreenshotResult;ZLjava/util/Set;IILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorState;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAvailable ()Z
+	public final fun getBrowser ()Lio/devconsole/ui/compose/InspectorBrowserUi;
+	public final fun getCapabilities ()Lio/devconsole/ui/compose/InspectorEditingUi;
+	public final fun getCaptureCategories ()Ljava/util/Set;
+	public final fun getCaptureRules ()Ljava/util/List;
+	public final fun getCrashes ()Ljava/util/List;
+	public final fun getDatabaseListing ()Lio/devconsole/ui/compose/InspectorDatabaseListingUi;
+	public final fun getDatabases ()Ljava/util/List;
+	public final fun getFeatureFlags ()Ljava/util/List;
+	public final fun getFileListing ()Lio/devconsole/ui/compose/InspectorFileListingUi;
+	public final fun getFilePreview ()Lio/devconsole/ui/compose/InspectorFilePreviewUi;
+	public final fun getFileRoots ()Ljava/util/List;
+	public final fun getFlaggedCrashIds ()Ljava/util/Set;
+	public final fun getFlaggedTransactionIds ()Ljava/util/Set;
+	public final fun getHealth ()Lio/devconsole/ui/compose/InspectorHealthUi;
+	public final fun getKeepAlivePromptNeeded ()Z
+	public final fun getLastCommandResult ()Lio/devconsole/ui/compose/InspectorCommandResult;
+	public final fun getLastScreenshotResult ()Lio/devconsole/api/ScreenshotResult;
+	public final fun getLogs ()Ljava/util/List;
+	public final fun getMockRules ()Ljava/util/List;
+	public final fun getMocksEnabled ()Z
+	public final fun getObserveTab ()Lio/devconsole/ui/compose/ObserveTab;
+	public final fun getPendingShareFilePath ()Ljava/lang/String;
+	public final fun getPreferenceFiles ()Ljava/util/List;
+	public final fun getPushEvents ()Ljava/util/List;
+	public final fun getQueryResult ()Lio/devconsole/ui/compose/InspectorQueryResultUi;
+	public final fun getRetention ()Lio/devconsole/ui/compose/InspectorRetentionUi;
+	public final fun getSelectedSessionId ()Ljava/lang/String;
+	public final fun getSelectedTransactionIds ()Ljava/util/Set;
+	public final fun getServerControlSupported ()Z
+	public final fun getSessionLogsLoading ()Z
+	public final fun getSessions ()Ljava/util/List;
+	public final fun getSockets ()Ljava/util/List;
+	public final fun getSqlResult ()Lio/devconsole/ui/compose/InspectorSqlResultUi;
+	public final fun getStateProviders ()Ljava/util/List;
+	public final fun getTransactions ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorStateEntryUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Z)Lio/devconsole/ui/compose/InspectorStateEntryUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorStateEntryUi;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorStateEntryUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getKey ()Ljava/lang/String;
+	public final fun getRedacted ()Z
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorStateProviderUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/util/List;)Lio/devconsole/ui/compose/InspectorStateProviderUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorStateProviderUi;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorStateProviderUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEntries ()Ljava/util/List;
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorTimingPhasesUi {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;)V
+	public synthetic fun <init> (Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/Long;
+	public final fun component2 ()Ljava/lang/Long;
+	public final fun component3 ()Ljava/lang/Long;
+	public final fun component4 ()Ljava/lang/Long;
+	public final fun component5 ()Ljava/lang/Long;
+	public final fun component6 ()Ljava/lang/Long;
+	public final fun copy (Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;)Lio/devconsole/ui/compose/InspectorTimingPhasesUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorTimingPhasesUi;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Long;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorTimingPhasesUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConnectMs ()Ljava/lang/Long;
+	public final fun getDnsMs ()Ljava/lang/Long;
+	public final fun getHasAnyPhase ()Z
+	public final fun getReceiveMs ()Ljava/lang/Long;
+	public final fun getSendMs ()Ljava/lang/Long;
+	public final fun getTlsMs ()Ljava/lang/Long;
+	public final fun getWaitMs ()Ljava/lang/Long;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorTrafficQuery {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/ui/compose/TrafficStatusClass;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/ui/compose/TrafficStatusClass;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lio/devconsole/ui/compose/TrafficStatusClass;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/ui/compose/TrafficStatusClass;)Lio/devconsole/ui/compose/InspectorTrafficQuery;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorTrafficQuery;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/ui/compose/TrafficStatusClass;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorTrafficQuery;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getSearch ()Ljava/lang/String;
+	public final fun getStatusClass ()Lio/devconsole/ui/compose/TrafficStatusClass;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorTransactionUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/Long;JLjava/util/Map;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/ui/compose/InspectorBodyKind;ZLio/devconsole/ui/compose/InspectorTimingPhasesUi;ZLjava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/Long;JLjava/util/Map;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/ui/compose/InspectorBodyKind;ZLio/devconsole/ui/compose/InspectorTimingPhasesUi;ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Ljava/lang/String;
+	public final fun component11 ()Ljava/lang/String;
+	public final fun component12 ()Ljava/lang/String;
+	public final fun component13 ()Ljava/lang/String;
+	public final fun component14 ()Lio/devconsole/ui/compose/InspectorBodyKind;
+	public final fun component15 ()Z
+	public final fun component16 ()Lio/devconsole/ui/compose/InspectorTimingPhasesUi;
+	public final fun component17 ()Z
+	public final fun component18 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/Integer;
+	public final fun component6 ()Ljava/lang/Long;
+	public final fun component7 ()J
+	public final fun component8 ()Ljava/util/Map;
+	public final fun component9 ()Ljava/util/Map;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/Long;JLjava/util/Map;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/ui/compose/InspectorBodyKind;ZLio/devconsole/ui/compose/InspectorTimingPhasesUi;ZLjava/lang/String;)Lio/devconsole/ui/compose/InspectorTransactionUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorTransactionUi;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/Long;JLjava/util/Map;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/ui/compose/InspectorBodyKind;ZLio/devconsole/ui/compose/InspectorTimingPhasesUi;ZLjava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorTransactionUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDurationMs ()Ljava/lang/Long;
+	public final fun getError ()Ljava/lang/String;
+	public final fun getHost ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getMockRuleId ()Ljava/lang/String;
+	public final fun getPath ()Ljava/lang/String;
+	public final fun getRequestBodyKind ()Lio/devconsole/ui/compose/InspectorBodyKind;
+	public final fun getRequestBodyTruncated ()Z
+	public final fun getRequestHeaders ()Ljava/util/Map;
+	public final fun getRequestPreview ()Ljava/lang/String;
+	public final fun getResponseHeaders ()Ljava/util/Map;
+	public final fun getResponsePreview ()Ljava/lang/String;
+	public final fun getStartedAtEpochMs ()J
+	public final fun getStatusCode ()Ljava/lang/Integer;
+	public final fun getTimingPhases ()Lio/devconsole/ui/compose/InspectorTimingPhasesUi;
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isMocked ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorViewModel : androidx/lifecycle/ViewModel {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (Lio/devconsole/ui/compose/InspectorDataSource;)V
+	public fun <init> (Lio/devconsole/ui/compose/InspectorDataSource;Lkotlinx/coroutines/CoroutineDispatcher;)V
+	public synthetic fun <init> (Lio/devconsole/ui/compose/InspectorDataSource;Lkotlinx/coroutines/CoroutineDispatcher;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun dispatch (Lio/devconsole/ui/compose/InspectorAction;)V
+	public final fun getState ()Lkotlinx/coroutines/flow/StateFlow;
+}
+
+public final class io/devconsole/ui/compose/ObserveTab : java/lang/Enum {
+	public static final field CRASHES Lio/devconsole/ui/compose/ObserveTab;
+	public static final field LOGS Lio/devconsole/ui/compose/ObserveTab;
+	public static final field PUSH Lio/devconsole/ui/compose/ObserveTab;
+	public static final field SOCKETS Lio/devconsole/ui/compose/ObserveTab;
+	public static final field TRAFFIC Lio/devconsole/ui/compose/ObserveTab;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/ui/compose/ObserveTab;
+	public static fun values ()[Lio/devconsole/ui/compose/ObserveTab;
+}
+
+public final class io/devconsole/ui/compose/TrafficStatusClass : java/lang/Enum {
+	public static final field ALL Lio/devconsole/ui/compose/TrafficStatusClass;
+	public static final field CLIENT_ERROR Lio/devconsole/ui/compose/TrafficStatusClass;
+	public static final field FAILED Lio/devconsole/ui/compose/TrafficStatusClass;
+	public static final field REDIRECT Lio/devconsole/ui/compose/TrafficStatusClass;
+	public static final field SERVER_ERROR Lio/devconsole/ui/compose/TrafficStatusClass;
+	public static final field SUCCESS Lio/devconsole/ui/compose/TrafficStatusClass;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getFrom ()Ljava/lang/Integer;
+	public final fun getTo ()Ljava/lang/Integer;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/ui/compose/TrafficStatusClass;
+	public static fun values ()[Lio/devconsole/ui/compose/TrafficStatusClass;
+}
+

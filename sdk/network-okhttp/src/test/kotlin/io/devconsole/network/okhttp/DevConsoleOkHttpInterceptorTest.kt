@@ -8,13 +8,13 @@ import io.devconsole.network.NetworkCursorCodec
 import io.devconsole.network.NetworkTransactionRecorder
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
-import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import okio.BufferedSink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -28,13 +28,13 @@ class DevConsoleOkHttpInterceptorTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("response body").build())
+            server.enqueue(MockResponse().setBody("response body"))
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
             val client = clientRecordingTo(transactions)
 
             val response = client.newCall(taggedPostRequest(server)).execute()
-            assertEquals("response body", response.body.string())
+            assertEquals("response body", response.body!!.string())
             val recordedList = awaitTransactions(transactions)
             assertEquals(1, recordedList.size)
             val recorded = recordedList.single()
@@ -65,7 +65,7 @@ class DevConsoleOkHttpInterceptorTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("ok").build())
+            server.enqueue(MockResponse().setBody("ok"))
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
             val client = clientRecordingTo(transactions)
@@ -107,7 +107,7 @@ class DevConsoleOkHttpInterceptorTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("ok").build())
+            server.enqueue(MockResponse().setBody("ok"))
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
             val client = clientRecordingTo(transactions)
@@ -151,7 +151,7 @@ class DevConsoleOkHttpInterceptorTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("ok").build())
+            server.enqueue(MockResponse().setBody("ok"))
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
             val client = clientRecordingTo(transactions)
@@ -181,7 +181,7 @@ class DevConsoleOkHttpInterceptorTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().body("response body").build())
+            server.enqueue(MockResponse().setBody("response body"))
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
             val client = clientRecordingTo(transactions)
@@ -218,7 +218,7 @@ class DevConsoleOkHttpInterceptorTest {
             // The host must see exactly what the network actually returned, regardless of the capture
             // failure triggered afterwards while building the transaction to record.
             assertEquals(200, response.code)
-            assertEquals("response body", response.body.string())
+            assertEquals("response body", response.body!!.string())
             assertTrue("expected the interceptor to have attempted a second (capture) read", writeCount > 1)
         } finally {
             server.close()
@@ -231,11 +231,9 @@ class DevConsoleOkHttpInterceptorTest {
         server.start()
         try {
             server.enqueue(
-                MockResponse
-                    .Builder()
-                    .chunkedBody("data: hello\n\n", 16)
-                    .addHeader("Content-Type", "text/event-stream")
-                    .build(),
+                MockResponse()
+                    .setChunkedBody("data: hello\n\n", 16)
+                    .addHeader("Content-Type", "text/event-stream"),
             )
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
@@ -243,7 +241,7 @@ class DevConsoleOkHttpInterceptorTest {
 
             val response = client.newCall(Request.Builder().url(server.url("/events")).build()).execute()
             // The host's own read of the real body must be completely unaffected by skipping the peek.
-            assertEquals("data: hello\n\n", response.body.string())
+            assertEquals("data: hello\n\n", response.body!!.string())
 
             val transaction = awaitTransactions(transactions).single()
             assertEquals(
@@ -267,11 +265,9 @@ class DevConsoleOkHttpInterceptorTest {
             // NDJSON. Before the fix this fell into the peekBody(512KiB) branch and blocked inside
             // intercept() until the peek bound was hit or the stream ended.
             server.enqueue(
-                MockResponse
-                    .Builder()
-                    .chunkedBody("{\"event\":\"tick\"}\n", 16)
-                    .addHeader("Content-Type", "text/plain")
-                    .build(),
+                MockResponse()
+                    .setChunkedBody("{\"event\":\"tick\"}\n", 16)
+                    .addHeader("Content-Type", "text/plain"),
             )
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
@@ -282,7 +278,7 @@ class DevConsoleOkHttpInterceptorTest {
             val elapsedMs = System.currentTimeMillis() - started
             assertTrue("intercept() must return promptly instead of blocking on the peek", elapsedMs < 2000L)
             // The host's own read of the real body must be completely unaffected by skipping the peek.
-            assertEquals("{\"event\":\"tick\"}\n", response.body.string())
+            assertEquals("{\"event\":\"tick\"}\n", response.body!!.string())
 
             val transaction = awaitTransactions(transactions).single()
             assertEquals(

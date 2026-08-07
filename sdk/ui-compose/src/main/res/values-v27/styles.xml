@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   android:windowLightNavigationBar landed in API 27. The base values/ theme omits it so the
-  inspector still builds and runs at the SDK's minSdk of 24; on 27 and above this override adds
+  inspector still builds and runs at the SDK's minSdk of 23; on 27 and above this override adds
   it back. The dark navigation bar the base theme sets is already correct without it.
 -->
 <resources>

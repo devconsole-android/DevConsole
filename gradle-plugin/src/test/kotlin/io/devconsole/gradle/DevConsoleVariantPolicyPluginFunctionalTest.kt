@@ -47,16 +47,19 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         )
         File(projectDir.root, "src/main/AndroidManifest.xml").apply { parentFile.mkdirs() }
             .writeText("<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" />")
+        // No version on the Android plugin: it resolves from the injected plugin-under-test
+        // classpath (see gradle-plugin/build.gradle.kts), keeping a single AGP classloader shared
+        // with the plugin under test so its type-based androidComponents lookups match.
         val pluginsBlock =
             if (androidPluginFirst) {
                 """
-                id("$androidPlugin") version "9.3.0"
+                id("$androidPlugin")
                 id("io.github.devconsole-android")
                 """.trimIndent()
             } else {
                 """
                 id("io.github.devconsole-android")
-                id("$androidPlugin") version "9.3.0"
+                id("$androidPlugin")
                 """.trimIndent()
             }
         File(projectDir.root, "build.gradle.kts").writeText(
@@ -66,7 +69,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
             }
             android {
                 namespace = "io.devconsole.fixture"
-                compileSdk = 37
+                compileSdk = 35
                 defaultConfig {
                     minSdk = 23
                     $applicationIdLine
@@ -82,6 +85,9 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
     }
 
     private fun runner(vararg args: String): GradleRunner = GradleRunner.create()
+        // AGP 8.13.0 requires Gradle 8.13+ and is not compatible with Gradle 9.x, so pin the TestKit
+        // daemon to 8.14.3 (the repo's own wrapper version) rather than inheriting any 9.x Gradle.
+        .withGradleVersion("8.14.3")
         .withProjectDir(projectDir.root)
         .withPluginClasspath()
         .withArguments(*args, "--stacktrace")
@@ -103,7 +109,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
             plugins { id("com.android.library") }
             android {
                 namespace = "io.devconsole.fixture.stubfull"
-                compileSdk = 37
+                compileSdk = 35
                 defaultConfig { minSdk = 23 }
                 $extraBuildTypes
             }
@@ -177,7 +183,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
             plugins { id("com.android.library") }
             android {
                 namespace = "io.devconsole.fixture.network"
-                compileSdk = 37
+                compileSdk = 35
                 defaultConfig { minSdk = 23 }
             }
             """.trimIndent(),
@@ -324,7 +330,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
                 plugins { id("com.android.library") }
                 android {
                     namespace = "io.devconsole.fixture.${path.replace('/', '.').replace('-', '_')}"
-                    compileSdk = 37
+                    compileSdk = 35
                     defaultConfig { minSdk = 23 }
                 }
                 """.trimIndent(),
@@ -753,7 +759,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
                 plugins { id("com.android.library") }
                 android {
                     namespace = "io.devconsole.fixture.${path.replace('/', '.').replace('-', '_')}"
-                    compileSdk = 37
+                    compileSdk = 35
                     defaultConfig { minSdk = 23 }
                 }
                 """.trimIndent(),
@@ -831,12 +837,12 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         )
 
         // release is PROTECTED by default, so auto-wire adds the noop core coordinate. The published
-        // coordinate is 0.2.0 -- the DEFAULT_SDK_VERSION must not point at a 0.2.0-SNAPSHOT that was
+        // coordinate is 0.3.0 -- the DEFAULT_SDK_VERSION must not point at a 0.3.0-SNAPSHOT that was
         // never published, which would make every zero-config release build fail to resolve.
         val result = runner("dependencies", "--configuration", "releaseImplementation").build()
 
-        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-noop:0.2.0"))
-        assertTrue(result.output, !result.output.contains("0.2.0-SNAPSHOT"))
+        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-noop:0.3.0"))
+        assertTrue(result.output, !result.output.contains("0.3.0-SNAPSHOT"))
     }
 
     @Test
@@ -872,7 +878,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
             extraBuildScript =
                 """
                 dependencies {
-                    add("debugImplementation", "io.github.devconsole-android:devconsole-ui-compose:0.2.0")
+                    add("debugImplementation", "io.github.devconsole-android:devconsole-ui-compose:0.3.0")
                 }
                 """.trimIndent(),
         )
@@ -881,7 +887,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         // debug is ENABLED, so the core runtime ("devconsole") must still be auto-wired alongside the
         // host's add-on declaration -- the add-on alone does not count as declaring the core runtime.
-        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole:0.2.0"))
+        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole:0.3.0"))
         assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-ui-compose"))
     }
 }

@@ -1,7 +1,8 @@
 package io.devconsole.socket
 
 import io.devconsole.security.RedactionEngine
-import java.util.Base64
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 enum class SocketDirection { SENT, RECEIVED }
 
@@ -788,6 +789,7 @@ private fun String.looksLikeJson(): Boolean = (startsWith('{') && endsWith('}'))
 
 private const val BYTE_MASK = 0xff
 
+@OptIn(ExperimentalEncodingApi::class)
 private fun ByteArray.binaryPayload(policy: BinaryPreviewPolicy): SocketPayload.Binary {
     val previewBytes = take(SocketRecorder.MAX_BINARY_FRAME_PREVIEW_BYTES).toByteArray()
     val payload = SocketPayload.Binary(size.toLong(), size > previewBytes.size)
@@ -799,6 +801,6 @@ private fun ByteArray.binaryPayload(policy: BinaryPreviewPolicy): SocketPayload.
                 BinaryPreviewEncoding.HEX,
             )
         BinaryPreviewPolicy.BASE64 ->
-            payload.withPreview(Base64.getEncoder().encodeToString(previewBytes), BinaryPreviewEncoding.BASE64)
+            payload.withPreview(Base64.Default.encode(previewBytes), BinaryPreviewEncoding.BASE64)
     }
 }

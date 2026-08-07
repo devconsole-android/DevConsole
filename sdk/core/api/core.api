@@ -1,0 +1,204 @@
+public final class io/devconsole/core/DevConsoleRuntime {
+	public fun <init> (Lio/devconsole/core/RuntimeGate;)V
+	public final fun beginServerStart ()Lio/devconsole/api/StartResult;
+	public final fun currentSessionId ()Ljava/lang/String;
+	public final fun getHealth ()Lkotlinx/coroutines/flow/StateFlow;
+	public final fun getState ()Lkotlinx/coroutines/flow/StateFlow;
+	public final fun initialize (Lio/devconsole/api/DevConsoleConfig;)Lio/devconsole/api/InitResult;
+	public final fun initialize (Lio/devconsole/api/DevConsoleConfig;Z)Lio/devconsole/api/InitResult;
+	public static synthetic fun initialize$default (Lio/devconsole/core/DevConsoleRuntime;Lio/devconsole/api/DevConsoleConfig;ZILjava/lang/Object;)Lio/devconsole/api/InitResult;
+	public final fun serverFailed (Ljava/lang/String;)V
+	public final fun serverRequiresPermission ()V
+	public final fun serverStarted ()V
+	public final fun start (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun stop (Lio/devconsole/api/StopReason;)V
+}
+
+public final class io/devconsole/core/EventBatchDropReason : java/lang/Enum {
+	public static final field QUEUE_FULL Lio/devconsole/core/EventBatchDropReason;
+	public static final field WRITER_CLOSED Lio/devconsole/core/EventBatchDropReason;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/core/EventBatchDropReason;
+	public static fun values ()[Lio/devconsole/core/EventBatchDropReason;
+}
+
+public final class io/devconsole/core/EventBatchWriter {
+	public static final field Companion Lio/devconsole/core/EventBatchWriter$Companion;
+	public static final field DEFAULT_BATCH_SIZE I
+	public static final field DEFAULT_CAPACITY I
+	public static final field DEFAULT_FLUSH_INTERVAL_MS J
+	public static final field DEFAULT_MAX_QUEUED_BYTES J
+	public fun <init> (Lio/devconsole/storage/api/EventStore;Lkotlinx/coroutines/CoroutineScope;IIJLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;)V
+	public synthetic fun <init> (Lio/devconsole/storage/api/EventStore;Lkotlinx/coroutines/CoroutineScope;IIJLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun flushAndStop (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun start ()V
+	public final fun stop ()V
+	public final fun submit (Lio/devconsole/api/EventEnvelope;)Z
+	public final fun submit (Lio/devconsole/storage/api/StoredEvent;)Z
+	public final fun withByteCapacity (J)Lio/devconsole/core/EventBatchWriter;
+	public final fun withPluginOverflowPolicies (Ljava/util/Map;)Lio/devconsole/core/EventBatchWriter;
+}
+
+public final class io/devconsole/core/EventBatchWriter$Companion {
+}
+
+public final class io/devconsole/core/EventDraft {
+	public static final field Companion Lio/devconsole/core/EventDraft$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/api/EventSeverity;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/api/EventSeverity;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lio/devconsole/api/EventSeverity;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/util/Map;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/api/EventSeverity;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;)Lio/devconsole/core/EventDraft;
+	public static synthetic fun copy$default (Lio/devconsole/core/EventDraft;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/api/EventSeverity;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/core/EventDraft;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCorrelationId ()Ljava/lang/String;
+	public final fun getPayloadRef ()Ljava/lang/String;
+	public final fun getPluginId ()Ljava/lang/String;
+	public final fun getSeverity ()Lio/devconsole/api/EventSeverity;
+	public final fun getSummary ()Ljava/lang/String;
+	public final fun getTags ()Ljava/util/Map;
+	public final fun getType ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/core/EventDraft$Companion {
+	public final fun system (Ljava/lang/String;Lio/devconsole/api/EventSeverity;)Lio/devconsole/core/EventDraft;
+	public static synthetic fun system$default (Lio/devconsole/core/EventDraft$Companion;Ljava/lang/String;Lio/devconsole/api/EventSeverity;ILjava/lang/Object;)Lio/devconsole/core/EventDraft;
+}
+
+public final class io/devconsole/core/EventDropNotice {
+	public fun <init> (Ljava/util/UUID;Ljava/lang/String;Lio/devconsole/api/EventSeverity;Ljava/lang/String;Lio/devconsole/core/EventDropReason;J)V
+	public final fun component1 ()Ljava/util/UUID;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lio/devconsole/api/EventSeverity;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Lio/devconsole/core/EventDropReason;
+	public final fun component6 ()J
+	public final fun copy (Ljava/util/UUID;Ljava/lang/String;Lio/devconsole/api/EventSeverity;Ljava/lang/String;Lio/devconsole/core/EventDropReason;J)Lio/devconsole/core/EventDropNotice;
+	public static synthetic fun copy$default (Lio/devconsole/core/EventDropNotice;Ljava/util/UUID;Ljava/lang/String;Lio/devconsole/api/EventSeverity;Ljava/lang/String;Lio/devconsole/core/EventDropReason;JILjava/lang/Object;)Lio/devconsole/core/EventDropNotice;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDroppedEventId ()Ljava/util/UUID;
+	public final fun getDroppedPluginId ()Ljava/lang/String;
+	public final fun getDroppedSeverity ()Lio/devconsole/api/EventSeverity;
+	public final fun getIncomingPluginId ()Ljava/lang/String;
+	public final fun getReason ()Lio/devconsole/core/EventDropReason;
+	public final fun getTotalDroppedCount ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/core/EventDropReason : java/lang/Enum {
+	public static final field GLOBAL_CAPACITY Lio/devconsole/core/EventDropReason;
+	public static final field PLUGIN_CAPACITY Lio/devconsole/core/EventDropReason;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/core/EventDropReason;
+	public static fun values ()[Lio/devconsole/core/EventDropReason;
+}
+
+public abstract interface class io/devconsole/core/EventDropSink {
+	public abstract fun record (Lio/devconsole/core/EventDropNotice;)V
+}
+
+public final class io/devconsole/core/EventOverflowStrategy : java/lang/Enum {
+	public static final field DROP_LATEST Lio/devconsole/core/EventOverflowStrategy;
+	public static final field DROP_OLDEST Lio/devconsole/core/EventOverflowStrategy;
+	public static final field DROP_OLDEST_LOWEST_SEVERITY Lio/devconsole/core/EventOverflowStrategy;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/core/EventOverflowStrategy;
+	public static fun values ()[Lio/devconsole/core/EventOverflowStrategy;
+}
+
+public final class io/devconsole/core/EventPipeline {
+	public fun <init> (Ljava/util/UUID;ILio/devconsole/security/RedactionEngine;)V
+	public synthetic fun <init> (Ljava/util/UUID;ILio/devconsole/security/RedactionEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getHealth ()Lkotlinx/coroutines/flow/StateFlow;
+	public final fun publish (Lio/devconsole/core/EventDraft;)Lio/devconsole/api/EventEnvelope;
+	public final fun snapshot ()Ljava/util/List;
+	public final fun withDropSink (Lio/devconsole/core/EventDropSink;)Lio/devconsole/core/EventPipeline;
+	public final fun withPluginOverflowPolicies (Ljava/util/Map;)Lio/devconsole/core/EventPipeline;
+}
+
+public final class io/devconsole/core/PluginOverflowPolicy {
+	public fun <init> (ILio/devconsole/core/EventOverflowStrategy;)V
+	public synthetic fun <init> (ILio/devconsole/core/EventOverflowStrategy;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()Lio/devconsole/core/EventOverflowStrategy;
+	public final fun copy (ILio/devconsole/core/EventOverflowStrategy;)Lio/devconsole/core/PluginOverflowPolicy;
+	public static synthetic fun copy$default (Lio/devconsole/core/PluginOverflowPolicy;ILio/devconsole/core/EventOverflowStrategy;ILjava/lang/Object;)Lio/devconsole/core/PluginOverflowPolicy;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxBufferedEvents ()I
+	public final fun getStrategy ()Lio/devconsole/core/EventOverflowStrategy;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/core/RuntimeGate {
+	public abstract fun evaluate ()Lio/devconsole/core/RuntimeGate$Decision;
+}
+
+public abstract interface class io/devconsole/core/RuntimeGate$Decision {
+}
+
+public final class io/devconsole/core/RuntimeGate$Decision$Disabled : io/devconsole/core/RuntimeGate$Decision {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/core/RuntimeGate$Decision$Disabled;
+	public static synthetic fun copy$default (Lio/devconsole/core/RuntimeGate$Decision$Disabled;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/core/RuntimeGate$Decision$Disabled;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/core/RuntimeGate$Decision$Enabled : io/devconsole/core/RuntimeGate$Decision {
+	public static final field INSTANCE Lio/devconsole/core/RuntimeGate$Decision$Enabled;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/core/RuntimeGate$Disabled : io/devconsole/core/RuntimeGate {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/core/RuntimeGate$Disabled;
+	public static synthetic fun copy$default (Lio/devconsole/core/RuntimeGate$Disabled;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/core/RuntimeGate$Disabled;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun evaluate ()Lio/devconsole/core/RuntimeGate$Decision;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/core/RuntimeGate$Enabled : io/devconsole/core/RuntimeGate {
+	public static final field INSTANCE Lio/devconsole/core/RuntimeGate$Enabled;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun evaluate ()Lio/devconsole/core/RuntimeGate$Decision;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/core/SdkHealth {
+	public fun <init> ()V
+	public fun <init> (JJJLio/devconsole/api/DevConsoleState;Ljava/lang/String;)V
+	public synthetic fun <init> (JJJLio/devconsole/api/DevConsoleState;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()J
+	public final fun component2 ()J
+	public final fun component3 ()J
+	public final fun component4 ()Lio/devconsole/api/DevConsoleState;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun copy (JJJLio/devconsole/api/DevConsoleState;Ljava/lang/String;)Lio/devconsole/core/SdkHealth;
+	public static synthetic fun copy$default (Lio/devconsole/core/SdkHealth;JJJLio/devconsole/api/DevConsoleState;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/core/SdkHealth;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDroppedEventCount ()J
+	public final fun getInitializationCount ()J
+	public final fun getLastFailure ()Ljava/lang/String;
+	public final fun getPublishedEventCount ()J
+	public final fun getState ()Lio/devconsole/api/DevConsoleState;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+

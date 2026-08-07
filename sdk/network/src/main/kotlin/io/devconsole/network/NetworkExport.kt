@@ -1,8 +1,10 @@
 package io.devconsole.network
 
 import io.devconsole.security.RedactionEngine
-import java.time.Instant
-import java.time.format.DateTimeFormatterBuilder
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Exports captured network transactions. Inputs are [NetworkCapture] values rather than raw
@@ -190,7 +192,7 @@ object NetworkExport {
         val responseHeaders = response?.headers.orEmpty().redactedWith(redaction)
         val responseBody = (response?.body ?: BodyPreview.Absent).redactedWith(redaction)
         append("{\"startedDateTime\":")
-            .append(HAR_TIMESTAMP_FORMAT.format(Instant.ofEpochMilli(startedAtEpochMs)).jsonQuoted())
+            .append(HAR_TIMESTAMP_FORMAT.get()!!.format(Date(startedAtEpochMs)).jsonQuoted())
             .append(",\"time\":")
             .append(durationMs)
             .append(",\"request\":{")
@@ -461,12 +463,19 @@ object NetworkExport {
             511 to "Network Authentication Required",
         )
 
-    private val HAR_TIMESTAMP_FORMAT =
-        DateTimeFormatterBuilder().appendInstant(HAR_TIMESTAMP_FRACTIONAL_DIGITS).toFormatter()
+    // HAR wants an ISO-8601 UTC instant with millisecond precision, e.g. "2026-08-07T11:55:55.123Z".
+    // SimpleDateFormat works down to minSdk 23 (java.time is API 26+), but is not thread-safe, so
+    // each thread gets its own instance via ThreadLocal.
+    private val HAR_TIMESTAMP_FORMAT: ThreadLocal<SimpleDateFormat> =
+        object : ThreadLocal<SimpleDateFormat>() {
+            override fun initialValue(): SimpleDateFormat =
+                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
+        }
 
     private const val HTTP_REDIRECT_MIN = 300
     private const val HTTP_REDIRECT_MAX = 399
     private val HTTP_REDIRECT_RANGE = HTTP_REDIRECT_MIN..HTTP_REDIRECT_MAX
     private const val CONTROL_CHAR_MAX = 0x20
-    private const val HAR_TIMESTAMP_FRACTIONAL_DIGITS = 3
 }

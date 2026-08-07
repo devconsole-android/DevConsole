@@ -12,7 +12,7 @@ android {
     defaultConfig {
         applicationId = "io.devconsole.sample.compose"
         versionCode = 1
-        versionName = "0.2.0-SNAPSHOT"
+        versionName = "0.3.0-SNAPSHOT"
     }
 }
 
@@ -31,7 +31,7 @@ dependencies {
     // references its types directly (see the local devConsoleStatusText() helper) so this stays
     // safe to flip without a release compile break.
     debugImplementation(project(":sdk:ui-compose"))
-    implementation("com.squareup.okhttp3:okhttp:5.4.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(libs.paho.mqttv3)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.compose)

@@ -3,10 +3,10 @@ package io.devconsole.mocks.okhttp
 import io.devconsole.mocks.MockAction
 import io.devconsole.mocks.MockEngine
 import io.devconsole.mocks.MockRule
-import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -16,7 +16,7 @@ class DevConsoleMockInterceptorNoopTest {
         val server = MockWebServer()
         server.start()
         try {
-            server.enqueue(MockResponse.Builder().code(204).build())
+            server.enqueue(MockResponse().setResponseCode(204))
             val engine =
                 MockEngine(
                     listOf(

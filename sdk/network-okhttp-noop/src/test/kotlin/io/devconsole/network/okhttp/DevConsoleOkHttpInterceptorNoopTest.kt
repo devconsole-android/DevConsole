@@ -7,10 +7,10 @@ import io.devconsole.network.NetworkTransactionQuery
 import io.devconsole.network.NetworkTransactionRecorder
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
-import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,11 +23,9 @@ class DevConsoleOkHttpInterceptorNoopTest {
         server.start()
         try {
             server.enqueue(
-                MockResponse
-                    .Builder()
-                    .code(203)
-                    .body("host-body")
-                    .build(),
+                MockResponse()
+                    .setResponseCode(203)
+                    .setBody("host-body"),
             )
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec(ByteArray(16) { it.toByte() }))
             val recorder =
@@ -46,7 +44,7 @@ class DevConsoleOkHttpInterceptorNoopTest {
             val response = client.newCall(request).execute()
 
             assertEquals(203, response.code)
-            assertEquals("host-body", response.body.string())
+            assertEquals("host-body", response.body!!.string())
             assertEquals(1, server.requestCount)
             assertTrue(store.page(NetworkTransactionQuery()).transactions.isEmpty())
         } finally {

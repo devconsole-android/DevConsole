@@ -4,6 +4,8 @@
  */
 package io.devconsole.storage.room
 
+import androidx.room.DatabaseConfiguration
+import androidx.sqlite.db.SupportSQLiteOpenHelper
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -109,6 +111,11 @@ private fun pluginEvent(
 
 private fun fakePluginFilterDatabase(eventDao: EventDao): DevConsoleDatabase =
     object : DevConsoleDatabase() {
+        // Room 2.7.x still declares createOpenHelper as abstract (it became non-abstract in 2.8+);
+        // the fake DB never opens a real connection, so it is never reached.
+        override fun createOpenHelper(config: DatabaseConfiguration): SupportSQLiteOpenHelper =
+            error("not touched by these tests")
+
         override fun eventDao(): EventDao = eventDao
 
         override fun attachmentDao(): AttachmentDao = error("not touched by these tests")

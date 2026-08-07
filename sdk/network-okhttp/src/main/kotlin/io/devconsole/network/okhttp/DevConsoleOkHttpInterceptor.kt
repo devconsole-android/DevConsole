@@ -137,8 +137,8 @@ class DevConsoleOkHttpInterceptor
         }
 
         private fun Response.toInput(timings: NetworkTimingPhases): NetworkResponseInput {
-            val responseContentType = body.contentType()?.toString()
-            val declaredLength = body.contentLength().takeIf { it >= 0 }
+            val responseContentType = body?.contentType()?.toString()
+            val declaredLength = body?.contentLength()?.takeIf { it >= 0 }
             val streaming = isStreamingBody(responseContentType, declaredLength)
             // A response with no declared content-type might still be decodable text --
             // NetworkCaptureFactory sniffs that from the actual bytes once it has them, so only a
