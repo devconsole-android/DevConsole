@@ -9,9 +9,11 @@ package io.devconsole.ui.compose
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -223,13 +225,15 @@ internal fun MoreScreen(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 16.dp),
         ) {
+            if (state.serverControlSupported) {
+                item { ServerControlCard(hero.running, actions.onSetServerRunning, colors) }
+                item { Spacer(Modifier.height(16.dp)) }
+            }
             item {
                 MoreHero(
                     info = hero,
                     collapsed = heroCollapsed,
                     onToggleCollapse = onToggleHero,
-                    serverControlSupported = state.serverControlSupported,
-                    onSetServerRunning = actions.onSetServerRunning,
                     colors = colors,
                 )
             }
@@ -306,13 +310,10 @@ private fun moreHeroStopped(): MoreHeroInfo =
     )
 
 @Composable
-@Suppress("LongParameterList") // Hero state + the gated CTA wiring; splitting would obscure the seam.
 private fun MoreHero(
     info: MoreHeroInfo,
     collapsed: Boolean,
     onToggleCollapse: () -> Unit,
-    serverControlSupported: Boolean,
-    onSetServerRunning: (Boolean) -> Unit,
     colors: DevConsoleColors,
 ) {
     val containerColor = if (info.running) colors.signalSoft else colors.surface2
@@ -339,27 +340,56 @@ private fun MoreHero(
         valueColor = valueColor,
         valueFontFamily = FontFamily.Monospace,
         onCollapse = onToggleCollapse,
-        // Only offer Start/Stop when this build's data source actually implements it -- a
-        // primary CTA that can never do anything is worse than no CTA (same honesty rule as
-        // the push Replay toast).
-        ctaLabel = if (serverControlSupported) (if (info.running) "Stop server" else "Start server") else null,
-        ctaIcon =
-            if (!serverControlSupported) {
-                null
-            } else {
-                {
-                    ControlGlyphIcon(
-                        if (info.running) ControlGlyph.Pause else ControlGlyph.Record,
-                        contentDescription = null,
-                        tint = if (info.running) colors.ink else colors.signalInk,
-                        size = 17.dp,
-                    )
-                }
-            },
-        ctaContainerColor = if (info.running) colors.panel else colors.signal,
-        ctaContentColor = if (info.running) colors.ink else colors.signalInk,
-        onCtaClick = if (serverControlSupported) ({ onSetServerRunning(!info.running) }) else null,
+        // Start/Stop lives in the dedicated ServerControlCard above this hero, not in a hero CTA.
     )
+}
+
+/**
+ * The dedicated Start/Stop pair at the top of More -- the same affordance the sample apps put on
+ * their home screens, on the SDK's own surface. Rendered only when this build actually wires
+ * [InspectorDataSource.setServerRunning]; a control that can never do anything is worse than none
+ * (same honesty rule as the push Replay toast).
+ */
+@Composable
+private fun ServerControlCard(
+    running: Boolean,
+    onSetServerRunning: (Boolean) -> Unit,
+    colors: DevConsoleColors,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(if (running) colors.signalSoft else colors.surface2)
+                .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            if (running) "Server is running" else "Server is stopped",
+            color = colors.ink,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            InspectorPillButton(
+                label = "Start server",
+                onClick = { onSetServerRunning(true) },
+                modifier = Modifier.weight(1f),
+                enabled = !running,
+                containerColor = if (running) colors.panel else colors.signal,
+                contentColor = if (running) colors.muted else colors.signalInk,
+            )
+            InspectorPillButton(
+                label = "Stop",
+                onClick = { onSetServerRunning(false) },
+                modifier = Modifier.weight(1f),
+                enabled = running,
+                outlined = true,
+                contentColor = if (running) colors.ink else colors.muted,
+            )
+        }
+    }
 }
 
 /** The URL card: running vs. stopped variants. */

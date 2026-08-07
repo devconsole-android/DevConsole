@@ -97,6 +97,8 @@ import io.devconsole.ui.compose.InspectorTimingPhasesUi
 import io.devconsole.ui.compose.InspectorTrafficQuery
 import io.devconsole.ui.compose.InspectorTransactionUi
 import io.devconsole.ui.compose.TrafficStatusClass
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import java.net.URI
 import java.util.Locale
 import java.util.UUID
@@ -155,7 +157,28 @@ internal class FullInspectorDataSource(
      * live runtime state; defaults to false for tests and partial wirings.
      */
     private val keepAlivePromptSupplier: () -> Boolean = { false },
+    /**
+     * More screen Start/Stop: suspend hooks into the facade's `startBrowser`/`stop`, launched on
+     * [serverControlScope]. All three null on builds/tests that don't wire server control, which
+     * hides the More screen's control card entirely.
+     */
+    private val serverControlScope: CoroutineScope? = null,
+    private val startServer: (suspend () -> Unit)? = null,
+    private val stopServer: (suspend () -> Unit)? = null,
 ) : InspectorDataSource {
+    override fun supportsServerControl(): Boolean =
+        serverControlScope != null && startServer != null && stopServer != null
+
+    @Suppress("ReturnCount") // Guard-clause early returns (no scope, no hook) are the clearest form here.
+    override fun setServerRunning(running: Boolean): InspectorCommandResult {
+        val scope = serverControlScope ?: return InspectorCommandResult.Unavailable
+        val action = (if (running) startServer else stopServer) ?: return InspectorCommandResult.Unavailable
+        // Fire-and-forget: startBrowser/stop are suspend and this contract is synchronous. The
+        // More screen reflects the outcome through its snapshot polling rather than this result.
+        scope.launch { action() }
+        return InspectorCommandResult.Success(summary = if (running) "Starting server" else "Stopping server")
+    }
+
     override suspend fun logsForSession(sessionId: String?): List<InspectorLogUi> =
         retainedCaptures
             ?.events(sessionId)

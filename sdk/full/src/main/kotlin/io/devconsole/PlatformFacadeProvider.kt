@@ -743,6 +743,9 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 shareableFileResolver = fileInspectorInstance::resolveShareableFile,
                 evidenceStore = roomEvidenceStore,
                 evidenceSessionId = ::currentOrFallbackSessionId,
+                serverControlScope = lifecycleScope,
+                startServer = { startBrowser(StartRequest()) },
+                stopServer = { stop(StopReason.UserRequested) },
                 keepAlivePromptSupplier = ::keepAlivePromptNeeded,
             ),
         )
