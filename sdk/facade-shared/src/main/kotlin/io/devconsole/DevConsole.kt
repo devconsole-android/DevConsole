@@ -86,7 +86,12 @@ object DevConsole {
     @JvmStatic
     fun createIntent(context: Context): Intent? = provider.createInspectorIntent(context)
 
-    /** Opens the inspector from the host app's chosen trigger. The SDK never opens it automatically. */
+    /**
+     * Opens the inspector from the host app's chosen trigger. With
+     * [io.devconsole.api.OpenTriggers] the SDK can also open it on a device shake or from a
+     * floating button -- both opt-in and off by default. The server is never started by any of
+     * these.
+     */
     @JvmStatic
     fun open(context: Context): InspectorOpenResult = provider.openInspector(context)
 
@@ -94,7 +99,7 @@ object DevConsole {
      * Binds the embedded server and opens the browser dashboard. The SDK never does this on its
      * own -- [initialize] only prepares capture/storage, so nothing is reachable over the network
      * until a host calls this (or [startBrowserAsync]) explicitly, typically from a debug menu
-     * action, a shake gesture, or unconditionally from `onCreate` if that suits the host.
+     * action, or unconditionally from `onCreate` if that suits the host.
      *
      * A `suspend` function, safe to call from any dispatcher including `Main` -- the underlying
      * bind loop does blocking socket probes across [StartRequest.portRange] internally, and that

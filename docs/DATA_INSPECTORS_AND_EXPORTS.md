@@ -77,7 +77,8 @@ non-exported `FileProvider` (`<applicationId>.devconsole.files`) that every buil
 ## The More screen
 
 The device-side "More" destination (`sdk:ui-compose`'s `InspectorMoreScreen`, reachable from
-`DevConsole.open(context)`) is the operator console for the running server, independent of any
+`DevConsole.open(context)`, or via the opt-in shake / floating-button triggers in
+`DevConsoleConfig.openTriggers`) is the operator console for the running server, independent of any
 connected browser:
 
 - **Session-code / connect** — shows the live `#code=` connect URL as text and as a **QR code**

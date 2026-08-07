@@ -254,6 +254,7 @@ public final class io/devconsole/api/DevConsoleConfig {
 	public final fun getEditingCapabilities ()Lio/devconsole/api/EditingCapabilities;
 	public final fun getEventBufferCapacity ()I
 	public final fun getFeatureFlags ()Ljava/util/List;
+	public final fun getOpenTriggers ()Lio/devconsole/api/OpenTriggers;
 	public final fun getRedactionPolicy ()Lio/devconsole/security/RedactionPolicy;
 	public final fun getRetentionPolicy ()Lio/devconsole/api/RetentionPolicy;
 	public final fun getScreenshotPolicy ()Lio/devconsole/api/ScreenshotPolicy;
@@ -272,6 +273,7 @@ public final class io/devconsole/api/DevConsoleConfig {
 	public final fun withCaptureCategories ([Lio/devconsole/api/CaptureCategory;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withCrashPolicy (Lio/devconsole/api/CrashPolicy;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withEditingCapabilities (Lio/devconsole/api/EditingCapabilities;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withOpenTriggers (Lio/devconsole/api/OpenTriggers;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withRetentionPolicy (Lio/devconsole/api/RetentionPolicy;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withScreenshotPolicy (Lio/devconsole/api/ScreenshotPolicy;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withSessionPolicy (Lio/devconsole/api/SessionPolicy;)Lio/devconsole/api/DevConsoleConfig;
@@ -291,6 +293,7 @@ public final class io/devconsole/api/DevConsoleConfig$Builder {
 	public final fun crashPolicy (Lio/devconsole/api/CrashPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun editingCapabilities (Lio/devconsole/api/EditingCapabilities;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun eventBufferCapacity (I)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun openTriggers (Lio/devconsole/api/OpenTriggers;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun redactionPolicy (Lio/devconsole/security/RedactionPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun retentionPolicy (Lio/devconsole/api/RetentionPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun screenshotPolicy (Lio/devconsole/api/ScreenshotPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
@@ -595,6 +598,39 @@ public final class io/devconsole/api/InspectorOpenResult$Opened : io/devconsole/
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/devconsole/api/OpenTriggers {
+	public static final field Companion Lio/devconsole/api/OpenTriggers$Companion;
+	public fun <init> ()V
+	public fun <init> (ZLio/devconsole/api/ShakeIntensity;Z)V
+	public synthetic fun <init> (ZLio/devconsole/api/ShakeIntensity;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public static final fun builder ()Lio/devconsole/api/OpenTriggers$Builder;
+	public final fun component1 ()Z
+	public final fun component2 ()Lio/devconsole/api/ShakeIntensity;
+	public final fun component3 ()Z
+	public final fun copy (ZLio/devconsole/api/ShakeIntensity;Z)Lio/devconsole/api/OpenTriggers;
+	public static synthetic fun copy$default (Lio/devconsole/api/OpenTriggers;ZLio/devconsole/api/ShakeIntensity;ZILjava/lang/Object;)Lio/devconsole/api/OpenTriggers;
+	public static final fun disabled ()Lio/devconsole/api/OpenTriggers;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFloatingButton ()Z
+	public final fun getShakeIntensity ()Lio/devconsole/api/ShakeIntensity;
+	public final fun getShakeToOpen ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/OpenTriggers$Builder {
+	public fun <init> ()V
+	public final fun build ()Lio/devconsole/api/OpenTriggers;
+	public final fun floatingButton (Z)Lio/devconsole/api/OpenTriggers$Builder;
+	public final fun shakeIntensity (Lio/devconsole/api/ShakeIntensity;)Lio/devconsole/api/OpenTriggers$Builder;
+	public final fun shakeToOpen (Z)Lio/devconsole/api/OpenTriggers$Builder;
+}
+
+public final class io/devconsole/api/OpenTriggers$Companion {
+	public final fun builder ()Lio/devconsole/api/OpenTriggers$Builder;
+	public final fun disabled ()Lio/devconsole/api/OpenTriggers;
+}
+
 public final class io/devconsole/api/RetentionPolicy {
 	public static final field Companion Lio/devconsole/api/RetentionPolicy$Companion;
 	public static final field DEFAULT_MAX_AGE_MS J
@@ -723,6 +759,15 @@ public final class io/devconsole/api/SessionPolicy {
 }
 
 public final class io/devconsole/api/SessionPolicy$Companion {
+}
+
+public final class io/devconsole/api/ShakeIntensity : java/lang/Enum {
+	public static final field FIRM Lio/devconsole/api/ShakeIntensity;
+	public static final field LIGHT Lio/devconsole/api/ShakeIntensity;
+	public static final field MEDIUM Lio/devconsole/api/ShakeIntensity;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/api/ShakeIntensity;
+	public static fun values ()[Lio/devconsole/api/ShakeIntensity;
 }
 
 public final class io/devconsole/api/StartRequest {

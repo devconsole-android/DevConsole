@@ -257,6 +257,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     /** Never holds a strong reference to an Activity; see [ActivityTracker]'s KDoc. */
     private val activityTracker = ActivityTracker()
     private val activityTrackerRegistered = AtomicBoolean(false)
+    private var openTriggerController: OpenTriggerController? = null
     private val screenshotCaptureInstance = ScreenshotCapture()
     private val timelineLogSink =
         TimelineLogSink(::activeSessionId, { timelineAppender }, timelineSequence::incrementAndGet)
@@ -639,6 +640,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             sessionMarkerMonitor = AndroidSessionMarkerMonitor(application, sessionMarkerRecorder)
         }
         registerActivityTrackerOnce(application)
+        reconfigureOpenTriggers(application, config)
         metadata =
             application
                 .serverMetadata()
@@ -1033,6 +1035,10 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
         return Intent()
             .setClassName(context.packageName, "io.devconsole.ui.compose.DevConsoleActivity")
             .also { intent ->
+                // Single-top so a second open() -- a trigger firing during the launch window, a
+                // host button double-tapped -- re-delivers to the existing inspector instead of
+                // stacking a second instance the user has to back out of.
+                intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 if (context !is Activity) {
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
@@ -1097,6 +1103,20 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
         if (activityTrackerRegistered.compareAndSet(false, true)) {
             application.registerActivityLifecycleCallbacks(activityTracker)
         }
+    }
+
+    /** Created and registered once; every later [initialize] (host superseding provisional) just reconfigures. */
+    private fun reconfigureOpenTriggers(
+        application: Application,
+        config: DevConsoleConfig,
+    ) {
+        val controller =
+            openTriggerController
+                ?: OpenTriggerController(application, { activity -> openInspector(activity) }).also {
+                    openTriggerController = it
+                    it.registerOnce(application)
+                }
+        controller.reconfigure(config.openTriggers)
     }
 
     // Guard-clause early returns (disabled, no foreground activity, capture outcome) are the

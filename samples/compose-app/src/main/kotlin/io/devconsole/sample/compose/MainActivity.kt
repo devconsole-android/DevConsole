@@ -81,8 +81,10 @@ import io.devconsole.api.DevConsoleConfig
 import io.devconsole.api.DevConsoleState
 import io.devconsole.api.EditingCapabilities
 import io.devconsole.api.InspectorOpenResult
+import io.devconsole.api.OpenTriggers
 import io.devconsole.api.ScreenshotPolicy
 import io.devconsole.api.ScreenshotResult
+import io.devconsole.api.ShakeIntensity
 import io.devconsole.api.StartRequest
 import io.devconsole.api.StartResult
 import io.devconsole.api.StopReason
@@ -243,6 +245,8 @@ class MainActivity : ComponentActivity() {
      * foundation-app leaves every flag at its `false` default to demonstrate the locked-down,
      * read-only posture a production-adjacent debug build might ship with. views-java-app sits in
      * between: mocks and capture rules are editable, but preferences/database/files stay read-only.
+     * [OpenTriggers] follows the same gradient: this sample opts into both shake-to-open and the
+     * floating button, views-java-app enables shake only, and foundation-app leaves both off.
      *
      * Screenshot capture is off by default across the whole SDK -- [ScreenshotPolicy.enabled]
      * defaults to `false` because a screenshot can't be redacted. This sample is the one that opts
@@ -288,6 +292,9 @@ class MainActivity : ComponentActivity() {
                 .build(),
         ).withScreenshotPolicy(ScreenshotPolicy(enabled = true))
             .withCrashPolicy(CrashPolicy(anrThresholdMs = DEMO_ANR_THRESHOLD_MS))
+            .withOpenTriggers(
+                OpenTriggers(shakeToOpen = true, shakeIntensity = ShakeIntensity.MEDIUM, floatingButton = true),
+            )
     // Feature 2 demo (capture-category selection at init): uncommenting the line below scopes
     // capture down to only SOCKET + MQTT. Every other category -- NETWORK, PUSH, LOGS, CRASHES,
     // STATE, INSPECTION, MOCKS -- is then hidden (not merely emptied out) and disabled in both

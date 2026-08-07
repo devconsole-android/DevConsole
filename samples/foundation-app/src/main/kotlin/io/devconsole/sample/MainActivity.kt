@@ -138,6 +138,7 @@ class MainActivity : Activity() {
                     ),
                 // Explicit, not just the default: this sample's whole point is the locked-down
                 // contrast to compose-app's fully-unlocked EditingCapabilities.
+                // OpenTriggers likewise stays at its all-off default -- no shake-to-open, no floating button.
             ).withEditingCapabilities(EditingCapabilities.readOnly()),
         )
         // Mock rules are SESSION-scoped and dropped on every server restart, so the rule is

@@ -32,8 +32,7 @@ build-time enforcement of the split.)*
 <uses-permission android:name="android.permission.INTERNET" />
 ```
 
-**3. Start the dashboard server** from anywhere in your app — a debug menu, a shake gesture, or
-plain `onCreate`:
+**3. Start the dashboard server** from anywhere in your app — a debug menu, or plain `onCreate`:
 
 ```kotlin
 lifecycleScope.launch { // startBrowser is a suspend function
@@ -55,17 +54,6 @@ SharedPreferences, SQLite, and files (read-only by default). Wire your HTTP clie
 (["Wire up your network stack"](#wire-up-your-network-stack) below) and network, WebSocket, and
 MQTT traffic live-tails in too — with mock rules and one-click HAR / Postman / bug-report exports.
 
-> **Not on Maven Central yet.** The first release is being prepared. Until it lands, clone this
-> repo and publish everything to your local Maven cache:
->
-> ```bash
-> ./gradlew publishToMavenLocal                  # the SDK artifacts
-> ./gradlew -p gradle-plugin publishToMavenLocal # the Gradle plugin
-> ```
->
-> then add `mavenLocal()` to both repository blocks of the consuming project's
-> `settings.gradle.kts` — the coordinates above then resolve from `~/.m2/repository`.
-
 ## What you get
 
 | Area | What it does |
@@ -79,13 +67,20 @@ MQTT traffic live-tails in too — with mock rules and one-click HAR / Postman /
 | **State & feature flags** | Snapshot host-registered state and override feature flags from the browser. |
 | **Data inspectors** | Browse SharedPreferences, SQLite (incl. a SQL console), and app files. Read-only by default; every edit surface is opt-in. |
 | **Evidence tray & exports** | Flag anything, attach it to a bug report bundle or Markdown/Jira/GitHub clipboard text. Export HAR, Postman Collection, or a full session ZIP. |
-| **In-app inspector** | `DevConsole.open(context)` shows the same inspectors as an on-device screen (included with `devconsole`), plus a QR code for pairing the browser. |
+| **In-app inspector** | `DevConsole.open(context)` shows the same inspectors as an on-device screen (included with `devconsole`), plus a QR code for pairing the browser. Shake-to-open (with adjustable intensity) and a draggable floating button are available as opt-in `DevConsoleConfig.openTriggers` flags. |
 | **Background keep-alive** | Opt-in foreground service that keeps the server alive while your app is backgrounded. Manifest-only opt-in, zero SDK-declared permissions. |
 
 Capture is category-scoped: `DevConsoleConfig.withCaptureCategories(...)` narrows what's recorded
 (`NETWORK`, `SOCKET`, `MQTT`, `PUSH`, `LOGS`, `CRASHES`, `STATE`, `INSPECTION`, `MOCKS` — default
 is all). Events persist in a Room database bounded by a retention policy (7 days / 100 MB by
 default).
+
+Opening the inspector can also be delegated to the SDK — both triggers only open the in-app
+inspector, never the server, and both are off by default:
+
+```kotlin
+DevConsoleConfig.default().withOpenTriggers(OpenTriggers(shakeToOpen = true, floatingButton = true))
+```
 
 ## How it works
 
@@ -242,9 +237,9 @@ Three runnable samples under [`samples/`](samples/) cover every integration styl
 
 | Sample | Stack | Posture |
 |---|---|---|
-| [`compose-app`](samples/compose-app) | Jetpack Compose | Everything unlocked: all editing capabilities, composer, screenshots, MQTT + WebSocket demos, in-app inspector |
+| [`compose-app`](samples/compose-app) | Jetpack Compose | Everything unlocked: all editing capabilities, composer, screenshots, MQTT + WebSocket demos, in-app inspector, shake + floating-button open triggers |
 | [`foundation-app`](samples/foundation-app) | Stock widgets, no UI framework | Everything at its locked-down default — the read-only contrast |
-| [`views-java-app`](samples/views-java-app) | Java + XML, `ui-views` panel | Middle ground: mocks and capture rules editable, data read-only, async Java APIs |
+| [`views-java-app`](samples/views-java-app) | Java + XML, `ui-views` panel | Middle ground: mocks and capture rules editable, data read-only, async Java APIs, shake-to-open (LIGHT) |
 
 ```bash
 ./gradlew :samples:compose-app:assembleDebug

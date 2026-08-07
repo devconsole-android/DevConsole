@@ -19,6 +19,15 @@ removed before ever shipping — see Removed, below — so it never joined this 
 From 1.0.0 onward: breaking changes to `sdk:api` require a major version, new API requires a minor,
 and everything else is a patch.
 
+## Unreleased
+
+### Added
+
+- **Opt-in open triggers.** `DevConsoleConfig.openTriggers` lets the SDK itself open the in-app
+  inspector on a device shake (`ShakeIntensity` — `LIGHT`/`MEDIUM`/`FIRM` — sets how hard) or from a
+  draggable floating button. Both default to off, and neither has any path to starting the embedded
+  server — triggers only open the inspector UI.
+
 ## 0.1.0 — 2026-08-07
 
 First public release.

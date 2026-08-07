@@ -41,7 +41,9 @@ import io.devconsole.api.BindingMode;
 import io.devconsole.api.DevConsoleConfig;
 import io.devconsole.api.DevConsoleState;
 import io.devconsole.api.EditingCapabilities;
+import io.devconsole.api.OpenTriggers;
 import io.devconsole.api.ScreenshotResult;
+import io.devconsole.api.ShakeIntensity;
 import io.devconsole.api.StartRequest;
 import io.devconsole.api.StartResult;
 import io.devconsole.api.StopReason;
@@ -222,6 +224,7 @@ public final class MainActivity extends Activity {
         );
         // mocks + captureRules editable, preferences/database/files read-only -- see the class-level
         // comment for how this sits between compose-app's and foundation-app's postures.
+        // Open triggers take the same middle ground below: shake-to-open only (LIGHT), no floating button.
         EditingCapabilities editingCapabilities = EditingCapabilities.builder()
                 .mocks(true)
                 .captureRules(true)
@@ -232,6 +235,10 @@ public final class MainActivity extends Activity {
                 .addStateProvider(stateProvider)
                 .addFeatureFlag(featureFlag)
                 .editingCapabilities(editingCapabilities)
+                .openTriggers(OpenTriggers.builder()
+                        .shakeToOpen(true)
+                        .shakeIntensity(ShakeIntensity.LIGHT)
+                        .build())
                 .build();
     }
 

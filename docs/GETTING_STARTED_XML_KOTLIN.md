@@ -46,14 +46,20 @@ module today; it is your responsibility to scope it to `debugImplementation` you
 
 4. Initialize and bind the panel. On a debuggable build the SDK has already auto-initialized by
    this point, so `initialize` is only needed when you have configuration to pass (state providers,
-   flags). The panel starts out showing "not running" either way -- the browser server is never
-   auto-started, so `onStart` below is what actually opens it. `DevConsoleState.Running` carries no
+   flags, open triggers). The panel starts out showing "not running" either way -- the browser
+   server is never auto-started, so `onStart` below is what actually opens it. `DevConsoleState.Running` carries no
    payload, so call `panel.setEndpoint(...)` with the `StartResult.Started.endpoint` your own
    `onStart` receives if you want the running address shown — it's cleared automatically the next
    time the panel renders a non-running state:
 
 ```kotlin
-DevConsole.initialize(application, DevConsoleConfig.default())
+DevConsole.initialize(
+    application,
+    DevConsoleConfig.default()
+        // Optional: let the SDK open the in-app inspector on a shake or from a floating
+        // button. Both are off by default and never start the server.
+        .withOpenTriggers(OpenTriggers(shakeToOpen = true, floatingButton = true)),
+)
 
 val panel: DevConsolePanelView = findViewById(R.id.dev_console_panel)
 panel.bind(

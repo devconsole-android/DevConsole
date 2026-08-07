@@ -25,6 +25,12 @@ follow a QA override. See [STATE_AND_FLAGS.md](STATE_AND_FLAGS.md).
 declared once via `DevConsoleConfig` at `initialize()` time, to avoid a race between a late
 registration and the dashboard having already read an earlier snapshot.
 
+**Shaking the device does nothing, and there's no floating button.** Both triggers are opt-in via
+`DevConsoleConfig.openTriggers` and off by default — pass
+`withOpenTriggers(OpenTriggers(shakeToOpen = true, floatingButton = true))` at `initialize()` time,
+and tune how hard a shake must be with `ShakeIntensity` (`LIGHT`/`MEDIUM`/`FIRM`). Either trigger
+only opens the in-app inspector; neither ever starts the server.
+
 **A mock rule isn't matching.** Check the Mocks page's conflict detector first — a
 higher-priority or more-specific rule may be winning instead. Matching is deterministic: highest
 priority wins, ties broken by specificity, then by creation order. See

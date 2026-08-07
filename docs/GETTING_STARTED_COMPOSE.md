@@ -41,10 +41,16 @@ cover this module today; it is your responsibility to scope it to `debugImplemen
    server itself is never auto-started; call `DevConsole.startBrowser()` yourself (step 4) and read
    the connect URL from the returned `StartResult.Started.access` (or the device's More screen — the
    logged URL deliberately omits the credential fragment). Initialize explicitly when you need to pass
-   configuration (state providers, flags):
+   configuration (state providers, flags, open triggers):
 
 ```kotlin
-DevConsole.initialize(application, DevConsoleConfig.default())
+DevConsole.initialize(
+    application,
+    DevConsoleConfig.default()
+        // Optional: let the SDK open the in-app inspector on a shake or from a floating
+        // button. Both are off by default and never start the server.
+        .withOpenTriggers(OpenTriggers(shakeToOpen = true, floatingButton = true)),
+)
 ```
 
 4. Drop in the optional Compose launcher panel, or build your own with `DevConsole.state()`.

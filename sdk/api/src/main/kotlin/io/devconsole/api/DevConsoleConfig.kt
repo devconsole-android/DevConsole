@@ -66,6 +66,10 @@ data class DevConsoleConfig(
     var captureCategories: Set<CaptureCategory> = CaptureCategory.all()
         private set
 
+    /** Opt-in in-app ways to open the inspector UI. See [OpenTriggers]; everything defaults to off. */
+    var openTriggers: OpenTriggers = OpenTriggers()
+        private set
+
     fun withStoragePolicy(value: StoragePolicy): DevConsoleConfig =
         duplicate().also {
             it.storagePolicy = value
@@ -105,6 +109,8 @@ data class DevConsoleConfig(
         duplicate().also { it.captureCategories = value }
 
     fun withCaptureCategories(vararg values: CaptureCategory): DevConsoleConfig = withCaptureCategories(values.toSet())
+
+    fun withOpenTriggers(value: OpenTriggers): DevConsoleConfig = duplicate().also { it.openTriggers = value }
 
     fun capturesCategory(category: CaptureCategory): Boolean = category in captureCategories
 
@@ -153,7 +159,8 @@ data class DevConsoleConfig(
             browserConfig == other.browserConfig &&
             crashPolicy == other.crashPolicy &&
             screenshotPolicy == other.screenshotPolicy &&
-            captureCategories == other.captureCategories
+            captureCategories == other.captureCategories &&
+            openTriggers == other.openTriggers
 
     private fun duplicate(): DevConsoleConfig =
         copy().also {
@@ -165,6 +172,7 @@ data class DevConsoleConfig(
             it.crashPolicy = crashPolicy
             it.screenshotPolicy = screenshotPolicy
             it.captureCategories = captureCategories
+            it.openTriggers = openTriggers
         }
 
     /** Mutable builder for Java callers and for incremental construction. */
@@ -185,6 +193,7 @@ data class DevConsoleConfig(
         private var crashPolicy = CrashPolicy()
         private var screenshotPolicy = ScreenshotPolicy()
         private var captureCategories: Set<CaptureCategory> = CaptureCategory.all()
+        private var openTriggers = OpenTriggers()
 
         fun eventBufferCapacity(value: Int) = apply { eventBufferCapacity = value }
 
@@ -218,6 +227,8 @@ data class DevConsoleConfig(
 
         fun addCaptureCategory(value: CaptureCategory) = apply { captureCategories = captureCategories + value }
 
+        fun openTriggers(value: OpenTriggers) = apply { openTriggers = value }
+
         fun build(): DevConsoleConfig {
             val configured =
                 DevConsoleConfig(
@@ -235,6 +246,7 @@ data class DevConsoleConfig(
                     .withCrashPolicy(crashPolicy)
                     .withScreenshotPolicy(screenshotPolicy)
                     .withCaptureCategories(captureCategories)
+                    .withOpenTriggers(openTriggers)
             return retentionPolicy?.let(configured::withRetentionPolicy) ?: configured
         }
     }

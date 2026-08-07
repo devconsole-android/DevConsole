@@ -31,7 +31,11 @@ async variants are `@JvmOverloads`), so it reads like a plain Java utility class
    carries no payload, so this is the only way to get it):
 
 ```java
-DevConsole.initialize(getApplication(), new DevConsoleConfig());
+DevConsole.initialize(getApplication(), DevConsoleConfig.builder()
+    // Optional: let the SDK open the in-app inspector on a shake or from a floating
+    // button. Both are off by default and never start the server.
+    .openTriggers(OpenTriggers.builder().shakeToOpen(true).floatingButton(true).build())
+    .build());
 
 DevConsolePanelView panel = findViewById(R.id.dev_console_panel);
 CoroutineScope panelScope = CoroutineScopeKt.CoroutineScope(Dispatchers.getMain());
