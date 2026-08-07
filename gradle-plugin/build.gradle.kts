@@ -6,7 +6,9 @@ plugins {
     id("com.gradle.plugin-publish") version "1.3.1"
 }
 
-group = "io.devconsole"
+// Must share a top-level namespace with the plugin ID (a Plugin Portal requirement) and match
+// the SDK's Maven group.
+group = "io.github.shakibuzzaman3104"
 version = "0.1.0"
 
 // Targets Java 17: this plugin JAR runs inside the Gradle daemon (Gradle 9.5
