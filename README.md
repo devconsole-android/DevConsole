@@ -1,9 +1,10 @@
 # DevConsole
 
-An on-device developer console for Android. It embeds a small web server inside your **debug**
-builds and serves a full debugging dashboard to any browser on your machine — no desktop app, no
-IDE plugin required. Release builds compile against a no-op twin artifact, so none of this code
-ever ships to production, and the Gradle plugin fails the build if it would.
+An on-device developer console for Android. Open a full inspector — network traffic, crashes,
+storage, feature flags, exports — right inside your **debug** app, by shake, floating button, or
+one line of code. When you want a bigger screen, the same data streams to any browser through an
+embedded web dashboard. Release builds compile against a no-op twin artifact, so none of this
+code ever ships to production, and the Gradle plugin fails the build if it would.
 
 ## TL;DR
 
@@ -26,38 +27,52 @@ plugins. If the `id("io.github.devconsole-android")` line doesn't resolve yet, j
 two dependencies work on their own; the plugin only adds automatic debug/release wiring and
 build-time enforcement of the split.)*
 
-**2. Make sure your manifest has `INTERNET`** (most apps already do):
-
-```xml
-<uses-permission android:name="android.permission.INTERNET" />
-```
-
-**3. Start the dashboard server** from anywhere in your app — a debug menu, or plain `onCreate`:
+**2. Open the inspector on the device.** The SDK auto-initializes on debuggable builds, so this
+works immediately — from any button in your debug UI:
 
 ```kotlin
-lifecycleScope.launch { // startBrowser is a suspend function
+DevConsole.open(context)
+```
+
+or hands-free, by opting into the built-in triggers — shake the device (intensity adjustable) or
+tap a draggable floating button:
+
+```kotlin
+DevConsole.initialize(
+    application,
+    DevConsoleConfig.default()
+        .withOpenTriggers(OpenTriggers(shakeToOpen = true, floatingButton = true)),
+)
+```
+
+That's the setup. The inspector shows crash/ANR reports, feature flags, and inspectors for
+SharedPreferences, SQLite, and files (read-only by default); wire your HTTP client with one line
+(["Wire up your network stack"](#wire-up-your-network-stack) below) and network, WebSocket, and
+MQTT traffic appears too.
+
+**3. Want a bigger screen? Start the browser dashboard** — the same data live-tailing in any
+browser, plus mock-rule editing and one-click HAR / Postman / bug-report exports. Make sure your
+manifest has `INTERNET` (most apps already do), then:
+
+```kotlin
+lifecycleScope.launch { // startBrowser is a suspend function; the server never starts on its own
     val result = DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))
     val connectUrl = (result as? StartResult.Started)?.access?.connectUrl
     // e.g. http://127.0.0.1:8080/#code=B7KQ2XWZ — surface this in your debug UI
 }
 ```
 
-**4. Bridge the port and open the URL** — the *whole* URL, `#code=` fragment included; that
-fragment is the credential:
-
 ```bash
 adb reverse tcp:8080 tcp:8080   # use the port from the DevConsole log line
 ```
 
-That's the setup. The dashboard is live with crash/ANR reports, feature flags, and inspectors for
-SharedPreferences, SQLite, and files (read-only by default). Wire your HTTP client with one line
-(["Wire up your network stack"](#wire-up-your-network-stack) below) and network, WebSocket, and
-MQTT traffic live-tails in too — with mock rules and one-click HAR / Postman / bug-report exports.
+then open the **whole URL** — the `#code=` fragment is the credential.
 
 ## What you get
 
 | Area | What it does |
 |---|---|
+| **In-app inspector** | `DevConsole.open(context)` shows every inspector below as an on-device screen (included with `devconsole`), plus a QR code for pairing the browser. Opens by shake (adjustable intensity) or draggable floating button via the opt-in `DevConsoleConfig.openTriggers` flags. |
 | **Network inspector** | Every HTTP call with headers, bodies, and a DNS/TCP/TLS/send/wait/receive timing bar. Live-tails as traffic happens. |
 | **WebSocket & MQTT inspectors** | Connection lifecycles and every frame, inbound and outbound. MQTT rides the Eclipse Paho adapter. |
 | **Mock rules** | Serve canned responses for matching requests (OkHttp), toggled from the dashboard, with deterministic priority matching. |
@@ -67,20 +82,12 @@ MQTT traffic live-tails in too — with mock rules and one-click HAR / Postman /
 | **State & feature flags** | Snapshot host-registered state and override feature flags from the browser. |
 | **Data inspectors** | Browse SharedPreferences, SQLite (incl. a SQL console), and app files. Read-only by default; every edit surface is opt-in. |
 | **Evidence tray & exports** | Flag anything, attach it to a bug report bundle or Markdown/Jira/GitHub clipboard text. Export HAR, Postman Collection, or a full session ZIP. |
-| **In-app inspector** | `DevConsole.open(context)` shows the same inspectors as an on-device screen (included with `devconsole`), plus a QR code for pairing the browser. Shake-to-open (with adjustable intensity) and a draggable floating button are available as opt-in `DevConsoleConfig.openTriggers` flags. |
 | **Background keep-alive** | Opt-in foreground service that keeps the server alive while your app is backgrounded. Manifest-only opt-in, zero SDK-declared permissions. |
 
 Capture is category-scoped: `DevConsoleConfig.withCaptureCategories(...)` narrows what's recorded
 (`NETWORK`, `SOCKET`, `MQTT`, `PUSH`, `LOGS`, `CRASHES`, `STATE`, `INSPECTION`, `MOCKS` — default
 is all). Events persist in a Room database bounded by a retention policy (7 days / 100 MB by
 default).
-
-Opening the inspector can also be delegated to the SDK — both triggers only open the in-app
-inspector, never the server, and both are off by default:
-
-```kotlin
-DevConsoleConfig.default().withOpenTriggers(OpenTriggers(shakeToOpen = true, floatingButton = true))
-```
 
 ## How it works
 
@@ -97,7 +104,25 @@ call `startBrowser(...)` explicitly.
 
 ## Step-by-step guide
 
-### Start and stop the server
+### Open the in-app inspector
+
+`DevConsole.open(context)` opens the inspector from any trigger you like and returns an
+`InspectorOpenResult`. To let the SDK open it without host code, opt into the triggers — both are
+off by default, and neither ever starts the server:
+
+```kotlin
+DevConsoleConfig.default().withOpenTriggers(
+    OpenTriggers(
+        shakeToOpen = true,
+        shakeIntensity = ShakeIntensity.MEDIUM, // LIGHT | MEDIUM | FIRM
+        floatingButton = true,
+    ),
+)
+```
+
+Java: `DevConsoleConfig.builder().openTriggers(OpenTriggers.builder().shakeToOpen(true).build())`.
+
+### Start and stop the dashboard server
 
 ```kotlin
 // Optional — auto-init already ran on debuggable builds. Call it yourself to customize:
