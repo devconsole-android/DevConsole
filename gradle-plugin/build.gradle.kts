@@ -3,7 +3,7 @@ plugins {
     id("java-gradle-plugin")
     id("maven-publish")
     // Latest 1.x release: 2.x raises the minimum Gradle version this repo isn't ready to require yet.
-    id("com.gradle.plugin-publish") version "1.3.1"
+    id("com.gradle.plugin-publish") version "2.1.1"
 }
 
 // Must share a top-level namespace with the plugin ID (a Plugin Portal requirement) and match
