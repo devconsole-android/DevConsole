@@ -8,6 +8,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import io.devconsole.api.AccessInfo
+import io.devconsole.api.BrowserBinding
 import io.devconsole.api.BrowserEndpoint
 import io.devconsole.api.CaptureCategory
 import io.devconsole.api.CaptureRuleEngine
@@ -772,10 +773,37 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 evidenceStore = roomEvidenceStore,
                 evidenceSessionId = ::currentOrFallbackSessionId,
                 serverControlScope = lifecycleScope,
-                startServer = { startBrowser(StartRequest()) },
+                startServer = { startBrowser(configuredStartRequest()) },
                 stopServer = { stop(StopReason.UserRequested) },
                 keepAlivePromptSupplier = ::keepAlivePromptNeeded,
             ),
+        )
+    }
+
+    /**
+     * The [StartRequest] the inspector's own More-screen Start button issues.
+     *
+     * The More screen has no request parameters of its own, so before this it always sent a default
+     * [StartRequest] -- meaning it bound loopback no matter what the host had configured, and a host
+     * that wanted LAN could only get it by calling [startBrowser] itself from its own UI. That is
+     * what [io.devconsole.api.BrowserConfig.binding] is for, and it is now the field that decides:
+     * an on-device start binds what the host asked for, and uses the port range it asked for too.
+     *
+     * Nothing here loosens the default. [BrowserBinding.LOOPBACK] remains the default on
+     * [io.devconsole.api.BrowserConfig], so LAN is still reached only by a host that explicitly asks
+     * for it, and a LAN start still passes through the same [rejectUnpermittedLan] gate as any
+     * other -- returning [StartResult.PermissionRequired] rather than binding, which the More screen
+     * surfaces through its normal state polling.
+     */
+    private fun configuredStartRequest(): StartRequest {
+        val browser = activeConfig?.browserConfig ?: return StartRequest()
+        return StartRequest(
+            bindingMode =
+                when (browser.binding) {
+                    BrowserBinding.LOOPBACK -> PublicBindingMode.LOOPBACK
+                    BrowserBinding.LAN -> PublicBindingMode.LAN
+                },
+            portRange = browser.portRange,
         )
     }
 

@@ -105,13 +105,13 @@ object DevConsole {
      * work is already moved off the caller's dispatcher, so calling this from
      * `lifecycleScope.launch { }` on the main thread will not ANR.
      *
-     * [StartRequest.bindingMode] decides loopback-vs-LAN for *this call*; there is currently no
-     * [DevConsoleConfig] value that provides a default for it -- see the KDoc on
-     * [io.devconsole.api.BindingMode] and [io.devconsole.api.BrowserBinding] for the full story on
-     * why a `BrowserBinding` field exists on `DevConsoleConfig.browserConfig` but doesn't drive
-     * this call. The default `StartRequest()` binds loopback, which is the safe choice -- see
-     * `docs/THREAT_MODEL.md` at the repository root before ever passing
-     * `bindingMode = BindingMode.LAN`.
+     * [StartRequest.bindingMode] decides loopback-vs-LAN for *this call*, and no [DevConsoleConfig]
+     * value provides a default for it: `DevConsoleConfig.browserConfig.binding` governs only the
+     * starts this method is not making -- the in-app inspector's More-screen Start button -- so a
+     * host that wants LAN from both surfaces sets both. See the KDoc on
+     * [io.devconsole.api.BindingMode] and [io.devconsole.api.BrowserBinding]. The default
+     * `StartRequest()` binds loopback, which is the safe choice -- see `docs/THREAT_MODEL.md` at
+     * the repository root before ever passing `bindingMode = BindingMode.LAN`.
      *
      * @param request binding mode and port range for this start attempt. Defaults to loopback on
      *   `8080..8099`.

@@ -38,6 +38,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import io.devconsole.DevConsole;
 import io.devconsole.api.BindingMode;
+import io.devconsole.api.BrowserBinding;
+import io.devconsole.api.BrowserConfig;
 import io.devconsole.api.DevConsoleConfig;
 import io.devconsole.api.DevConsoleState;
 import io.devconsole.api.EditingCapabilities;
@@ -239,6 +241,11 @@ public final class MainActivity extends Activity {
                         .shakeToOpen(true)
                         .shakeIntensity(ShakeIntensity.LIGHT)
                         .build())
+                // Matches the BindingMode.LAN passed to startBrowserAsync below: the in-app
+                // inspector's More screen issues no StartRequest of its own, so without this it
+                // would bind loopback while this activity's own Start button binds LAN.
+                .browserConfig(new BrowserConfig(BrowserBinding.LAN, new kotlin.ranges.IntRange(8080, 8099),
+                        BrowserConfig.DEFAULT_SESSION_CODE_TTL_MS))
                 .build();
     }
 

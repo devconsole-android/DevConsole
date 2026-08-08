@@ -6,15 +6,19 @@ private const val DEFAULT_PORT_RANGE_START = 8080
 private const val DEFAULT_PORT_RANGE_END = 8099
 
 /**
- * Network exposure declared on [BrowserConfig] (`DevConsoleConfig.browserConfig.binding`). Despite
- * living on the host's [DevConsoleConfig], this field is **not currently consumed** by the running
- * server -- as of this writing, binding mode for an actual
- * [io.devconsole.DevConsole.startBrowser] call is decided entirely by the separate
- * [StartRequest.bindingMode] (which has its own [BindingMode] type and its own [BindingMode.LOOPBACK]
- * default, independent of this field). Setting [BrowserConfig.binding] round-trips through
- * [DevConsoleConfig] and back out, but has no effect on what the server actually binds to; treat
- * [StartRequest.bindingMode] as the only thing that matters until this is wired up. See the KDoc on
- * [BindingMode] for the other half of this relationship.
+ * Network exposure declared on [BrowserConfig] (`DevConsoleConfig.browserConfig.binding`), for
+ * server starts the host does not issue itself.
+ *
+ * The two binding types cover the two ways a server can start, and neither overrides the other:
+ * a [io.devconsole.DevConsole.startBrowser] call the host makes carries its own
+ * [StartRequest.bindingMode] and this field is not consulted, while a start the host does *not*
+ * make -- the Start button on the in-app inspector's More screen, which has no request of its own --
+ * binds what this field says. Configure this when you want an on-device start to reach the browser
+ * over the network; pass [StartRequest.bindingMode] when your own code is doing the starting.
+ *
+ * [LOOPBACK] is the default here for the same reason it is on [BindingMode]: the dashboard speaks
+ * plaintext HTTP, so [LAN] is an explicit decision to expose captured headers, tokens, and bodies to
+ * anyone who can see the traffic. See the KDoc on [BindingMode] and `docs/THREAT_MODEL.md`.
  */
 enum class BrowserBinding { LOOPBACK, LAN }
 

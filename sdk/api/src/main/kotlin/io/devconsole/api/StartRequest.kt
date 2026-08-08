@@ -12,12 +12,12 @@ private const val DEFAULT_PORT_RANGE_END = 8099
  * passing `LAN`.
  *
  * This is a distinct type from [BrowserBinding] on [BrowserConfig] (`DevConsoleConfig.browserConfig`),
- * and the two are **not** layered as "config provides a default, [StartRequest] overrides it": as
- * of this writing, [BrowserConfig.binding] is not read by the running server at all -- only
- * [StartRequest.bindingMode] (defaulting to [BindingMode.LOOPBACK] via [StartRequest]'s own
- * default constructor argument, independent of any [DevConsoleConfig] the host installed) decides the
- * actual binding mode for a given [io.devconsole.DevConsole.startBrowser] call. See the KDoc on
- * [BrowserBinding] for the config-side field this leaves currently inert.
+ * and the two are **not** layered as "config provides a default, [StartRequest] overrides it". They
+ * answer for different callers: this type decides a start the host issues itself, where the request
+ * is right there at the call site and defaults to [BindingMode.LOOPBACK] regardless of what any
+ * [DevConsoleConfig] says; [BrowserConfig.binding] decides a start the host does not issue -- the
+ * in-app inspector's More-screen Start button, which has no [StartRequest] to carry. Neither reads
+ * the other. See the KDoc on [BrowserBinding] for that side.
  */
 enum class BindingMode { LOOPBACK, LAN }
 

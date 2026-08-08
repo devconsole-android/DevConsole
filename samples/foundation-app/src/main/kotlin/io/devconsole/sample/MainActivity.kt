@@ -26,6 +26,8 @@ import android.widget.TextView
 import android.widget.Toast
 import io.devconsole.DevConsole
 import io.devconsole.api.BindingMode
+import io.devconsole.api.BrowserBinding
+import io.devconsole.api.BrowserConfig
 import io.devconsole.api.DevConsoleConfig
 import io.devconsole.api.DevConsoleState
 import io.devconsole.api.EditingCapabilities
@@ -139,7 +141,13 @@ class MainActivity : Activity() {
                 // Explicit, not just the default: this sample's whole point is the locked-down
                 // contrast to compose-app's fully-unlocked EditingCapabilities.
                 // OpenTriggers likewise stays at its all-off default -- no shake-to-open, no floating button.
-            ).withEditingCapabilities(EditingCapabilities.readOnly()),
+            ).withEditingCapabilities(EditingCapabilities.readOnly())
+                // Matches the BindingMode.LAN this sample's own Start button passes: the in-app
+                // inspector's More screen issues no StartRequest, so without this it would bind
+                // loopback and the two start paths would hand out different connect URLs. This is
+                // the one place LAN is deliberate in an otherwise locked-down sample -- see the
+                // start call site and docs/THREAT_MODEL.md.
+                .withBrowserConfig(BrowserConfig(binding = BrowserBinding.LAN)),
         )
         // Mock rules are SESSION-scoped and dropped on every server restart, so the rule is
         // (re)installed from the Running-state observer below, not once here -- a one-shot install

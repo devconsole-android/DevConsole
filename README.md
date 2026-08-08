@@ -142,6 +142,17 @@ shows the live connect URL — as text, a copy button, and a QR code to scan fro
 
 <p align="center"><img src="docs/images/inspector-more-server.png" width="300" alt="More screen — server started from the device, showing the connect URL" /></p>
 
+That button binds **loopback** by default, so the URL it shows needs `adb forward`. To make it bind
+LAN instead — so the QR code is scannable from another machine with no forwarding — declare it on
+the config, since the button issues no `StartRequest` of its own:
+
+```kotlin
+DevConsoleConfig.default().withBrowserConfig(BrowserConfig(binding = BrowserBinding.LAN))
+```
+
+This is independent of the `bindingMode` you pass to `startBrowser` yourself; set both if you start
+the server from your own UI too. Read [the threat model](docs/THREAT_MODEL.md) before choosing LAN.
+
 From code:
 
 ```kotlin
