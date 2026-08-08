@@ -20,6 +20,11 @@ joined this list.)
 
 ## Unreleased
 
+## 1.0.1 — 2026-08-08
+
+A patch in the strict sense the [policy](#versioning-and-stability-policy) now commits to: one
+browser-side bug fix, no API change of any kind.
+
 ### Fixed
 
 - **Long response bodies were cut off in the dashboard's detail pane, with nothing to scroll.** The
