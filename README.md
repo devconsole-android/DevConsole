@@ -138,6 +138,12 @@ Activity changes and rotation (it re-clamps into the window so it can never be s
 It rests at 65% opacity so it doesn't hide the UI underneath, and goes fully opaque while you're
 touching it. A drag never counts as a tap, so moving it won't open the inspector.
 
+Both triggers are **UI-framework agnostic**: the button is a plain `ImageView` added to the
+Activity's decor view and the shake detector is a sensor listener, so an XML/Views or Java host gets
+exactly the same behaviour as a Compose one — no `ui-compose` or `ui-views` dependency involved.
+Java: `OpenTriggers.builder().shakeToOpen(true).floatingButton(true).build()`, as
+[`views-java-app`](samples/views-java-app) does.
+
 Java: `DevConsoleConfig.builder().openTriggers(OpenTriggers.builder().shakeToOpen(true).build())`.
 
 ### Start and stop the dashboard server
@@ -340,7 +346,7 @@ Three runnable samples under [`samples/`](samples/) cover every integration styl
 |---|---|---|
 | [`compose-app`](samples/compose-app) | Jetpack Compose | Everything unlocked: all editing capabilities, composer, screenshots, OkHttp + Ktor (CIO) network demos, MQTT + WebSocket demos, in-app inspector, shake + floating-button open triggers |
 | [`foundation-app`](samples/foundation-app) | Stock widgets, no UI framework | Everything at its locked-down default — the read-only contrast |
-| [`views-java-app`](samples/views-java-app) | Java + XML, `ui-views` panel | Middle ground: mocks and capture rules editable, data read-only, async Java APIs, shake-to-open (LIGHT) |
+| [`views-java-app`](samples/views-java-app) | Java + XML, `ui-views` panel | Middle ground: mocks and capture rules editable, data read-only, async Java APIs, shake-to-open (LIGHT) + floating button — the same draggable one Compose hosts get, since it is a plain `View` on the decor view, not a Compose feature |
 
 ```bash
 ./gradlew :samples:compose-app:assembleDebug
