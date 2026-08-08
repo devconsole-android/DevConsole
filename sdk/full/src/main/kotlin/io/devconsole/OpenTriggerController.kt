@@ -164,6 +164,10 @@ internal class OpenTriggerController(
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 contentDescription = BUTTON_CONTENT_DESCRIPTION
                 elevation = BUTTON_ELEVATION_DP * density
+                // Sits on top of the host's own UI, so it stays translucent at rest rather than
+                // hiding whatever it happens to be parked over; touching it returns it to full
+                // opacity, which also makes it obvious what you have hold of while dragging.
+                alpha = BUTTON_IDLE_ALPHA
                 // The mark carries its own rounded-square plate, so the button needs no background of
                 // its own -- but an elevation shadow is cast from the view's outline, which defaults to
                 // the full rectangle and would leak out past the artwork's transparent corners.
@@ -220,6 +224,7 @@ internal class OpenTriggerController(
                     startX = view.x
                     startY = view.y
                     dragging = false
+                    view.alpha = BUTTON_ACTIVE_ALPHA
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -230,10 +235,14 @@ internal class OpenTriggerController(
                     true
                 }
                 MotionEvent.ACTION_UP -> {
+                    view.alpha = BUTTON_IDLE_ALPHA
                     if (!dragging) view.performClick()
                     true
                 }
-                MotionEvent.ACTION_CANCEL -> true
+                MotionEvent.ACTION_CANCEL -> {
+                    view.alpha = BUTTON_IDLE_ALPHA
+                    true
+                }
                 else -> false
             }
 
@@ -291,6 +300,14 @@ internal class OpenTriggerController(
 
         /** Matches the corner radius drawn into `devconsole_logo`, as a fraction of its width. */
         const val BUTTON_CORNER_RADIUS_FRACTION = 0.193f
+
+        /**
+         * Resting and touched opacity. The button floats over the host app's own UI for the whole
+         * session, so at rest it stays legible without fully hiding what is beneath it; any touch
+         * takes it to opaque, which doubles as the drag affordance.
+         */
+        const val BUTTON_IDLE_ALPHA = 0.65f
+        const val BUTTON_ACTIVE_ALPHA = 1f
         const val OPEN_DEBOUNCE_MS = 1_000L
         private const val ACCELEROMETER_AXES = 3
     }

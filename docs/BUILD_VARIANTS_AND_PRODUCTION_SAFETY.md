@@ -108,6 +108,36 @@ and never writes to any store — confirmed by dedicated tests in `NoopFacadeTes
 thing production builds must never perform, not just the resulting network request to a dashboard
 that doesn't exist in that build.
 
+## Permissions never reach a release build
+
+Manifest entries merge from dependencies, so it is worth being explicit about which ones DevConsole
+contributes and where they stop. `sdk:full` declares exactly two — `ACCESS_LOCAL_NETWORK` (Android
+17+ gates local-network access; without it a LAN-bound dashboard binds and serves nobody) and
+`ACCESS_NETWORK_STATE` (a normal permission, used only for connectivity-change timeline markers).
+`sdk:noop` declares none. Since `sdk:full` is a `debugImplementation` and `sdk:noop` is what a
+release variant compiles against, neither permission can appear in a released APK or AAB, and
+there is nothing to declare to Google Play.
+
+The keep-alive permissions (`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`,
+`POST_NOTIFICATIONS`) are not DevConsole's at all — the SDK declares none of them, and a host opts
+in by putting them in its **own `src/debug` manifest**, which is what keeps them out of release too.
+See [BACKGROUND_KEEPALIVE.md](BACKGROUND_KEEPALIVE.md).
+
+`INTERNET` is the one permission a DevConsole feature needs that the SDK does not declare: binding
+the dashboard's TCP socket requires it, but it is not DevConsole-specific and most apps already
+carry it for their own networking, so hosts declare it themselves.
+
+Rather than trusting any of that, check a real artifact:
+
+```bash
+aapt2 dump permissions app/build/outputs/apk/release/app-release.apk
+```
+
+Run against `samples/compose-app` — the sample with every feature switched on — the debug APK lists
+`ACCESS_LOCAL_NETWORK`, `ACCESS_NETWORK_STATE`, `FOREGROUND_SERVICE`,
+`FOREGROUND_SERVICE_SPECIAL_USE`, `POST_NOTIFICATIONS` and `INTERNET`, while its release APK lists
+only `INTERNET` (the sample's own) and the auto-generated dynamic-receiver permission.
+
 ## Publication status
 
 The artifacts are `io.github.devconsole-android:devconsole` (the full runtime, from `:sdk:full`) and
