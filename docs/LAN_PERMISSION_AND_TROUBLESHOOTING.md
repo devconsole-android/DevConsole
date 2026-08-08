@@ -29,17 +29,29 @@ would be a large rewrite to solve a problem that was actually one `if` statement
 
 ### Android's local-network runtime permission
 
-On a device where `Build.VERSION.SDK_INT >= 37` **and** the host app's `targetSdkVersion >= 37`,
-starting in LAN mode requires the `android.permission.ACCESS_LOCAL_NETWORK` runtime permission.
-`PlatformFacadeProvider.startBrowser()` checks this via `LocalNetworkPermissionGate` *before* attempting
-any bind; if the permission isn't granted, `startBrowser` returns `StartResult.PermissionRequired(...)`
-without touching the network. On any device/app combination below that floor (which is every
-device and app in normal use today), LAN mode works with no extra permission at all.
+On a device where `Build.VERSION.SDK_INT >= 37`, starting in LAN mode requires the
+`android.permission.ACCESS_LOCAL_NETWORK` runtime permission. **The app's `targetSdkVersion` does
+not enter into it** — enforcement follows the device, so an app targeting API 35 on an Android 17
+device needs the permission just the same. `PlatformFacadeProvider.startBrowser()` checks this via
+`LocalNetworkPermissionGate` *before* attempting any bind; if the permission isn't granted,
+`startBrowser` returns `StartResult.PermissionRequired(...)` without touching the network. Below
+API 37, LAN mode works with no extra permission at all.
 
-**This SDK does not request the permission for you.** If you target API 37+ and want LAN mode,
-your app needs its own runtime-permission request flow (e.g. `ActivityResultContracts.RequestPermission`)
-before calling `startBrowser` with `BindingMode.LAN` — check `StartResult.PermissionRequired.permission`
-and prompt the user if you get it back.
+> **This rule was wrong until 0.4.1**, and its failure mode was silent. The gate also required
+> `targetSdkVersion >= 37`, so on an Android 17 device an app targeting anything older was waved
+> through: `startBrowser` returned `StartResult.Started` with a real LAN endpoint and QR code, the
+> socket bound and even completed TCP handshakes — and the platform dropped the traffic, so every
+> browser request hung until it timed out. If you are on 0.4.0 or earlier and a LAN URL is
+> unreachable from a device that pings fine, this is why; upgrade, or grant the permission yourself
+> before starting.
+
+**The permission is declared for you; requesting it is yours.** `sdk:full` declares
+`ACCESS_LOCAL_NETWORK` in its own manifest, so it merges into your **debug** variant automatically
+and you do not add a `<uses-permission>` line. It never reaches release: `devconsole-noop` declares
+nothing, which is why a release APK carries no trace of it (and why Google Play never sees it).
+Requesting it at runtime is still your app's job — use `ActivityResultContracts.RequestPermission`
+with `StartResult.PermissionRequired.permission` when you get that result back, exactly as all three
+samples do.
 
 ## Loopback / ADB reverse mode
 
