@@ -6130,7 +6130,16 @@
   // Network transaction detail / export
   // ================================================================
   /** Detail pane header/tabs/body builder shared by Network/WebSockets/Push (Timeline's is
-   * simpler and inlined in renderEventDetail since it has no tabs). */
+   * simpler and inlined in renderEventDetail since it has no tabs).
+   *
+   * The closing `</div>` on the last line is load-bearing. Every caller builds its pane as
+   * `head + findBar + <div class="detail-body">…</div>`, counting on all three being *siblings*
+   * inside `.detail-pane-v2`'s flex column: the head sizes to content and `.detail-body` takes the
+   * rest with `flex: 1; min-height: 0; overflow: auto`, which is the only thing that scrolls a long
+   * response body. While this div was left unclosed the parser nested the find bar and the body
+   * inside `.detail-head` instead, where `flex`/`min-height`/`overflow` mean nothing — so a body
+   * taller than the pane grew the head past it and `.detail-pane-v2`'s `overflow: hidden` simply
+   * cut it off, with nothing anywhere able to scroll to the rest. */
   function detailHeadHtml({ badgeText, badgeTone, title, statusText, sTone, mocked, extraBadge, facts, actions, tabs, layoutToggle }) {
     const zoom = document.body.classList.contains('detail-zoom');
     return `<div class="detail-head">
@@ -6162,7 +6171,7 @@
                 : ''
             }</div>`
           : ''
-      }`;
+      }</div>`;
   }
   /** Shared by every detail pane's find-in-detail bar (Network, WebSockets, Timeline, Push) --
    * `inputId` keeps each pane's input element uniquely addressable since all four panes' markup
