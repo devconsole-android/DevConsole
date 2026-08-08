@@ -365,6 +365,14 @@ public final class io/devconsole/ui/compose/InspectorAction$ExportSessionZip : i
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/devconsole/ui/compose/InspectorAction$NotificationPermissionGranted : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$NotificationPermissionGranted;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class io/devconsole/ui/compose/InspectorAction$OpenDatabase : io/devconsole/ui/compose/InspectorAction {
 	public static final field $stable I
 	public fun <init> (Ljava/lang/String;)V
@@ -876,6 +884,7 @@ public abstract interface class io/devconsole/ui/compose/InspectorDataSource {
 	public abstract fun listTables (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorDatabaseListingUi;
 	public fun logsForSession (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun mockRules ()Ljava/util/List;
+	public fun onNotificationPermissionGranted ()V
 	public abstract fun previewFile (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorFilePreviewUi;
 	public abstract fun queryTable (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorQueryResultUi;
 	public abstract fun removePreference (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult;
@@ -912,6 +921,7 @@ public final class io/devconsole/ui/compose/InspectorDataSource$DefaultImpls {
 	public static fun flaggedTransactionIds (Lio/devconsole/ui/compose/InspectorDataSource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun logsForSession (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun mockRules (Lio/devconsole/ui/compose/InspectorDataSource;)Ljava/util/List;
+	public static fun onNotificationPermissionGranted (Lio/devconsole/ui/compose/InspectorDataSource;)V
 	public static fun revokePrincipal (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult;
 	public static fun setServerRunning (Lio/devconsole/ui/compose/InspectorDataSource;Z)Lio/devconsole/ui/compose/InspectorCommandResult;
 	public static fun shareableFilePath (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;

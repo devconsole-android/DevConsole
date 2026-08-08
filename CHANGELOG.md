@@ -22,6 +22,17 @@ and everything else is a patch.
 
 ### Fixed
 
+- **The keep-alive notification never appeared, and the prompt to fix that was on the wrong screen.**
+  Two compounding causes. First, `POST_NOTIFICATIONS` is what makes the foreground service's
+  notification visible, and the snackbar offering that grant lived only on the Control surface —
+  while the server is started from More (or the host's own UI), so someone who started the server
+  and went looking for a notification never saw the offer. It is now on both. Second, and worse,
+  accepting it still showed nothing: Android suppresses a foreground service's notification when the
+  service starts without the permission and does **not** post it retroactively on grant, so the
+  service sat there `isForeground=true` with a notification attached and no posted record at all.
+  Granting now re-issues the keep-alive start, which re-posts for real. Verified end to end on an
+  Android 17 device — from denied and invisible, through the prompt, to the notification in the
+  shade.
 - **The More screen's QR code sat off-centre in its dialog.** `AlertDialog` aligns its `text` slot
   content to the start, and the QR is a fixed-size square narrower than the dialog, so it hugged the
   left edge with all the slack on the right; the empty `confirmButton` — whose button-row padding is
