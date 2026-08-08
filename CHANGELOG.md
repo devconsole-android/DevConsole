@@ -22,6 +22,11 @@ and everything else is a patch.
 
 ### Fixed
 
+- **The More screen's QR code sat off-centre in its dialog.** `AlertDialog` aligns its `text` slot
+  content to the start, and the QR is a fixed-size square narrower than the dialog, so it hugged the
+  left edge with all the slack on the right; the empty `confirmButton` — whose button-row padding is
+  laid out whether or not it has content — pushed it above centre as well. It is now centred on both
+  axes.
 - **LAN mode silently served nobody on Android 17.** `LocalNetworkPermissionGate` required both
   `deviceApi >= 37` **and** `targetSdk >= 37` before asking for `ACCESS_LOCAL_NETWORK`, but the
   platform enforces Local Network Access on the device version alone. An app targeting API 35 on an
