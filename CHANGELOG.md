@@ -20,6 +20,18 @@ joined this list.)
 
 ## Unreleased
 
+### Fixed
+
+- **Long response bodies were cut off in the dashboard's detail pane, with nothing to scroll.** The
+  shared `detailHeadHtml` builder opened `<div class="detail-head">` and never closed it, so the
+  browser nested the find bar and `.detail-body` *inside* the head instead of leaving all three as
+  siblings of `.detail-pane-v2`'s flex column. `.detail-body`'s `flex: 1; min-height: 0;
+  overflow: auto` — the only thing that scrolls a long body — therefore applied to nothing: the head
+  grew past the pane and `.detail-pane-v2`'s `overflow: hidden` clipped whatever didn't fit, with no
+  scroller anywhere. One `</div>` fixes it for every pane built on that helper (Network, WebSockets,
+  Push, Crashes). Measured in a real browser before and after: the pane went from one child with a
+  347px non-filling body to three siblings whose body fills the pane and scrolls its full overflow.
+
 ## 1.0.0 — 2026-08-08
 
 The API is stable from here (see the policy above). No API was broken to get here: 1.0.0 is the
