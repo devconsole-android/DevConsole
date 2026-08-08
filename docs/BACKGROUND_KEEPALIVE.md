@@ -89,10 +89,19 @@ stops the service; it only affects whether the user can see it's running.
 
 Because of that, DevConsole never asks for `POST_NOTIFICATIONS` on its own initiative. Instead:
 
-- The Compose Control surface (`InspectorControlScreen`) shows a dismissible snackbar offering the
-  grant.
+- The Compose **Control and More** surfaces both show a dismissible snackbar offering the grant.
+  More matters as much as Control: it is where the server is started, so it is where someone who
+  just started one goes looking for the notification.
 - The views launcher (`DevConsolePanelView`) shows an equivalent notice row with "Allow" and
   "Dismiss" actions.
+
+Granting also **re-posts** the notification. Android suppresses a foreground service's notification
+when the service starts without `POST_NOTIFICATIONS` and does not post it retroactively once the
+permission is granted — the service keeps running with a notification attached that the shade never
+shows. Accepting the prompt therefore re-issues the keep-alive start, so `startForeground` runs
+again and the notification finally appears. (Granting from Settings instead, while the server is
+already running, does not go through that path: stop and start the server, or reopen the inspector
+and let it re-issue, to make the notification appear.)
 
 Both are offered **only** when all of the following hold: the server is running, the host opted
 into the foreground service at all, the host's manifest declares `POST_NOTIFICATIONS`, and the

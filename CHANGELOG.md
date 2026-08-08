@@ -56,6 +56,14 @@ and everything else is a patch.
 
 ### Changed
 
+- **The floating open-trigger button is translucent at rest.** It sits over the host app's own UI
+  for the whole session, so it now rests at 65% opacity instead of fully opaque, going opaque again
+  while touched — which doubles as the affordance for the drag it already supported.
+- **Permissions are documented.** The README gained a Permissions table covering every permission
+  DevConsole needs, who declares it, why, and the fact that none of them reach a release build
+  (`devconsole-noop` declares nothing), with an `aapt2 dump permissions` command to verify it
+  against a real artifact rather than take the docs' word for it.
+  `docs/BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md` carries the same in detail.
 - **The in-app inspector's Start button now honours `browserConfig.binding`.** `BrowserConfig.binding`
   existed on `DevConsoleConfig` but was documented as inert: the More screen's Start button always
   sent a default `StartRequest`, so it bound loopback no matter what the host had configured, and a

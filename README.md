@@ -133,6 +133,11 @@ DevConsoleConfig.default().withOpenTriggers(
 )
 ```
 
+The floating button is **draggable** — press and move it anywhere on screen, and it stays put across
+Activity changes and rotation (it re-clamps into the window so it can never be stranded off-screen).
+It rests at 65% opacity so it doesn't hide the UI underneath, and goes fully opaque while you're
+touching it. A drag never counts as a tap, so moving it won't open the inspector.
+
 Java: `DevConsoleConfig.builder().openTriggers(OpenTriggers.builder().shakeToOpen(true).build())`.
 
 ### Start and stop the dashboard server
@@ -277,6 +282,32 @@ Opt-in add-ons (each `-noop` twin is the matching `releaseImplementation`):
 
 Every other module (`devconsole-core`, `devconsole-storage-room`, …) arrives transitively — you
 never name it. All modules publish sources, javadoc, and signed POMs.
+
+## Permissions — and why none of them ship
+
+Short version: **nothing DevConsole needs reaches your release build**, so there is nothing to
+declare to Google Play and nothing for a store reviewer to ask about. The permissions live in
+`devconsole` (a `debugImplementation`); `devconsole-noop`, which is what your release variant
+compiles and ships against, declares none at all.
+
+| Permission | Declared by | Why it exists | In your release build? |
+|---|---|---|---|
+| `ACCESS_LOCAL_NETWORK` | **DevConsole** (`devconsole`) | Android 17 (API 37) gates local-network access. Without it a LAN-bound dashboard binds and then silently serves nobody — see [LAN permission](docs/LAN_PERMISSION_AND_TROUBLESHOOTING.md). Requested at runtime only when you start in LAN mode. | **No** |
+| `ACCESS_NETWORK_STATE` | **DevConsole** (`devconsole`) | Normal (non-runtime) permission, used only to record connectivity-change markers on the timeline. | **No** |
+| `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SPECIAL_USE` | **You**, in `src/debug` | Opt-in only. Lets the dashboard server survive your app being backgrounded — [keep-alive](docs/BACKGROUND_KEEPALIVE.md). Omit them and you simply don't get the feature; DevConsole declares neither. | **No** (you put them in the debug manifest) |
+| `POST_NOTIFICATIONS` | **You**, in `src/debug` | Optional. Only decides whether the keep-alive notification is *visible* — the service runs either way. DevConsole never requests it unprompted; the inspector offers it. | **No** (same) |
+| `INTERNET` | **You**, in `src/main` | Binding the dashboard's TCP socket needs it. Not DevConsole-specific — most apps already declare it for their own networking, which is why DevConsole doesn't add it for you. | Yes — but it's yours, and almost certainly already there |
+
+Verify it yourself on any build, rather than taking the table's word for it:
+
+```bash
+aapt2 dump permissions app/build/outputs/apk/release/app-release.apk
+```
+
+The Gradle plugin also enforces the split mechanically: `verifyDevConsoleProtectedArtifacts` fails
+the build if the full runtime reaches a protected variant, checking declared dependencies, the
+resolved runtime classpath, and the final APK/AAB bytes. See
+[Build variants and production safety](docs/BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md).
 
 ## Security model — read this
 
