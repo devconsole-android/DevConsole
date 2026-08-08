@@ -176,6 +176,16 @@ private fun rememberMoreActions(
         onSelectSession = { id -> viewModel.dispatch(InspectorAction.SelectSession(id)) },
     )
 
+/**
+ * The QR is a fixed-size square and the dialog is wider than it, so it needs to be told to centre:
+ * [AlertDialog]'s `text` slot aligns its content to the start, which left the code visibly hugging
+ * the left edge with all the slack piled up on the right.
+ *
+ * The vertical half is the empty `confirmButton`. A content-only [AlertDialog] still lays out its
+ * button row and keeps the padding that separates it from the text, so the QR sat above centre by
+ * that much. Weighting the padding to the top pays it back, which is why this is not a symmetric
+ * [Modifier.padding] value.
+ */
 @Composable
 private fun QrDialog(
     url: String,
@@ -184,9 +194,20 @@ private fun QrDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        text = { ConnectUrlQrCode(url = url, modifier = Modifier.padding(12.dp)) },
+        text = {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                ConnectUrlQrCode(
+                    url = url,
+                    modifier = Modifier.padding(top = QR_DIALOG_TOP_PADDING, bottom = QR_DIALOG_BOTTOM_PADDING),
+                )
+            }
+        },
     )
 }
+
+/** Offsets the button-row padding an empty `confirmButton` still contributes below the QR. */
+private val QR_DIALOG_TOP_PADDING = 24.dp
+private val QR_DIALOG_BOTTOM_PADDING = 12.dp
 
 /**
  * Stateless, previewable More surface: hero, [InspectorUrlCard], and Export rows. Session/browser/
