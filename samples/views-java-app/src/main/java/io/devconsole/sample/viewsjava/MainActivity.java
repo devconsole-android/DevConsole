@@ -237,9 +237,13 @@ public final class MainActivity extends Activity {
                 .addStateProvider(stateProvider)
                 .addFeatureFlag(featureFlag)
                 .editingCapabilities(editingCapabilities)
+                // The floating button is not a Compose feature: OpenTriggerController attaches a
+                // plain ImageView to the Activity's decorView, so an XML/Views host gets the same
+                // draggable, translucent button a Compose host does. Enabled here to show that.
                 .openTriggers(OpenTriggers.builder()
                         .shakeToOpen(true)
                         .shakeIntensity(ShakeIntensity.LIGHT)
+                        .floatingButton(true)
                         .build())
                 // Matches the BindingMode.LAN passed to startBrowserAsync below: the in-app
                 // inspector's More screen issues no StartRequest of its own, so without this it
