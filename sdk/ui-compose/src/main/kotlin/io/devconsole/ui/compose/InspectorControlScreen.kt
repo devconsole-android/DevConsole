@@ -88,7 +88,7 @@ internal fun ControlRoute(
     KeepAliveNotificationPromptEffect(
         promptNeeded = state.keepAlivePromptNeeded,
         snackbarHostState = snackbarHostState,
-        onPermissionResult = { viewModel.dispatch(InspectorAction.Refresh) },
+        onPermissionResult = { viewModel.dispatch(InspectorAction.NotificationPermissionGranted) },
     )
 
     Box(modifier = modifier.fillMaxSize()) {

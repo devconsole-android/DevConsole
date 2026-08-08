@@ -165,7 +165,14 @@ internal class FullInspectorDataSource(
     private val serverControlScope: CoroutineScope? = null,
     private val startServer: (suspend () -> Unit)? = null,
     private val stopServer: (suspend () -> Unit)? = null,
+    /**
+     * Re-posts the keep-alive notification after a `POST_NOTIFICATIONS` grant; see
+     * [InspectorDataSource.onNotificationPermissionGranted] for why a grant alone shows nothing.
+     */
+    private val republishKeepAliveNotification: () -> Unit = {},
 ) : InspectorDataSource {
+    override fun onNotificationPermissionGranted() = republishKeepAliveNotification()
+
     override fun supportsServerControl(): Boolean =
         serverControlScope != null && startServer != null && stopServer != null
 

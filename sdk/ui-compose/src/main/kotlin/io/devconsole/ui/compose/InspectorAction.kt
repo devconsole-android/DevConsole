@@ -8,6 +8,13 @@ package io.devconsole.ui.compose
 sealed interface InspectorAction {
     data object Refresh : InspectorAction
 
+    /**
+     * The operator allowed notifications from the keep-alive prompt. Re-posts the foreground
+     * service's notification, which the platform suppressed when the service started without the
+     * permission and does not post retroactively on grant, then refreshes so the prompt clears.
+     */
+    data object NotificationPermissionGranted : InspectorAction
+
     data class SelectObserveTab(
         val tab: ObserveTab,
     ) : InspectorAction

@@ -629,6 +629,19 @@ interface InspectorDataSource {
     fun setServerRunning(running: Boolean): InspectorCommandResult = InspectorCommandResult.Unavailable
 
     /**
+     * Called after the operator grants `POST_NOTIFICATIONS` from the keep-alive prompt.
+     *
+     * A foreground service started while that permission was denied has its notification suppressed
+     * by the platform, and granting the permission afterwards does **not** retroactively post it --
+     * the notification only appears once something calls `startForeground` again. Without this hook
+     * the operator allows notifications, is told nothing more, and still sees no notification, which
+     * looks exactly like the keep-alive service not running at all.
+     *
+     * Defaults to a no-op for adapters with no server lifecycle to re-notify.
+     */
+    fun onNotificationPermissionGranted() = Unit
+
+    /**
      * The More screen's screenshot capture button. Delegates to `DevConsole.captureScreenshot()` on
      * a build that has it wired up; defaults to a not-connected [ScreenshotResult.Failed] so every
      * existing adapter and fake keeps compiling and behaving unchanged, matching this interface's

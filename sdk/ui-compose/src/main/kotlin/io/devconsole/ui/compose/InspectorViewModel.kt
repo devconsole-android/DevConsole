@@ -70,6 +70,10 @@ class InspectorViewModel
         fun dispatch(action: InspectorAction) {
             when (action) {
                 InspectorAction.Refresh -> refreshSnapshot()
+                InspectorAction.NotificationPermissionGranted -> {
+                    dataSource.onNotificationPermissionGranted()
+                    refreshSnapshot()
+                }
                 is InspectorAction.SelectObserveTab -> selectObserveTab(action.tab)
                 is InspectorAction.ToggleTransactionSelection -> toggleTransactionSelection(action.id)
                 is InspectorAction.SelectTransactions -> selectTransactions(action.ids)

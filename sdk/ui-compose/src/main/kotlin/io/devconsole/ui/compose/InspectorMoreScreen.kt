@@ -117,6 +117,15 @@ internal fun MoreRoute(
             viewModel.dispatch(InspectorAction.DismissScreenshotResult)
         }
     }
+    // Also offered here, not only on Control. Without POST_NOTIFICATIONS the keep-alive service
+    // still runs but Android hides its notification, so the server looks like it is not running in
+    // the background at all -- and this is the screen someone is on when they start it and go
+    // looking for that notification. The prompt is a no-op on any screen once granted or dismissed.
+    KeepAliveNotificationPromptEffect(
+        promptNeeded = state.keepAlivePromptNeeded,
+        snackbarHostState = snackbarHostState,
+        onPermissionResult = { viewModel.dispatch(InspectorAction.NotificationPermissionGranted) },
+    )
 
     Box(modifier = modifier.fillMaxSize()) {
         MoreScreen(

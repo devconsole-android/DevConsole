@@ -775,9 +775,28 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 serverControlScope = lifecycleScope,
                 startServer = { startBrowser(configuredStartRequest()) },
                 stopServer = { stop(StopReason.UserRequested) },
+                republishKeepAliveNotification = ::republishKeepAliveNotification,
                 keepAlivePromptSupplier = ::keepAlivePromptNeeded,
             ),
         )
+    }
+
+    /**
+     * Re-issues the keep-alive start for the endpoint already bound, which makes the foreground
+     * service call `startForeground` again and finally post its notification.
+     *
+     * Needed because Android suppresses a foreground service's notification when the service starts
+     * without `POST_NOTIFICATIONS` and never posts it retroactively once the permission is granted.
+     * Until this ran, allowing notifications from the inspector's prompt changed nothing visible:
+     * the service was foreground with a notification attached and the shade stayed empty.
+     *
+     * A no-op when no server is running -- there is nothing to re-notify about, and the keep-alive
+     * service must never be started on its own.
+     */
+    private fun republishKeepAliveNotification() {
+        if (!::application.isInitialized) return
+        val endpoint = lastStarted?.endpoint ?: return
+        keepAliveController?.onServerStarted(application, "http://${endpoint.host}:${endpoint.port}")
     }
 
     /**
