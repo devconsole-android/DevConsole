@@ -37,7 +37,7 @@ device needs the permission just the same. `PlatformFacadeProvider.startBrowser(
 `startBrowser` returns `StartResult.PermissionRequired(...)` without touching the network. Below
 API 37, LAN mode works with no extra permission at all.
 
-> **This rule was wrong until 0.4.1**, and its failure mode was silent. The gate also required
+> **This rule was wrong until 1.0.0**, and its failure mode was silent. The gate also required
 > `targetSdkVersion >= 37`, so on an Android 17 device an app targeting anything older was waved
 > through: `startBrowser` returned `StartResult.Started` with a real LAN endpoint and QR code, the
 > socket bound and even completed TCP handshakes — and the platform dropped the traffic, so every
