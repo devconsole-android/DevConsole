@@ -31,6 +31,6 @@ android {
     defaultConfig {
         applicationId = "io.devconsole.sample"
         versionCode = 1
-        versionName = "1.0.0-SNAPSHOT"
+        versionName = "1.0.1-SNAPSHOT"
     }
 }
