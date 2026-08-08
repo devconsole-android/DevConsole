@@ -11,11 +11,13 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import io.devconsole.api.StopReason
+import io.devconsole.full.R
 
 /**
  * Process-pinning shell for the keep-alive feature. The server already runs inside the host
@@ -62,7 +64,8 @@ internal class DevConsoleForegroundService : Service() {
         val notification =
             NotificationCompat
                 .Builder(this, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+                .setSmallIcon(R.drawable.devconsole_notification)
+                .setLargeIcon(BitmapFactory.decodeResource(resources, R.drawable.devconsole_logo))
                 .setContentTitle("Dev Console server running")
                 .setContentText(endpointUrl)
                 .setOngoing(true)

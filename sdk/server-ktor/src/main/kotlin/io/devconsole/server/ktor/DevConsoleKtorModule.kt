@@ -578,6 +578,12 @@ fun Application.devConsoleModule(
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respondText(DashboardAssets.js(), contentType = io.ktor.http.ContentType.Text.JavaScript)
         }
+        // Browsers request the favicon before -- and independently of -- any session, so it is
+        // unauthenticated for the same reason the two assets above are.
+        get("/assets/favicon.webp") {
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respondBytes(DashboardAssets.favicon(), contentType = io.ktor.http.ContentType("image", "webp"))
+        }
         get("/health") {
             call.respondText(
                 "{\"status\":\"auth_required\",\"protocolVersion\":${metadata.protocolVersion}," +

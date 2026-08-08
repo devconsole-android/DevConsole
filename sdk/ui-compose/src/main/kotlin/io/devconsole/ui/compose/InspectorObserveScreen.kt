@@ -522,8 +522,11 @@ internal fun ObserveScreen(
 /**
  * D4's previous-run-crashed marker: the most recent *non-active* session (i.e. not the one
  * currently capturing) whose [InspectorSessionUi.status] is `"CRASHED"` -- mirroring
- * `StoredSessionStatus.CRASHED`, which [io.devconsole.CrashCapture.markCrashed] already writes on
- * every uncaught exception. This only surfaces that existing marker; nothing here creates it.
+ * `StoredSessionStatus.CRASHED`, which `io.devconsole.CrashCapture.markCrashed` writes on every
+ * uncaught exception, and which session bootstrap writes for a run that died before that could
+ * finish (`closeSessionsLeftByDeadProcesses` -- a run killed *without* crashing is closed COMPLETED
+ * there and deliberately does not reach this banner). This only surfaces that existing marker;
+ * nothing here creates it.
  */
 private fun previousCrashedSession(sessions: List<InspectorSessionUi>): InspectorSessionUi? =
     sessions

@@ -20,6 +20,65 @@ and everything else is a patch.
 
 ## Unreleased
 
+## 0.4.0 — 2026-08-08
+
+Network capture closes its two body-capture gaps: chunked responses on OkHttp and response bodies
+on Ktor, on every engine. The SDK also gets its own icon, and stops claiming a crash after runs
+that did not crash.
+
+### Added
+
+- **DevConsole now has an icon, and uses it.** The mark ships as `drawable/devconsole_logo` in
+  `sdk:full` (WebP, quality 90, five density buckets, transparent corners) and replaces the
+  placeholder artwork everywhere one was standing in: the draggable open-trigger floating button was
+  a grey circle reading "DC" and is now the mark itself, clipped and shadowed to its own rounded
+  square; the keep-alive foreground-service notification borrowed
+  `android.R.drawable.stat_sys_upload_done` and now carries the mark as its large icon plus a
+  purpose-drawn monochrome `drawable/devconsole_notification` vector as the status-bar small icon
+  (small icons are flattened to a tinted alpha mask by the platform, so the colour artwork cannot
+  serve there). The web dashboard gained a favicon at `GET /assets/favicon.webp`, served
+  unauthenticated alongside the CSS and JS for the same reason they are.
+
+### Changed
+
+- **OkHttp adapter now captures chunked/unknown-length response bodies.** Previously any response
+  without a declared `Content-Length` (`Transfer-Encoding: chunked`, transparently-gzipped bodies,
+  most long-poll/NDJSON feeds) was recorded metadata-only, because peeking an unbounded body could
+  block the interceptor forever. `DevConsoleOkHttpInterceptor` now wraps such bodies in a
+  non-blocking tee instead: bytes are copied into a bounded 512 KiB capture buffer as the host reads
+  them, with no effect on what the host receives. The transaction records at body EOF or close,
+  whichever comes first (`bodyOmittedReason` is `"truncated"` if the cap was hit, `"partial"` if the
+  host closed the body before EOF); a body still open 500ms after `intercept()` returns gets a
+  provisional metadata-only `"streaming"` record that the completion record later replaces in
+  place, so a long-lived stream — or a body the host never reads or closes at all — still shows up
+  instead of vanishing. `text/event-stream` responses are unaffected and stay immediate
+  metadata-only. Adds an additive `NetworkTransactionRecorder.record(request, response, startedAt,
+  completedAt, transactionId)` overload so an adapter can replace its own earlier record in place;
+  `sdk:network`'s ABI baseline was updated for it.
+- **Ktor adapter now captures response bodies, on every engine.** `DevConsoleKtorClientPlugin`
+  previously never captured response bodies at all — Ktor's pipeline offered no non-consuming read
+  at the stage it hooked. It now intercepts at `HttpReceivePipeline.After` and splits the raw
+  response channel (the same mechanism `ResponseObserver` uses), draining one half into a bounded
+  256 KiB capture buffer while handing the other back to the host untouched — saved-body
+  double-reads and non-saved `DoubleReceiveException` behavior are both preserved. Binary content
+  types, `text/event-stream`, `101 Switching Protocols` upgrades, and declared-oversized bodies stay
+  metadata-only; everything else is captured up to the cap (`bodyOmittedReason = "too-large"` past
+  it). This closes the capability gap the OkHttp-engine workaround documented in
+  `docs/NETWORK_ADAPTERS.md` existed to route around — that section now only recommends the OkHttp
+  engine when timing phases or mock rules are needed, not for bodies.
+
+### Fixed
+
+- **"Previous run crashed" no longer fires for runs that did not crash.** A process death cannot run
+  `DevConsole.stop()`, so an ordinary exit — swiping the app away, the system reclaiming the process,
+  Android Studio's stop button — leaves behind the same unclosed `ACTIVE` session row an uncaught
+  exception does. The next launch closed *all* of them as `CRASHED`, so both the on-device Observe
+  banner and the dashboard's Overview banner (which read that one stored status) claimed a crash on
+  essentially every launch. A leftover run is now closed `CRASHED` only when it actually recorded a
+  `"crash"` plugin event of type `"uncaught"`, and `COMPLETED` otherwise; ANR records under that same
+  plugin no longer count, since a stall the run survived is not a crash. Deaths that leave no
+  evidence at all (native crashes, low-memory kills) read as `COMPLETED`.
+
 ## 0.3.0 — 2026-08-08
 
 A compatibility-focused release: the SDK and Gradle plugin now build against a broadly adopted

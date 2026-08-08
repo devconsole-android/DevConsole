@@ -9,11 +9,16 @@ import io.devconsole.network.NetworkTransactionRecorder
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
 import io.ktor.client.HttpClient
+import io.ktor.client.call.body
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.SaveBodyPlugin
+import io.ktor.client.plugins.onDownload
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.prepareGet
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -21,7 +26,13 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.contentType
 import io.ktor.http.headersOf
+import io.ktor.utils.io.ByteChannel
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.readUTF8Line
+import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -163,6 +174,258 @@ class DevConsoleKtorClientPluginTest {
             // failed and was swallowed, rather than a partial/corrupt transaction being stored.
             Thread.sleep(200)
             assertTrue(store.page(NetworkTransactionQuery()).transactions.isEmpty())
+        }
+
+    @Test
+    fun `captures a textual response body and keeps double receive working`() =
+        runBlocking {
+            val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
+            val recorder =
+                NetworkTransactionRecorder(
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    store = store,
+                )
+            val payload = "{\"status\":\"ok\",\"items\":[1,2,3]}"
+            val mockEngine =
+                MockEngine { _ ->
+                    respond(
+                        content = payload,
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+            val client =
+                HttpClient(mockEngine) {
+                    install(DevConsoleKtorClientPlugin) { this.recorder = recorder }
+                }
+
+            val response = client.get("https://api.test/orders")
+
+            // Default configuration: SaveBodyPlugin is active, and the rebuilt response delegates
+            // re-reads back to the saved copy, so the host's response stays genuinely re-readable.
+            assertEquals(payload, response.bodyAsText())
+            assertEquals(payload, response.bodyAsText())
+
+            val transactions = awaitTransactions(store)
+            assertEquals(1, transactions.size)
+            val captured = transactions.single().capture.response!!
+            assertEquals(payload, (captured.body as BodyPreview.Text).value)
+            assertNull(captured.metadata.body.omittedReason)
+        }
+
+    @Test
+    fun `keeps the host body intact when a download listener has rewrapped the response`() =
+        runBlocking {
+            val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
+            val recorder =
+                NetworkTransactionRecorder(
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    store = store,
+                )
+            val payload = "{\"status\":\"ok\"}"
+            val mockEngine =
+                MockEngine { _ ->
+                    respond(
+                        content = payload,
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+            val client =
+                HttpClient(mockEngine) {
+                    install(DevConsoleKtorClientPlugin) { this.recorder = recorder }
+                }
+
+            // The default-installed BodyProgress plugin runs at HttpReceivePipeline.After *before*
+            // user plugins and, when a download listener is present, replaces the response with a
+            // fixed single-shot channel while isSaved stays true. The capture must split that
+            // channel -- never read or cancel it outright -- or the host's only body is destroyed.
+            val response = client.get("https://api.test/orders") { onDownload { _, _ -> } }
+
+            assertEquals(payload, response.bodyAsText())
+
+            val captured = awaitTransactions(store).single().capture.response!!
+            assertEquals(payload, (captured.body as BodyPreview.Text).value)
+            assertNull(captured.metadata.body.omittedReason)
+        }
+
+    @Test
+    fun `streams the response to the host while the origin is still open`() =
+        runBlocking {
+            val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
+            val recorder =
+                NetworkTransactionRecorder(
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    store = store,
+                )
+            val originBody = ByteChannel()
+            val mockEngine =
+                MockEngine { _ ->
+                    respond(
+                        content = originBody,
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "text/plain"),
+                    )
+                }
+            val client =
+                HttpClient(mockEngine) {
+                    install(DevConsoleKtorClientPlugin) { this.recorder = recorder }
+                }
+
+            originBody.writeStringUtf8("first-line\n")
+            originBody.flush()
+
+            // The streaming path (`prepareGet` keeps the connection open for the block) must see
+            // each line as the origin flushes it: a capture that buffers the host's body until the
+            // origin closes -- e.g. by claiming a saved-body replay -- would time out here, because
+            // the origin is deliberately still open at every read below.
+            client.prepareGet("https://api.test/stream").execute { response ->
+                val bodyChannel = response.bodyAsChannel()
+                assertEquals("first-line", withTimeout(2_000) { bodyChannel.readUTF8Line() })
+
+                originBody.writeStringUtf8("second-line\n")
+                originBody.flushAndClose()
+                assertEquals("second-line", withTimeout(2_000) { bodyChannel.readUTF8Line() })
+            }
+
+            val captured = awaitTransactions(store).single().capture.response!!
+            assertEquals("first-line\nsecond-line\n", (captured.body as BodyPreview.Text).value)
+            assertNull(captured.metadata.body.omittedReason)
+        }
+
+    @Test
+    fun `captures a chunked response body when body saving is disabled`() =
+        runBlocking {
+            val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
+            val recorder =
+                NetworkTransactionRecorder(
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    store = store,
+                )
+            val mockEngine =
+                MockEngine { _ ->
+                    // A raw channel with no Content-Length header models a chunked transfer.
+                    respond(
+                        content = ByteReadChannel("chunked payload"),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "text/plain"),
+                    )
+                }
+            val client =
+                HttpClient(mockEngine) {
+                    install(SaveBodyPlugin) { disabled = true }
+                    install(DevConsoleKtorClientPlugin) { this.recorder = recorder }
+                }
+
+            val response = client.get("https://api.test/chunked")
+            assertEquals("chunked payload", response.bodyAsText())
+
+            val transactions = awaitTransactions(store)
+            assertEquals(1, transactions.size)
+            val captured = transactions.single().capture.response!!
+            assertEquals("chunked payload", (captured.body as BodyPreview.Text).value)
+            assertNull(captured.metadata.body.omittedReason)
+        }
+
+    @Test
+    fun `omits an oversized declared-length response body without reading it`() =
+        runBlocking {
+            val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
+            val recorder =
+                NetworkTransactionRecorder(
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    store = store,
+                )
+            val bigBody = "a".repeat(300 * 1024)
+            val mockEngine =
+                MockEngine { _ ->
+                    respond(
+                        content = bigBody,
+                        status = HttpStatusCode.OK,
+                        headers =
+                            headersOf(
+                                HttpHeaders.ContentType to listOf("text/plain"),
+                                HttpHeaders.ContentLength to listOf(bigBody.length.toString()),
+                            ),
+                    )
+                }
+            val client =
+                HttpClient(mockEngine) {
+                    install(DevConsoleKtorClientPlugin) { this.recorder = recorder }
+                }
+
+            val response = client.get("https://api.test/big")
+            assertEquals(bigBody, response.bodyAsText())
+
+            val captured = awaitTransactions(store).single().capture.response!!
+            assertTrue(captured.body is BodyPreview.Absent)
+            assertEquals("too-large", captured.metadata.body.omittedReason)
+            assertEquals(bigBody.length.toLong(), captured.metadata.body.declaredLength)
+        }
+
+    @Test
+    fun `omits an oversized chunked response body at the capture cap`() =
+        runBlocking {
+            val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
+            val recorder =
+                NetworkTransactionRecorder(
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    store = store,
+                )
+            val bigBody = "b".repeat(300 * 1024)
+            val mockEngine =
+                MockEngine { _ ->
+                    respond(
+                        content = ByteReadChannel(bigBody),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "text/plain"),
+                    )
+                }
+            val client =
+                HttpClient(mockEngine) {
+                    install(SaveBodyPlugin) { disabled = true }
+                    install(DevConsoleKtorClientPlugin) { this.recorder = recorder }
+                }
+
+            // The capture side hits its cap mid-stream and must record and then keep draining --
+            // the host's read of the other split half must still see every byte.
+            val response = client.get("https://api.test/big-chunked")
+            assertEquals(bigBody, response.bodyAsText())
+
+            val captured = awaitTransactions(store).single().capture.response!!
+            assertTrue(captured.body is BodyPreview.Absent)
+            assertEquals("too-large", captured.metadata.body.omittedReason)
+        }
+
+    @Test
+    fun `leaves a binary response body as metadata only`() =
+        runBlocking {
+            val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
+            val recorder =
+                NetworkTransactionRecorder(
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    store = store,
+                )
+            val binaryBody = ByteArray(64) { it.toByte() }
+            val mockEngine =
+                MockEngine { _ ->
+                    respond(
+                        content = binaryBody,
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/octet-stream"),
+                    )
+                }
+            val client =
+                HttpClient(mockEngine) {
+                    install(DevConsoleKtorClientPlugin) { this.recorder = recorder }
+                }
+
+            val response = client.get("https://api.test/download")
+            assertArrayEquals(binaryBody, response.body<ByteArray>())
+
+            val captured = awaitTransactions(store).single().capture.response!!
+            assertTrue(captured.body is BodyPreview.Absent)
+            assertEquals("binary", captured.metadata.body.omittedReason)
         }
 
     private fun awaitTransactions(

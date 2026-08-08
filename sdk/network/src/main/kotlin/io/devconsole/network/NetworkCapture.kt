@@ -692,15 +692,32 @@ class NetworkTransactionRecorder(
     /** Installs the capture-exclusion gate; without one every enabled recording is captured. */
     fun withCaptureGate(gate: NetworkCaptureGate): NetworkTransactionRecorder = apply { captureGate = gate }
 
-    // Each early return below is a distinct drop reason (gate rejection, single item over budget,
-    // still-full queue after one eviction) that reads far more clearly as a guard clause than folded
-    // into one boolean expression.
+    fun record(
+        request: NetworkRequestInput,
+        response: NetworkResponseInput?,
+        startedAtEpochMs: Long,
+        completedAtEpochMs: Long?,
+    ) = record(request, response, startedAtEpochMs, completedAtEpochMs, transactionId = null)
+
+    /**
+     * Same as the four-argument [record], but stores the transaction under the caller-supplied
+     * [transactionId] instead of a freshly generated one (`null` keeps the generated id).
+     * Recording the same id again replaces the earlier stored transaction -- the
+     * [NetworkTransactionStore.record] contract -- which is how an adapter first records a
+     * provisional metadata-only transaction for a still-streaming response and later upgrades it
+     * in place with the captured body, without ever showing two entries for one HTTP call.
+     *
+     * Each early return below is a distinct drop reason (gate rejection, single item over budget,
+     * still-full queue after one eviction) that reads far more clearly as a guard clause than
+     * folded into one boolean expression.
+     */
     @Suppress("ReturnCount")
     fun record(
         request: NetworkRequestInput,
         response: NetworkResponseInput?,
         startedAtEpochMs: Long,
         completedAtEpochMs: Long?,
+        transactionId: String?,
     ) {
         val gate = captureGate
         // A gate failure must never suppress capture silently, so an exception means "capture".
@@ -715,6 +732,7 @@ class NetworkTransactionRecorder(
                 startedAtEpochMs,
                 completedAtEpochMs,
                 runCatching(sessionIdProvider).getOrNull(),
+                transactionId,
             )
         val itemBytes = item.estimatedSizeBytes()
         if (itemBytes > maxQueuedBytes) {
@@ -751,7 +769,7 @@ class NetworkTransactionRecorder(
                     val item = queue.poll() ?: break
                     queuedBytes.addAndGet(-item.estimatedSizeBytes())
                     runCatching {
-                        val transactionId = idProvider()
+                        val transactionId = item.transactionId ?: idProvider()
                         val capture = factory.capture(item.request, item.response)
                         attachmentSink?.let { sink ->
                             factory
@@ -792,6 +810,7 @@ class NetworkTransactionRecorder(
         val startedAtEpochMs: Long,
         val completedAtEpochMs: Long?,
         val sessionId: String?,
+        val transactionId: String? = null,
     )
 
     /** Rough estimate of what [item] holds in memory while queued; body bytes dominate. */

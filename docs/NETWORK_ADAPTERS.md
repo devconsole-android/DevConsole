@@ -9,7 +9,7 @@ about twenty lines against the same public recorder.
 |---|---|
 | **OkHttp** | Add `DevConsoleOkHttpInterceptor` (below). |
 | **Retrofit** | **Nothing.** Retrofit does no networking of its own — it delegates to an `OkHttpClient`. Add the interceptor to the client Retrofit is built with and every call is captured. |
-| **Ktor client** | Install `DevConsoleKtorClientPlugin` (below). Engine-independent: CIO, OkHttp, Android, and Java all work. |
+| **Ktor client** | Install `DevConsoleKtorClientPlugin` (below). Engine-independent: CIO, OkHttp, Android, and Java all work, including full response-body capture. The OkHttp engine still has an edge for timing phases and mocks — see [Ktor on the OkHttp engine](#ktor-on-the-okhttp-engine). |
 | **Apollo / GraphQL** | Runs on OkHttp, so the interceptor captures it. Bodies are shown as-is; there is no GraphQL-aware formatting yet. |
 | **Cronet, HttpURLConnection, Volley, anything else** | Write a small adapter against `NetworkTransactionRecorder` — see [Custom stacks](#custom-stacks). |
 | **gRPC** | Not supported. `grpc-okhttp` uses OkHttp's transport primitives directly and never passes through the `Interceptor` chain, so it needs a gRPC `ClientInterceptor`. Not yet written. |
@@ -18,16 +18,16 @@ Three things worth knowing:
 
 - **`sdk:server-ktor` is not Ktor client support.** It is the embedded dashboard server. Ktor client
   capture lives in `sdk:network-ktor`.
-- **Mocking and WebSocket capture are OkHttp-only.** `DevConsoleMockInterceptor` and
-  `DevConsoleOkHttpWebSocketListener` have no equivalent for other stacks yet, so a Ktor-CIO app gets
-  network capture but not mocks.
-- **The Ktor adapter never captures response bodies.** At the pipeline stage `DevConsoleKtorClientPlugin`
-  hooks (`onResponse`, before `HttpResponsePipeline.Transform`) Ktor exposes no non-consuming
-  ("peek") read of the response body the way OkHttp's `peekBody(...)` does — reading it there would
-  steal bytes the host's own `response.body<T>()`/`bodyAsText()` call still needs. Response
-  transactions from the Ktor adapter are always metadata-only (status, headers, content type,
-  declared length); request bodies are still captured, subject to the same textual/bounded rules as
-  below.
+- **Mocking, WebSocket capture, and OkHttp's DNS/TCP/TLS/send/wait/receive timing breakdown are
+  OkHttp-only.** `DevConsoleMockInterceptor`, `DevConsoleOkHttpWebSocketListener`, and per-phase
+  timing have no equivalent for other stacks yet, so a Ktor-CIO app gets full request/response
+  capture but not mocks, WebSocket capture, or a timing breakdown finer than total call duration.
+- **Both adapters capture response bodies now, each with its own bound.** OkHttp captures a
+  declared-length body eagerly and an unknown-length (chunked, transparently-gzipped) one through a
+  non-blocking tee, capped at 512 KiB — see
+  [Chunked and streaming responses](#chunked-and-streaming-responses). The Ktor adapter captures a
+  textual body up to 256 KiB on every engine — see [Ktor client](#ktor-client-sdknetwork-ktor)
+  below. Both leave `text/event-stream` and known-binary bodies metadata-only.
 
 ## OkHttp (`sdk:network-okhttp`)
 
@@ -75,6 +75,40 @@ network capture and then call `client.newWebSocket(...)` on the same instance, t
 will be double-captured — once in the Network tab as an HTTP request, and again in the WebSocket tab
 as a connection. Create a separate plain `OkHttpClient` for WebSocket traffic instead.
 
+### Chunked and streaming responses
+
+A response with a declared `Content-Length` is captured eagerly, the same as always. A response
+**without** one — `Transfer-Encoding: chunked`, a transparently gzip-recompressed body, most
+long-poll and NDJSON feeds — is no longer skipped. Instead of the eager `peekBody(...)` used for
+known-length responses, the interceptor wraps the body in a non-blocking **tee**: every byte the
+host reads is copied into a bounded capture buffer as a side effect of that same read. The host's
+own `Response.body` stream is completely unaffected — same bytes, same timing, no buffering
+inserted on the calling thread.
+
+The transaction is recorded once the body reaches EOF or is closed, whichever happens first,
+against a 512 KiB cap:
+
+- Fully delivered under the cap → recorded complete, `bodyOmittedReason = null`.
+- Still flowing past the cap → the first 512 KiB is recorded, `bodyOmittedReason = "truncated"`,
+  and `bodyLength` carries the true total the host received, not just the captured prefix.
+- Closed by the host before EOF (an early `response.close()`, a cancelled call) → whatever was
+  delivered by then is recorded, `bodyOmittedReason = "partial"`.
+
+`text/event-stream` responses are the one exception: they're still recorded metadata-only
+(`bodyOmittedReason = "streaming"`) immediately, without teeing — a real SSE feed is for all
+practical purposes endless, and pinning a growing capture buffer against it would be pointless. A
+response with a known non-textual content type is also left metadata-only, same as on the
+known-length path.
+
+A body the host neither reads nor closes still doesn't vanish: 500ms after the interceptor returns
+the response, a watchdog checks whether the body is still open and, if so, records a provisional
+`bodyOmittedReason = "streaming"` entry (`completedAtEpochMs = null`). An ordinary finite response
+is read well inside that window and is unaffected — the provisional record never fires. A body
+that's still open when the watchdog does fire — a genuinely long-lived stream, or one the host
+abandoned outright — gets that provisional entry replaced in place if and when the body eventually
+completes, or left standing forever if it never does. Either way, every response the interceptor
+hands back is recorded, not only the ones whose body the host happens to consume.
+
 ## Ktor client (`sdk:network-ktor`)
 
 ```kotlin
@@ -86,12 +120,62 @@ val client = HttpClient {
 ```
 
 Captures full request/response metadata (method, URL, headers, status, content type, declared
-length) and — for a textual, known-length body no larger than 256 KiB, from a Ktor `OutgoingContent`
-that isn't a single-use stream — the request body too. **Response bodies are never captured** for
-this adapter: Ktor's client pipeline offers no non-consuming read of the response body at the stage
-this plugin observes it, unlike OkHttp's `peekBody(...)`, so every recorded transaction's response is
-metadata-only regardless of content type or size. This is the main capability gap versus the OkHttp
-adapter — see [Two things worth knowing](#what-is-covered-out-of-the-box) above.
+length), the request body (textual, known-length, no larger than 256 KiB, from a Ktor
+`OutgoingContent` that isn't a single-use stream), and the response body too — textual, up to
+256 KiB, on **every** engine (CIO, OkHttp, Android, Java, ...).
+
+Response capture happens at `client.receivePipeline.intercept(HttpReceivePipeline.After)`, the same
+stage Ktor's own `ResponseObserver`/`Logging` plugins use: the raw response channel is duplicated
+with `ByteReadChannel.split`, one half handed back to the host completely untouched — a saved
+response's double `body<T>()`/`bodyAsText()` read, and a `DoubleReceiveException` on a non-saved
+one, both behave exactly as they would without this plugin — while the other half is drained
+asynchronously into the capture buffer. Recording happens once the capture half closes (body
+captured whole) or hits the 256 KiB cap (`bodyOmittedReason = "too-large"`), whichever comes first;
+a call torn down mid-body still leaves a metadata-only record rather than losing the transaction.
+
+A response is left metadata-only without its channel ever being touched when its declared content
+type is known non-textual (`bodyOmittedReason = "binary"`), its declared `Content-Length` already
+exceeds the cap (`"too-large"`), or it's `text/event-stream` or a `101 Switching Protocols` upgrade
+(`"streaming"` — splitting a live SSE/WebSocket channel would eat frames the host still needs). A
+response with no declared content type is still captured, so the body-preview UTF-8 sniff can
+decide from the actual bytes.
+
+What the Ktor adapter still can't provide — on any engine — is OkHttp's DNS/TCP/TLS/send/wait/receive
+timing breakdown and mock rules. See [Ktor on the OkHttp engine](#ktor-on-the-okhttp-engine) below.
+
+### Ktor on the OkHttp engine
+
+`DevConsoleKtorClientPlugin` already captures full request and response bodies on every engine, so
+you no longer need the engine-level interceptor just to get bodies. What it still can't provide is
+the **DNS/TCP/TLS/send/wait/receive timing breakdown** and **mock rules** — both come from OkHttp's
+`EventListener`/interceptor chain, which the Ktor client pipeline has no equivalent for. If your
+`HttpClient` uses the **OkHttp engine** and you need either of those, instrument the engine's
+`OkHttpClient` directly instead of installing the plugin:
+
+```kotlin
+val client = HttpClient(OkHttp) {
+    engine {
+        config {
+            installDevConsole(DevConsole.networkRecorder())
+            addInterceptor(DevConsoleMockInterceptor(DevConsole.mockEngine())) // optional
+        }
+    }
+}
+```
+
+The `devconsole-network-ktor` dependency is not needed in this mode — the OkHttp adapter ships
+inside `devconsole` itself.
+
+Two caveats:
+
+- **Install one integration, not both.** The engine-level interceptor and the Ktor plugin each
+  record independently; installing both records every call twice.
+- Bodies captured this way follow the OkHttp adapter's own bounds — the
+  [tee described above](#chunked-and-streaming-responses) and its 512 KiB cap, not the Ktor
+  plugin's 256 KiB one.
+
+Reach for this only when you need timing phases or mocks. For capture alone, the plugin now covers
+CIO, OkHttp, Android, and Java equally well.
 
 ## Custom stacks
 

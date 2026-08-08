@@ -86,6 +86,11 @@ data class NetworkTransactionPage(
 )
 
 interface NetworkTransactionStore {
+    /**
+     * Stores [transaction]. Recording an id that is already stored replaces the earlier
+     * transaction rather than adding a duplicate -- adapters rely on this to upgrade a provisional
+     * (still-streaming, metadata-only) record in place once the body completes.
+     */
     fun record(transaction: NetworkTransaction)
 
     fun page(query: NetworkTransactionQuery): NetworkTransactionPage

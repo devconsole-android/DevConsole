@@ -395,7 +395,7 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
     }
 }
 
-private const val DEFAULT_SDK_VERSION = "0.3.0"
+private const val DEFAULT_SDK_VERSION = "0.4.0"
 private const val DEVCONSOLE_GROUP = "io.github.devconsole-android"
 
 /**

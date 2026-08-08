@@ -541,6 +541,7 @@ public final class io/devconsole/network/NetworkTransactionRecorder {
 	public synthetic fun <init> (Lio/devconsole/network/NetworkCaptureFactory;Lio/devconsole/network/NetworkTransactionStore;ZLkotlin/jvm/functions/Function0;ILjava/util/concurrent/Executor;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun droppedCount ()J
 	public final fun record (Lio/devconsole/network/NetworkRequestInput;Lio/devconsole/network/NetworkResponseInput;JLjava/lang/Long;)V
+	public final fun record (Lio/devconsole/network/NetworkRequestInput;Lio/devconsole/network/NetworkResponseInput;JLjava/lang/Long;Ljava/lang/String;)V
 	public final fun withAttachmentSink (Lio/devconsole/network/NetworkAttachmentSink;)Lio/devconsole/network/NetworkTransactionRecorder;
 	public final fun withCaptureGate (Lio/devconsole/network/NetworkCaptureGate;)Lio/devconsole/network/NetworkTransactionRecorder;
 	public final fun withSessionIdProvider (Lkotlin/jvm/functions/Function0;)Lio/devconsole/network/NetworkTransactionRecorder;
