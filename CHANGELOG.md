@@ -2,23 +2,31 @@
 
 Notable changes to the DevConsole SDK. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
-[semantic versioning](https://semver.org/) once 1.0.0 ships.
+[semantic versioning](https://semver.org/).
 
 ## Versioning and stability policy
 
-Until **1.0.0**, the public API may change in any release — that is the point of the pre-1.0 window,
-and breaking changes made now are cheaper than the ones made later.
+**1.0.0 shipped on 2026-08-08, and the public API is now stable.** Breaking changes to `sdk:api`
+require a major version, new API requires a minor, and everything else is a patch. The pre-1.0
+window — where any release could change the API — is closed.
 
 Since 0.3.0, every published `sdk/` module carries a committed ABI baseline
 (`sdk/<module>/api/<module>.api`) checked on every build. Any change to those surfaces shows up as
-a failing `apiCheck` and must be accepted deliberately with `./gradlew apiDump`. (There was briefly
-a separate `sdk:plugin-api` module for a generic third-party plugin framework; it was removed
-before ever shipping — see Removed, below — so it never joined this list.)
-
-From 1.0.0 onward: breaking changes to `sdk:api` require a major version, new API requires a minor,
-and everything else is a patch.
+a failing `apiCheck` and must be accepted deliberately with `./gradlew apiDump`. That baseline is
+what makes the promise above enforceable rather than aspirational: an accidental break fails CI
+before it can reach a release. (There was briefly a separate `sdk:plugin-api` module for a generic
+third-party plugin framework; it was removed before ever shipping — see Removed, below — so it never
+joined this list.)
 
 ## Unreleased
+
+## 1.0.0 — 2026-08-08
+
+The API is stable from here (see the policy above). No API was broken to get here: 1.0.0 is the
+0.4.0 surface plus one additive `NetworkTransactionRecorder.record(...)` overload, and everything
+else in this release is a fix to behaviour that looked right and wasn't — a LAN server that bound
+and served nobody, a notification that was posted and never shown, a QR code that sat off-centre,
+and a config field that had been documented as inert since it was added.
 
 ### Fixed
 

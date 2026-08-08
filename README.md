@@ -23,6 +23,11 @@ one line of code. When you want a bigger screen, the same data streams to any br
 embedded web dashboard. Release builds compile against a no-op twin artifact, so none of this
 code ever ships to production, and the Gradle plugin fails the build if it would.
 
+**1.0.0 is out, and the public API is stable.** From here, breaking changes to `sdk:api` need a
+major version, new API a minor, everything else a patch — enforced, not just promised: every
+published module carries a committed ABI baseline that fails the build on an unintended change.
+See the [changelog](CHANGELOG.md) for the full policy.
+
 ## TL;DR
 
 **1. Add the plugin and two dependencies** to your app's `build.gradle.kts`:
@@ -30,12 +35,12 @@ code ever ships to production, and the Gradle plugin fails the build if it would
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.devconsole-android") version "0.4.0"
+    id("io.github.devconsole-android") version "1.0.0"
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:0.4.0")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:0.4.0")
+    debugImplementation("io.github.devconsole-android:devconsole:1.0.0")
+    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.0.0")
 }
 ```
 
