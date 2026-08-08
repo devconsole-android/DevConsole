@@ -20,6 +20,23 @@ and everything else is a patch.
 
 ## Unreleased
 
+### Changed
+
+- **The in-app inspector's Start button now honours `browserConfig.binding`.** `BrowserConfig.binding`
+  existed on `DevConsoleConfig` but was documented as inert: the More screen's Start button always
+  sent a default `StartRequest`, so it bound loopback no matter what the host had configured, and a
+  host that wanted LAN could only get it by calling `startBrowser` from its own UI — leaving the same
+  app handing out two different connect URLs depending on where you pressed start. That field now
+  decides what an on-device start binds, along with its port range. Nothing about the defaults moved:
+  `BrowserBinding.LOOPBACK` is still the default, LAN is still an explicit opt-in, and a LAN start
+  from this surface passes through the same local-network permission gate as any other. The two
+  binding settings remain independent by design — `StartRequest.bindingMode` governs starts the host
+  issues, `browserConfig.binding` governs the ones it doesn't — and the KDoc on both, plus
+  `docs/THREAT_MODEL.md`, now says so instead of describing the config field as unused.
+- **Samples:** all three now declare `BrowserConfig(binding = BrowserBinding.LAN)`, matching the
+  `BindingMode.LAN` their own Start buttons already passed, so both start paths agree. `compose-app`
+  additionally gained a Ktor-on-CIO network demo exercising 0.4.0's response-body capture.
+
 ## 0.4.0 — 2026-08-08
 
 Network capture closes its two body-capture gaps: chunked responses on OkHttp and response bodies

@@ -199,6 +199,14 @@ the default `StartRequest()` binds loopback, and LAN only happens when you pass
 LAN:
 `DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))`.
 
+There is a second way to start the server, and it has its own opt-in: the **Start button on the
+in-app inspector's More screen**, which issues no `StartRequest` and instead binds whatever
+`DevConsoleConfig.browserConfig.binding` declares. That field also defaults to `LOOPBACK`, so an
+on-device start is loopback unless a host explicitly configures
+`BrowserConfig(binding = BrowserBinding.LAN)`. The two settings are independent and neither
+overrides the other -- a host that wants LAN from both surfaces has to say so twice, and a host that
+sets only `StartRequest(bindingMode = LAN)` leaves the on-device button on loopback.
+
 **Stop the server when you are done.** `DevConsole.stop(...)` revokes browser sessions immediately
 and unbinds the port. A dashboard left running on a desk overnight is an open dashboard.
 

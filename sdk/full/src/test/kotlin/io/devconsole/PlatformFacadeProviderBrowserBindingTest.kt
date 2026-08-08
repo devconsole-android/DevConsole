@@ -20,10 +20,11 @@ import org.robolectric.annotation.Config
 
 /**
  * Regression guard for H4: the More surface's browser binding must reflect the mode the server
- * actually bound to ([BrowserEndpoint.bindingMode]), not the not-yet-consumed
- * [io.devconsole.api.BrowserConfig.binding] declaration. The default config declares LOOPBACK, so
- * a LAN start is the case that distinguishes the two -- only the real bound mode surfaces "LAN",
- * which is what drives the "LAN MODE — UNENCRYPTED" banner.
+ * actually bound to ([BrowserEndpoint.bindingMode]), not the [io.devconsole.api.BrowserConfig.binding]
+ * declaration. The two can legitimately disagree -- config governs only starts the host does not
+ * issue itself -- and the banner must follow the socket, not the intent. Here the default config
+ * declares LOOPBACK while the host starts LAN explicitly, so only the real bound mode surfaces
+ * "LAN", which is what drives the "LAN MODE — UNENCRYPTED" banner.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])

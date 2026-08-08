@@ -74,6 +74,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.devconsole.DevConsole
 import io.devconsole.api.BindingMode
+import io.devconsole.api.BrowserBinding
+import io.devconsole.api.BrowserConfig
 import io.devconsole.api.BrowserEndpoint
 import io.devconsole.api.CrashPolicy
 import io.devconsole.api.DevConsoleConfig
@@ -283,6 +285,13 @@ class MainActivity : ComponentActivity() {
             composerAllowedHosts = setOf("jsonplaceholder.typicode.com", "example.test", "postman-echo.com"),
             // Lets the dashboard drive registered state mutations; state is read-only otherwise.
             stateMutationsEnabled = true,
+        ).withBrowserConfig(
+            // Governs the in-app inspector's own More-screen Start button, which issues no
+            // StartRequest of its own -- without this it would bind loopback while the sample's
+            // own Start button binds LAN, so the same app would hand out two different connect
+            // URLs depending on where you pressed start. LAN carries the exposure spelled out at
+            // that call site and in docs/THREAT_MODEL.md.
+            BrowserConfig(binding = BrowserBinding.LAN),
         ).withEditingCapabilities(
             EditingCapabilities
                 .builder()
