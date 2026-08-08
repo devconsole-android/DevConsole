@@ -99,6 +99,8 @@ import io.devconsole.state.FeatureFlag
 import io.devconsole.state.StateSnapshot
 import io.devconsole.state.StateValue
 import io.devconsole.state.stateProvider
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -207,6 +209,9 @@ class MainActivity : ComponentActivity() {
             .addInterceptor(DevConsoleMockInterceptor(DevConsole.mockEngine()))
             .build()
     }
+
+    /** Built from the variant source sets: instrumented in debug, a plain client in release. */
+    private val ktorClient by lazy { buildSampleKtorClient() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -435,12 +440,21 @@ class MainActivity : ComponentActivity() {
                 SectionLabel("Exercise the SDK")
                 CapabilityCard(
                     title = "Send network request",
-                    subtitle = "Captured by the OkHttp interceptor",
+                    subtitle = "OkHttp interceptor -- chunked response, body captured via the tee",
                     onClick = {
                         scope.launch {
                             lastResponse =
                                 sendRequest("https://jsonplaceholder.typicode.com/todos/1", "Network response")
                             showOrderHistory = DevConsole.featureFlagValue(SHOW_ORDER_HISTORY_FLAG)
+                        }
+                    },
+                )
+                CapabilityCard(
+                    title = "Send Ktor request",
+                    subtitle = "Ktor plugin on the CIO engine -- request and response bodies, no OkHttp involved",
+                    onClick = {
+                        scope.launch {
+                            lastResponse = sendKtorRequest("https://jsonplaceholder.typicode.com/posts/1")
                         }
                     },
                 )
@@ -534,6 +548,28 @@ class MainActivity : ComponentActivity() {
                 // error.message can be null (e.g. some IOExceptions), which would otherwise leave
                 // LAST RESULT rendering nothing under its label -- always fall back to a class name.
                 "Request failed: ${error.message ?: error.javaClass.simpleName}"
+            }
+        }
+
+    /**
+     * Issues one request through the sample's Ktor client, whose debug build installs
+     * `DevConsoleKtorClientPlugin` (see `SampleKtorClient` in `src/debug`).
+     *
+     * The response body is read here rather than discarded, because reading it is the point: the
+     * plugin splits the response channel, so the bytes this call receives and the bytes the Network
+     * inspector shows come from the same stream, and neither read costs the other anything. On the
+     * release variant the identical call runs against a plain client and records nothing.
+     */
+    private suspend fun sendKtorRequest(url: String): String =
+        withContext(Dispatchers.IO) {
+            requestCount.incrementAndGet()
+            try {
+                val body = ktorClient.get(url).bodyAsText()
+                "Ktor response: ${body.length} chars"
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                "Ktor request failed: ${error.message ?: error.javaClass.simpleName}"
             }
         }
 

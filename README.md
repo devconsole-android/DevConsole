@@ -296,7 +296,7 @@ Three runnable samples under [`samples/`](samples/) cover every integration styl
 
 | Sample | Stack | Posture |
 |---|---|---|
-| [`compose-app`](samples/compose-app) | Jetpack Compose | Everything unlocked: all editing capabilities, composer, screenshots, MQTT + WebSocket demos, in-app inspector, shake + floating-button open triggers |
+| [`compose-app`](samples/compose-app) | Jetpack Compose | Everything unlocked: all editing capabilities, composer, screenshots, OkHttp + Ktor (CIO) network demos, MQTT + WebSocket demos, in-app inspector, shake + floating-button open triggers |
 | [`foundation-app`](samples/foundation-app) | Stock widgets, no UI framework | Everything at its locked-down default — the read-only contrast |
 | [`views-java-app`](samples/views-java-app) | Java + XML, `ui-views` panel | Middle ground: mocks and capture rules editable, data read-only, async Java APIs, shake-to-open (LIGHT) |
 
