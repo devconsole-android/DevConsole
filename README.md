@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/images/devconsole-mark.webp" width="96" alt="" />
+
 # DevConsole
 
 **Debug your Android app from inside the app — or from any browser.**
@@ -28,12 +30,12 @@ code ever ships to production, and the Gradle plugin fails the build if it would
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.devconsole-android") version "0.3.0"
+    id("io.github.devconsole-android") version "0.4.0"
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:0.3.0")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:0.3.0")
+    debugImplementation("io.github.devconsole-android:devconsole:0.4.0")
+    releaseImplementation("io.github.devconsole-android:devconsole-noop:0.4.0")
 }
 ```
 
@@ -208,8 +210,14 @@ val client = OkHttpClient.Builder()
     .addInterceptor(DevConsoleMockInterceptor(DevConsole.mockEngine())) // optional, mocks
     .build()
 
-// Ktor client (captures metadata + request bodies; response bodies are never read):
+// Ktor client, any engine (captures request + response bodies, textual, up to 256 KiB each):
 val ktor = HttpClient { install(DevConsoleKtorClientPlugin) { recorder = DevConsole.networkRecorder() } }
+
+// Ktor on the OkHttp engine — only needed for DNS/TCP/TLS timing phases and mock rules, which the
+// plugin above can't provide on any engine. Skip the plugin and instrument the engine instead:
+val ktorOkHttp = HttpClient(OkHttp) {
+    engine { config { installDevConsole(DevConsole.networkRecorder()) } }
+}
 
 // WebSocket (OkHttp): inbound + outbound
 val socket = client.newWebSocket(request, DevConsoleOkHttpWebSocketListener(DevConsole.socketRecorder()))
@@ -224,6 +232,13 @@ DevConsole.recordPush(FirebaseRemoteMessageAdapter().toPushInput(remoteMessage))
 // Anything else (Cronet, Volley, custom): record directly — never throws, never blocks:
 DevConsole.networkRecorder().record(requestInput, responseInput, startedAtMs, completedAtMs)
 ```
+
+One capture bound worth knowing up front: response bodies are captured up to a cap — 512 KiB on
+OkHttp (chunked/unknown-length bodies via a non-blocking tee, recorded at EOF or close), 256 KiB on
+Ktor. `text/event-stream` and known-binary bodies stay metadata-only on both, since a live SSE feed
+is for all practical purposes endless. See
+[Chunked and streaming responses](docs/NETWORK_ADAPTERS.md#chunked-and-streaming-responses) for how
+the OkHttp tee works.
 
 Java equivalents exist throughout (e.g. `DevConsoleOkHttp.install(builder, recorder)`). Details:
 [docs/NETWORK_ADAPTERS.md](docs/NETWORK_ADAPTERS.md), [docs/MQTT_CAPTURE.md](docs/MQTT_CAPTURE.md),
@@ -245,7 +260,7 @@ Opt-in add-ons (each `-noop` twin is the matching `releaseImplementation`):
 |---|---|---|
 | `devconsole-ui-compose` | *(none — `debugImplementation` only)* | Compose launcher-panel API (the on-device inspector itself already ships inside `devconsole`; name this coordinate only to call the panel composables) |
 | `devconsole-ui-views` | *(none — `debugImplementation` only)* | `DevConsolePanelView` launcher for XML/Views hosts |
-| `devconsole-network-ktor` | *(none)* | Ktor `HttpClient` capture plugin |
+| `devconsole-network-ktor` | *(none)* | Ktor `HttpClient` capture plugin (full request + response body capture, any engine; see [Network adapters](docs/NETWORK_ADAPTERS.md)) |
 | `devconsole-socket-paho` | `devconsole-socket-paho-noop` | MQTT capture via Eclipse Paho |
 | `devconsole-push-firebase` | `devconsole-push-firebase-noop` | FCM push adapter (reflection-based) |
 

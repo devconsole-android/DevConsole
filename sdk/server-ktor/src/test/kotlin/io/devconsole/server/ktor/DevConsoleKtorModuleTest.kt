@@ -228,6 +228,7 @@ class DevConsoleKtorModuleTest {
             // card view (Mocks reloads on every visit like every other view); mockRuleList is the
             // stable container id to assert on instead.
             assertTrue(dashboard.contains("id=\"mockRuleList\""))
+            assertTrue(dashboard.contains("<link rel=\"icon\" type=\"image/webp\" href=\"/assets/favicon.webp\">"))
             assertTrue(dashboard.contains("<link rel=\"stylesheet\" href=\"/assets/dashboard.css\">"))
             assertTrue(dashboard.contains("<script src=\"/assets/dashboard.js\"></script>"))
             assertFalse(dashboard.contains("<style>"))
@@ -260,6 +261,26 @@ class DevConsoleKtorModuleTest {
             // bakes in session-specific data -- they are static, so no auth header is sent above.
             assertEquals("nosniff", cssResponse.headers["X-Content-Type-Options"])
             assertEquals("nosniff", jsResponse.headers["X-Content-Type-Options"])
+        }
+
+    /** The browser asks for the favicon before any session exists, so it is unauthenticated too. */
+    @Test
+    fun `favicon is served unauthenticated as webp`() =
+        testApplication {
+            application { devConsoleModule(SessionAuthority()) }
+
+            val response = client.get("/assets/favicon.webp") { header(HttpHeaders.Host, "localhost") }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals("no-store", response.headers[HttpHeaders.CacheControl])
+            assertTrue(response.headers[HttpHeaders.ContentType]!!.contains("image/webp"))
+            assertEquals("nosniff", response.headers["X-Content-Type-Options"])
+            // RIFF....WEBP is the container's own magic; a truncated or wrong-typed asset fails here
+            // rather than shipping a broken tab icon nobody notices.
+            val bytes = response.bodyAsBytes()
+            assertTrue(bytes.size > 500)
+            assertEquals("RIFF", bytes.copyOfRange(0, 4).decodeToString())
+            assertEquals("WEBP", bytes.copyOfRange(8, 12).decodeToString())
         }
 
     @Test

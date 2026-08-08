@@ -536,16 +536,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             runtime.currentSessionId() == expectedSessionId && runtime.state.value != DevConsoleState.Stopped
         if (!stillCurrent()) return false
         return try {
-            // A process death cannot run stop(). Close any prior active row before making this
-            // process writable. RoomSessionStore itself dispatches every DAO operation to IO.
-            store
-                .sessions()
-                .asSequence()
-                .filter { it.status == StoredSessionStatus.ACTIVE && it.id != expectedSessionId }
-                .forEach {
-                    if (!stillCurrent()) return false
-                    store.crash(it.id, System.currentTimeMillis())
-                }
+            if (!closeSessionsLeftByDeadProcesses(store, expectedSessionId) { stillCurrent() }) return false
             if (!stillCurrent()) return false
             store.start(application.storedSession(expectedSessionId))
             if (!stillCurrent()) return false
@@ -562,6 +553,40 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
         } catch (_: Exception) {
             false
         }
+    }
+
+    /**
+     * A process death cannot run `stop()`, so every prior `ACTIVE` row has to be closed here, before
+     * this process becomes writable -- as `CRASHED` only for a run that actually recorded an uncaught
+     * exception. An ordinary kill (swipe-away, system reclaim, Android Studio's stop button) leaves
+     * behind a leftover `ACTIVE` row indistinguishable from a crash's, and closing those as `CRASHED`
+     * too is what fired the "Previous run crashed" banner after runs that never crashed; see
+     * [recordedUncaughtCrash] for the evidence that separates them.
+     *
+     * [RoomSessionStore] itself dispatches every DAO operation to IO. Returns false when
+     * [stillCurrent] stops holding partway through -- a newer bootstrap owns the session now and this
+     * one must abandon its work rather than keep writing.
+     */
+    private suspend fun closeSessionsLeftByDeadProcesses(
+        store: RoomSessionStore,
+        expectedSessionId: String,
+        stillCurrent: () -> Boolean,
+    ): Boolean {
+        val events = roomEventStore
+        store
+            .sessions()
+            .asSequence()
+            .filter { it.status == StoredSessionStatus.ACTIVE && it.id != expectedSessionId }
+            .forEach { stale ->
+                if (!stillCurrent()) return false
+                val endedAtMs = System.currentTimeMillis()
+                if (events?.recordedUncaughtCrash(stale.id) == true) {
+                    store.crash(stale.id, endedAtMs)
+                } else {
+                    store.end(stale.id, endedAtMs)
+                }
+            }
+        return true
     }
 
     private fun reconfigureBatchWriter(capacity: Int) {

@@ -11,6 +11,7 @@ import android.hardware.SensorManager
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import androidx.test.core.app.ApplicationProvider
 import io.devconsole.api.DevConsoleConfig
 import io.devconsole.api.InitResult
@@ -100,6 +101,20 @@ class OpenTriggerControllerTest {
 
         controller.onActivityPaused(activity)
         assertNull(floatingButton(activity))
+    }
+
+    /** The button is the DevConsole mark itself, so a missing or unresolvable drawable is a bug. */
+    @Test
+    fun `floating button renders the devconsole mark and clips its shadow to the artwork`() {
+        controller.reconfigure(OpenTriggers(floatingButton = true))
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+
+        controller.onActivityResumed(activity)
+        val button = floatingButton(activity) as ImageView
+
+        assertNotNull(button.drawable)
+        assertTrue(button.clipToOutline)
+        assertTrue(button.outlineProvider is RoundedSquareOutline)
     }
 
     @Test

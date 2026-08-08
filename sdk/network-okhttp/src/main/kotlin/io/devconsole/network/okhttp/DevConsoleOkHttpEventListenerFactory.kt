@@ -63,6 +63,16 @@ class DevConsoleOkHttpEventListenerFactory
         internal fun timingsFor(call: Call): NetworkTimingPhases =
             timestampsByCall[call]?.snapshot() ?: NetworkTimingPhases()
 
+        /**
+         * The *live* phase state for [call], for capture work that outlives the interceptor's
+         * return -- deferred body-tee recording snapshots phases only once the host finishes the
+         * body, which is causally after both [forget] and the `callEnd` eviction have already run.
+         * Both of those only drop the map *entry*; the call's [PhaseTrackingEventListener] keeps
+         * writing marks into this same object, so a holder of this reference can still take a
+         * complete [CallPhaseTimestamps.snapshot] afterwards. Never removes state.
+         */
+        internal fun phaseTimestampsFor(call: Call): CallPhaseTimestamps? = timestampsByCall[call]
+
         /** Drops any retained state for [call]. Safe to call even when nothing is retained. */
         internal fun forget(call: Call) {
             timestampsByCall.remove(call)

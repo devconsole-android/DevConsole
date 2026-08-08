@@ -180,7 +180,27 @@ This is backed by `GET /api/v1/runs`, which exposes every retained run's status,
 server-side (the dashboard does not trust whatever order the underlying store happens to return). The
 `CRASHED` marker itself was already being written by `CrashCapture.markCrashed()` well before this
 route existed — the gap this closes is that nothing previously *surfaced* it to a browser, which can't
-reach in-process session state the way the on-device inspector can.
+reach in-process session state the way the on-device inspector can. The on-device Observe surface
+shows the same banner off the same stored status, so both agree by construction.
+
+### How a run that died without `stop()` is classified
+
+`markCrashed()` only runs when the uncaught-exception handler does. A process death cannot run
+`DevConsole.stop()` either, so an ordinary exit — swiping the app away, the system reclaiming the
+process, Android Studio's stop button — leaves behind an unclosed `ACTIVE` session row that looks
+exactly like the one a crash leaves when `markCrashed()` didn't get to finish. The next launch closes
+every leftover row during session bootstrap
+(`PlatformFacadeProvider.closeSessionsLeftByDeadProcesses`), and it decides between the two cases on
+evidence rather than assuming the worst:
+
+- the run recorded a `"crash"` plugin event of type `"uncaught"` → closed **`CRASHED`**;
+- anything else → closed **`COMPLETED`**.
+
+ANR records deliberately do not count even though they share the `"crash"` plugin id: a stall the run
+survived is not a crashed run. Deaths that leave no durable evidence at all — native crashes, the
+low-memory killer — therefore read as `COMPLETED`. That under-reports those, which costs one banner;
+the alternative (assume `CRASHED`) over-reported on essentially every launch and made the banner
+worth ignoring.
 
 **Known limitation, by design, not yet closed:** the banner's **VIEW** action opens the general
 Crashes view (`show('crashes')`), not a view filtered down to that specific past run. Nothing in this

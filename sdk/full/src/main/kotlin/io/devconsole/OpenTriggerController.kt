@@ -7,9 +7,7 @@ package io.devconsole
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
-import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.graphics.Outline
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -21,10 +19,12 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
-import android.widget.TextView
+import android.widget.ImageView
 import io.devconsole.api.OpenTriggers
 import io.devconsole.api.ShakeIntensity
+import io.devconsole.full.R
 import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
@@ -158,19 +158,17 @@ internal class OpenTriggerController(
         if (decor.findViewWithTag<View>(BUTTON_TAG) != null) return
         val density = activity.resources.displayMetrics.density
         val button =
-            TextView(activity).apply {
+            ImageView(activity).apply {
                 tag = BUTTON_TAG
-                text = BUTTON_LABEL
-                typeface = Typeface.MONOSPACE
-                setTextColor(Color.WHITE)
-                gravity = Gravity.CENTER
+                setImageResource(R.drawable.devconsole_logo)
+                scaleType = ImageView.ScaleType.FIT_CENTER
                 contentDescription = BUTTON_CONTENT_DESCRIPTION
                 elevation = BUTTON_ELEVATION_DP * density
-                background =
-                    GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(BUTTON_BACKGROUND_COLOR)
-                    }
+                // The mark carries its own rounded-square plate, so the button needs no background of
+                // its own -- but an elevation shadow is cast from the view's outline, which defaults to
+                // the full rectangle and would leak out past the artwork's transparent corners.
+                outlineProvider = RoundedSquareOutline(BUTTON_CORNER_RADIUS_FRACTION)
+                clipToOutline = true
                 setOnClickListener { openFromTrigger(activity) }
                 setOnTouchListener(FloatingButtonDragHandler(ViewConfiguration.get(activity).scaledTouchSlop))
                 // The stored position is raw pixels from whatever window it was last dragged in; a
@@ -287,13 +285,34 @@ internal class OpenTriggerController(
         const val INSPECTOR_ACTIVITY_CLASS_NAME = "io.devconsole.ui.compose.DevConsoleActivity"
         const val BUTTON_TAG = "io.devconsole.openTriggerFloatingButton"
         const val BUTTON_CONTENT_DESCRIPTION = "Open DevConsole"
-        const val BUTTON_LABEL = "DC"
         const val BUTTON_SIZE_DP = 48
         const val BUTTON_DEFAULT_MARGIN_DP = 16
         const val BUTTON_ELEVATION_DP = 8
-        const val BUTTON_BACKGROUND_COLOR = 0xB2202126.toInt()
+
+        /** Matches the corner radius drawn into `devconsole_logo`, as a fraction of its width. */
+        const val BUTTON_CORNER_RADIUS_FRACTION = 0.193f
         const val OPEN_DEBOUNCE_MS = 1_000L
         private const val ACCELEROMETER_AXES = 3
+    }
+}
+
+/**
+ * Traces the floating button's elevation shadow (and its touch ripple, via `clipToOutline`) around
+ * the rounded-square plate `devconsole_logo` draws, instead of the view's full rectangle -- the
+ * artwork's corners are transparent, so the default outline would cast a squared-off shadow into
+ * empty pixels.
+ *
+ * A true squircle cannot be expressed as an [Outline]; a plain rounded rect at the same radius is
+ * close enough at 48dp, where the difference is well under a pixel.
+ */
+internal class RoundedSquareOutline(
+    private val cornerRadiusFraction: Float,
+) : ViewOutlineProvider() {
+    override fun getOutline(
+        view: View,
+        outline: Outline,
+    ) {
+        outline.setRoundRect(0, 0, view.width, view.height, view.width * cornerRadiusFraction)
     }
 }
 

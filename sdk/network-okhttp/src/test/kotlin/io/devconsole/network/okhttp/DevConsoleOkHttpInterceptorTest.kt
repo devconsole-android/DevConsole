@@ -5,6 +5,8 @@ import io.devconsole.network.InMemoryNetworkTransactionStore
 import io.devconsole.network.NetworkCaptureContext
 import io.devconsole.network.NetworkCaptureFactory
 import io.devconsole.network.NetworkCursorCodec
+import io.devconsole.network.NetworkTransaction
+import io.devconsole.network.NetworkTransactionQuery
 import io.devconsole.network.NetworkTransactionRecorder
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
@@ -17,10 +19,12 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okio.BufferedSink
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 class DevConsoleOkHttpInterceptorTest {
     @Test
@@ -256,37 +260,268 @@ class DevConsoleOkHttpInterceptorTest {
     }
 
     @Test
-    fun `skips peeking a chunked unknown-length text response so intercept returns without blocking`() {
+    fun `captures a finite chunked response body through the tee as the host consumes it`() {
         val server = MockWebServer()
         server.start()
         try {
             // No Content-Length header: chunkedBody makes OkHttp report an unknown content length,
-            // the same shape as a long-poll or line-delimited streaming response that isn't SSE or
-            // NDJSON. Before the fix this fell into the peekBody(512KiB) branch and blocked inside
-            // intercept() until the peek bound was hit or the stream ended.
+            // the shape of a finite chunked JSON response. Before the tee this was recorded
+            // metadata-only as "streaming"; now the body is captured as the host reads it.
+            val chunkedJson = "{\"event\":\"tick\"}\n"
             server.enqueue(
                 MockResponse()
-                    .setChunkedBody("{\"event\":\"tick\"}\n", 16)
-                    .addHeader("Content-Type", "text/plain"),
+                    .setChunkedBody(chunkedJson, 16)
+                    .addHeader("Content-Type", "application/json"),
             )
             val transactions =
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
             val client = clientRecordingTo(transactions)
 
             val started = System.currentTimeMillis()
-            val response = client.newCall(Request.Builder().url(server.url("/long-poll")).build()).execute()
+            val response = client.newCall(Request.Builder().url(server.url("/chunked")).build()).execute()
             val elapsedMs = System.currentTimeMillis() - started
-            assertTrue("intercept() must return promptly instead of blocking on the peek", elapsedMs < 2000L)
-            // The host's own read of the real body must be completely unaffected by skipping the peek.
-            assertEquals("{\"event\":\"tick\"}\n", response.body!!.string())
+            assertTrue("intercept() must return promptly instead of blocking on a peek", elapsedMs < 2000L)
+            // The host's own read of the real body must see exactly the network's bytes.
+            assertEquals(chunkedJson, response.body!!.string())
 
-            val transaction = awaitTransactions(transactions).single()
-            assertEquals(
-                "streaming",
-                transaction.capture.response!!
+            val transaction =
+                awaitTransactions(transactions) { list ->
+                    list
+                        .singleOrNull()
+                        ?.capture
+                        ?.response
+                        ?.body is BodyPreview.Text
+                }.single()
+            val recordedResponse = transaction.capture.response!!
+            assertEquals(chunkedJson, (recordedResponse.body as BodyPreview.Text).value)
+            assertNull(recordedResponse.metadata.body.omittedReason)
+            assertEquals(chunkedJson.length.toLong(), recordedResponse.metadata.body.declaredLength)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `passes every byte to the host while truncating the tee capture at the bound`() {
+        val server = MockWebServer()
+        server.start()
+        try {
+            val totalBytes = 700 * 1024
+            val oversizedBody = "a".repeat(totalBytes)
+            server.enqueue(
+                MockResponse()
+                    .setChunkedBody(oversizedBody, 64 * 1024)
+                    .addHeader("Content-Type", "text/plain"),
+            )
+            val transactions =
+                InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
+            val client = clientRecordingTo(transactions)
+
+            val response = client.newCall(Request.Builder().url(server.url("/oversized-chunked")).build()).execute()
+            val hostBody = response.body!!.string()
+            assertEquals("the host must receive every byte, capped capture or not", oversizedBody, hostBody)
+
+            val transaction =
+                awaitTransactions(transactions) { list ->
+                    list
+                        .singleOrNull()
+                        ?.capture
+                        ?.response
+                        ?.metadata
+                        ?.body
+                        ?.omittedReason == "truncated"
+                }.single()
+            val recordedResponse = transaction.capture.response!!
+            assertEquals("truncated", recordedResponse.metadata.body.omittedReason)
+            assertEquals(totalBytes.toLong(), recordedResponse.metadata.body.declaredLength)
+            val capturedText = (recordedResponse.body as BodyPreview.Text).value
+            // 512KiB: the interceptor's MAX_RESPONSE_PEEK_BYTES tee-capture bound.
+            assertEquals(512L * 1024L, capturedText.length.toLong())
+            assertTrue(oversizedBody.startsWith(capturedText))
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `records exactly once with a partial body when the host closes the teed body early`() {
+        val server = MockWebServer()
+        server.start()
+        try {
+            val fullBody = "b".repeat(100 * 1024)
+            server.enqueue(
+                MockResponse()
+                    .setChunkedBody(fullBody, 8 * 1024)
+                    .addHeader("Content-Type", "text/plain"),
+            )
+            val transactions =
+                InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
+            val client = clientRecordingTo(transactions)
+
+            val response = client.newCall(Request.Builder().url(server.url("/abandoned")).build()).execute()
+            val firstBytes = response.body!!.source().readUtf8(5)
+            assertEquals("bbbbb", firstBytes)
+            response.close()
+
+            val transaction =
+                awaitTransactions(transactions) { list ->
+                    list
+                        .singleOrNull()
+                        ?.capture
+                        ?.response
+                        ?.metadata
+                        ?.body
+                        ?.omittedReason == "partial"
+                }.single()
+            val recordedResponse = transaction.capture.response!!
+            assertEquals(200, recordedResponse.statusCode)
+            val capturedText = (recordedResponse.body as BodyPreview.Text).value
+            assertTrue("only bytes actually delivered to the host can be captured", capturedText.isNotEmpty())
+            assertTrue(fullBody.startsWith(capturedText))
+            // Closed before EOF: whatever fragment was delivered must never masquerade as the
+            // complete response body.
+            assertEquals("partial", recordedResponse.metadata.body.omittedReason)
+            // Close raced EOF on nothing here, but the once-guard must still have recorded a single
+            // transaction; give the async recorder a beat to surface any duplicate before asserting.
+            Thread.sleep(100)
+            assertEquals(1, awaitTransactions(transactions).size)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `records a long-lived teed stream provisionally while it is still open`() {
+        val server = MockWebServer()
+        server.start()
+        try {
+            // 8 bytes per 500ms keeps this NDJSON stream open for roughly two seconds -- long
+            // enough that the provisional record must appear while bytes are still arriving.
+            val ndjsonBody = "{\"tick\":1}\n{\"tick\":2}\n"
+            server.enqueue(
+                MockResponse()
+                    .setChunkedBody(ndjsonBody, 8)
+                    .throttleBody(8, 500, TimeUnit.MILLISECONDS)
+                    .addHeader("Content-Type", "application/x-ndjson"),
+            )
+            val transactions =
+                InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
+            val client = clientRecordingTo(transactions)
+
+            val response = client.newCall(Request.Builder().url(server.url("/ndjson")).build()).execute()
+            // Nothing of the body has been read yet: the stream is open, and the transaction must
+            // already be visible as a metadata-only "streaming" record with no completion time.
+            val provisional = awaitTransactions(transactions, maxWaitMs = 3000L).single()
+            val provisionalResponse = provisional.capture.response!!
+            assertEquals("streaming", provisionalResponse.metadata.body.omittedReason)
+            assertEquals(BodyPreview.Absent, provisionalResponse.body)
+            assertNull("an open stream has no completion moment yet", provisional.completedAtEpochMs)
+
+            // Draining the stream to EOF must upgrade that same transaction in place -- same id,
+            // now with the captured body and a real completion time, never a second entry.
+            assertEquals(ndjsonBody, response.body!!.string())
+            val upgraded =
+                awaitTransactions(transactions, maxWaitMs = 5000L) { list ->
+                    list
+                        .singleOrNull()
+                        ?.capture
+                        ?.response
+                        ?.body is BodyPreview.Text
+                }.single()
+            assertEquals(provisional.id, upgraded.id)
+            assertEquals(ndjsonBody, (upgraded.capture.response!!.body as BodyPreview.Text).value)
+            assertNull(
+                upgraded.capture.response!!
                     .metadata.body.omittedReason,
             )
-            assertEquals(BodyPreview.Absent, transaction.capture.response!!.body)
+            assertNotNull(upgraded.completedAtEpochMs)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `still records a teed response the host neither reads nor closes`() {
+        val server = MockWebServer()
+        server.start()
+        try {
+            server.enqueue(
+                MockResponse()
+                    .setChunkedBody("{\"ok\":true}", 8)
+                    .addHeader("Content-Type", "application/json"),
+            )
+            val transactions =
+                InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
+            val client = clientRecordingTo(transactions)
+
+            val response = client.newCall(Request.Builder().url(server.url("/abandoned-unread")).build()).execute()
+            try {
+                // The host walks away without touching the body: no EOF, no close. The transaction
+                // must still surface -- as the provisional metadata-only record -- instead of
+                // silently never existing.
+                val transaction = awaitTransactions(transactions, maxWaitMs = 3000L).single()
+                val recordedResponse = transaction.capture.response!!
+                assertEquals(200, recordedResponse.statusCode)
+                assertEquals("streaming", recordedResponse.metadata.body.omittedReason)
+                assertEquals(BodyPreview.Absent, recordedResponse.body)
+            } finally {
+                response.close()
+            }
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `teed capture still records real timings after the factory has evicted its entry`() {
+        val server = MockWebServer()
+        server.start()
+        try {
+            server.enqueue(
+                MockResponse()
+                    .setChunkedBody("{\"ok\":true}", 8)
+                    .addHeader("Content-Type", "application/json"),
+            )
+            val transactions =
+                InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
+            val listenerFactory = DevConsoleOkHttpEventListenerFactory()
+            val client =
+                OkHttpClient
+                    .Builder()
+                    .eventListenerFactory(listenerFactory)
+                    .addInterceptor(
+                        DevConsoleOkHttpInterceptor(
+                            NetworkTransactionRecorder(
+                                NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                                transactions,
+                            ),
+                            listenerFactory,
+                        ),
+                    ).build()
+
+            client.newCall(Request.Builder().url(server.url("/timed")).build()).execute().use {
+                assertEquals("{\"ok\":true}", it.body!!.string())
+            }
+
+            val timings =
+                awaitTransactions(transactions) { list ->
+                    list
+                        .singleOrNull()
+                        ?.capture
+                        ?.response
+                        ?.metadata
+                        ?.timings
+                        ?.receiveMs != null
+                }.single()
+                    .capture.response!!
+                    .metadata.timings
+            // The deferred record runs after both the interceptor's forget() and callEnd's own
+            // eviction; the live CallPhaseTimestamps reference must still yield complete phases,
+            // including receiveMs whose end mark is only written as the body is exhausted.
+            assertNotNull("dnsMs must survive eviction of the factory's map entry", timings.dnsMs)
+            assertNotNull("waitMs must survive eviction of the factory's map entry", timings.waitMs)
+            assertNotNull("receiveMs is only observable at body exhaustion", timings.receiveMs)
+            assertEquals("leak safety must be unchanged by deferred capture", 0, listenerFactory.trackedCallCount())
         } finally {
             server.close()
         }
@@ -314,16 +549,23 @@ class DevConsoleOkHttpInterceptorTest {
                 ),
             ).build()
 
+    /**
+     * Polls until [until] accepts the store's transactions (default: any transaction at all). A
+     * teed response may legitimately be stored twice under one id -- provisional then final -- so
+     * tests that assert on the final state pass a predicate matching it instead of grabbing
+     * whichever record happens to have landed first.
+     */
     private fun awaitTransactions(
         store: InMemoryNetworkTransactionStore,
         maxWaitMs: Long = 2000L,
-    ): List<io.devconsole.network.NetworkTransaction> {
+        until: (List<NetworkTransaction>) -> Boolean = { it.isNotEmpty() },
+    ): List<NetworkTransaction> {
         val deadline = System.currentTimeMillis() + maxWaitMs
         while (System.currentTimeMillis() < deadline) {
-            val list = store.page(io.devconsole.network.NetworkTransactionQuery()).transactions
-            if (list.isNotEmpty()) return list
+            val list = store.page(NetworkTransactionQuery()).transactions
+            if (until(list)) return list
             Thread.sleep(10)
         }
-        return store.page(io.devconsole.network.NetworkTransactionQuery()).transactions
+        return store.page(NetworkTransactionQuery()).transactions
     }
 }
