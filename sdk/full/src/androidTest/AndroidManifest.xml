@@ -1,4 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Test-only, and never merged into the published AAR: the SDK itself declares no permissions.
+         LocalNetworkPermissionInstrumentedTest opens a ServerSocket to pick a free port, which fails
+         with EPERM without INTERNET. That is why the one test guarding the API 37 LAN permission
+         rule could not run on a device at all, and why the rule shipped wrong.
+         ACCESS_LOCAL_NETWORK is declared but deliberately left ungranted: the test asserts what
+         happens when it is missing. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <application>
         <!-- Test-only host window for ScreenshotCaptureInstrumentedTest: a real, laid-out Activity
              is what PixelCopy and the FLAG_SECURE detection both need to be verified against an

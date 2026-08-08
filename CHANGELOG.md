@@ -20,6 +20,24 @@ and everything else is a patch.
 
 ## Unreleased
 
+### Fixed
+
+- **LAN mode silently served nobody on Android 17.** `LocalNetworkPermissionGate` required both
+  `deviceApi >= 37` **and** `targetSdk >= 37` before asking for `ACCESS_LOCAL_NETWORK`, but the
+  platform enforces Local Network Access on the device version alone. An app targeting API 35 on an
+  Android 17 device was therefore told no permission was needed: `startBrowser` returned
+  `StartResult.Started` with a real LAN endpoint, the socket bound, the port even completed TCP
+  handshakes — and the platform dropped the traffic, so every dashboard request hung until it timed
+  out. Every signal said success. The gate now keys on the device API only, so that host gets an
+  actionable `StartResult.PermissionRequired` and the normal permission prompt instead of a dead
+  server. Verified on an Android 17 device: with the permission denied the LAN start now prompts,
+  and once granted the dashboard answers over LAN immediately.
+- **The instrumented test that guards this rule could not run.** `sdk:full`'s androidTest APK
+  declared no `INTERNET` permission, so `LocalNetworkPermissionInstrumentedTest` died at `EPERM`
+  opening a `ServerSocket` before reaching its assertions — which is how a rule contradicted by its
+  own test shipped. The androidTest manifest (test-only; never part of the published AAR) now
+  declares it, and the test passes on a real API 37 device.
+
 ### Changed
 
 - **The in-app inspector's Start button now honours `browserConfig.binding`.** `BrowserConfig.binding`
