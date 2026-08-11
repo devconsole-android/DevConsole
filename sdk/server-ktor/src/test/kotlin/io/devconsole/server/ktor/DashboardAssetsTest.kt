@@ -94,4 +94,40 @@ class DashboardAssetsTest {
         assertTrue(css.contains(".rail"))
         assertFalse(dashboard.contains("color-scheme: dark"))
     }
+
+    @Test
+    fun `dashboard uses the graphite cobalt design tokens`() {
+        val css = DashboardAssets.css().lowercase()
+
+        listOf(
+            "--ground: #111317",
+            "--panel: #171a20",
+            "--surface-2: #1d2129",
+            "--ink: #eceef2",
+            "--signal: #72a7ff",
+        ).forEach { token -> assertTrue("missing $token", css.contains(token)) }
+
+        listOf("#b7ed65", "#427526", "terminal-green", "instrument panel").forEach { legacy ->
+            assertFalse("legacy design value remains: $legacy", css.contains(legacy))
+        }
+    }
+
+    @Test
+    fun `dashboard defaults to system theme and persists only explicit choice`() {
+        val script = DashboardAssets.js()
+
+        assertTrue(script.contains("matchMedia('(prefers-color-scheme: dark)')"))
+        assertTrue(script.contains("devconsole-theme"))
+        assertTrue(script.contains("media.addEventListener('change'"))
+    }
+
+    @Test
+    fun `dashboard shell keeps stable functional ids and semantic landmarks`() {
+        val dashboard = DashboardAssets.index()
+
+        assertTrue(dashboard.contains("<header class=\"topbar\""))
+        assertTrue(dashboard.contains("<nav class=\"rail\""))
+        assertTrue(dashboard.contains("<main id=\"mainContent\""))
+        assertTrue(dashboard.contains("aria-label=\"Inspector views\""))
+    }
 }
