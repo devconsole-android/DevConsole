@@ -20,6 +20,25 @@ joined this list.)
 
 ## Unreleased
 
+### Fixed
+
+- **OkHttp responses without a `Content-Length` showed a blank response body unless the host read
+  the whole thing.** Those responses — `Transfer-Encoding: chunked`, and every transparently
+  gzipped response, which is most of them — are captured by the tee, which copies bytes *as the
+  host reads them*. A call site that reads only the status code and closes (`execute().use {
+  it.code }`, the shape all three samples had), or a parser that stops at the end of the value it
+  wanted, therefore left nothing to capture: the transaction was recorded with an empty body and
+  `bodyOmittedReason = "partial"`. The same response *with* a `Content-Length` was captured whole
+  by the eager `peekBody`, and the Ktor plugin — which drains its own half of the split channel —
+  was never affected, so identical app code showed the body on one client and a blank pane on the
+  other. `TeeCapturingSource.close()` now drains whatever the host left behind before completing
+  the close, bounded by the existing 512 KiB cap and a 300 ms deadline (the same
+  bounded-drain-on-close OkHttp itself performs for connection reuse). A body that runs out of that
+  budget is still recorded `"partial"`, and one no bytes were recovered from is now recorded with
+  no body instead of an empty one — an empty preview beside a 200 reads as "the server sent
+  nothing", which is a different claim. The compose sample's OkHttp card now reads its response
+  body, like its Ktor card already did.
+
 ## 1.0.1 — 2026-08-08
 
 A patch in the strict sense the [policy](#versioning-and-stability-policy) now commits to: one

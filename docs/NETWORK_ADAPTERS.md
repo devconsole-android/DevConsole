@@ -91,8 +91,19 @@ against a 512 KiB cap:
 - Fully delivered under the cap → recorded complete, `bodyOmittedReason = null`.
 - Still flowing past the cap → the first 512 KiB is recorded, `bodyOmittedReason = "truncated"`,
   and `bodyLength` carries the true total the host received, not just the captured prefix.
-- Closed by the host before EOF (an early `response.close()`, a cancelled call) → whatever was
-  delivered by then is recorded, `bodyOmittedReason = "partial"`.
+- Closed by the host before EOF (an early `response.close()`, a call site that reads only the
+  status code, a parser that stops at the end of the value it wanted) → the tee **drains what the
+  host left behind** before completing the close, so the body is still recorded whole with
+  `bodyOmittedReason = null`. The drain is bounded twice over: it stops at the same 512 KiB cap,
+  and it holds `close()` for at most 300 ms — the same bounded-drain-on-close OkHttp itself
+  performs to decide whether an abandoned connection is worth reusing. Only when that budget runs
+  out (a live stream abandoned mid-flight, a read failure) is the fragment recorded with
+  `bodyOmittedReason = "partial"`, and a body no bytes at all were recovered from is recorded with
+  no body rather than an empty one.
+
+That drain is what keeps capture independent of how much of the body the host wanted: a response
+with a `Content-Length` is captured whole whether or not the host reads it, and one without a
+`Content-Length` now behaves the same way.
 
 `text/event-stream` responses are the one exception: they're still recorded metadata-only
 (`bodyOmittedReason = "streaming"`) immediately, without teeing — a real SSE feed is for all

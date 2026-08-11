@@ -7,7 +7,8 @@
 package io.devconsole.ui.compose
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,8 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,7 +31,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private const val CHEVRON_ROTATION_DURATION_MS = 140
 
 /**
  * A collapsible detail card: 56dp header row with an animated chevron, a 14sp label, an optional
@@ -56,19 +55,14 @@ internal fun CollapsibleSection(
     val rotation by
         animateFloatAsState(
             targetValue = if (expanded) 0f else -90f,
-            animationSpec = tween(CHEVRON_ROTATION_DURATION_MS),
+            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
             label = "sectionChevron",
         )
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        color = DevConsoleTheme.colors.surface2,
-    ) {
-        Column {
-            CollapsibleSectionHeader(label, onToggle, rotation, meta, metaColor, onCopy, copyContentDescription)
-            if (expanded) {
-                Column(content = content)
-            }
+    Column(modifier = modifier.fillMaxWidth()) {
+        HorizontalDivider(color = DevConsoleTheme.colors.line)
+        CollapsibleSectionHeader(label, onToggle, rotation, meta, metaColor, onCopy, copyContentDescription)
+        if (expanded) {
+            Column(content = content)
         }
     }
 }

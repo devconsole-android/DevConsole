@@ -43,10 +43,13 @@ import java.util.concurrent.atomic.AtomicBoolean
  * The final record is emitted exactly once -- [recorded] is an atomic guard because a `close()` on
  * one thread can race the read that hits EOF on another -- and both record paths enqueue under
  * [lock] so the provisional record can never be enqueued after (and thus clobber) the final one.
- * A close *before* EOF means the host abandoned the body mid-stream: the recorded body is only
- * what was delivered up to that point, and is marked `bodyOmittedReason = "partial"` so a
- * fragment is never presented as the complete response. All work is wrapped in `runCatching`, so
- * nothing here can ever throw into the host's reads.
+ * A close *before* EOF means the host abandoned the body mid-stream; [TeeCapturingSource.close]
+ * first drains what is left within a bounded budget, so an abandoned body is normally still
+ * recorded whole. Only when that drain cannot finish -- deadline, read failure, or the capture cap
+ * -- is the record marked `bodyOmittedReason = "partial"` so a fragment is never presented as the
+ * complete response, and a body no bytes at all were recovered from is recorded with no body
+ * rather than an empty one. All work is wrapped in `runCatching`, so nothing here can ever throw
+ * into the host's reads.
  *
  * [phaseTimestamps] is the *live* per-call timing state handed out by
  * [DevConsoleOkHttpEventListenerFactory.phaseTimestampsFor], not a snapshot: by the time the body
@@ -101,6 +104,14 @@ internal class DeferredResponseBodyCapture(
     fun onBodyClosed() = recordFinalTransactionOnce(reachedEndOfBody = false)
 
     /**
+     * Whether pulling more bytes out of the body could still add anything to the capture: nothing
+     * has been recorded yet and the bounded buffer has room left. [TeeCapturingSource.close] asks
+     * before -- and between -- its drain reads, so a body the host abandoned is never read past
+     * what the capture can actually keep.
+     */
+    fun wantsMoreBytes(): Boolean = !recorded.get() && synchronized(lock) { captured.size < maxCapturedBytes }
+
+    /**
      * Schedules the provisional `"streaming"` record described in the class kdoc. Called by the
      * interceptor right before it hands the teed response to the host; scheduling failures are
      * swallowed because provisional visibility is strictly best-effort on top of the final record.
@@ -145,9 +156,13 @@ internal class DeferredResponseBodyCapture(
             synchronized(lock) {
                 val bodyBytes = captured.readByteArray()
                 val capturedWasCapped = totalBytesDelivered > bodyBytes.size
+                // An abandoned body no bytes were recovered from is recorded as *no* body, not as a
+                // zero-length one: an empty preview alongside a 200 reads as "the server sent
+                // nothing", which is a different -- and wrong -- claim than "nothing was captured".
+                val recoveredNothing = !reachedEndOfBody && bodyBytes.isEmpty()
                 val responseInput =
                     responseTemplate
-                        .copy(body = bodyBytes)
+                        .copy(body = bodyBytes.takeUnless { recoveredNothing })
                         .withMetadata(
                             responseTemplate.metadata.copy(
                                 bodyLength = totalBytesDelivered,
@@ -191,6 +206,14 @@ internal class DeferredResponseBodyCapture(
  * first delivered untouched into the host's own sink by the delegate, then copied (bounded) as a
  * side effect. EOF and close each notify the capture so it can record at whichever happens first.
  *
+ * Capture must not depend on how much of the body the host happens to read. A host that reads only
+ * the status code and closes -- or a parser that stops at the end of the JSON value it wanted --
+ * would otherwise leave DevConsole showing a blank or truncated body for exactly the responses
+ * OkHttp reports no `Content-Length` for (chunked, and every transparently-gzipped response), while
+ * the same response *with* a `Content-Length` is captured whole by the interceptor's eager
+ * `peekBody`. [close] closes that gap: whatever the host left behind is drained here first, within
+ * a bounded budget, so the recorded body is the whole response in every ordinary case.
+ *
  * A delegate read that throws propagates unchanged and notifies nothing -- the host's subsequent
  * `close()` (every well-behaved consumer closes a failed body) is what records the transaction with
  * whatever bytes had been delivered by then. [close] notifies in a `finally` so even a close failure
@@ -215,9 +238,62 @@ internal class TeeCapturingSource(
 
     override fun close() {
         try {
+            // Isolated from the close itself: a drain that fails must still leave the host with the
+            // close it asked for, and still record whatever was captured before it failed.
+            runCatching { drainRemainderWithinBudget() }
             super.close()
         } finally {
             capture.onBodyClosed()
         }
+    }
+
+    /**
+     * Reads whatever the host left unread through this tee -- discarding the bytes, since only the
+     * capture still wants them -- so an abandoned body is recorded whole instead of as the fragment
+     * the host happened to consume. Doubly bounded: it stops as soon as the capture has no room
+     * left ([DeferredResponseBodyCapture.wantsMoreBytes], i.e. the same 512KB cap the tee already
+     * enforces) and it borrows OkHttp's own `Util.skipAll` deadline idiom -- tighten the source's
+     * deadline to at most [DRAIN_DEADLINE_MS], restore it afterwards -- so a body that is a live
+     * stream rather than a finished response cannot block the host's `close()` for longer than
+     * that. Overshooting the deadline surfaces as an `InterruptedIOException` from [read], caught by
+     * [close]'s `runCatching`, and the transaction is recorded `"partial"`.
+     *
+     * This is the same bounded-drain-on-close that OkHttp itself performs to decide whether an
+     * abandoned connection is worth reusing (`AbstractSource.discard`, 100ms), so on the common
+     * finite-response path these bytes were already going to be read off the socket regardless.
+     */
+    private fun drainRemainderWithinBudget() {
+        if (!capture.wantsMoreBytes()) return
+        val timeout = timeout()
+        val startNs = System.nanoTime()
+        val originalRemainingNs =
+            if (timeout.hasDeadline()) timeout.deadlineNanoTime() - startNs else NO_DEADLINE
+        timeout.deadlineNanoTime(startNs + minOf(originalRemainingNs, DRAIN_DEADLINE_NS))
+        try {
+            val discarded = Buffer()
+            while (capture.wantsMoreBytes() && read(discarded, DRAIN_SEGMENT_BYTES) != -1L) {
+                discarded.clear()
+            }
+        } finally {
+            if (originalRemainingNs == NO_DEADLINE) {
+                timeout.clearDeadline()
+            } else {
+                timeout.deadlineNanoTime(startNs + originalRemainingNs)
+            }
+        }
+    }
+
+    private companion object {
+        /**
+         * Ceiling on how long a host `close()` may be held while the rest of an abandoned body is
+         * drained. Generous for a finite response still in flight on a slow connection, short
+         * enough that abandoning a long-lived stream stays effectively instant.
+         */
+        const val DRAIN_DEADLINE_MS = 300L
+        const val DRAIN_DEADLINE_NS = DRAIN_DEADLINE_MS * 1_000_000L
+        const val DRAIN_SEGMENT_BYTES = 8L * 1024L
+
+        /** Sentinel for "the source had no deadline of its own to preserve". */
+        const val NO_DEADLINE = Long.MAX_VALUE
     }
 }

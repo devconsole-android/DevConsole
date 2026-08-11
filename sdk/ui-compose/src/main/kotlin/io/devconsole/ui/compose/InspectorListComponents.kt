@@ -8,7 +8,8 @@
 package io.devconsole.ui.compose
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -176,7 +177,7 @@ internal fun TonalListRow(
  * A real rotating chevron glyph for a [TonalListRow]'s expand/collapse affordance, replacing the
  * CJK presentation-form `︿` (U+FE3F) hack -- font-coverage dependent and announced as a symbol by
  * TalkBack. Same rotation convention [CollapsibleSection] uses: open -> 0deg (points down),
- * collapsed -> -90deg (points right), animated with the same 140ms tween.
+ * collapsed -> -90deg (points right), animated with a standard spring.
  */
 @Composable
 internal fun TonalRowExpandChevron(
@@ -186,7 +187,7 @@ internal fun TonalRowExpandChevron(
     val rotation by
         animateFloatAsState(
             targetValue = if (expanded) 0f else -90f,
-            animationSpec = tween(140),
+            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
             label = "tonalRowExpandChevron",
         )
     InspectorGlyphIcon(

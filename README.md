@@ -261,7 +261,7 @@ DevConsole.networkRecorder().record(requestInput, responseInput, startedAtMs, co
 ```
 
 One capture bound worth knowing up front: response bodies are captured up to a cap — 512 KiB on
-OkHttp (chunked/unknown-length bodies via a non-blocking tee, recorded at EOF or close), 256 KiB on
+OkHttp (chunked/unknown-length bodies via a tee, recorded at EOF or close), 256 KiB on
 Ktor. `text/event-stream` and known-binary bodies stay metadata-only on both, since a live SSE feed
 is for all practical purposes endless. See
 [Chunked and streaming responses](docs/NETWORK_ADAPTERS.md#chunked-and-streaming-responses) for how
