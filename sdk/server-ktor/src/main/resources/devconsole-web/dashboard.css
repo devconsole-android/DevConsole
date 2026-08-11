@@ -93,10 +93,10 @@
 html { color-scheme: dark; }
 :root[data-theme="light"] { color-scheme: light; }
 
-/* ---------------- Density tokens (task E6: Simple/Advanced mode) ----------------
+/* ---------------- Density tokens (Simple/Advanced mode) ----------------
    Advanced keeps today's numbers byte-for-byte (that's the whole point: density is a feature for
    developers). Simple overrides the same four tokens under body.mode-simple so every consumer
-   below reads through a variable instead of a per-component override — E1's breakpoints and E6's
+   below reads through a variable instead of a per-component override — the responsive breakpoints and the density
    density then compose instead of fighting, since neither ever hard-codes the other's concern.
    Colour is untouched by either mode, so the AA contrast ratios in §3.1/3.2 apply unchanged. */
 :root {
@@ -119,6 +119,46 @@ body.mode-simple {
   --d-card-pad: 20px;
   --d-card-gap: 16px;
 }
+
+/* ---------------- Spacing scale ----------------
+   4-unit base with 6 and 10 as the half-steps an 8-only scale misses: 2 4 6 8 10 12 16 20 24.
+   Everything below picks from it; 5px and 18px were the only strays and are gone.
+
+   Deliberately a documented contract rather than a --sp-* token layer. The density block directly
+   above is the cautionary tale: --d-card-pad and --d-card-gap sat here declared and unread for
+   their whole life, so the mode they belong to only half worked. A spacing token nobody reads is
+   worse than a literal, because it reads as wired. Tokens here would need all ~120 spacing
+   declarations converted in one pass to be honest, and that buys no visual change -- so the scale
+   is enforced by review against this comment, and only the two tokens that already had a real
+   job (density, which genuinely varies at runtime) stay variables.
+
+   Vertical rhythm inside a view: 16 above the title (.main-inner), 20 below it (.view-head),
+   12 below the toolbar. The one generous interval is under the title, on purpose. */
+
+/* ---------------- Type ramp ----------------
+   Eight roles, smallest to largest. Each step is >=8% from its neighbour, which is the point:
+   the ramp used to carry eleven sizes, and three of them were the same role split across a
+   half-pixel -- .toolbar > button at 12px beside the base button rule at 12.5px, .stream-seg
+   button at 11px beside .seg button at 11.5px, .detail-group-label at 10px beside
+   .card-shell-badge at 10.5px. A half-pixel cannot express hierarchy; it only records that two
+   people sized the same thing on different days.
+
+     9.5   tag        micro badge; always 700, almost always mono (.row-tag, .badge-pill)
+    10.5   label      uppercase structural label, column key, count (.list-head span, .row-badge)
+    11.5   meta       supporting text, small controls, kv data (.detail-fact, .seg button)
+    12.5   body       prose, form controls, code, mono payloads (.card-lede, input, .code-line)
+    13     item       entity names and detail titles, separated from body by weight not size;
+                      also --d-body-font's advanced value, so it moves with density
+    14     heading    card and section headings (.card-shell-title, 700)
+    17     metric     the single large number on a card (.card-metric-val)
+    20     title      the view h1 (.view-title)
+
+   13 sits close to 12.5 on purpose and is the one pair left standing: one side is a runtime
+   density token (13 -> 14.5 in Simple mode), so folding it into the static ramp would decalibrate
+   the density feature to buy a cosmetic gap. The roles are held apart by weight (500-700) instead.
+
+   Sizes stay in px, not rem: browser zoom scales px fine, and the density tokens above are the
+   deliberate user-facing size control on this surface. */
 
 /* height: 100vh (not min-height) pins the whole app to one viewport-tall flex column: .topbar
    takes its fixed 48px and .workspace below it gets the rest via flex — the chain that lets
@@ -231,7 +271,7 @@ div::-webkit-scrollbar-track, nav::-webkit-scrollbar-track { background: transpa
 .stream-seg button {
   position: relative; display: flex; align-items: center; gap: 8px;
   padding: 0 12px; height: 24px; border: none; border-right: 1px solid var(--line);
-  border-radius: 0; font-size: 11px; font-weight: 600;
+  border-radius: 0; font-size: 11.5px; font-weight: 600;
   color: var(--muted); background: transparent; cursor: pointer;
 }
 .stream-seg button:last-child { border-right: none; }
@@ -239,7 +279,7 @@ div::-webkit-scrollbar-track, nav::-webkit-scrollbar-track { background: transpa
 .stream-seg button.active { color: var(--signal-ink); background: var(--signal); }
 
 .host-line {
-  flex: 0 1 auto; min-width: 0; font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
+  flex: 0 1 auto; min-width: 0; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .topbar-spacer { flex: 1; }
@@ -290,7 +330,7 @@ div::-webkit-scrollbar-track, nav::-webkit-scrollbar-track { background: transpa
 body.rail-hidden .rail { display: none; }
 
 .rail-group { margin-top: 14px; }
-.rail-group-label { display: flex; align-items: center; gap: 8px; padding: 0 10px 5px; color: var(--text-3); font-size: 11px; font-weight: 600; }
+.rail-group-label { display: flex; align-items: center; gap: 8px; padding: 0 10px 5px; color: var(--text-3); font-size: 11.5px; font-weight: 600; }
 .rail-group-label .text {
   font-size: inherit; font-weight: inherit; color: inherit; text-transform: none; letter-spacing: 0;
   white-space: nowrap;
@@ -323,7 +363,7 @@ body.rail-hidden .rail { display: none; }
 
 .rail-shortcuts { margin-top: 24px; padding: 0 10px; color: var(--text-3); }
 .rail-shortcuts-title {
-  font-size: 11px; font-weight: 600; color: inherit;
+  font-size: 11.5px; font-weight: 600; color: inherit;
   margin-bottom: 4px;
 }
 .rail-shortcuts-grid { display: grid; gap: 2px; font-size: 10.5px; line-height: 1.5; color: inherit; }
@@ -376,14 +416,19 @@ main { flex: 1 1 0%; min-width: 0; min-height: 0; display: flex; flex-direction:
 @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 
 /* View head */
-.view-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding-bottom: 12px; }
+/* padding-bottom is the view's one generous interval, and it is deliberately larger than the
+   .toolbar margin below it (20 vs 12). Both were 12px, which gave the h1 exactly as much room as a
+   filter row and flattened the page into one undifferentiated stack -- with 8 of the 16 views
+   carrying no toolbar at all, the title simply ran into its own content. 20/12 reads as
+   "title band, then the working area" at a glance without spending height a dense tool needs. */
+.view-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding-bottom: 20px; }
 .view-title { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
 .view-badge {
-  flex: 0 0 auto; font-family: var(--font-mono); font-size: 11px; padding: 2px 8px; border-radius: 99px;
+  flex: 0 0 auto; font-family: var(--font-mono); font-size: 11.5px; padding: 2px 8px; border-radius: 99px;
   border: 1px solid var(--line); color: var(--text-3); white-space: nowrap;
 }
 @media (max-width: 1000px) { .view-badge { display: none; } }
-.view-hint { margin: 0; flex: 0 1 auto; min-width: 0; font-size: 12px; color: var(--muted); text-align: right; max-width: 520px; }
+.view-hint { margin: 0; flex: 0 1 auto; min-width: 0; font-size: 12.5px; color: var(--muted); text-align: right; max-width: 520px; }
 /* Title + badge row inside `.view-head`'s left side (every view repeats this). */
 .view-title-row { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
 
@@ -424,12 +469,12 @@ button.primary { background: var(--signal); color: var(--signal-ink); border-col
 button.primary:hover { background: color-mix(in srgb, var(--signal) 85%, black); color: var(--signal-ink); }
 button.danger { color: var(--error); border-color: var(--error); background: var(--error-soft); }
 button.danger:hover { border-color: var(--error); background: color-mix(in srgb, var(--error) 20%, transparent); color: var(--error); }
-button.xs { padding: 5px 9px; font-size: 11px; }
+button.xs { padding: 5px 9px; font-size: 11.5px; }
 button.ghost { background: transparent; }
 .toolbar > button, .toolbar .filter-actions > button {
-  height: 32px; border-radius: 8px; padding: 0 12px; font-size: 12px;
+  height: 32px; border-radius: 8px; padding: 0 12px; font-size: 12.5px;
 }
-.card-buttons > button { height: 31px; border-radius: 8px; padding: 0 12px; font-size: 12px; }
+.card-buttons > button { height: 32px; border-radius: 8px; padding: 0 12px; font-size: 12.5px; }
 
 /* Search field with a leading icon */
 .search-wrap { position: relative; display: flex; flex: 1 1 220px; min-width: 180px; }
@@ -439,7 +484,7 @@ button.ghost { background: transparent; }
 .search-wrap .search-lead { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--text-3); }
 .search-wrap input {
   flex: 1; height: 32px; padding: 0 12px 0 28px; border-radius: 8px;
-  font-family: var(--font-mono); font-size: 12px;
+  font-family: var(--font-mono); font-size: 12.5px;
 }
 
 /* Segmented control */
@@ -469,7 +514,7 @@ button.ghost { background: transparent; }
 }
 .drop-btn.has-selection .drop-summary { color: var(--ink); }
 .drop-count {
-  font-family: var(--font-mono); font-size: 10px; font-weight: 700; padding: 1px 8px;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; padding: 1px 8px;
   border-radius: 99px; background: var(--signal); color: var(--signal-ink);
 }
 .drop-btn .ic-chevron { flex: 0 0 auto; color: var(--text-3); transform: rotate(-90deg); transition: transform 0.12s ease; }
@@ -500,7 +545,7 @@ button.ghost { background: transparent; }
 .drop-footer { display: flex; gap: 4px; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
 .drop-footer button {
   flex: 1; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px;
-  font-size: 11px; font-weight: 600; color: var(--muted); background: var(--surface-2); justify-content: center;
+  font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--surface-2); justify-content: center;
 }
 
 /* Applied-filters strip — scaffolding for result-count chips with a remove (×) action. */
@@ -510,13 +555,13 @@ button.ghost { background: transparent; }
   display: flex; align-items: center; gap: 8px; height: 24px; padding: 0 4px 0 8px;
   border: 1px solid var(--signal); border-radius: 99px; background: var(--signal-soft); color: var(--ink); cursor: pointer;
 }
-.applied-filter-label { font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
+.applied-filter-label { font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; }
 .applied-filter-x {
   display: grid; place-items: center; width: 14px; height: 14px; border-radius: 99px;
-  background: var(--signal); color: var(--signal-ink); font-size: 11px; line-height: 1;
+  background: var(--signal); color: var(--signal-ink); font-size: 11.5px; line-height: 1;
 }
 .applied-filters-reset {
-  height: 24px; padding: 0 8px; font-size: 11px; font-weight: 600; color: var(--muted);
+  height: 24px; padding: 0 8px; font-size: 11.5px; font-weight: 600; color: var(--muted);
   background: none; border: none; border-bottom: 1px solid var(--line); border-radius: 0;
 }
 
@@ -530,7 +575,7 @@ button.ghost { background: transparent; }
 .selection-count { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; color: var(--ink); white-space: nowrap; }
 .selection-spacer { flex: 1; }
 .selection-bar button {
-  height: 26px; padding: 0 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  height: 26px; padding: 0 10px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
   display: inline-flex; align-items: center; gap: 6px; background: var(--panel);
 }
 .selection-bar button[data-sel-action="clear"] { color: var(--muted); background: transparent; border-color: transparent; }
@@ -545,7 +590,15 @@ button.ghost { background: transparent; }
 .metric-strip .metric { min-width: 0; padding: 12px 14px; border-right: 1px solid var(--line); }
 .metric-strip .metric:last-child { border-right: 0; }
 .metric-strip .metric-value { font: 600 20px/1.2 var(--font-mono); }
-.metric-strip .metric-label { margin-top: 3px; color: var(--muted); font-size: 11px; }
+.metric-strip .metric-label { margin-top: 3px; color: var(--muted); font-size: 11.5px; }
+/* metricHtml() has wrapped the value and its qualifier in .metric-value-row since the first
+   release, and neither that row nor .metric-sub ever had a rule -- so the qualifier ran straight
+   into the number on every metrics strip in the app: "8sample", "00%", "0.55s", "0as evidence".
+   Baseline, not center: the qualifier is a unit hanging off a 20px mono figure, and centering it
+   would float it against the digits' x-height. Same treatment the native HeroCard gives
+   `valueSuffix` -- muted, one step down, baseline-aligned -- so the two surfaces read alike. */
+.metric-strip .metric-value-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.metric-strip .metric-sub { color: var(--muted); font-size: 11.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Gate banner — capability/host-gate explanation scaffolding. */
 .gate-banner {
@@ -553,7 +606,7 @@ button.ghost { background: transparent; }
   border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 6px; background: transparent;
 }
 .gate-banner .ic { color: var(--warn); flex: 0 0 auto; margin-top: 1px; }
-.gate-banner-title { font-size: 12px; font-weight: 600; color: var(--ink); }
+.gate-banner-title { font-size: 12.5px; font-weight: 600; color: var(--ink); }
 .gate-banner-body { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 /* Same visual as .gate-banner but a real <button> (the Overview "previous-run-crashed" banner is
    clickable — jumps to Crashes) so it stays reachable and activatable by keyboard, unlike a div
@@ -573,7 +626,10 @@ button.ghost { background: transparent; }
 .card-shell-title { margin: 0; font-size: 14px; text-transform: none; letter-spacing: 0; font-weight: 700; flex: 1; }
 .card-shell-badge { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--text-3); }
 .card-shell-body { flex: 1; display: flex; flex-direction: column; padding: 14px 0 0; }
-.card-shell[data-contained="true"] { padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+/* --d-card-pad, not a literal 16px: this is the consumer that token was declared for, and until
+   now it had none -- so Simple mode grew every row and the body font while leaving cards exactly
+   as tight as Advanced. */
+.card-shell[data-contained="true"] { padding: var(--d-card-pad); border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 
 /* Toggle switch, 38x22 — scaffolding for capability toggles. */
 .toggle-switch { position: relative; flex: 0 0 auto; width: 38px; height: 22px; border-radius: 99px; border: 1px solid var(--control-outline); background: var(--surface-3); }
@@ -600,7 +656,11 @@ details.adv-filters > summary .ic { color: var(--text-3); }
 .filter-grid-flush { padding: 0; }
 
 /* ---------------- List / detail split ---------------- */
-.split-shell { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); flex: 1 1 0%; min-height: 360px; display: grid; grid-template-columns: minmax(300px, var(--list-w, 320px)) 5px minmax(360px, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+/* The list column's floor and default are what leave `.row-main` room to render. A `.row` spends
+   298px on fixed columns (check 24, badge 50, duration 74, status 62, flag 24, five 8px gaps, 20px
+   padding), so the old 320px default left the path/summary text 2px and every row rendered blank.
+   360px is the floor and 440px the default, giving the main text 62px/142px. */
+.split-shell { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); flex: 1 1 0%; min-height: 360px; display: grid; grid-template-columns: minmax(360px, var(--list-w, 440px)) 5px minmax(360px, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
 body.detail-zoom .split-shell { grid-template-columns: 1fr; }
 body.detail-zoom .split-shell > .list-pane, body.detail-zoom .split-shell > .splitter { display: none; }
 
@@ -660,12 +720,12 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 
 .list-pane { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .list-head {
-  display: flex; align-items: center; gap: 12px; padding: 0 12px; height: 30px; flex: 0 0 30px;
+  display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 30px; flex: 0 0 30px;
   border-bottom: 1px solid var(--line); background: var(--surface-2);
 }
 .list-head.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
-.list-head span { font-size: 10px; font-weight: 700; color: var(--text-3); white-space: nowrap; }
-/* overflow-anchor: none -- Network/Timeline/Sockets/Push (E4) rebuild this element's content on
+.list-head span { font-size: 10.5px; font-weight: 700; color: var(--text-3); white-space: nowrap; }
+/* overflow-anchor: none -- Network/Timeline/Sockets/Push rebuild this element's content on
    every scroll-driven virtualizer repaint; the browser's automatic scroll anchoring otherwise
    fights that rebuild (it tries to hold some now-removed node's visual position), producing a
    jump. The virtualizer sets scrollTop itself whenever it needs to move it. */
@@ -673,14 +733,16 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .list-foot {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; height: 30px; flex: 0 0 30px;
   border-top: 1px solid var(--line); background: var(--surface-2);
-  font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3);
 }
 
-.col-badge { flex: 0 0 54px; text-align: center; }
+/* Header cells mirror the `.row` column widths exactly, so the two stay aligned. `.col-flag`
+   also stands in for the flag button on rows that have none, so it matches `.row-flag`'s 24px. */
+.col-badge { flex: 0 0 50px; text-align: center; }
 .col-main { flex: 1; min-width: 0; text-align: left; }
 .col-duration { flex: 0 0 74px; text-align: right; }
 .col-status { flex: 0 0 62px; text-align: right; }
-.col-flag { flex: 0 0 34px; text-align: right; }
+.col-flag { flex: 0 0 24px; text-align: right; }
 @media (max-width: 620px) { .col-duration { display: none; } }
 
 /* Export-selection checkbox (Network list only): header "select all visible" + one per row.
@@ -707,14 +769,14 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 
 /* ---- List rows ---- */
 .row {
-  position: relative; display: flex; align-items: center; gap: 12px; width: 100%; height: var(--d-row-h);
+  position: relative; display: flex; align-items: center; gap: 8px; width: 100%; height: var(--d-row-h);
   padding: 0 8px 0 12px; text-align: left; cursor: pointer; border-radius: 0; border-inline: 0; border-top: 0; border-bottom: 1px solid var(--line);
   background: transparent; color: var(--ink); font: inherit; font-size: var(--d-row-font);
 }
 .row:hover { background: var(--surface-2); }
 .row.selected, .row[aria-selected="true"], .trace-row.selected { background: var(--surface-2); box-shadow: inset 2px 0 var(--signal); }
 .row-badge {
-  flex: 0 0 54px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+  flex: 0 0 50px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
   text-align: center; padding: 2px 0; border-radius: 4px;
 }
 .row-main { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
@@ -726,8 +788,12 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
   flex: 0 0 auto; font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
   padding: 1px 4px; border-radius: 99px; border: 1px solid var(--border-strong);
 }
+/* These two slots are shared by five very different lists: Network puts "198 ms"/"200" in them,
+   but Timeline puts an event type (`socket.frame.text.received`) and Sockets/Push/Crashes put a
+   frame size, lifecycle, or thread name beside a wall-clock time. They are sized for those longer
+   consumers, which is why the list column -- not these -- is where `.row-main` gets its room. */
 .row-duration { flex: 0 0 74px; font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; color: var(--text-3); }
-.row-status { flex: 0 0 62px; font-family: var(--font-mono); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.row-status { flex: 0 0 62px; font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .row-flag {
   flex: 0 0 auto; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
   border: none; border-radius: 6px; background: transparent; color: var(--text-3);
@@ -763,8 +829,8 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .trace-row.selected { background: var(--signal-soft); }
 .trace-row.selected::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--signal); }
 .trace-time { display: grid; gap: 2px; justify-items: end; }
-.trace-t { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
-.trace-gap { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
+.trace-t { font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.trace-gap { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); }
 .trace-gap.warn { color: var(--warn); }
 .trace-line { position: relative; align-self: stretch; display: block; justify-self: center; width: 20px; }
 .trace-line::before { content: ""; position: absolute; left: 9px; top: 0; bottom: 0; width: 1px; background: var(--line); }
@@ -773,7 +839,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .trace-main { display: grid; gap: 4px; min-width: 0; }
 .trace-line1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .trace-dir { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; flex: 0 0 auto; }
-.trace-label { font-family: var(--font-mono); font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trace-label { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trace-sz { flex: 0 0 auto; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); }
 .trace-bar { display: block; height: 5px; min-width: 8px; border-radius: 4px; }
 
@@ -793,7 +859,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .detail-expand.active { border-color: var(--signal); background: var(--signal-soft); color: var(--signal); }
 .detail-facts { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; }
 .detail-fact { display: flex; align-items: baseline; gap: 8px; font-size: 11.5px; }
-.detail-fact-k { font-size: 10px; font-weight: 600; color: var(--text-3); }
+.detail-fact-k { font-size: 10.5px; font-weight: 600; color: var(--text-3); }
 .detail-fact-v { font-family: var(--font-mono); color: var(--ink); }
 /* Clickable fact (M2: "mock rule: <id>" linking to the Mocks view) — same layout as a plain
    .detail-fact but as a button, so it needs its own background/border/padding reset. */
@@ -805,19 +871,19 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 @keyframes dcRowFlash { from { background: var(--signal-soft); } to { background: transparent; } }
 .row-flash { animation: dcRowFlash 900ms ease; }
 .detail-actions-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-.detail-action-btn { display: flex; align-items: center; gap: 8px; height: 27px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 11.5px; color: var(--ink); background: var(--surface-2); }
+.detail-action-btn { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 11.5px; color: var(--ink); background: var(--surface-2); }
 .detail-action-btn.on { color: var(--signal); border-color: var(--signal); background: var(--signal-soft); }
 .detail-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .detail-tabs { display: flex; align-items: center; gap: 2px; margin-top: 12px; flex-wrap: wrap; }
-.detail-tab { position: relative; padding: 0 12px; height: 31px; font-size: 12px; font-weight: 500; color: var(--muted); background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0; }
+.detail-tab { position: relative; padding: 0 12px; height: 32px; font-size: 12.5px; font-weight: 500; color: var(--muted); background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0; }
 .detail-tab.active { font-weight: 600; color: var(--ink); border-color: var(--signal); }
-.detail-tab-count { margin-left: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
+.detail-tab-count { margin-left: 8px; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); }
 .detail-layout-toggle { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 10px; margin-bottom: 4px; margin-left: auto; border: 1px solid var(--line); border-radius: 8px; font-size: 11.5px; color: var(--muted); background: var(--surface-2); }
 .detail-layout-toggle.on { border-color: var(--signal); background: var(--signal-soft); color: var(--signal); }
 
 /* ---- Find-in-detail bar ---- */
 .detail-find { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
-.detail-find .search-wrap input { height: 28px; font-size: 11.5px; }
+.detail-find .search-wrap input { height: 26px; font-size: 11.5px; }
 .detail-find-count { font-family: var(--font-mono); font-size: 10.5px; white-space: nowrap; flex: 0 0 auto; }
 
 /* ---- Scrollable body ---- */
@@ -830,7 +896,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .sbs-pane { min-width: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
 .sbs-pane-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
 .sbs-pane-dot { width: 6px; height: 6px; border-radius: 99px; flex: 0 0 auto; }
-.sbs-pane-side { font-size: 10px; font-weight: 700; }
+.sbs-pane-side { font-size: 10.5px; font-weight: 700; }
 /* Meta absorbs the squeeze (ellipsis) so the action buttons never clip at the pane edge. */
 .sbs-pane-meta { font-family: var(--font-mono); font-size: 10.5px; white-space: nowrap; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right; }
 .sbs-pane-action { display: flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; }
@@ -842,18 +908,18 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .detail-group-toggle { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; background: transparent; border: none; padding: 0; color: var(--text-3); }
 .detail-group-toggle .ic { width: 10px; height: 10px; transition: transform 0.12s ease; }
 .detail-group-toggle[aria-expanded="false"] .ic { transform: rotate(-90deg); }
-.detail-group-label { font-size: 10px; font-weight: 700; }
+.detail-group-label { font-size: 10.5px; font-weight: 700; }
 .detail-group-rule { flex: 1; min-width: 8px; height: 1px; background: var(--line); }
-.detail-group-meta { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); white-space: nowrap; }
+.detail-group-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); white-space: nowrap; }
 .detail-group-copy { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--muted); }
 /* The default 16px .ic overflows the 20px bordered button and paints outside it. */
 .detail-group-copy .ic { width: 11px; height: 11px; }
-.detail-group-empty { display: block; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+.detail-group-empty { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); }
 
 /* k/v grids */
 .kv-grid { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-.kv-grid .kv-k { padding: 4px 8px; background: var(--surface-2); font-family: var(--font-mono); font-size: 11px; color: var(--json-key); overflow-wrap: anywhere; }
-.kv-grid .kv-v { padding: 4px 8px; background: var(--code-bg); font-family: var(--font-mono); font-size: 11px; overflow-wrap: anywhere; }
+.kv-grid .kv-k { padding: 4px 8px; background: var(--surface-2); font-family: var(--font-mono); font-size: 11.5px; color: var(--json-key); overflow-wrap: anywhere; }
+.kv-grid .kv-v { padding: 4px 8px; background: var(--code-bg); font-family: var(--font-mono); font-size: 11.5px; overflow-wrap: anywhere; }
 .kv-grid-lg { grid-template-columns: minmax(120px, auto) 1fr; border-radius: 8px; }
 .kv-grid.kv-grid-lg .kv-k { padding: 8px 12px; font-size: 11.5px; white-space: nowrap; }
 .kv-grid.kv-grid-lg .kv-v { padding: 8px 12px; font-size: 11.5px; background: var(--panel); word-break: break-all; }
@@ -865,7 +931,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .code-block { border: 1px solid var(--line); border-radius: 6px; background: var(--code-bg); padding: 8px 12px; overflow-x: auto; }
 .code-block.code-block-lg { border-radius: 8px; padding: 12px; }
 .code-line { display: flex; font-family: var(--font-mono); font-size: 11.5px; line-height: 1.65; white-space: pre; }
-.code-block-lg .code-line { font-size: 12px; line-height: 1.7; }
+.code-block-lg .code-line { font-size: 12.5px; line-height: 1.7; }
 .code-line.hit { background: var(--signal-soft); }
 .code-line.diff { background: var(--warn-soft); }
 .code-pad { color: var(--text-3); }
@@ -898,7 +964,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 /* Note textarea */
 .detail-note { display: grid; gap: 4px; margin-top: 16px; }
 .detail-note > span { font-size: 10.5px; font-weight: 600; color: var(--text-3); }
-.detail-note textarea { width: 100%; padding: 8px 12px; font-size: 12px; resize: vertical; }
+.detail-note textarea { width: 100%; padding: 8px 12px; font-size: 12.5px; resize: vertical; }
 
 /* Redaction footnote */
 .detail-footnote { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
@@ -916,7 +982,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .empty-state {
   /* grid-template-columns is explicit (not the implicit single `auto` column display:grid would
      otherwise pick) so the column's max track size is capped at the container's own width —
-     without it, a wide child (long connect-instruction copy, task E2) sizes the implicit column to
+     without it, a wide child (long connect-instruction copy) sizes the implicit column to
      its own content and silently overflows/clips inside an `overflow-x:hidden` ancestor like
      .list-body instead of wrapping. Verified at 375px: see the E1 report. */
   display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; gap: 8px;
@@ -964,14 +1030,16 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
    container query instead of a JS viewport-width resize listener — same outcome (span 2/3 cards
    fold to 1 column before they'd overflow a narrow rail-adjacent grid), far less code to keep
    in sync. */
-.cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 18px 24px; align-items: stretch; container-type: inline-size; }
+.cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px 24px; align-items: stretch; container-type: inline-size; }
 .card-shell[data-span="2"] { grid-column: span 2; }
 .card-shell[data-span="3"] { grid-column: span 3; }
 @container (max-width: 1044px) { .card-shell[data-span="3"] { grid-column: span 2; } }
 @container (max-width: 692px) { .card-shell[data-span] { grid-column: span 1; } }
 
-.card-lede { margin: 0 0 12px; font-size: 12px; color: var(--muted); text-wrap: pretty; }
-.card-fields { display: grid; gap: 12px; margin-bottom: 12px; }
+.card-lede { margin: 0 0 12px; font-size: 12.5px; color: var(--muted); text-wrap: pretty; }
+/* The other half of the pair: --d-card-gap is a card's interior field rhythm (12 -> 16 in Simple),
+   distinct from .cards-grid's gap between whole cards. It had no consumer either. */
+.card-fields { display: grid; gap: var(--d-card-gap); margin-bottom: 12px; }
 /* height: 32px here used to combine with the generic `input, select, textarea, button` rule's
    `padding: 9px 11px` to leave only a 12px content box (32 - 18 padding - 2 border) for text --
    less than even this font's own ascent+descent at 12px, let alone the line-height the density
@@ -981,9 +1049,9 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
    only padding-top/-bottom (not the shorthand) so a select's `padding-right: 28px` arrow gutter
    and an input's 11px horizontal padding stay untouched. */
 .card-fields label.field input, .card-fields label.field select {
-  height: 32px; padding-top: 0; padding-bottom: 0; font-family: var(--font-mono); font-size: 12px;
+  height: 32px; padding-top: 0; padding-bottom: 0; font-family: var(--font-mono); font-size: 12.5px;
 }
-.card-fields label.field textarea { font-family: var(--font-mono); font-size: 12px; }
+.card-fields label.field textarea { font-family: var(--font-mono); font-size: 12.5px; }
 /* A `.field` that should span every column of its `.card-fields` grid (multi-line inputs). */
 .field-full { grid-column: 1 / -1; }
 
@@ -998,24 +1066,24 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .card-row { display: grid; grid-template-columns: minmax(110px, 38%) 1fr auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .card-row:last-child { border-bottom: none; }
 .card-row-k { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-row-v { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.card-row-v { font-family: var(--font-mono); font-size: 12.5px; overflow-wrap: anywhere; }
 .card-row-tag { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border-strong); white-space: nowrap; }
 
 .card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .card-metric { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
-.card-metric-label { font-size: 10px; font-weight: 600; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-metric-label { font-size: 10.5px; font-weight: 600; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-metric-val { font-family: var(--font-mono); font-size: 17px; margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .card-toggles { display: grid; gap: 1px; margin-bottom: 12px; }
 .card-toggle-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .card-toggle-row:last-child { border-bottom: none; }
 .card-toggle-text { flex: 1; min-width: 0; }
-.card-toggle-k { display: block; font-family: var(--font-mono); font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-toggle-sub { display: block; font-size: 11px; color: var(--text-3); margin-top: 1px; }
+.card-toggle-k { display: block; font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-toggle-sub { display: block; font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
 
 .card-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; }
 .card-table { border-collapse: collapse; width: 100%; min-width: 100%; }
-.card-table th { text-align: left; padding: 8px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line); font-size: 10px; font-weight: 700; color: var(--text-3); white-space: nowrap; }
+.card-table th { text-align: left; padding: 8px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line); font-size: 10.5px; font-weight: 700; color: var(--text-3); white-space: nowrap; }
 .card-table td { padding: 8px 12px; border-bottom: 1px solid var(--line); font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
 .card-table tr:last-child td { border-bottom: none; }
 
@@ -1045,9 +1113,11 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 /* max-height is a CSS custom property (per-card `c.treeMax`, threaded through
    cardTreeHtml/cardHtml) so callers can override without an inline max-height. */
 .card-tree { display: grid; gap: 1px; max-height: var(--tree-max, 320px); overflow-y: auto; overflow-x: hidden; margin-bottom: 12px; }
-.card-tree-node { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; height: 29px; padding: 0 8px; border-radius: 6px; text-align: left; background: transparent; border: none; }
+/* 30px, the row tier .list-head/.detail-head/.rail-item already sit on -- it was 29px, one pixel
+   short of a tier for no reason anyone could see. */
+.card-tree-node { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px; border-radius: 6px; text-align: left; background: transparent; border: none; }
 .card-tree-node .ic { flex: 0 0 auto; width: 14px; height: 14px; }
-.card-tree-node-label { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-tree-node-label { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-tree-node-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); }
 .card-tree-node.selected { background: var(--signal-soft); }
 
@@ -1065,13 +1135,13 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
    control (Database's Sort); `.toolbar-group-stack` lays the label above it (Timeline/Network/
    WebSockets' Level/Source/Status/Method/Frame type/Direction/View). */
 .toolbar-group { display: flex; align-items: center; gap: 8px; }
-.toolbar-group-stack { display: grid; gap: 5px; }
+.toolbar-group-stack { display: grid; gap: 4px; }
 .toolbar-group-label { font-size: 10.5px; font-weight: 600; color: var(--text-3); }
 /* Pushes trailing toolbar controls (e.g. "Bookmarked only") to the right edge. */
 .toolbar-spacer { flex: 1; }
 
-.block-title { font-size: 10px; font-weight: 700; color: var(--text-3); margin: 16px 0 6px; }
-.card-field-help { font-size: 11px; color: var(--text-3); }
+.block-title { font-size: 10.5px; font-weight: 700; color: var(--text-3); margin: 16px 0 6px; }
+.card-field-help { font-size: 11.5px; color: var(--text-3); }
 
 /* ---------------- JSON tree (Composer's execute/import result, and — via the shared
    renderJson()/mountBodyViewers() body-viewer below — any detected-JSON network/socket body) */
@@ -1093,7 +1163,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .json-more-stub {
   display: inline-block; margin: 2px 0; padding: 2px 8px; border: 1px dashed var(--line);
   border-radius: 6px; background: transparent; color: var(--muted);
-  font-family: var(--font-mono); font-size: 11px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 11.5px; cursor: pointer;
 }
 .json-more-stub:hover { color: var(--ink); border-color: var(--border-strong); }
 .brace { font-weight: 700; }
@@ -1151,7 +1221,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 }
 @keyframes modalpop { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-.modal-title { font-weight: 700; font-size: 12px; display: flex; align-items: center; gap: 8px; }
+.modal-title { font-weight: 700; font-size: 12.5px; display: flex; align-items: center; gap: 8px; }
 .modal-title .ic { color: var(--signal); }
 .modal-close { border: 1px solid var(--line); border-radius: 8px; background: transparent; font-size: 20px; line-height: 1; color: var(--text-3); padding: 0 4px; }
 .modal-close:hover { color: var(--ink); border-color: var(--border-strong); }
@@ -1170,7 +1240,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 #shortcutsModal .modal { max-width: 440px; }
 #shortcutsModal .modal-title .ic { width: 15px; height: 15px; }
 #shortcutsModal .modal-close {
-  width: 28px; height: 28px; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--muted);
+  width: 28px; height: 28px; display: grid; place-items: center; font-size: 11.5px; font-weight: 600; color: var(--muted);
 }
 #shortcutsModal .modal-body { padding: 8px 16px 16px; }
 .modal-body { padding: 16px; overflow-y: auto; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
@@ -1181,7 +1251,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .shortcut-row { display: flex; align-items: center; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .shortcut-row span { color: var(--muted); font-size: 12.5px; flex: 1; }
 kbd {
-  font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--ink);
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; color: var(--ink);
   background: var(--code-bg); border: 1px solid var(--border-strong); border-radius: 6px;
   padding: 4px 0; min-width: 34px; text-align: center; flex: 0 0 auto;
 }
@@ -1208,7 +1278,7 @@ kbd {
 .toast-close .ic { color: inherit; }
 
 /* ============================================================
-   Responsive — task E1 (mobile-first pass, done together with E6's density tokens above)
+   Responsive — mobile-first pass, paired with the density tokens above
    ============================================================
    The breakpoint ladder, rationalised from the ad hoc 960/780/680/620/560/480/1000/1180 set that
    was already scattered through the file. Every one of those eight values turned out to be doing
@@ -1243,8 +1313,9 @@ kbd {
                                  with the session-pill collapsed to nothing, and nothing here is
                                  ever allowed to just disappear.
 
-   Orthogonal, not width-keyed: `prefers-reduced-motion: reduce` (motion off) and `pointer: coarse`
-   (touch target floor) below — both apply at any viewport width.
+   Orthogonal, not width-keyed: `prefers-reduced-motion: reduce` (motion off), `pointer: coarse`
+   (touch target floor) and `max-height` (short viewport) below — all three apply at any viewport
+   width.
 
    Verified against zero horizontal body overflow at 375 / 768 / 1024 — see the implementation
    report for the per-view check list; this comment is the contract those checks were run against.
@@ -1252,6 +1323,23 @@ kbd {
 @media (max-width: 780px) {
   .main-inner { padding: 16px 14px 0; }
   .view.active { padding-bottom: 40px; }
+}
+
+/* Short viewport — the case every width breakpoint above is blind to.
+   A phone in landscape is *wide and short*: 844x390 clears the 780px rail breakpoint entirely and
+   lands in the <=960px stacked-pane layout, where each pane carries `min-height: 360px`. Two of
+   them is 720px of shell inside roughly 340px of workspace, so the split view became a page-scroll
+   through a third of a viewport at a time, with each pane scrolling independently inside that.
+   Nothing clipped, which is why width-keyed testing at 375/768/1024 never caught it — all three of
+   those are tall.
+
+   Keyed on the axis that is actually short rather than guessing a device width, and placed after
+   the <=960px block so it wins on source order at equal specificity. `body.detail-zoom`'s own
+   (0,3,0) override still beats both, so a zoomed detail pane keeps the full viewport. */
+@media (max-height: 560px) {
+  .split-shell { min-height: 0; }
+  .split-shell > .list-pane,
+  .split-shell > .detail-pane-v2 { height: 42vh; min-height: 0; }
 }
 @media (max-width: 480px) {
   .brand-name { font-size: 11.5px; }
@@ -1264,6 +1352,21 @@ kbd {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  /* The blanket rule above is right for five of this file's six animations -- `fadein` on .view and
+     the modal backdrop, `modalpop`, and `dcPulse`, which are all either pure transition or an
+     emphasis loop whose meaning the dot's own colour already carries (warn = live, error =
+     expired). It is wrong for `dcRowFlash`, which is not polish. dashboard.js applies it to a
+     `.card-toggle-row` immediately after `scrollIntoView()` on the mock-rule list, so the wash is
+     the only thing answering "which of these rows is the one I just saved?" once the list has
+     jumped somewhere new. Flattening its duration to 0.01ms deletes that answer rather than the
+     motion, and it does so precisely for the user who most needs the list not to have moved
+     unannounced.
+
+     So reduced motion gets the mark without the fade. dashboard.js owns the class lifetime
+     (`setTimeout(() => row.classList.remove('row-flash'), 900)`), not the animation, so the row
+     simply is washed for those 900ms and then plainly is not -- a state change, which is what
+     reduced motion asks for, instead of a transition, which is what it asks to be spared. */
+  .row-flash { animation: none; background: var(--signal-soft); }
 }
 @media (pointer: coarse) {
   input, select, button, textarea { min-height: 44px; }
@@ -1310,7 +1413,7 @@ kbd {
 .skip-link:focus { top: 8px; outline: 3px solid var(--ink); outline-offset: 2px; }
 
 /* ============================================================
-   Simple / Advanced mode (progressive disclosure) — task D1.
+   Simple / Advanced mode (progressive disclosure).
    Trims are CSS-first: the underlying control/state is untouched, only its rail/toolbar/detail
    affordance is hidden in Simple mode, so switching back to Advanced never loses anything.
    ============================================================ */
@@ -1341,7 +1444,7 @@ body.mode-simple .detail-action-hide-simple { display: none; }
      .rail-group-label (0,1,0) and grids the Advanced label into a 17px icon track. */
   display: flex; align-items: center; gap: 8px; height: 34px;
   width: 100%; border: none; border-radius: 6px; background: transparent; color: var(--text-3);
-  font-size: 11px; font-weight: 600; cursor: pointer; padding: 0 10px;
+  font-size: 11.5px; font-weight: 600; cursor: pointer; padding: 0 10px;
 }
 .rail-group-label.rail-adv-toggle:hover { color: var(--signal); }
 .rail-group-label.rail-adv-toggle:hover .text { color: var(--signal); }

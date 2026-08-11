@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.invisibleToUser
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -221,13 +222,22 @@ internal fun InspectorPillButton(
                 .then(outlineModifier)
                 .background(resolvedContainer)
                 .clickable(onClick = onClick, enabled = enabled, role = Role.Button)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             icon?.invoke()
-            Text(label, color = contentColor, fontSize = labelFontSize, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            // Ellipsis rather than the default clip: these pills are laid out by weight, so a label
+            // that outgrows its share used to lose its last glyph silently ("Code" rendered "Cod").
+            Text(
+                label,
+                color = contentColor,
+                fontSize = labelFontSize,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

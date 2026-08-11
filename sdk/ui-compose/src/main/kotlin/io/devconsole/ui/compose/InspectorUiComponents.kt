@@ -6,13 +6,11 @@
 
 package io.devconsole.ui.compose
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -61,34 +59,24 @@ internal object TerminalType {
             lineHeight = 16.sp,
             lineHeightStyle = m3SlotLineHeightStyle,
         )
-
-    // letterSpacing 0.2 (not 0.25): m3 1.4.0's BodyMediumTracking, which this slot replaces.
-    val bodyMedium =
-        TextStyle(
-            fontSize = 14.sp,
-            letterSpacing = 0.2.sp,
-            lineHeight = 20.sp,
-            lineHeightStyle = m3SlotLineHeightStyle,
-        )
 }
 
-/** Shared bordered panel used by the Observe and Control surfaces to match the workspace shell. */
+/**
+ * Shared section container for the Data screen's Files and Database blocks: a rule, then content.
+ *
+ * Flat on purpose, like [CollapsibleSection] and [HeroCard] and like the dashboard's own
+ * `.card-shell` (`border: 0; border-radius: 0; background: transparent`). It used to be a 14dp
+ * bordered panel, which left the Data screen wearing card chrome after every sibling surface had
+ * dropped it -- the same list could show a bordered card directly above a flat [TonalListRow].
+ */
 @Composable
 internal fun TerminalCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val colors = DevConsoleTheme.colors
-    Surface(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .border(1.dp, colors.borderStrong, RoundedCornerShape(14.dp)),
-        shape = RoundedCornerShape(14.dp),
-        color = colors.ground,
-        tonalElevation = 0.dp,
-    ) {
-        Column(modifier = Modifier.padding(16.dp), content = content)
+    Column(modifier = modifier.fillMaxWidth()) {
+        HorizontalDivider(color = DevConsoleTheme.colors.line)
+        Column(modifier = Modifier.padding(vertical = 12.dp), content = content)
     }
 }
 
@@ -119,17 +107,6 @@ internal fun CapabilityDisabledNotice(
         color = DevConsoleTheme.colors.muted,
         style = TerminalType.bodySmall,
     )
-}
-
-@Composable
-internal fun DetailStat(
-    label: String,
-    value: String,
-) {
-    Column {
-        TerminalSectionLabel(label)
-        Text(value, color = DevConsoleTheme.colors.ink, style = TerminalType.bodyMedium)
-    }
 }
 
 /** Muted single-line notice used when a Data section has nothing to show. */

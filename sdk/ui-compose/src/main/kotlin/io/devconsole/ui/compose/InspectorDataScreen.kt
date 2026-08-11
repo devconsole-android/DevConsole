@@ -299,7 +299,6 @@ private fun DataHero(
     onToggleCollapse: () -> Unit,
     colors: DevConsoleColors,
 ) {
-    val containerColor = if (info.blindSpot) colors.errorSoft else colors.surface2
     val accentColor = if (info.blindSpot) colors.error else colors.text3
     val valueColor = if (info.blindSpot) colors.error else colors.ink
     val barLabel = if (info.blindSpot) "key${if (info.value == "1") "" else "s"} exposed by the allowlist" else info.of
@@ -308,7 +307,6 @@ private fun DataHero(
             value = info.value,
             label = barLabel,
             onExpand = onToggleCollapse,
-            containerColor = containerColor,
             valueColor = valueColor,
             labelColor = accentColor,
         )
@@ -318,7 +316,6 @@ private fun DataHero(
             value = info.value,
             valueSuffix = info.of,
             subtitle = info.sub,
-            containerColor = containerColor,
             labelColor = accentColor,
             valueColor = valueColor,
             onCollapse = onToggleCollapse,
@@ -362,7 +359,7 @@ private fun StateEntryTonalRow(
     )
 }
 
-/** Hand-built fixture for [DataScreenPreview] -- A2: previews are the only visual check on this branch. */
+/** Hand-built fixture for [DataScreenPreview]. */
 private fun dataScreenPreviewState() =
     InspectorState(
         available = true,

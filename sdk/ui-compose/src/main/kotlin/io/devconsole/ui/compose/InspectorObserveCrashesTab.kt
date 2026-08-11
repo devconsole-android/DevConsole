@@ -7,19 +7,19 @@
 
 package io.devconsole.ui.compose
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
@@ -55,10 +55,12 @@ internal fun CrashesTabContent(
         }
     val rowsNewestFirst = remember(searched) { searched.sortedByDescending { it.timestampEpochMs } }
 
+    val arrivals = rememberArrivals(rowsNewestFirst.map { it.id })
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        // 12px side/top padding with FAB clearance at the bottom, like every Observe tab's scroll container.
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
+        // 16dp side / 12dp top padding with FAB clearance at the bottom, like every Observe tab's
+        // scroll container.
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
     ) {
         stickyHeader {
             InspectorSearchBar(
@@ -72,7 +74,14 @@ internal fun CrashesTabContent(
         item { Spacer(Modifier.height(16.dp)) }
         item { GroupLabel("Newest first") }
         itemsIndexed(rowsNewestFirst, key = { _, crash -> crash.id }) { _, crash ->
-            CrashRow(crash, crash.id in ui.flaggedCrashIds, colors) { actions.onOpenCrashDetail(crash.id) }
+            CrashRow(
+                crash = crash,
+                isFlagged = crash.id in ui.flaggedCrashIds,
+                colors = colors,
+                modifier = Modifier.animateItem(),
+                isArrival = crash.id in arrivals,
+                onClick = { actions.onOpenCrashDetail(crash.id) },
+            )
         }
     }
 }
@@ -89,7 +98,6 @@ private fun CrashesHero(
             value = crashes.size.toString(),
             label = "crashes and ANRs this session",
             onExpand = actions.onToggleCrashesHero,
-            containerColor = colors.errorSoft,
             valueColor = colors.error,
             labelColor = colors.error,
         )
@@ -103,7 +111,6 @@ private fun CrashesHero(
         subtitle =
             "$crashCount crash${if (crashCount == 1) "" else "es"}, " +
                 "$anrCount ANR${if (anrCount == 1) "" else "s"} this session.",
-        containerColor = colors.errorSoft,
         labelColor = colors.error,
         valueColor = colors.error,
         onCollapse = actions.onToggleCrashesHero,
@@ -111,18 +118,22 @@ private fun CrashesHero(
 }
 
 /** Container tint mirrors [TrafficRow]'s flagged/unflagged pattern: evidence status surfaces in the row itself. */
+@Suppress("LongParameterList") // Row content, evidence state, and the live-arrival flash.
 @Composable
 private fun CrashRow(
     crash: InspectorCrashUi,
     isFlagged: Boolean,
     colors: DevConsoleColors,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isArrival: Boolean = false,
 ) {
     val (leadColor, leadBg) = logLevelTint(crash.kind, colors)
     val crumbCount = crash.breadcrumbs.size
     val crumbNoun = if (crumbCount == 1) "breadcrumb" else "breadcrumbs"
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         TonalListRow(
+            isArrival = isArrival,
             leadText = logLevelShortLabel(crash.kind),
             leadColor = leadColor,
             leadContainerColor = leadBg,
@@ -135,7 +146,7 @@ private fun CrashRow(
         )
         androidx.compose.material3.HorizontalDivider(
             modifier = Modifier.padding(start = 76.dp),
-            color = colors.line
+            color = colors.line,
         )
     }
 }

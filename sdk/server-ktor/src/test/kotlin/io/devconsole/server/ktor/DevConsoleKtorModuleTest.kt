@@ -1350,6 +1350,77 @@ class DevConsoleKtorModuleTest {
             assertEquals("mock.disable_all", audit.events().single().commandType)
         }
 
+    /**
+     * The way back from the kill switch. Before this route existed the browser could only turn
+     * mocking off; getting it back meant restarting the host app, even though the Android in-app
+     * inspector had a two-way toggle the whole time.
+     */
+    @Test
+    fun `mock engine can be re-enabled after the kill switch`() =
+        testApplication {
+            val sessions = SessionAuthority()
+            val sessionCodes = SessionCodeAuthority(sessions)
+            val mocks = MockEngine(listOf(MockRule("orders", 1, path = "/orders")))
+            val audit = InMemoryCommandAuditLog()
+            application {
+                devConsoleModule(sessions, sessionCodes) {
+                    mockEngine = mocks
+                    mocksEditable = true
+                    commandAuditLog = audit
+                }
+            }
+            val session = client.exchangeSession(sessions, sessionCodes)
+            client.post("/api/v1/mocks/disable-all") {
+                header(HttpHeaders.Host, "localhost")
+                header(HttpHeaders.Authorization, "Bearer ${session.token}")
+                header(HttpHeaders.Origin, "http://localhost")
+                header("X-DevConsole-CSRF", session.csrfToken)
+            }
+            assertTrue("precondition: the kill switch turned mocking off", !mocks.isEnabled())
+
+            val reEnabled =
+                client.post("/api/v1/mocks/enabled") {
+                    header(HttpHeaders.Host, "localhost")
+                    header(HttpHeaders.Authorization, "Bearer ${session.token}")
+                    header(HttpHeaders.Origin, "http://localhost")
+                    header("X-DevConsole-CSRF", session.csrfToken)
+                    setBody("true")
+                }
+
+            assertEquals(HttpStatusCode.OK, reEnabled.status)
+            assertTrue(reEnabled.bodyAsText().contains("\"enabled\":true"))
+            assertTrue(mocks.isEnabled())
+            assertEquals("mock.enabled", audit.events().last().commandType)
+        }
+
+    @Test
+    fun `re-enabling mocks requires the mocks editing capability`() =
+        testApplication {
+            val sessions = SessionAuthority()
+            val sessionCodes = SessionCodeAuthority(sessions)
+            val mocks = MockEngine(listOf(MockRule("orders", 1, path = "/orders")))
+            application {
+                devConsoleModule(sessions, sessionCodes) {
+                    mockEngine = mocks
+                    mocksEditable = false
+                }
+            }
+            val session = client.exchangeSession(sessions, sessionCodes)
+            mocks.setEnabled(false)
+
+            val response =
+                client.post("/api/v1/mocks/enabled") {
+                    header(HttpHeaders.Host, "localhost")
+                    header(HttpHeaders.Authorization, "Bearer ${session.token}")
+                    header(HttpHeaders.Origin, "http://localhost")
+                    header("X-DevConsole-CSRF", session.csrfToken)
+                    setBody("true")
+                }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertTrue("a read-only host must not have mocking switched back on", !mocks.isEnabled())
+        }
+
     @Test
     fun `mock rules support create list and delete when editable`() =
         testApplication {

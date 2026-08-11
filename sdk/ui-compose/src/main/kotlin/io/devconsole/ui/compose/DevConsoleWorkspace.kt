@@ -6,11 +6,12 @@
 
 package io.devconsole.ui.compose
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -187,31 +188,36 @@ private fun WorkspaceContent(
     // the newly active route's own LaunchedEffect asserts the correct value right after.
     LaunchedEffect(selected) { onDetailOverlayOpen(false) }
     val stateHolder = rememberSaveableStateHolder()
-    when (selected) {
-        InspectorDestination.OBSERVE ->
-            stateHolder.SaveableStateProvider(InspectorDestination.OBSERVE.name) {
-                ObserveRoute(
-                    onToggleTheme = onToggleTheme,
-                    onDetailOverlayOpen = onDetailOverlayOpen,
-                    modifier = modifier,
-                )
-            }
-        InspectorDestination.CONTROL ->
-            stateHolder.SaveableStateProvider(InspectorDestination.CONTROL.name) {
-                ControlRoute(
-                    onToggleTheme = onToggleTheme,
-                    onDetailOverlayOpen = onDetailOverlayOpen,
-                    modifier = modifier,
-                )
-            }
-        InspectorDestination.DATA ->
-            stateHolder.SaveableStateProvider(InspectorDestination.DATA.name) {
-                DataRoute(onToggleTheme = onToggleTheme, modifier = modifier)
-            }
-        InspectorDestination.MORE ->
-            stateHolder.SaveableStateProvider(InspectorDestination.MORE.name) {
-                MoreRoute(onToggleTheme = onToggleTheme, modifier = modifier)
-            }
+    // The dashboard's `.view { animation: fadein 0.15s ease; }`. Fade-through rather than a slide:
+    // the four destinations are siblings, not a hierarchy, so nothing should imply a direction of
+    // travel between them. Short enough that it reads as a settle, never as a wait.
+    Crossfade(targetState = selected, animationSpec = feedbackSpec(), label = "destination") { destination ->
+        when (destination) {
+            InspectorDestination.OBSERVE ->
+                stateHolder.SaveableStateProvider(InspectorDestination.OBSERVE.name) {
+                    ObserveRoute(
+                        onToggleTheme = onToggleTheme,
+                        onDetailOverlayOpen = onDetailOverlayOpen,
+                        modifier = modifier,
+                    )
+                }
+            InspectorDestination.CONTROL ->
+                stateHolder.SaveableStateProvider(InspectorDestination.CONTROL.name) {
+                    ControlRoute(
+                        onToggleTheme = onToggleTheme,
+                        onDetailOverlayOpen = onDetailOverlayOpen,
+                        modifier = modifier,
+                    )
+                }
+            InspectorDestination.DATA ->
+                stateHolder.SaveableStateProvider(InspectorDestination.DATA.name) {
+                    DataRoute(onToggleTheme = onToggleTheme, modifier = modifier)
+                }
+            InspectorDestination.MORE ->
+                stateHolder.SaveableStateProvider(InspectorDestination.MORE.name) {
+                    MoreRoute(onToggleTheme = onToggleTheme, modifier = modifier)
+                }
+        }
     }
 }
 

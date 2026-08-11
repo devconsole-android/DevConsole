@@ -7,6 +7,8 @@ public final class io/devconsole/core/DevConsoleRuntime {
 	public final fun initialize (Lio/devconsole/api/DevConsoleConfig;)Lio/devconsole/api/InitResult;
 	public final fun initialize (Lio/devconsole/api/DevConsoleConfig;Z)Lio/devconsole/api/InitResult;
 	public static synthetic fun initialize$default (Lio/devconsole/core/DevConsoleRuntime;Lio/devconsole/api/DevConsoleConfig;ZILjava/lang/Object;)Lio/devconsole/api/InitResult;
+	public final fun recordDroppedEvents (J)V
+	public final fun recordPublishedEvent ()V
 	public final fun serverFailed (Ljava/lang/String;)V
 	public final fun serverRequiresPermission ()V
 	public final fun serverStarted ()V

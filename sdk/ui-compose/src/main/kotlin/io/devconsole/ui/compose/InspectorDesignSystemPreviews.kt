@@ -75,7 +75,6 @@ private fun HeroCardPreview() {
             value = "4",
             valueSuffix = "of 15",
             subtitle = "2 client, 2 server, 1 timeout.",
-            containerColor = DevConsoleTheme.colors.errorSoft,
             labelColor = DevConsoleTheme.colors.error,
             valueColor = DevConsoleTheme.colors.error,
             onCollapse = {},

@@ -332,7 +332,7 @@
     const { id, selected, badgeText, badgeTone, mainText, mainRtl, tagText, tagTone, duration, statusText, sTone, flagKind, flagLabel, checkbox, checked, posinset, setsize } = opts;
     const flagId = opts.flagId ?? id; // selection id and evidence id may differ (socket frames)
     const flagged = flagKind ? isFlagged(flagKind, flagId) : false;
-    // aria-posinset/aria-setsize: with the list virtualized (E4), only a window of `role="option"`
+    // aria-posinset/aria-setsize: with the list virtualized, only a window of `role="option"`
     // rows is ever in the DOM at once, so a screen reader can't infer "row 40 of 5,000" from DOM
     // order alone. Omitted when a caller doesn't pass `setsize` (none currently — every rowHtml()
     // call site was updated alongside the virtualizer).
@@ -433,7 +433,7 @@
   }
 
   // ================================================================
-  // Windowed list rendering (E4): Network (#transactions), Timeline (#events), WebSockets
+  // Windowed list rendering: Network (#transactions), Timeline (#events), WebSockets
   // (#sockets — both its list- and timeline-mode row templates) and Push (#pushEvents) all page
   // through server data but used to render every fetched row into the DOM, so a long QA session
   // meant either clicking through pages or a DOM that grew without bound. One virtualizer per
@@ -444,7 +444,7 @@
   // `rowHtml()`/row-template strings they always did, just for a window of indices instead of the
   // whole array.
   //
-  // Row height is not a constant: body.mode-simple/advanced (commit 8c8084c) scale `--d-row-h`
+  // Row height is not a constant: body.mode-simple/advanced scale `--d-row-h`
   // (44px/34px) and `--d-trace-h` (54px/44px), so every repaint re-measures the real computed
   // value off the container rather than trusting a cached number, and `remeasure()` (wired to the
   // mode toggle below) keeps the row at the top of the viewport stable across a height change
@@ -1019,7 +1019,7 @@
   }
 
   // ================================================================
-  // Simple / Advanced mode (persisted, next to the theme) — task D1. Simple is the default;
+  // Simple / Advanced mode (persisted, next to the theme). Simple is the default;
   // nothing is ever deleted, Advanced just un-hides the rail's "Advanced" group and a handful of
   // per-view toolbar/detail controls. Every trim below is CSS (body.mode-simple/-advanced in
   // dashboard.css) except the rail regrouping, which genuinely moves DOM nodes (see
@@ -1189,8 +1189,8 @@
     if (uiMode === 'simple' && RAIL_ADVANCED_VIEWS.has(currentView) && !railAdvancedOpen) setRailAdvancedOpen(true);
     applyModeIcon();
     normalizeNetworkTabForMode();
-    // Simple/Advanced scale --d-row-h and --d-trace-h (commit 8c8084c); every virtualized list
-    // (E4) must re-measure so a mode switch mid-scroll repaints at the new row height instead of
+    // Simple/Advanced scale --d-row-h and --d-trace-h; every virtualized list
+    // must re-measure so a mode switch mid-scroll repaints at the new row height instead of
     // corrupting row positions against a stale one.
     virtualLists.forEach((v) => v.remeasure());
   }
@@ -2000,7 +2000,7 @@
   // first drag, keypress or window resize.
   let syncSplitterAria = () => {};
   function initSplitters() {
-    const MIN_WIDTH = 320;
+    const MIN_WIDTH = 360;
     const maxWidth = () => Math.max(MIN_WIDTH, window.innerWidth - 420);
     // How far past the normal MIN_WIDTH/maxWidth() stop the pointer has to travel before a
     // release commits to fully collapsing that pane — matches the "under ~160px" spec.
@@ -2299,12 +2299,22 @@
       (i, total) => {
         const e = rows[i];
         const lvl = SEVERITY_SHORT[e.severity] || 'INF';
+        let mainText = e.summary;
+        if (e.pluginId === 'network') {
+          try {
+            const urlMatch = e.summary.match(/(https?:\/\/[^\s]+)/);
+            if (urlMatch) {
+              const url = new URL(urlMatch[1]);
+              mainText = e.summary.replace(urlMatch[1], url.pathname + url.search);
+            }
+          } catch (err) {}
+        }
         return rowHtml({
           id: e.id, selected: selectedEventId === e.id,
           badgeText: lvl, badgeTone: levelTone(lvl),
-          mainText: e.summary, tagText: e.pluginId.toUpperCase(), tagTone: 'muted',
+          mainText: mainText, tagText: e.pluginId.toUpperCase(), tagTone: 'muted',
           duration: e.type, statusText: time(e.wallTimeMs).replace(/:\d\d /, ' ').slice(0, 8), sTone: 'muted',
-          flagKind: 'timeline', flagLabel: e.summary,
+          flagKind: 'timeline', flagLabel: mainText,
           posinset: i + 1, setsize: total,
         });
       },
@@ -2417,8 +2427,6 @@
     }
     const lvl = SEVERITY_SHORT[event.severity] || 'INF';
     const zoom = document.body.classList.contains('detail-zoom');
-    const bookmarked = bookmarkedIds.has(event.id);
-    const linked = event.pluginId === 'network' && event.correlationId;
     const query = eventDetailQuery;
     // Log/crash events carry a message + (for crashes and ANRs) a stack trace on
     // StoredEvent.payloadJson — see the module doc above ensureEventPayloadsLoaded(). Parsed
@@ -2491,10 +2499,6 @@
           <span class="detail-fact"><span class="detail-fact-k">source</span><span class="detail-fact-v">${esc(event.pluginId)}</span></span>
           <span class="detail-fact"><span class="detail-fact-k">seq</span><span class="detail-fact-v">#${esc(event.sequence ?? '—')}</span></span>
         </div>
-        <div class="detail-actions-row">
-          <button type="button" class="detail-action-btn${bookmarked ? ' on' : ''}" data-action="bookmark">${icon('star', 'ic-sm')}${bookmarked ? 'Bookmarked' : 'Bookmark'}</button>
-          <button type="button" class="detail-action-btn" data-action="open-network" ${linked ? '' : 'disabled'} title="${linked ? 'Open the related transaction' : 'This event has no linked transaction'}">${icon('network', 'ic-sm')}Open in Network</button>
-        </div>
       </div>${findBarHtml(query, countPaneHits([{ groups: [{ kvs }] }]), 'eventDetailFindInput')}
       <div class="detail-body">
         ${screenshotHtml}
@@ -2506,15 +2510,6 @@
     restoreFocus(focusSnap, pane);
     // toggle-zoom is handled by the delegated listener wired once in wireEvents (`$('eventDetail')
     // .addEventListener('click', ...)`), not rebound here on every render.
-    pane.querySelector('[data-action="bookmark"]').onclick = () => toggleBookmark(event.id);
-    const openNetworkBtn = pane.querySelector('[data-action="open-network"]');
-    if (linked)
-      openNetworkBtn.onclick = async () => {
-        await show('network');
-        const match = networkPage.find((t) => t.correlationId === event.correlationId);
-        if (match) showTransaction(match.id);
-        else toast('No matching transaction is currently loaded.', 'error');
-      };
     $('eventNoteSaveBtn').onclick = saveNote;
     if (screenshotAttachmentId) {
       mountEvidenceThumbnails(pane);
@@ -2523,7 +2518,7 @@
   }
 
   // Client-side ceiling on the accumulated `events` array — was 500 (== the old per-request
-  // limit), raised to 5,000 (E4: matches the acceptance scenario's session size) now that DOM
+  // limit), raised to 5,000 (a realistic full-session size) now that DOM
   // size is decoupled from array size by the Timeline virtualizer below. Applied both to live-tail
   // merges (mergeEvents) and to scroll-triggered "load more" (loadMoreEventsIfPossible) so neither
   // path can grow the in-memory array past what a long unattended session should reasonably hold.
@@ -2863,9 +2858,9 @@
       fetch('/api/v1/meta', { headers: auth() }),
       fetch('/api/v1/network/transactions?limit=100', { headers: auth() }),
       fetch('/api/v1/events?limit=6&sort=DESC', { headers: auth() }),
-      // D4's "previous-run-crashed banner": GET /api/v1/runs (added in 7ef109d) reports every
+      // The "previous-run-crashed banner": GET /api/v1/runs reports every
       // retained run's StoredSessionStatus, sorted newest-first by the server. The most recent
-      // *non-active* run is the "previous run" the spec means.
+      // *non-active* run is the "previous run".
       fetch('/api/v1/runs', { headers: auth() }),
     ]);
     if (!overviewRes.ok) return;
@@ -2933,14 +2928,13 @@
     // so every row's flag button and the rail count are already correct across every view.
     loadEvidenceFlags();
   }
-  /** D4's previous-run-crashed banner, driven by GET /api/v1/runs (7ef109d) — `previousRun` is
+  /** The previous-run-crashed banner, driven by GET /api/v1/runs — `previousRun` is
    * already "the most recent non-active run" by the time it gets here (see loadOverview). Shown
    * only when that run's real StoredSessionStatus is CRASHED; a COMPLETED (or any other) previous
    * run shows nothing. Now that crashes are addressable per run (GET /api/v1/retained-events?
    * pluginId=crash carries sessionId — see the Crashes module doc), the click handler below jumps
    * straight to that run's crash via focusCrashesOnRun() instead of just opening the Crashes view
-   * in general, which is all a plain `show('crashes')` used to be able to do (see commit 9315533's
-   * note, no longer accurate). */
+   * in general, which is all a plain `show('crashes')` used to be able to do. */
   function renderOverviewCrashBanner(previousRun) {
     const el = $('overviewCrashBanner');
     if (!el) return;
@@ -2960,7 +2954,7 @@
         {
           icon: 'lock', iconTone: 'warn', title: 'Connect this browser', span: 2,
           // fieldsHtml (unlike `lede`) is inserted raw, not HTML-escaped — the only field on this
-          // card that can carry the <code>/<strong> markup task E2 asks for (device path, the
+          // card that can carry <code>/<strong> markup (device path, the
           // adb forward command, and the #code= credential note) ahead of the actual connect
           // input, since cardHtml() always renders fieldsHtml before its own buttons/lede order
           // isn't ours to change (it's shared by every card-grid view, not scoped to Overview).
@@ -3275,7 +3269,7 @@
   let networkOrder = [];
   const NETWORK_EMPTY_HTML = '<div class="list-empty">' + icon('funnel', 'ic-lg') + '<div class="list-empty-title">No transactions match</div><div class="list-empty-sub">Clear a filter or widen the status/method selection to see the other captures.</div></div>';
   function renderNetwork() {
-    $('networkMainColLabel').textContent = networkShowHost ? 'Host / path' : 'Path';
+    $('networkMainColLabel').textContent = 'Path';
     // Normalize the selection BEFORE painting, like the other four list views: rows gate tabindex
     // on `selected`, so painting with a stale id would leave zero tabbable rows until
     // showTransaction()'s async re-render -- or forever, if that detail fetch rejects.
@@ -3289,13 +3283,13 @@
           id: t.id, selected: selectedTransactionId === t.id,
           checkbox: true, checked: networkSelectedIds.has(t.id),
           badgeText: t.method, badgeTone: methodTone(t.method),
-          mainText: networkShowHost ? t.host + t.path : t.path,
+          mainText: t.path,
           // Single row-tag slot: a pinned diff baseline always wins over the mocked marker.
           tagText: networkPinnedId === t.id ? 'BASE' : t.tags?.mocked === 'true' ? 'MOCK' : false,
           tagTone: 'put',
           duration: t.durationMs != null ? t.durationMs + ' ms' : t.error ? 'failed' : '—',
           statusText: t.status != null ? String(t.status) : t.error ? 'ERR' : '—', sTone: statusTone(t.status),
-          flagKind: 'network', flagLabel: t.method + ' ' + t.host + t.path,
+          flagKind: 'network', flagLabel: t.method + ' ' + t.path,
           posinset: i + 1, setsize: total,
         });
       },
@@ -3990,7 +3984,7 @@
   }
 
   // ================================================================
-  // Crashes (D4/D7) — uncaught exceptions and ANRs from the `crash` plugin, read cross-session via
+  // Crashes — uncaught exceptions and ANRs from the `crash` plugin, read cross-session via
   // GET /api/v1/retained-events?pluginId=crash (no sessionId). A crash's process dies right after
   // CrashCapture writes it to Room, so by the time a developer reopens the app and connects the
   // dashboard, the session that recorded it is no longer current — the live in-memory timeline
@@ -4152,7 +4146,7 @@
   };
   /** Target of the Overview "previous run crashed" banner (renderOverviewCrashBanner) — landing on
    * the general Crashes view was the best that banner could do before crashes were addressable per
-   * run (see commit 9315533's note); now that every row carries sessionId, it can select the exact
+   * run; now that every row carries sessionId, it can select the exact
    * crash instead. Clears any leftover kind/search filter that would otherwise hide the target row
    * — the banner's whole job is to land the developer on this crash, not on "no rows match your
    * leftover filter" — then reuses the same select()+focusSelectedRow() path the j/k keyboard
@@ -5462,9 +5456,9 @@
     const r = await fetch('/api/v1/attachments/' + encodeURIComponent(attachmentId), { headers: auth() });
     if (!(await downloadBlobResponse(r, attachmentId))) toast('Attachment download failed: ' + r.status, 'error');
   }
-  /** C: the evidence bundle -- `POST /api/v1/exports` with `scope=EVIDENCE`, the existing export
+  /** The evidence bundle -- `POST /api/v1/exports` with `scope=EVIDENCE`, the existing export
    * route (CSRF, size limits, truncation reporting, stale-export pruning all come for free). No
-   * `X-DevConsole-Export-Truncated` header is set on this branch (unlike the HAR/Postman bulk
+   * `X-DevConsole-Export-Truncated` header is set on this route (unlike the HAR/Postman bulk
    * routes), so truncation can only be read from the ZIP's own manifest.json -- same "verify
    * manifest.json" guidance the whole-session export already gives. */
   async function downloadEvidenceBundle() {
@@ -5761,7 +5755,7 @@
     $('composerImport').disabled = !enabled;
     $('composerCollectionSave').disabled = !enabled;
     $('pushSimulate').disabled = !enabled;
-    $('mockDisable').disabled = !enabled;
+    syncMockEngineButton();
     syncMockRuleDialogGate();
     $('captureRuleSave').disabled = !enabled || !captureRulesEditable;
     $('fileCreate').disabled = !enabled || !filesEditable;
@@ -5769,8 +5763,8 @@
     // (renderEventDetail) with their disabled state set directly from `token` at render time,
     // since they only exist in the DOM once an event is selected.
     $('quickExport').disabled = !token;
-    // Capture is off by default on the host (ScreenshotPolicy.enabled = false) and there is no
-    // route that reports that ahead of time (see the verification report) — this button is only
+    // Capture is off by default on the host (ScreenshotPolicy.enabled = false) and no route
+    // reports that ahead of time — this button is only
     // ever gated on "is a session connected", exactly like Export; SCREENSHOT_DISABLED is
     // surfaced as a toast naming the config property once a capture is actually attempted.
     $('captureScreenshot').disabled = !token;
@@ -6018,13 +6012,41 @@
     if (!token) return;
     const r = await fetch('/api/v1/mocks', { headers: auth() });
     mocksGloballyEnabled = r.ok ? (await r.json()).enabled === true : true;
+    syncMockEngineButton();
     loadMockRules();
   }
-  async function disableMocks() {
+  /** Turning mocking off stays on the ungated `disable-all` route, so a host that publishes mocks
+   *  as read-only can still fall back to real traffic; turning it back on goes through the
+   *  capability-gated `/enabled` route, because that one changes how the app behaves. */
+  async function toggleMockEngine() {
     if (!hasSession()) return;
-    const r = await fetch('/api/v1/mocks/disable-all', { method: 'POST', headers: controlHeaders() });
-    toast(r.ok ? 'All mocks disabled.' : 'Disable failed: ' + r.status, r.ok ? undefined : 'error');
+    const turningOn = !mocksGloballyEnabled;
+    if (turningOn && !canEditMocks()) return;
+    const r = turningOn
+      ? await fetch('/api/v1/mocks/enabled', {
+          method: 'POST',
+          headers: { ...controlHeaders(), 'Content-Type': 'text/plain' },
+          body: 'true',
+        })
+      : await fetch('/api/v1/mocks/disable-all', { method: 'POST', headers: controlHeaders() });
+    const verb = turningOn ? 'enabled' : 'disabled';
+    toast(r.ok ? 'Mocking ' + verb + '.' : (turningOn ? 'Enable' : 'Disable') + ' failed: ' + r.status, r.ok ? undefined : 'error');
     if (r.ok) loadMocks();
+  }
+  /** Keeps the single mock-engine button describing what it will do next. */
+  function syncMockEngineButton() {
+    const btn = $('mockDisable');
+    if (!btn) return;
+    const on = mocksGloballyEnabled;
+    btn.classList.toggle('danger', on);
+    btn.querySelector('use').setAttribute('href', on ? '#dc-close' : '#dc-check');
+    btn.lastChild.textContent = on ? 'Disable all mocks' : 'Enable mocking';
+    btn.disabled = !hasSession() || (!on && !canEditMocks());
+    btn.title = btn.disabled
+      ? (hasSession() ? 'The host app publishes mock rules as read-only' : 'Sign-in required')
+      : on
+        ? 'Stop serving every mock rule — requests go to the real network'
+        : 'Serve matching requests from the enabled mock rules again';
   }
   async function deleteMockRule(id) {
     if (!canEditMocks()) return;
@@ -7101,13 +7123,6 @@
     // ---- Network -----------------------------------------------------------------
     wireSeg($('networkStatusSeg'), (value) => { networkStatusFilter = value; applyNetworkFilters(); });
     wireSeg($('networkMethodSeg'), (value) => { networkMethodFilter = value; applyNetworkFilters(); });
-    $('networkToggleHost').onclick = () => {
-      networkShowHost = !networkShowHost;
-      $('networkToggleHostLabel').textContent = networkShowHost ? 'Base URL shown' : 'Base URL hidden';
-      $('networkToggleHost').querySelector('.ic use').setAttribute('href', networkShowHost ? '#dc-eye' : '#dc-lock');
-      $('networkToggleHost').setAttribute('aria-pressed', String(!networkShowHost));
-      renderNetwork();
-    };
     $('networkRefresh').onclick = () => loadNetwork();
     $('networkNewest').onclick = () => loadNetwork();
     $('networkOlder').onclick = () => networkCursor && loadNetwork(networkCursor);
@@ -7216,7 +7231,7 @@
     $('composerCollectionSave').onclick = saveComposerCollection;
     $('composerCollections').onclick = loadComposerCollections;
 
-    $('mockDisable').onclick = disableMocks;
+    $('mockDisable').onclick = toggleMockEngine;
     $('mockNewRule').onclick = () => openMockRuleDialog(null);
     $('mockRuleModalClose').onclick = closeMockRuleDialog;
     $('mockRuleCancel').onclick = closeMockRuleDialog;

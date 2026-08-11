@@ -168,7 +168,7 @@ private fun FileEntryRow(
         if (canEdit && !entry.isDirectory) FileEntryActions(root, entry, actions)
         androidx.compose.material3.HorizontalDivider(
             modifier = Modifier.padding(start = 76.dp),
-            color = colors.line
+            color = colors.line,
         )
     }
 }

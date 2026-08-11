@@ -28,5 +28,8 @@ private class FakeThemePreferenceStore(
     private val values: MutableMap<String, Boolean> = mutableMapOf(),
 ) : InspectorThemePreferenceStore {
     override fun readOverride(): Boolean? = values["dark"]
-    override fun writeOverride(dark: Boolean) { values["dark"] = dark }
+
+    override fun writeOverride(dark: Boolean) {
+        values["dark"] = dark
+    }
 }

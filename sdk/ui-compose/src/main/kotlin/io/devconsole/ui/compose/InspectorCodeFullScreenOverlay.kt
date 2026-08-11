@@ -7,6 +7,7 @@
 package io.devconsole.ui.compose
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,10 +21,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,7 +74,23 @@ internal fun InspectorCodeFullScreenOverlay(
 ) {
     BackHandler(onBack = onDismiss)
     val colors = DevConsoleTheme.colors
-    Surface(modifier = modifier.fillMaxSize(), color = colors.ground) {
+    // The dashboard's `modalpop`: rise 10px, scale up from 0.98, fade in, over OVERLAY_MS on the
+    // emphasized curve. Owned here rather than at the four call sites so every overlay arrives the
+    // same way, and driven from one Animatable so the whole entrance runs in the draw phase.
+    val entranceSpec = feedbackSpec<Float>(InspectorMotion.OVERLAY_MS)
+    val entrance = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { entrance.animateTo(1f, entranceSpec) }
+    Surface(
+        modifier =
+            modifier.fillMaxSize().graphicsLayer {
+                val progress = entrance.value
+                alpha = progress
+                scaleX = OVERLAY_ENTRY_SCALE + (1f - OVERLAY_ENTRY_SCALE) * progress
+                scaleY = scaleX
+                translationY = (1f - progress) * OVERLAY_ENTRY_RISE.toPx()
+            },
+        color = colors.ground,
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
             CodeFullScreenHeader(title, onDismiss, headerTrailing)
             LazyColumn(
@@ -132,3 +152,9 @@ private fun CodeFullScreenHeader(
         trailing?.invoke()
     }
 }
+
+/** `modalpop`'s starting scale: near-full, so the overlay grows into place instead of zooming. */
+private const val OVERLAY_ENTRY_SCALE = 0.98f
+
+/** `modalpop`'s starting offset: a short rise, matching `translateY(10px)` on the dashboard. */
+private val OVERLAY_ENTRY_RISE = 10.dp

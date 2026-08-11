@@ -837,12 +837,12 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         )
 
         // release is PROTECTED by default, so auto-wire adds the noop core coordinate. The published
-        // coordinate is 1.0.1 -- the DEFAULT_SDK_VERSION must not point at a 1.0.1-SNAPSHOT that was
+        // coordinate is 1.1.0 -- the DEFAULT_SDK_VERSION must not point at a 1.1.0-SNAPSHOT that was
         // never published, which would make every zero-config release build fail to resolve.
         val result = runner("dependencies", "--configuration", "releaseImplementation").build()
 
-        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-noop:1.0.1"))
-        assertTrue(result.output, !result.output.contains("1.0.1-SNAPSHOT"))
+        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-noop:1.1.0"))
+        assertTrue(result.output, !result.output.contains("1.1.0-SNAPSHOT"))
     }
 
     @Test
@@ -878,7 +878,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
             extraBuildScript =
                 """
                 dependencies {
-                    add("debugImplementation", "io.github.devconsole-android:devconsole-ui-compose:1.0.1")
+                    add("debugImplementation", "io.github.devconsole-android:devconsole-ui-compose:1.1.0")
                 }
                 """.trimIndent(),
         )
@@ -887,7 +887,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         // debug is ENABLED, so the core runtime ("devconsole") must still be auto-wired alongside the
         // host's add-on declaration -- the add-on alone does not count as declaring the core runtime.
-        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole:1.0.1"))
+        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole:1.1.0"))
         assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-ui-compose"))
     }
 }

@@ -162,6 +162,56 @@ class ExceptionBoundaryTest {
             assertFalse("the response must not leak a stack frame", body.contains("ThrowingCommandAuditLog"))
         }
 
+    /**
+     * A form-body route handed JSON used to reach the catch-all and answer `500 INTERNAL_ERROR`,
+     * which reads as "the SDK broke" for what is really a malformed request. The boundary now
+     * separates the two, so a `500` from this server always means a genuine server-side fault.
+     */
+    @Test
+    fun `a form route sent the wrong content type answers a 4xx rather than 500`() =
+        testApplication {
+            val sessions = SessionAuthority()
+            val sessionCodes = SessionCodeAuthority(sessions)
+            application { devConsoleModule(sessions, sessionCodes) }
+            val session = approvedSession(sessions, sessionCodes)
+
+            val response =
+                client.post("/api/v1/network/postman") {
+                    header(HttpHeaders.Host, "localhost")
+                    header(HttpHeaders.Authorization, "Bearer ${session.token}")
+                    header(HttpHeaders.Origin, "http://localhost")
+                    header("X-DevConsole-CSRF", session.csrfToken)
+                    header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    setBody("{\"id\":\"whatever\"}")
+                }
+
+            // Ktor reports a JSON body handed to receiveParameters() as a failed content
+            // transformation rather than an unsupported media type, so this lands on the 400 branch;
+            // the 415 branch covers the routes and Ktor paths that do raise the typed media error.
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            val body = response.bodyAsText()
+            assertTrue("expected the typed client error, got: $body", body.contains("VALIDATION_FAILED"))
+            assertFalse("a caller's bad content type is not a server fault", body.contains("INTERNAL_ERROR"))
+        }
+
+    @Test
+    fun `the same form route still succeeds with the documented content type`() =
+        testApplication {
+            val sessions = SessionAuthority()
+            val sessionCodes = SessionCodeAuthority(sessions)
+            application { devConsoleModule(sessions, sessionCodes) }
+            val session = approvedSession(sessions, sessionCodes)
+
+            val response =
+                client.post("/api/v1/network/postman") {
+                    controlHeaders(session)
+                    setBody("")
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.bodyAsText().contains("\"info\""))
+        }
+
     @Test
     fun `a route that does not throw is unaffected by the exception boundary`() =
         testApplication {

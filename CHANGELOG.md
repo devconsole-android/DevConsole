@@ -20,7 +20,81 @@ joined this list.)
 
 ## Unreleased
 
+## 1.1.0 — 2026-08-12
+
+A minor in the strict sense the [policy](#versioning-and-stability-policy) commits to: two additive
+methods on `DevConsoleRuntime`, one new REST route, and no change to any existing surface. Most of
+the release is the native-siblings UI pass across both surfaces, plus four defects a full
+feature sweep of the shipped build turned up.
+
+### Added
+
+- **`POST /api/v1/mocks/enabled` — the way back from the mock kill switch.** The browser could
+  disable all mocking (`POST /api/v1/mocks/disable-all`) but had no route to turn it back on, so
+  the only way to resume mocking was to restart the host app — while the Android in-app inspector
+  had a two-way toggle the whole time. The dashboard's "Disable all mocks" button is now a two-way
+  switch that reads its label from the engine's live state. The two directions gate differently and
+  deliberately: turning mocking *off* stays ungated (falling back to real traffic is always
+  allowed), while turning it back *on* requires the host's `mocks` editing capability, since it
+  changes how the app behaves.
+
+- **`DevConsoleRuntime.recordPublishedEvent()` / `recordDroppedEvents(count)`**, the counters behind
+  the fix below.
+
 ### Fixed
+
+- **Every list row in the dashboard rendered without its path or summary.** `.row-main` is the
+  flexible column between a row's fixed ones, and those fixed columns — checkbox 24px, method badge
+  54px, duration 74px, status 62px, flag 24px, five 12px gaps, 20px padding — added up to 318px
+  inside a list pane whose default width was 320px. The path text was laid out into the leftover
+  2px and clipped to nothing, so Network, Timeline, WebSockets, Push, and Crashes all showed rows
+  identifiable only by their method badge and duration; on the two-column rows a sliver of the
+  leading `/` survived and read as a stray comma. The detail pane had the full URL all along, which
+  is what kept this from being obvious. The row gap is now 8px and the list column defaults to
+  440px with a 360px floor (it stays drag-resizable), leaving the main text 142px at the default.
+  The `.col-*` header cells were re-aligned to match, including `.col-flag`, which had been 34px
+  against the 24px flag button it labels.
+
+- **The SDK-health card reported "0 published events" no matter how much the SDK captured.**
+  `publishedEventCount` and `droppedEventCount` are surfaced on the dashboard's SDK Health screen
+  and the Android More screen's health rows, and both were hardcoded 0 in every shipping build:
+  the counters live on `EventPipeline`, which nothing in the runtime ever instantiates — real
+  captures funnel through `CaptureTimelineBridge.emit()` instead, and `DevConsoleRuntime`'s own
+  `SdkHealth` only ever tracked `initializationCount` and `state`. A dropped-event count that can
+  never rise is the more consequential half: it is the SDK's only signal that capture lost data to
+  buffer overflow. `emit()` now counts each published event and the persistence queue's existing
+  `onDrop` hook counts each dropped one.
+
+- **A malformed request answered `500 INTERNAL_ERROR`.** Routes that read a form body — `POST
+  /api/v1/push/simulate`, the `POST` halves of the HAR and Postman exports, `POST /api/v1/exports`,
+  and the rest — call `receiveParameters()`, which throws when handed JSON or no `Content-Type` at
+  all. That landed on the module's catch-all boundary and came back as a server error, sending
+  anyone writing a third-party client hunting a bug in the SDK for what was their own malformed
+  request. Content-transformation failures now answer `400 VALIDATION_FAILED` and the typed
+  media-type rejection answers `415 UNSUPPORTED_MEDIA_TYPE`, so an `INTERNAL_ERROR` from this
+  server once again means only a genuine server-side fault. The dashboard was never affected — it
+  sets the right content type on every one of these calls.
+
+- **A pill button clipped its own label.** `InspectorPillButton` laid its label out with `maxLines =
+  1` and the default clip overflow, so the More screen's "Code" action — squeezed by the "Copy URL"
+  pill's 2f weight — rendered as "Cod". The label now ellipsizes rather than silently dropping a
+  glyph, the pill's horizontal padding is 12dp, and the URL card's primary action takes 1.5f.
+
+- **Starting the server on a port that was taken between the availability probe and the real bind
+  could crash the host app.** `KtorLocalServerEngine.start` preflights each candidate port with
+  `isPortAvailable`, then calls `embeddedServer(CIO, ...).start(wait = false)` — which returns
+  *before* CIO's accept loop has actually bound. Losing that race throws `BindException` inside
+  Ktor's own accept coroutine, long after the `runCatching` around `start()` has returned, and with
+  nothing on the server's parent context it reached the thread's default uncaught handler: on
+  Android, the host application's crash handler. A debug console taking down the app it exists to
+  observe, for a condition it already handles — `isServerBound` sees the failure and the loop falls
+  forward to the next port exactly as intended. The embedded server now runs in an engine-owned
+  `SupervisorJob` scope carrying a `CoroutineExceptionHandler`, so a detected-and-recovered bind
+  failure stays the SDK's business. Surfaced by a flaky test rather than a report: Gradle runs
+  `testDebugUnitTest` and `testReleaseUnitTest` in parallel, both binding this module's fixed
+  `8400..8419` range, and the loser's escaped exception landed on whichever unrelated test called
+  `runTest` next as `UncaughtExceptionsBeforeTest` — roughly two failures in every five suite runs,
+  on two tests that had nothing to do with it.
 
 - **OkHttp responses without a `Content-Length` showed a blank response body unless the host read
   the whole thing.** Those responses — `Transfer-Encoding: chunked`, and every transparently

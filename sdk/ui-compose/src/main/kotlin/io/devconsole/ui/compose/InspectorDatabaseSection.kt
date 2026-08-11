@@ -166,7 +166,7 @@ private fun DatabaseTableRow(
         )
         androidx.compose.material3.HorizontalDivider(
             modifier = Modifier.padding(start = 76.dp),
-            color = colors.line
+            color = colors.line,
         )
     }
 }

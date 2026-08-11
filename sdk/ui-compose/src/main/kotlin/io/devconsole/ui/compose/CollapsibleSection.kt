@@ -6,9 +6,12 @@
 
 package io.devconsole.ui.compose
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -31,12 +34,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-
 /**
- * A collapsible detail card: 56dp header row with an animated chevron, a 14sp label, an optional
- * mono meta string, and an optional 44dp copy button; [content] renders only while [expanded].
- * Nest [InspectorKeyValueList], [InspectorCodeBlock], [InspectorProgressBars] or
+ * A collapsible detail section: a rule, then a 56dp header row with an animated chevron, a 14sp
+ * label, an optional mono meta string, and an optional 44dp copy button; [content] renders only
+ * while [expanded]. Nest [InspectorKeyValueList], [InspectorCodeBlock], [InspectorProgressBars] or
  * [InspectorDetailEmptyText] inside it.
+ *
+ * Flat and rule-separated rather than a filled card, matching [HeroCard], [TerminalCard] and the
+ * dashboard's `.card-shell`. The chevron sits on the shared 16dp gutter so the header lines up with
+ * the [InspectorKeyValueList] rows underneath it and with every [TonalListRow] and [GroupLabel]
+ * elsewhere in the app.
  */
 @Suppress("LongParameterList") // Label, meta, copy button, and content.
 @Composable
@@ -55,13 +62,21 @@ internal fun CollapsibleSection(
     val rotation by
         animateFloatAsState(
             targetValue = if (expanded) 0f else -90f,
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+            animationSpec = chevronSpec(),
             label = "sectionChevron",
         )
     Column(modifier = modifier.fillMaxWidth()) {
         HorizontalDivider(color = DevConsoleTheme.colors.line)
         CollapsibleSectionHeader(label, onToggle, rotation, meta, metaColor, onCopy, copyContentDescription)
-        if (expanded) {
+        // The chevron was already animating while the content it controls snapped in and out, which
+        // reads as two unrelated events rather than one. Expanding the height ties them together:
+        // the section grows out of the header the chevron just turned on.
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(feedbackSpec(InspectorMotion.EXPAND_MS)) + fadeIn(feedbackSpec()),
+            // Exit faster than entrance -- collapsing is a dismissal, not an arrival.
+            exit = shrinkVertically(feedbackSpec()) + fadeOut(feedbackSpec()),
+        ) {
             Column(content = content)
         }
     }
@@ -78,7 +93,9 @@ private fun CollapsibleSectionHeader(
     onCopy: (() -> Unit)?,
     copyContentDescription: String,
 ) {
-    Row(modifier = Modifier.padding(start = 4.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    // start 8 + the inner row's own 8 puts the chevron on the shared 16dp gutter; end 4 optically
+    // lands the copy glyph on the same gutter, since it is centred in a 44dp round button.
+    Row(modifier = Modifier.padding(start = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(
             modifier =
                 Modifier

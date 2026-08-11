@@ -26,7 +26,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -274,7 +273,6 @@ private fun ControlHero(
             value = overrides.activeCount.toString(),
             label = "of ${overrides.total} overrides active",
             onExpand = onToggleCollapse,
-            containerColor = colors.putSoft,
             valueColor = colors.put,
             labelColor = colors.put,
         )
@@ -284,7 +282,6 @@ private fun ControlHero(
             value = overrides.activeCount.toString(),
             valueSuffix = "of ${overrides.total}",
             subtitle = overrides.sub,
-            containerColor = colors.putSoft,
             labelColor = colors.put,
             valueColor = colors.put,
             onCollapse = onToggleCollapse,
@@ -506,7 +503,7 @@ private fun FlagRow(
     )
 }
 
-/** Hand-built fixture for [ControlScreenPreview] -- previews are the only visual check on this branch. */
+/** Hand-built fixture for [ControlScreenPreview]. */
 private fun controlScreenPreviewState() =
     InspectorState(
         available = true,

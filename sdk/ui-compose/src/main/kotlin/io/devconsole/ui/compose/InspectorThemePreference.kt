@@ -4,6 +4,7 @@ import android.content.Context
 
 internal interface InspectorThemePreferenceStore {
     fun readOverride(): Boolean?
+
     fun writeOverride(dark: Boolean)
 }
 

@@ -9,7 +9,7 @@ plugins {
 // Must share a top-level namespace with the plugin ID (a Plugin Portal requirement) and match
 // the SDK's Maven group.
 group = "io.github.devconsole-android"
-version = "1.0.1"
+version = "1.1.0"
 
 // Targets Java 17: this plugin JAR runs inside the Gradle daemon (AGP 8.13.0
 // requires JDK 17) and compiles against com.android.tools.build:gradle:8.13.0,

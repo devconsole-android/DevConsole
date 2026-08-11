@@ -35,12 +35,12 @@ See the [changelog](CHANGELOG.md) for the full policy.
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.devconsole-android") version "1.0.1"
+    id("io.github.devconsole-android") version "1.1.0"
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:1.0.1")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.0.1")
+    debugImplementation("io.github.devconsole-android:devconsole:1.1.0")
+    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.1.0")
 }
 ```
 

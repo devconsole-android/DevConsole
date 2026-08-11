@@ -6,13 +6,13 @@
 
 package io.devconsole.ui.compose
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.material3.Shapes
-import androidx.compose.material3.Typography
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -162,29 +162,28 @@ internal object DevConsoleElevation {
  * they're used instead of centralized here.
  */
 internal object DevConsoleType {
-    val title =
-        TextStyle(fontSize = 27.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.02).em, lineHeight = 31.sp)
     val rowTitle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.5.sp)
     val rowSub = TextStyle(fontSize = 12.5.sp)
     val groupLabel = TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.04.em)
-    val heroValue =
-        TextStyle(fontSize = 40.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.03).em, lineHeight = 40.sp)
 }
 
-internal val DevConsoleShapes = Shapes(
-    extraSmall = RoundedCornerShape(4.dp),
-    small = RoundedCornerShape(6.dp),
-    medium = RoundedCornerShape(8.dp),
-    large = RoundedCornerShape(12.dp),
-    extraLarge = RoundedCornerShape(16.dp),
-)
+internal val DevConsoleShapes =
+    Shapes(
+        extraSmall = RoundedCornerShape(4.dp),
+        small = RoundedCornerShape(6.dp),
+        medium = RoundedCornerShape(8.dp),
+        large = RoundedCornerShape(12.dp),
+        extraLarge = RoundedCornerShape(16.dp),
+    )
 
-internal val DevConsoleTypography = Typography(
-    headlineSmall = TextStyle(fontSize = 27.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.02).em, lineHeight = 31.sp),
-    bodyLarge = TextStyle(fontSize = 14.5.sp),
-    bodySmall = TextStyle(fontSize = 12.5.sp),
-    labelMedium = TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.04.em),
-)
+internal val DevConsoleTypography =
+    Typography(
+        headlineSmall =
+            TextStyle(fontSize = 27.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.02).em, lineHeight = 31.sp),
+        bodyLarge = TextStyle(fontSize = 14.5.sp),
+        bodySmall = TextStyle(fontSize = 12.5.sp),
+        labelMedium = TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.04.em),
+    )
 
 internal val LocalDevConsoleColors = staticCompositionLocalOf { DevConsoleDarkColors }
 
@@ -206,7 +205,10 @@ internal fun DevConsoleTheme(
 ) {
     val colors = if (darkTheme) DevConsoleDarkColors else DevConsoleLightColors
     val colorScheme = if (darkTheme) darkDevConsoleColorScheme(colors) else lightDevConsoleColorScheme(colors)
-    CompositionLocalProvider(LocalDevConsoleColors provides colors) {
+    CompositionLocalProvider(
+        LocalDevConsoleColors provides colors,
+        LocalReduceMotion provides rememberReduceMotion(),
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             shapes = DevConsoleShapes,

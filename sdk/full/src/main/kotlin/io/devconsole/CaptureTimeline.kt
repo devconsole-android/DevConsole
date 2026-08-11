@@ -38,6 +38,8 @@ internal class CaptureTimelineBridge(
     private val streamHub: () -> EventStreamHub?,
     private val nextSequence: () -> Long,
     private val breadcrumbs: BreadcrumbRingBuffer? = null,
+    /** Counts the emission onto SDK health; defaults away for the callers with no runtime to count on. */
+    private val onPublished: () -> Unit = {},
 ) {
     constructor(
         sessionId: String,
@@ -108,6 +110,7 @@ internal class CaptureTimelineBridge(
             ),
         )
         breadcrumbs?.record(Breadcrumb(wallTimeMs, pluginId, type, severity.ordinal, summary))
+        onPublished()
         return id.toString()
     }
 }

@@ -131,7 +131,7 @@ class KtorLocalServerEngineTest {
     @Test
     fun `stop clears engine state so a subsequent start on the same engine succeeds`() =
         runBlocking {
-            // Regression coverage for the bug this branch fixes: a throwing engine.stop() used to
+            // Regression coverage: a throwing engine.stop() used to
             // skip the `engine = null` reset entirely (no try/finally), permanently wedging the
             // server -- every later start() would answer "Server already running" until process
             // death. This can't fault-inject a throwing embedded engine without a bigger refactor

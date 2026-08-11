@@ -110,4 +110,31 @@ class DevConsoleRuntimeTest {
         val result = runtime.initialize(DevConsoleConfig(eventBufferCapacity = 64))
         assertTrue("expected Conflict, got $result", result is InitResult.Conflict)
     }
+
+    /**
+     * These two counters are what the dashboard's SDK-health card and the Android More screen
+     * report. Nothing incremented them before, so both surfaces showed a permanent 0 published /
+     * 0 dropped while the timeline filled up behind them.
+     */
+    @Test
+    fun `published and dropped events accumulate onto health`() {
+        val runtime = enabledRuntime()
+        runtime.initialize(DevConsoleConfig.default())
+        assertEquals(0L, runtime.health.value.publishedEventCount)
+
+        repeat(3) { runtime.recordPublishedEvent() }
+        runtime.recordDroppedEvents(2)
+
+        assertEquals(3L, runtime.health.value.publishedEventCount)
+        assertEquals(2L, runtime.health.value.droppedEventCount)
+    }
+
+    @Test
+    fun `a non-positive drop count leaves health untouched`() {
+        val runtime = enabledRuntime()
+        runtime.recordDroppedEvents(0)
+        runtime.recordDroppedEvents(-5)
+
+        assertEquals(0L, runtime.health.value.droppedEventCount)
+    }
 }
