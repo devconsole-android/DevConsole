@@ -966,9 +966,31 @@
   // ================================================================
   // Theme (persisted, no inline bootstrap script allowed by CSP)
   // ================================================================
+  const THEME_STORAGE_KEY = 'devconsole-theme';
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+
   function currentTheme() {
     return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
   }
+
+  function storedTheme() {
+    try {
+      const value = localStorage.getItem(THEME_STORAGE_KEY);
+      return value === 'dark' || value === 'light' ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function systemTheme() {
+    return media.matches ? 'dark' : 'light';
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    applyThemeIcon();
+  }
+
   function applyThemeIcon() {
     const btn = $('themeToggle');
     if (!btn) return;
@@ -976,26 +998,24 @@
     btn.innerHTML = icon(dark ? 'sun' : 'moon');
     btn.title = dark ? 'Switch to light theme' : 'Switch to dark theme';
     btn.setAttribute('aria-label', btn.title);
+    btn.setAttribute('aria-pressed', String(dark));
   }
+
   function initTheme() {
-    let saved = null;
-    try {
-      saved = localStorage.getItem('devconsole-theme');
-    } catch {
-      /* storage unavailable */
-    }
-    document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
-    applyThemeIcon();
+    applyTheme(storedTheme() || systemTheme());
+    media.addEventListener('change', (event) => {
+      if (!storedTheme()) applyTheme(event.matches ? 'dark' : 'light');
+    });
   }
+
   function toggleTheme() {
     const next = currentTheme() === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
     try {
-      localStorage.setItem('devconsole-theme', next);
+      localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {
       /* storage unavailable */
     }
-    applyThemeIcon();
+    applyTheme(next);
   }
 
   // ================================================================
