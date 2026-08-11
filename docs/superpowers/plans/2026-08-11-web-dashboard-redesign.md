@@ -379,13 +379,17 @@ Do not rename `.split-shell`, `.list-pane`, `.detail-pane`, `.splitter`, or any 
 
 Use 32–36px controls, 6px corners, and sentence-case labels. Restrict pill geometry to status/count chips. Keep the simple/advanced visibility contract and every filter ID.
 
-- [ ] **Step 4: Exercise each split view manually**
+- [ ] **Step 4: Compress the Network request list into inline rows**
+
+Remove the visible Method, Path, Duration, and Status column-title strip from the left Network pane while retaining accessible context for assistive technology. Render each transaction as one compact scanning line: method, path (flexing), duration, status, and evidence action. Do not stack field titles above values. Preserve selection, checkboxes, flags, host visibility, virtualized list behavior, and the detail-pane contract. Let the left pane start narrower so the request inspector receives more space.
+
+- [ ] **Step 5: Exercise each split view manually**
 
 Open Timeline, Network, WebSockets, Push, and Crashes. For each: select a row, scroll long detail content, drag the splitter, resize with arrows, double-click reset, hide each pane with Home/End, and restore it.
 
 Expected: behavior matches the pre-redesign dashboard; only presentation changes.
 
-- [ ] **Step 5: Commit split views**
+- [ ] **Step 6: Commit split views**
 
 ```bash
 git add sdk/server-ktor/src/main/resources/devconsole-web/index.html sdk/server-ktor/src/main/resources/devconsole-web/dashboard.css
