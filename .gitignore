@@ -20,3 +20,6 @@ captures/
 
 # macOS
 .DS_Store
+
+# Local feature worktrees
+.worktrees/
