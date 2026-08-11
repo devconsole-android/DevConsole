@@ -84,7 +84,8 @@ internal fun InspectorTopArea(
                 containerColor = Color.Transparent,
                 titleContentColor = DevConsoleTheme.colors.ink,
                 actionIconContentColor = DevConsoleTheme.colors.muted
-            )
+            ),
+            windowInsets = androidx.compose.foundation.layout.WindowInsets(0.dp)
         )
         if (subLine.isNotEmpty()) {
             Text(
