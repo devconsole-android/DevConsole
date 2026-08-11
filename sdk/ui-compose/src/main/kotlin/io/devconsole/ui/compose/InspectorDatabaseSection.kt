@@ -151,17 +151,24 @@ private fun DatabaseTableRow(
     onOpenTable: (String, String) -> Unit,
 ) {
     val colors = DevConsoleTheme.colors
-    TonalListRow(
-        leadText = "TBL",
-        leadColor = colors.put,
-        leadContainerColor = colors.putSoft,
-        title = table.name,
-        subtitle = database,
-        trailValue = table.rowCount.toString(),
-        trailValueColor = colors.ink,
-        trailSubtitle = if (table.rowCount == 1L) "row" else "rows",
-        onClick = { onOpenTable(database, table.name) },
-    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        TonalListRow(
+            leadText = "TBL",
+            leadColor = colors.put,
+            leadContainerColor = colors.putSoft,
+            title = table.name,
+            subtitle = database,
+            trailValue = table.rowCount.toString(),
+            trailValueColor = colors.ink,
+            trailSubtitle = if (table.rowCount == 1L) "row" else "rows",
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            onClick = { onOpenTable(database, table.name) },
+        )
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(start = 76.dp),
+            color = colors.line
+        )
+    }
 }
 
 @Composable

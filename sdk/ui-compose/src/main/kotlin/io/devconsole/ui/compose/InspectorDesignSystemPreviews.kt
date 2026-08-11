@@ -162,7 +162,7 @@ private fun InspectorBottomNavPreview() {
     var selected by remember { mutableStateOf(0) }
     val destinations = listOf("Observe", "Control", "Data", "More")
     DevConsoleTheme(darkTheme = isSystemInDarkTheme()) {
-        InspectorBottomNav(
+        InspectorNavigationBar(
             destinations.mapIndexed { index, label ->
                 InspectorNavItem(label, index == selected, { selected = index }) {
                     InspectorGlyphIcon(InspectorGlyph.Check, contentDescription = null, size = 20.dp)

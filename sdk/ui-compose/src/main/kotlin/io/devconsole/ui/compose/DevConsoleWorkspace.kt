@@ -6,20 +6,25 @@
 
 package io.devconsole.ui.compose
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 
@@ -39,13 +44,21 @@ fun DevConsoleWorkspace() {
  * console, not just whichever screen last owned it, and hides the bottom nav entirely while a detail
  * overlay covers the screen. Every route now owns its mock-accurate `InspectorTopArea` directly.
  */
+internal enum class InspectorNavigationLayout { Bar, Rail }
+
+internal fun inspectorNavigationLayout(width: androidx.compose.ui.unit.Dp): InspectorNavigationLayout =
+    if (width < 600.dp) InspectorNavigationLayout.Bar else InspectorNavigationLayout.Rail
+
 @Composable
 internal fun DevConsoleWorkspace(
     selected: InspectorDestination,
     onDestinationSelected: (InspectorDestination) -> Unit,
     viewModel: InspectorViewModel = viewModel(),
 ) {
-    var darkTheme by rememberSaveable { mutableStateOf(true) }
+    val context = LocalContext.current
+    val store = remember { SharedPreferencesInspectorThemeStore(context.applicationContext) }
+    val systemDark = isSystemInDarkTheme()
+    var darkTheme by rememberSaveable { mutableStateOf(resolveDarkTheme(store.readOverride(), systemDark)) }
     var detailOverlayOpen by rememberSaveable { mutableStateOf(false) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     // A capture category disabled at init (or, dynamically, mid-session) can take the currently
@@ -59,21 +72,47 @@ internal fun DevConsoleWorkspace(
         if (selected !in visible) onDestinationSelected(visible.first())
     }
     DevConsoleTheme(darkTheme = darkTheme) {
-        Scaffold(
-            containerColor = DevConsoleTheme.colors.ground,
-            bottomBar = {
-                if (!detailOverlayOpen) {
-                    InspectorBottomNav(items = workspaceNavItems(selected, state, onDestinationSelected))
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val layout = inspectorNavigationLayout(maxWidth)
+            if (layout == InspectorNavigationLayout.Bar) {
+                Scaffold(
+                    containerColor = DevConsoleTheme.colors.ground,
+                    bottomBar = {
+                        if (!detailOverlayOpen) {
+                            InspectorNavigationBar(items = workspaceNavItems(selected, state, onDestinationSelected))
+                        }
+                    },
+                ) { padding ->
+                    WorkspaceContent(
+                        selected = selected,
+                        onToggleTheme = {
+                            val next = !darkTheme
+                            store.writeOverride(next)
+                            darkTheme = next
+                        },
+                        onDetailOverlayOpen = { open -> detailOverlayOpen = open },
+                        modifier = Modifier.fillMaxSize().padding(padding),
+                        viewModel = viewModel,
+                    )
                 }
-            },
-        ) { padding ->
-            WorkspaceContent(
-                selected = selected,
-                onToggleTheme = { darkTheme = !darkTheme },
-                onDetailOverlayOpen = { open -> detailOverlayOpen = open },
-                modifier = Modifier.fillMaxSize().padding(padding),
-                viewModel = viewModel,
-            )
+            } else {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    if (!detailOverlayOpen) {
+                        InspectorNavigationRail(items = workspaceNavItems(selected, state, onDestinationSelected))
+                    }
+                    WorkspaceContent(
+                        selected = selected,
+                        onToggleTheme = {
+                            val next = !darkTheme
+                            store.writeOverride(next)
+                            darkTheme = next
+                        },
+                        onDetailOverlayOpen = { open -> detailOverlayOpen = open },
+                        modifier = Modifier.weight(1f),
+                        viewModel = viewModel,
+                    )
+                }
+            }
         }
     }
 }

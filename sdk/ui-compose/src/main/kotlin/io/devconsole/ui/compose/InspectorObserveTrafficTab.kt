@@ -369,56 +369,62 @@ private fun TrafficRow(
 ) {
     val (leadColor, leadBg) = methodTint(transaction.method, colors)
     val mockedSuffix = if (transaction.isMocked) " · mocked" else ""
-    TonalListRow(
-        leadText = methodLeadText(transaction.method),
-        leadColor = leadColor,
-        leadContainerColor = leadBg,
-        title = transaction.path.substringBefore('?'),
-        subtitle = "${transaction.host} · ${formatCaptureClockTime(transaction.startedAtEpochMs)}$mockedSuffix",
-        trailValue = transaction.statusCode?.toString() ?: "ERR",
-        trailValueColor = statusTint(transaction.statusCode, colors),
-        trailSubtitle =
-            when {
-                transaction.statusCode == null -> "timeout"
-                transaction.durationMs != null -> "${transaction.durationMs} ms"
-                else -> null
-            },
-        containerColor =
-            if (isSelected) {
-                colors.putSoft
-            } else if (isFlagged) {
-                colors.signalSoft
-            } else {
-                colors.surface2
-            },
-        leading =
-            if (selectionModeActive) {
-                {
-                    TrafficRowSelectionCheckbox(
-                        checked = isSelected,
-                        onToggle = { actions.onToggleTransactionSelection(transaction.id) },
-                    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        TonalListRow(
+            leadText = methodLeadText(transaction.method),
+            leadColor = leadColor,
+            leadContainerColor = leadBg,
+            title = transaction.path.substringBefore('?'),
+            subtitle = "${transaction.host} · ${formatCaptureClockTime(transaction.startedAtEpochMs)}$mockedSuffix",
+            trailValue = transaction.statusCode?.toString() ?: "ERR",
+            trailValueColor = statusTint(transaction.statusCode, colors),
+            trailSubtitle =
+                when {
+                    transaction.statusCode == null -> "timeout"
+                    transaction.durationMs != null -> "${transaction.durationMs} ms"
+                    else -> null
+                },
+            containerColor =
+                if (isSelected) {
+                    colors.surface2
+                } else if (isFlagged) {
+                    colors.signalSoft
+                } else {
+                    Color.Transparent
+                },
+            leading =
+                if (selectionModeActive) {
+                    {
+                        TrafficRowSelectionCheckbox(
+                            checked = isSelected,
+                            onToggle = { actions.onToggleTransactionSelection(transaction.id) },
+                        )
+                    }
+                } else {
+                    null
+                },
+            // Long-press always toggles (entering selection mode on the first hit, since a non-empty
+            // selection *is* selection mode -- see TrafficTabContent). A plain tap opens the detail
+            // overlay normally, and instead toggles once selection mode is already active, matching the
+            // standard Android "long-press to start selecting, tap to extend" idiom.
+            onClick = {
+                if (selectionModeActive) {
+                    actions.onToggleTransactionSelection(transaction.id)
+                } else {
+                    actions.onOpenNetDetail(transaction.id)
                 }
-            } else {
-                null
             },
-        // Long-press always toggles (entering selection mode on the first hit, since a non-empty
-        // selection *is* selection mode -- see TrafficTabContent). A plain tap opens the detail
-        // overlay normally, and instead toggles once selection mode is already active, matching the
-        // standard Android "long-press to start selecting, tap to extend" idiom.
-        onClick = {
-            if (selectionModeActive) {
-                actions.onToggleTransactionSelection(transaction.id)
-            } else {
-                actions.onOpenNetDetail(transaction.id)
-            }
-        },
-        onLongClick = { actions.onToggleTransactionSelection(transaction.id) },
-        // The leading checkbox only exists once selection mode is active -- only then does it need
-        // to stay out of the row's merged semantics node so TalkBack exposes both the row's
-        // tap/long-press action and the checkbox's toggle independently.
-        mergeDescendants = !selectionModeActive,
-    )
+            onLongClick = { actions.onToggleTransactionSelection(transaction.id) },
+            // The leading checkbox only exists once selection mode is active -- only then does it need
+            // to stay out of the row's merged semantics node so TalkBack exposes both the row's
+            // tap/long-press action and the checkbox's toggle independently.
+            mergeDescendants = !selectionModeActive,
+        )
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(start = 76.dp),
+            color = colors.line
+        )
+    }
 }
 
 /** Circular selection-mode checkbox (mirrors [InspectorChip]'s filled/outline convention for the checked state). */

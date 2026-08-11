@@ -38,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -406,6 +407,7 @@ private fun MockRuleAdvancedFields(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun MockRuleEditorHeader(
     title: String,
@@ -413,36 +415,37 @@ private fun MockRuleEditorHeader(
     onBack: () -> Unit,
     colors: DevConsoleColors,
 ) {
-    val lineColor = colors.line
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .drawBehind {
-                    val strokeWidth = 1.dp.toPx()
-                    val y = size.height - strokeWidth / 2
-                    drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth)
-                }.padding(top = 8.dp, start = 8.dp, end = 8.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        InspectorRoundIconButton(
-            contentDescription = "Cancel",
-            onClick = onBack,
-            icon = {
+    androidx.compose.material3.TopAppBar(
+        title = {
+            Column {
+                Text(
+                    text = title,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                    color = colors.ink,
+                )
+                Text(
+                    text = subtitle,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    color = colors.muted,
+                    maxLines = 1
+                )
+            }
+        },
+        navigationIcon = {
+            androidx.compose.material3.IconButton(onClick = onBack) {
                 InspectorGlyphIcon(
                     InspectorGlyph.ChevronDown,
-                    contentDescription = null,
+                    contentDescription = "Cancel",
                     tint = colors.ink,
                     size = 20.dp,
                     rotationDegrees = 90f,
                 )
-            },
+            }
+        },
+        colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
         )
-        Column(Modifier.weight(1f).padding(start = 4.dp)) {
-            Text(title, color = colors.ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, color = colors.muted, fontSize = 12.5.sp, maxLines = 1)
-        }
-    }
+    )
 }
 
 @Composable

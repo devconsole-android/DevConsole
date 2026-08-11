@@ -303,11 +303,11 @@ private fun MockRulesHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         GroupLabel("Mock rules", modifier = Modifier.weight(1f))
-        InspectorPillButton(
-            label = "New rule",
+        androidx.compose.material3.OutlinedButton(
             onClick = onNewRule,
-            labelFontSize = 13.sp,
-        )
+        ) {
+            Text("New rule", fontSize = 13.sp, color = colors.ink)
+        }
     }
 }
 
@@ -363,11 +363,6 @@ private fun MockRuleRow(
                 Switch(
                     checked = rule.enabled,
                     onCheckedChange = { checked -> onToggle(rule.id, checked) },
-                    colors =
-                        SwitchDefaults.colors(
-                            checkedTrackColor = colors.signal,
-                            checkedThumbColor = colors.signalInk,
-                        ),
                     modifier =
                         Modifier.semantics {
                             contentDescription =

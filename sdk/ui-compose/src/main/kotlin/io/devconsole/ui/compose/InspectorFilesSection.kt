@@ -147,7 +147,7 @@ private fun FileEntryRow(
     actions: FileBrowserActions,
 ) {
     val colors = DevConsoleTheme.colors
-    Column {
+    Column(modifier = Modifier.fillMaxWidth()) {
         TonalListRow(
             leadText = if (entry.isDirectory) "DIR" else "FILE",
             leadColor = if (entry.isDirectory) colors.signal else colors.put,
@@ -156,6 +156,7 @@ private fun FileEntryRow(
             subtitle = if (entry.isDirectory) "directory" else "${entry.sizeBytes} B",
             trailValue = if (entry.isDirectory) "›" else "",
             trailValueColor = colors.muted,
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
             onClick = {
                 if (entry.isDirectory) {
                     actions.onOpenPath(root, entry.relativePath)
@@ -165,6 +166,10 @@ private fun FileEntryRow(
             },
         )
         if (canEdit && !entry.isDirectory) FileEntryActions(root, entry, actions)
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(start = 76.dp),
+            color = colors.line
+        )
     }
 }
 

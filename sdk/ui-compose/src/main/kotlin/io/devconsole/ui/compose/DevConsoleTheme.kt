@@ -9,6 +9,10 @@ package io.devconsole.ui.compose
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -70,96 +74,79 @@ internal data class DevConsoleColors(
     val jsonBraces: List<Color>,
 )
 
-private val DarkSignal = Color(0xFFB7ED65)
-private val DarkError = Color(0xFFFF715E)
-private val DarkWarn = Color(0xFFF0B45C)
-private val DarkPut = Color(0xFF7FD0C9)
-private val DarkMuted = Color(0xFF92968E)
+private val DarkPrimary = Color(0xFF72A7FF)
+private val DarkError = Color(0xFFFF7B72)
+private val DarkWarning = Color(0xFFF2B66D)
+private val DarkSecondary = Color(0xFF72C4CE)
 
 internal val DevConsoleDarkColors =
     DevConsoleColors(
-        ground = Color(0xFF0B0E0D),
-        panel = Color(0xFF151A18),
-        surface2 = Color(0xFF1B231E),
-        surface3 = Color(0xFF212B24),
-        codeBg = Color(0xFF10140F),
-        ink = Color(0xFFE7E5D8),
-        muted = DarkMuted,
-        text3 = Color(0xFF7D8479),
-        line = Color(0xFF344039),
-        borderStrong = Color(0xFF4A5A4F),
-        signal = DarkSignal,
-        signalInk = Color(0xFF0B0E0D),
-        warn = DarkWarn,
+        ground = Color(0xFF111317),
+        panel = Color(0xFF171A20),
+        surface2 = Color(0xFF1D2129),
+        surface3 = Color(0xFF242A34),
+        codeBg = Color(0xFF0D0F13),
+        ink = Color(0xFFECEEF2),
+        muted = Color(0xFF969DA8),
+        text3 = Color(0xFF858D99),
+        line = Color(0xFF343A45),
+        borderStrong = Color(0xFF4A5260),
+        signal = DarkPrimary,
+        signalInk = Color(0xFF0E1624),
+        warn = DarkWarning,
         error = DarkError,
-        errorInk = Color(0xFF0B0E0D), // not #fff: 4.5:1 AA gate fails on #FF715E in dark
-        put = DarkPut,
-        signalSoft = DarkSignal.copy(alpha = 0.11f),
+        errorInk = Color(0xFF0E1624),
+        put = DarkSecondary,
+        signalSoft = DarkPrimary.copy(alpha = 0.13f),
         errorSoft = DarkError.copy(alpha = 0.13f),
-        warnSoft = DarkWarn.copy(alpha = 0.13f),
-        putSoft = DarkPut.copy(alpha = 0.13f),
-        jsonKey = Color(0xFF8FD6C4),
-        jsonString = Color(0xFFCFD8A6),
-        jsonNumber = Color(0xFFF0B45C),
-        jsonBoolean = Color(0xFFB7ED65),
-        jsonNull = Color(0xFF92968E),
-        jsonBraces =
-            listOf(
-                Color(0xFFB7ED65),
-                Color(0xFFF0B45C),
-                Color(0xFF7FD0C9),
-                Color(0xFFE7E5D8),
-                Color(0xFF92968E),
-            ),
+        warnSoft = DarkWarning.copy(alpha = 0.13f),
+        putSoft = DarkSecondary.copy(alpha = 0.13f),
+        jsonKey = Color(0xFF8CB8FF),
+        jsonString = Color(0xFFA9D6B9),
+        jsonNumber = DarkWarning,
+        jsonBoolean = Color(0xFFC7A7FF),
+        jsonNull = Color(0xFF969DA8),
+        jsonBraces = listOf(DarkPrimary, DarkWarning, DarkSecondary, Color(0xFFECEEF2), Color(0xFFC7A7FF)),
     )
 
-// #427526, not the older #4F8F28: the light signal was darkened for WCAG AA (the old hex measures
-// 3.97:1 on white -- see docs/DESIGN_SPEC.md §3.2 "do not lighten back"). Mirrors the web
-// dashboard's light --signal.
-private val LightSignal = Color(0xFF427526)
+private val LightPrimary = Color(0xFF245DA8)
 private val LightError = Color(0xFFB6392A)
 private val LightWarn = Color(0xFF93630A)
 private val LightPut = Color(0xFF1F7A6C)
-private val LightMuted = Color(0xFF5B6459)
 
 internal val DevConsoleLightColors =
     DevConsoleColors(
-        ground = Color(0xFFF3F6EE),
+        ground = Color(0xFFF7F8FA),
         panel = Color(0xFFFFFFFF),
-        surface2 = Color(0xFFEEF2E6),
-        surface3 = Color(0xFFE3E9D7),
-        codeBg = Color(0xFFF6F8F1),
-        ink = Color(0xFF182018),
-        muted = LightMuted,
-        text3 = Color(0xFF656C5F),
-        line = Color(0xFFDDE3D1),
-        borderStrong = Color(0xFFC3CDB4),
-        signal = LightSignal,
+        surface2 = Color(0xFFEEF1F5),
+        surface3 = Color(0xFFE4E8EE),
+        codeBg = Color(0xFFF7F8FA),
+        ink = Color(0xFF1C1F24),
+        muted = Color(0xFF68707B),
+        text3 = Color(0xFF68707B),
+        line = Color(0xFFD5D9E0),
+        borderStrong = Color(0xFFAAB1BC),
+        signal = LightPrimary,
         signalInk = Color(0xFFFFFFFF),
         warn = LightWarn,
         error = LightError,
         errorInk = Color(0xFFFFFFFF),
         put = LightPut,
-        signalSoft = LightSignal.copy(alpha = 0.10f),
+        signalSoft = LightPrimary.copy(alpha = 0.10f),
         errorSoft = LightError.copy(alpha = 0.10f),
         warnSoft = LightWarn.copy(alpha = 0.10f),
         putSoft = LightPut.copy(alpha = 0.10f),
         jsonKey = Color(0xFF1F7A6C),
         jsonString = Color(0xFF4A5B1F),
-        jsonNumber = Color(0xFF93630A),
-        jsonBoolean = LightSignal,
-        jsonNull = Color(0xFF656C5F),
-        // brace-4 deliberately isn't a restatement of --muted (#656C5F) sitting right next to it in
-        // the same tree -- plum, not a tint of any tone already in the ladder above, mirroring the
-        // web palette's own brace-4 pick (dashboard.css) at ~6.9:1 on white / ~6.4:1 on codeBg, both
-        // past the 4.5:1 AA floor the rest of this block is held to (brace-0 tracks [LightSignal]
-        // for exactly that reason).
+        jsonNumber = LightWarn,
+        jsonBoolean = LightPrimary,
+        jsonNull = Color(0xFF68707B),
         jsonBraces =
             listOf(
-                LightSignal,
-                Color(0xFF93630A),
-                Color(0xFF1F7A6C),
-                Color(0xFF182018),
+                LightPrimary,
+                LightWarn,
+                LightPut,
+                Color(0xFF1C1F24),
                 Color(0xFF6A4C93),
             ),
     )
@@ -184,6 +171,21 @@ internal object DevConsoleType {
         TextStyle(fontSize = 40.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.03).em, lineHeight = 40.sp)
 }
 
+internal val DevConsoleShapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(6.dp),
+    medium = RoundedCornerShape(8.dp),
+    large = RoundedCornerShape(12.dp),
+    extraLarge = RoundedCornerShape(16.dp),
+)
+
+internal val DevConsoleTypography = Typography(
+    headlineSmall = TextStyle(fontSize = 27.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.02).em, lineHeight = 31.sp),
+    bodyLarge = TextStyle(fontSize = 14.5.sp),
+    bodySmall = TextStyle(fontSize = 12.5.sp),
+    labelMedium = TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.04.em),
+)
+
 internal val LocalDevConsoleColors = staticCompositionLocalOf { DevConsoleDarkColors }
 
 /** Reads [DevConsoleColors] the same way `MaterialTheme.colorScheme` reads the M3 scheme. */
@@ -199,13 +201,18 @@ internal object DevConsoleTheme {
  */
 @Composable
 internal fun DevConsoleTheme(
-    darkTheme: Boolean = true,
+    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
     val colors = if (darkTheme) DevConsoleDarkColors else DevConsoleLightColors
     val colorScheme = if (darkTheme) darkDevConsoleColorScheme(colors) else lightDevConsoleColorScheme(colors)
     CompositionLocalProvider(LocalDevConsoleColors provides colors) {
-        MaterialTheme(colorScheme = colorScheme, content = content)
+        MaterialTheme(
+            colorScheme = colorScheme,
+            shapes = DevConsoleShapes,
+            typography = DevConsoleTypography,
+            content = content,
+        )
     }
 }
 

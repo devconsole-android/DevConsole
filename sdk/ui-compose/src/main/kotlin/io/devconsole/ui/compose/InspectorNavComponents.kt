@@ -11,15 +11,28 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -49,6 +62,7 @@ internal data class InspectorTopAction(
  * The Android inspector's screen head: a muted 13sp sub-line, trailing 48dp round icon actions,
  * and a large 27sp title below.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun InspectorTopArea(
     subLine: String,
@@ -56,32 +70,32 @@ internal fun InspectorTopArea(
     modifier: Modifier = Modifier,
     actions: List<InspectorTopAction> = emptyList(),
 ) {
-    Column(modifier = modifier.padding(top = 12.dp, start = 8.dp, end = 8.dp, bottom = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier = modifier) {
+        TopAppBar(
+            title = { Text(title) },
+            actions = {
+                actions.forEach { action ->
+                    IconButton(onClick = action.onClick) {
+                        action.icon()
+                    }
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color.Transparent,
+                titleContentColor = DevConsoleTheme.colors.ink,
+                actionIconContentColor = DevConsoleTheme.colors.muted
+            )
+        )
+        if (subLine.isNotEmpty()) {
             Text(
-                subLine,
-                modifier = Modifier.weight(1f).padding(start = 8.dp),
+                text = subLine,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
                 color = DevConsoleTheme.colors.muted,
+                style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
             )
-            actions.forEach { action ->
-                InspectorRoundIconButton(
-                    contentDescription = action.contentDescription,
-                    onClick = action.onClick,
-                    containerColor = action.containerColor,
-                    icon = action.icon,
-                )
-            }
         }
-        Text(
-            title,
-            modifier = Modifier.padding(top = 2.dp, start = 8.dp, end = 8.dp, bottom = 8.dp),
-            color = DevConsoleTheme.colors.ink,
-            style = DevConsoleType.title,
-        )
     }
 }
 
@@ -118,8 +132,6 @@ internal fun InspectorTabRow(
     Row(
         modifier =
             modifier.fillMaxWidth().drawBehind {
-                // Centred on the exact bottom edge clips half the stroke outside the layout's
-                // bounds; inset by half the stroke width so the whole 1dp line stays on-canvas.
                 val strokeWidth = 1.dp.toPx()
                 val y = size.height - strokeWidth / 2
                 drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth)
@@ -134,23 +146,20 @@ internal fun InspectorTabRow(
                         .weight(1f)
                         .height(52.dp)
                         .clickable(onClick = tab.onClick, role = Role.Tab)
-                        // mergeDescendants: without it TalkBack reads the label text as a node
-                        // separate from the tab's own click target.
                         .semantics(mergeDescendants = true) { selected = tab.selected },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     tab.label,
                     color = labelColor,
-                    fontSize = 13.sp,
-                    fontWeight = if (tab.selected) FontWeight.SemiBold else FontWeight.Medium,
+                    style = MaterialTheme.typography.titleSmall,
                 )
                 Box(
                     modifier =
                         Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth(0.72f)
-                            .height(3.dp)
+                            .height(2.dp)
                             .clip(RoundedCornerShape(topStart = 99.dp, topEnd = 99.dp))
                             .background(indicatorColor),
                 )
@@ -170,33 +179,32 @@ internal fun InspectorSearchBar(
     modifier: Modifier = Modifier,
     placeholder: String = "Search",
 ) {
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .heightIn(min = 52.dp)
-                .clip(RoundedCornerShape(50))
-                .background(DevConsoleTheme.colors.surface2)
-                .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        InspectorGlyphIcon(
-            InspectorGlyph.Search,
-            contentDescription = null,
-            tint = DevConsoleTheme.colors.muted,
-            size = 18.dp,
-        )
-        Box(modifier = Modifier.weight(1f)) {
-            InspectorPlainTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                placeholder = placeholder,
-                textColor = DevConsoleTheme.colors.ink,
-                placeholderColor = DevConsoleTheme.colors.text3,
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        placeholder = { Text(placeholder) },
+        leadingIcon = {
+            InspectorGlyphIcon(
+                InspectorGlyph.Search,
+                contentDescription = null,
+                tint = DevConsoleTheme.colors.muted,
+                size = 18.dp,
             )
-        }
-    }
+        },
+        singleLine = true,
+        shape = MaterialTheme.shapes.medium,
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = DevConsoleTheme.colors.surface2,
+            unfocusedContainerColor = DevConsoleTheme.colors.surface2,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            focusedTextColor = DevConsoleTheme.colors.ink,
+            unfocusedTextColor = DevConsoleTheme.colors.ink,
+            focusedPlaceholderColor = DevConsoleTheme.colors.text3,
+            unfocusedPlaceholderColor = DevConsoleTheme.colors.text3,
+        )
+    )
 }
 
 /** Extended FAB: flag icon + bold label. Pair with [EvidenceFabScrollClearance]. */
@@ -239,61 +247,64 @@ internal data class InspectorNavItem(
     val icon: @Composable () -> Unit,
 )
 
-/** 4-destination bottom nav: 64x32dp pill indicator, 12sp labels. */
 @Composable
-internal fun InspectorBottomNav(
+internal fun InspectorNavigationBar(
     items: List<InspectorNavItem>,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .background(DevConsoleTheme.colors.panel)
-                .padding(top = 12.dp, start = 4.dp, end = 4.dp, bottom = 16.dp),
+    NavigationBar(
+        modifier = modifier,
+        containerColor = DevConsoleTheme.colors.panel,
     ) {
-        items.forEach { item -> InspectorNavDestination(item, modifier = Modifier.weight(1f)) }
+        items.forEach { item ->
+            NavigationBarItem(
+                selected = item.selected,
+                onClick = item.onClick,
+                icon = {
+                    CompositionLocalProvider(LocalContentColor provides if (item.selected) DevConsoleTheme.colors.signalInk else DevConsoleTheme.colors.muted) {
+                        item.icon()
+                    }
+                },
+                label = { Text(item.label) },
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = DevConsoleTheme.colors.signal,
+                    selectedIconColor = DevConsoleTheme.colors.signalInk,
+                    selectedTextColor = DevConsoleTheme.colors.ink,
+                    unselectedIconColor = DevConsoleTheme.colors.muted,
+                    unselectedTextColor = DevConsoleTheme.colors.muted,
+                )
+            )
+        }
     }
 }
 
 @Composable
-private fun InspectorNavDestination(
-    item: InspectorNavItem,
+internal fun InspectorNavigationRail(
+    items: List<InspectorNavItem>,
     modifier: Modifier = Modifier,
 ) {
-    val colors = DevConsoleTheme.colors
-    val pillColor = if (item.selected) colors.signal else Color.Transparent
-    val labelColor = if (item.selected) colors.ink else colors.muted
-    val iconColor = if (item.selected) colors.signalInk else colors.muted
-    Column(
-        modifier =
-            modifier
-                .heightIn(min = 56.dp)
-                .clickable(onClick = item.onClick, role = Role.Tab)
-                // mergeDescendants: without it TalkBack reads the icon and label text as nodes
-                // separate from the destination's own click target. See InspectorTabRow above
-                // for the same fix.
-                .semantics(mergeDescendants = true) { selected = item.selected }
-                .padding(2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+    NavigationRail(
+        modifier = modifier,
+        containerColor = DevConsoleTheme.colors.panel,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .width(64.dp)
-                    .height(32.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(pillColor),
-            contentAlignment = Alignment.Center,
-        ) {
-            CompositionLocalProvider(LocalContentColor provides iconColor) { item.icon() }
+        items.forEach { item ->
+            NavigationRailItem(
+                selected = item.selected,
+                onClick = item.onClick,
+                icon = {
+                    CompositionLocalProvider(LocalContentColor provides if (item.selected) DevConsoleTheme.colors.signalInk else DevConsoleTheme.colors.muted) {
+                        item.icon()
+                    }
+                },
+                label = { Text(item.label) },
+                colors = NavigationRailItemDefaults.colors(
+                    indicatorColor = DevConsoleTheme.colors.signal,
+                    selectedIconColor = DevConsoleTheme.colors.signalInk,
+                    selectedTextColor = DevConsoleTheme.colors.ink,
+                    unselectedIconColor = DevConsoleTheme.colors.muted,
+                    unselectedTextColor = DevConsoleTheme.colors.muted,
+                )
+            )
         }
-        Text(
-            item.label,
-            color = labelColor,
-            fontSize = 12.sp,
-            fontWeight = if (item.selected) FontWeight.SemiBold else FontWeight.Medium,
-        )
     }
 }

@@ -11,6 +11,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
@@ -117,15 +121,21 @@ private fun CrashRow(
     val (leadColor, leadBg) = logLevelTint(crash.kind, colors)
     val crumbCount = crash.breadcrumbs.size
     val crumbNoun = if (crumbCount == 1) "breadcrumb" else "breadcrumbs"
-    TonalListRow(
-        leadText = logLevelShortLabel(crash.kind),
-        leadColor = leadColor,
-        leadContainerColor = leadBg,
-        title = if (crash.summary.length > 40) crash.summary.take(40) + "…" else crash.summary,
-        subtitle = "${crash.thread.ifBlank { "unknown thread" }} · $crumbCount $crumbNoun",
-        trailValue = formatCaptureClockTime(crash.timestampEpochMs),
-        trailValueColor = colors.muted,
-        containerColor = if (isFlagged) colors.signalSoft else colors.surface2,
-        onClick = onClick,
-    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        TonalListRow(
+            leadText = logLevelShortLabel(crash.kind),
+            leadColor = leadColor,
+            leadContainerColor = leadBg,
+            title = if (crash.summary.length > 40) crash.summary.take(40) + "…" else crash.summary,
+            subtitle = "${crash.thread.ifBlank { "unknown thread" }} · $crumbCount $crumbNoun",
+            trailValue = formatCaptureClockTime(crash.timestampEpochMs),
+            trailValueColor = colors.muted,
+            containerColor = if (isFlagged) colors.signalSoft else Color.Transparent,
+            onClick = onClick,
+        )
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(start = 76.dp),
+            color = colors.line
+        )
+    }
 }

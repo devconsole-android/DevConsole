@@ -50,13 +50,11 @@ internal fun GroupLabel(
     text: String,
     modifier: Modifier = Modifier,
 ) {
-    // The 8dp horizontal inset lines this up with the list rows below it, which the bare bottom
-    // padding was missing.
     Text(
-        text.uppercase(),
-        modifier = modifier.padding(start = 8.dp, top = 2.dp, end = 8.dp, bottom = 8.dp),
+        text,
+        modifier = modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp),
         color = DevConsoleTheme.colors.text3,
-        style = DevConsoleType.groupLabel,
+        style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
     )
 }
 
@@ -103,7 +101,7 @@ internal fun TonalListRow(
     modifier: Modifier = Modifier,
     trailValueColor: Color = DevConsoleTheme.colors.ink,
     trailSubtitle: String? = null,
-    containerColor: Color = DevConsoleTheme.colors.surface2,
+    containerColor: Color = Color.Transparent,
     /** Real composable trailing content (e.g. [TonalRowExpandChevron]) rendered after [trailValue]'s column. */
     trailContent: (@Composable () -> Unit)? = null,
     /** Optional composable rendered before the lead badge -- e.g. the traffic tab's selection checkbox. */
@@ -121,12 +119,10 @@ internal fun TonalListRow(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp)
-                .heightIn(min = 74.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .heightIn(min = 48.dp)
                 .background(containerColor)
                 .tonalRowClickable(onClick, onLongClick, mergeDescendants)
-                .padding(start = 12.dp, top = 12.dp, end = 16.dp, bottom = 12.dp),
+                .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -249,7 +245,7 @@ internal fun FilterChipRow(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         chips.forEach { chip -> InspectorChip(chip, onClick = { onChipClick(chip) }) }
@@ -261,37 +257,29 @@ private fun InspectorChip(
     chip: InspectorFilterChip,
     onClick: () -> Unit,
 ) {
-    val colors = DevConsoleTheme.colors
-    val borderColor = if (chip.selected) colors.signal else colors.line
-    val containerColor = if (chip.selected) colors.signal else Color.Transparent
-    val contentColor = if (chip.selected) colors.signalInk else colors.ink
-    Row(
-        modifier =
-            Modifier
-                .minimumInteractiveComponentSize()
-                .height(44.dp)
-                .border(1.dp, borderColor, RoundedCornerShape(12.dp))
-                .clip(RoundedCornerShape(12.dp))
-                .background(containerColor)
-                // toggleable (not a bare clickable+Role.Checkbox) so TalkBack announces the real checked state.
-                .toggleable(value = chip.selected, onValueChange = { onClick() }, role = Role.Checkbox)
-                .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (chip.selected) {
-            InspectorGlyphIcon(InspectorGlyph.Check, contentDescription = null, tint = contentColor, size = 15.dp)
-        }
-        Text(
-            chip.label,
-            color = contentColor,
-            fontSize = 13.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+    androidx.compose.material3.FilterChip(
+        selected = chip.selected,
+        onClick = onClick,
+        label = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(chip.label)
+                if (chip.count != null) {
+                    Text(chip.count)
+                }
+            }
+        },
+        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+            containerColor = Color.Transparent,
+            labelColor = DevConsoleTheme.colors.ink,
+            selectedContainerColor = DevConsoleTheme.colors.signal.copy(alpha = 0.12f),
+            selectedLabelColor = DevConsoleTheme.colors.signal,
+            selectedLeadingIconColor = DevConsoleTheme.colors.signal,
+        ),
+        border = androidx.compose.material3.FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = chip.selected,
+            borderColor = DevConsoleTheme.colors.line,
+            selectedBorderColor = DevConsoleTheme.colors.signal,
         )
-        if (chip.count != null) {
-            Text(chip.count, color = if (chip.selected) contentColor else colors.text3, fontSize = 12.sp)
-        }
-    }
+    )
 }

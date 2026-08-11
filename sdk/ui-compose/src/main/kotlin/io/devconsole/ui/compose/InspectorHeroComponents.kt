@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.sp
  * A tinted verdict card with a big value, an optional trailing icon OR a collapse chevron (never
  * both -- the Android state always ends up collapsible), and an optional full-width pill CTA.
  */
-@Suppress("LongParameterList") // Every field varies per screen.
+@Suppress("LongParameterList")
 @Composable
 internal fun HeroCard(
     label: String,
@@ -53,7 +53,6 @@ internal fun HeroCard(
     iconContainerColor: Color = DevConsoleTheme.colors.panel,
     onCollapse: (() -> Unit)? = null,
     collapseContentDescription: String = "Collapse this summary to one line",
-    /** More's uptime clock reads best in mono digits; every other screen leaves this null. */
     valueFontFamily: FontFamily? = null,
     ctaLabel: String? = null,
     ctaIcon: (@Composable () -> Unit)? = null,
@@ -61,50 +60,101 @@ internal fun HeroCard(
     ctaContentColor: Color = DevConsoleTheme.colors.signalInk,
     onCtaClick: (() -> Unit)? = null,
 ) {
-    Surface(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), color = containerColor) {
-        Column(modifier = Modifier.padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 16.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(label.uppercase(), color = labelColor, style = DevConsoleType.groupLabel)
-                    Row(
-                        modifier = Modifier.padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text(
-                            value,
-                            modifier = Modifier.alignByBaseline(),
-                            color = valueColor,
-                            style = DevConsoleType.heroValue.copy(fontFamily = valueFontFamily),
-                        )
-                        if (valueSuffix != null) {
-                            Text(
-                                valueSuffix,
-                                modifier = Modifier.alignByBaseline(),
-                                color = DevConsoleTheme.colors.muted,
-                                fontSize = 14.sp,
-                            )
-                        }
-                    }
+    SummaryStrip(
+        label = label,
+        value = value,
+        subtitle = subtitle,
+        modifier = modifier,
+        valueSuffix = valueSuffix,
+        labelColor = labelColor,
+        valueColor = valueColor,
+        onCollapse = onCollapse,
+        collapseContentDescription = collapseContentDescription,
+        valueFontFamily = valueFontFamily,
+        ctaLabel = ctaLabel,
+        ctaIcon = ctaIcon,
+        ctaContainerColor = ctaContainerColor,
+        ctaContentColor = ctaContentColor,
+        onCtaClick = onCtaClick,
+    )
+}
+
+@Composable
+internal fun SummaryStrip(
+    label: String,
+    value: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    valueSuffix: String? = null,
+    labelColor: Color = DevConsoleTheme.colors.text3,
+    valueColor: Color = DevConsoleTheme.colors.ink,
+    onCollapse: (() -> Unit)? = null,
+    collapseContentDescription: String = "Collapse this summary to one line",
+    valueFontFamily: FontFamily? = null,
+    ctaLabel: String? = null,
+    ctaIcon: (@Composable () -> Unit)? = null,
+    ctaContainerColor: Color = DevConsoleTheme.colors.signal,
+    ctaContentColor: Color = DevConsoleTheme.colors.signalInk,
+    onCtaClick: (() -> Unit)? = null,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        androidx.compose.material3.HorizontalDivider(color = DevConsoleTheme.colors.line)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(label, color = labelColor, style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
                     Text(
-                        subtitle,
-                        modifier = Modifier.padding(top = 8.dp),
-                        color = DevConsoleTheme.colors.muted,
-                        fontSize = 13.5.sp,
+                        value,
+                        color = valueColor,
+                        style = androidx.compose.material3.MaterialTheme.typography.headlineSmall.copy(fontFamily = valueFontFamily),
                     )
+                    if (valueSuffix != null) {
+                        Text(
+                            valueSuffix,
+                            color = DevConsoleTheme.colors.muted,
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                    }
                 }
-                HeroTrailing(icon, iconContainerColor, onCollapse, collapseContentDescription, labelColor)
+                Text(subtitle, color = DevConsoleTheme.colors.muted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
-            if (ctaLabel != null && onCtaClick != null) {
-                InspectorPillButton(
-                    label = ctaLabel,
-                    onClick = onCtaClick,
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                    containerColor = ctaContainerColor,
-                    contentColor = ctaContentColor,
-                    icon = ctaIcon,
+            if (onCollapse != null) {
+                InspectorRoundIconButton(
+                    contentDescription = collapseContentDescription,
+                    onClick = onCollapse,
+                    size = 40.dp,
+                    containerColor = Color.Transparent,
+                    icon = {
+                        InspectorGlyphIcon(
+                            InspectorGlyph.ChevronDown,
+                            contentDescription = null,
+                            tint = labelColor,
+                            size = 18.dp,
+                            rotationDegrees = 180f,
+                        )
+                    },
                 )
             }
         }
+        if (ctaLabel != null && onCtaClick != null) {
+            InspectorPillButton(
+                label = ctaLabel,
+                onClick = onCtaClick,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp),
+                containerColor = ctaContainerColor,
+                contentColor = ctaContentColor,
+                icon = ctaIcon,
+            )
+        }
+        androidx.compose.material3.HorizontalDivider(color = DevConsoleTheme.colors.line)
     }
 }
 
@@ -161,9 +211,7 @@ internal fun HeroBar(
         modifier =
             modifier
                 .fillMaxWidth()
-                .heightIn(min = 56.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(containerColor)
+                .heightIn(min = 48.dp)
                 .clickable(onClick = onExpand, onClickLabel = expandContentDescription, role = Role.Button)
                 .semantics(mergeDescendants = true) {}
                 .padding(horizontal = 16.dp),
@@ -174,15 +222,14 @@ internal fun HeroBar(
             value,
             color = valueColor,
             fontFamily = FontFamily.Monospace,
-            fontSize = 19.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
         )
         Text(
             label,
             modifier = Modifier.weight(1f),
             color = labelColor,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

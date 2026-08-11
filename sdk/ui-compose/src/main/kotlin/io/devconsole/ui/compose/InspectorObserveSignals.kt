@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
@@ -143,18 +147,24 @@ private fun SocketFrameRow(
     // An MQTT frame's topic is what an operator scanning this list actually wants to see -- the
     // socket's own URL is just the broker address, identical across every message on the connection.
     val title = frame.topic ?: path
-    TonalListRow(
-        leadText = if (received) "↓" else "↑",
-        leadColor = leadColor,
-        leadContainerColor = leadBg,
-        title = title,
-        subtitle = "$protocolBadge · ${frame.frameType} · ${frame.preview.orEmpty().take(34)}",
-        trailValue = socketFrameSizeLabel(frame),
-        trailValueColor = colors.ink,
-        trailSubtitle = formatCaptureClockTime(frame.timestampEpochMs),
-        containerColor = colors.surface2,
-        onClick = onClick,
-    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        TonalListRow(
+            leadText = if (received) "↓" else "↑",
+            leadColor = leadColor,
+            leadContainerColor = leadBg,
+            title = title,
+            subtitle = "$protocolBadge · ${frame.frameType} · ${frame.preview.orEmpty().take(34)}",
+            trailValue = socketFrameSizeLabel(frame),
+            trailValueColor = colors.ink,
+            trailSubtitle = formatCaptureClockTime(frame.timestampEpochMs),
+            containerColor = Color.Transparent,
+            onClick = onClick,
+        )
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(start = 76.dp),
+            color = colors.line
+        )
+    }
 }
 
 /** "MQTT" for an MQTT-protocol connection, "WS" otherwise -- shown as a prefix in [SocketFrameRow]'s subtitle. */
@@ -275,18 +285,24 @@ private fun PushRow(
     val leadColor = if (push.simulated) colors.warn else colors.signal
     val leadBg = if (push.simulated) colors.warnSoft else colors.signalSoft
     val title = push.dataPreview["title"] ?: push.messageId ?: "Push notification"
-    TonalListRow(
-        leadText = push.provider.uppercase(Locale.US),
-        leadColor = leadColor,
-        leadContainerColor = leadBg,
-        title = title,
-        subtitle = "${push.messageId ?: "no id"} · ${if (push.simulated) "simulated" else "captured"}",
-        trailValue = pushLifecycleShortLabel(push.lifecycle),
-        trailValueColor = colors.muted,
-        trailSubtitle = formatCaptureClockTimeShort(push.receivedAtEpochMs),
-        containerColor = colors.surface2,
-        onClick = onClick,
-    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        TonalListRow(
+            leadText = push.provider.uppercase(Locale.US),
+            leadColor = leadColor,
+            leadContainerColor = leadBg,
+            title = title,
+            subtitle = "${push.messageId ?: "no id"} · ${if (push.simulated) "simulated" else "captured"}",
+            trailValue = pushLifecycleShortLabel(push.lifecycle),
+            trailValueColor = colors.muted,
+            trailSubtitle = formatCaptureClockTimeShort(push.receivedAtEpochMs),
+            containerColor = Color.Transparent,
+            onClick = onClick,
+        )
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(start = 76.dp),
+            color = colors.line
+        )
+    }
 }
 
 /** Logs tab: warnings+errors hero + a newest-first event list. */
@@ -390,17 +406,23 @@ private fun LogRow(
     onClick: () -> Unit,
 ) {
     val (leadColor, leadBg) = logLevelTint(log.kind, colors)
-    TonalListRow(
-        leadText = logLevelShortLabel(log.kind),
-        leadColor = leadColor,
-        leadContainerColor = leadBg,
-        title = if (log.summary.length > 40) log.summary.take(40) + "…" else log.summary,
-        subtitle = "${log.source} · ${log.kind}",
-        trailValue = formatCaptureClockTime(log.timestampEpochMs),
-        trailValueColor = colors.muted,
-        containerColor = colors.surface2,
-        onClick = onClick,
-    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        TonalListRow(
+            leadText = logLevelShortLabel(log.kind),
+            leadColor = leadColor,
+            leadContainerColor = leadBg,
+            title = if (log.summary.length > 40) log.summary.take(40) + "…" else log.summary,
+            subtitle = "${log.source} · ${log.kind}",
+            trailValue = formatCaptureClockTime(log.timestampEpochMs),
+            trailValueColor = colors.muted,
+            containerColor = Color.Transparent,
+            onClick = onClick,
+        )
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(start = 76.dp),
+            color = colors.line
+        )
+    }
 }
 
 @Composable
