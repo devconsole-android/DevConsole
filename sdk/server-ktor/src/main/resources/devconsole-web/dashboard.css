@@ -1,5 +1,5 @@
 /* ============================================================
-   DevConsole dashboard — terminal-green instrument panel.
+   DevConsole dashboard — graphite/cobalt diagnostic workbench.
    Dual theme via [data-theme] on <html>; dark is the default.
    ============================================================ */
 
@@ -7,82 +7,78 @@
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* Dark terminal-green (default) */
-  --ground: #0b0e0d;
-  --panel: #151a18;
-  --surface-2: #1b231e;
-  --surface-3: #212b24;
-  --code-bg: #10140f;
-  --ink: #e7e5d8;
-  --muted: #92968e;
-  --text-3: #7d8479;
-  --line: #344039;
-  --border-strong: #4a5a4f;
-  --signal: #b7ed65;
-  --signal-ink: #0b0e0d;
-  --warn: #f0b45c;
-  --error: #ff715e;
-  --put: #7fd0c9;
+  /* Dark graphite/cobalt (default) */
+  --ground: #111317;
+  --panel: #171a20;
+  --surface-2: #1d2129;
+  --surface-3: #242a34;
+  --code-bg: #0d0f13;
+  --ink: #eceef2;
+  --muted: #969da8;
+  --text-3: #858d99;
+  --line: #343a45;
+  --border-strong: #4a5260;
+  --signal: #72a7ff;
+  --signal-ink: #0e1624;
+  --warn: #f2b66d;
+  --error: #ff7b72;
+  --put: #72c4ce;
+  --success: #7bc9a5;
 
-  --signal-soft: rgba(183, 237, 101, 0.11);
-  --error-soft: rgba(255, 113, 94, 0.13);
-  --warn-soft: rgba(240, 180, 92, 0.13);
-  --put-soft: rgba(127, 208, 201, 0.13);
+  --signal-soft: rgba(114, 167, 255, 0.13);
+  --error-soft: rgba(255, 123, 114, 0.13);
+  --warn-soft: rgba(242, 182, 109, 0.13);
+  --put-soft: rgba(114, 196, 206, 0.13);
+  --success-soft: rgba(123, 201, 165, 0.13);
 
-  /* One Material elevation folded into a local token (constraints #2) — same in both themes. */
-  --elev-3: 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --elev-3: 0 8px 24px rgba(0, 0, 0, 0.28);
 
-  --json-key: #8fd6c4;
-  --json-string: #cfd8a6;
-  --json-number: #f0b45c;
-  --json-boolean: #b7ed65;
-  --json-null: #92968e;
-  --json-brace-0: #b7ed65;
-  --json-brace-1: #f0b45c;
-  --json-brace-2: #7fd0c9;
-  --json-brace-3: #e7e5d8;
-  --json-brace-4: #92968e;
+  --json-key: #8cb8ff;
+  --json-string: #a9d6b9;
+  --json-number: var(--warn);
+  --json-boolean: #c7a7ff;
+  --json-null: var(--muted);
+  --json-brace-0: var(--signal);
+  --json-brace-1: var(--warn);
+  --json-brace-2: var(--put);
+  --json-brace-3: var(--ink);
+  --json-brace-4: #c7a7ff;
 }
 
 :root[data-theme="light"] {
-  --ground: #f3f6ee;
+  --ground: #f7f8fa;
   --panel: #ffffff;
-  --surface-2: #eef2e6;
-  --surface-3: #e3e9d7;
-  --code-bg: #f6f8f1;
-  --ink: #182018;
-  --muted: #5b6459;
-  --text-3: #656c5f;
-  --line: #dde3d1;
-  --border-strong: #c3cdb4;
-  --signal: #427526;
+  --surface-2: #eef1f5;
+  --surface-3: #e4e8ee;
+  --code-bg: #f2f4f7;
+  --ink: #1c1f24;
+  --muted: #68707b;
+  --text-3: #5f6874;
+  --line: #d5d9e0;
+  --border-strong: #aab1bc;
+  --signal: #245da8;
   --signal-ink: #ffffff;
-  --warn: #93630a;
-  --error: #b6392a;
-  --put: #1f7a6c;
+  --warn: #8a5a12;
+  --error: #b33a31;
+  --put: #1e6d76;
+  --success: #2f7255;
 
-  --signal-soft: rgba(66, 117, 38, 0.1);
-  --error-soft: rgba(182, 57, 42, 0.1);
-  --warn-soft: rgba(147, 99, 10, 0.1);
-  --put-soft: rgba(31, 122, 108, 0.1);
+  --signal-soft: rgba(36, 93, 168, 0.10);
+  --error-soft: rgba(179, 58, 49, 0.10);
+  --warn-soft: rgba(138, 90, 18, 0.10);
+  --put-soft: rgba(30, 109, 118, 0.10);
+  --success-soft: rgba(47, 114, 85, 0.10);
 
-  --json-key: #1f7a6c;
-  --json-string: #4a5b1f;
-  --json-number: #93630a;
-  /* Boolean + brace-0 track the light --signal, which was darkened #4f8f28 -> #427526 for AA
-     (the old hex measures 3.97:1 on #ffffff / 3.71:1 on --code-bg -- see §3.2's "do not lighten
-     back" note in docs/DESIGN_SPEC.md). */
-  --json-boolean: #427526;
-  --json-null: #656c5f;
-  --json-brace-0: #427526;
-  --json-brace-1: #93630a;
-  --json-brace-2: #1f7a6c;
-  --json-brace-3: #182018;
-  /* --json-brace-4 was the missing step in the light ladder and fell through to the DARK theme's
-     value (#92968e, ~2.9:1 on white -- fails AA). Plum, not a tint of any tone already in the
-     ladder above: ~6.9:1 on #ffffff and ~6.4:1 on --code-bg (#f6f8f1), both comfortably past the
-     4.5:1 AA floor the rest of this block is held to. See docs/DESIGN_SPEC.md §3.3. */
-  --json-brace-4: #6a4c93;
+  --json-key: var(--signal);
+  --json-string: var(--success);
+  --json-number: var(--warn);
+  --json-boolean: #6a46a5;
+  --json-null: var(--muted);
+  --json-brace-0: var(--signal);
+  --json-brace-1: var(--warn);
+  --json-brace-2: var(--put);
+  --json-brace-3: var(--ink);
+  --json-brace-4: #6a46a5;
 }
 
 * { box-sizing: border-box; }
@@ -141,7 +137,6 @@ body {
   font-family: var(--font-ui);
   font-size: var(--d-body-font);
   line-height: var(--d-body-lh);
-  letter-spacing: 0.005em;
   font-feature-settings: "tnum";
   -webkit-font-smoothing: antialiased;
 }
@@ -224,7 +219,7 @@ div::-webkit-scrollbar-track, nav::-webkit-scrollbar-track { background: transpa
    dot so it reads as distinct from the ordinary "reconnecting" warn-pulse below. */
 .session-pill .dot.expired { background: var(--error); animation: none; }
 .session-pill .label {
-  min-width: 0; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  min-width: 0; font-size: 10.5px; font-weight: 600;
   color: var(--muted); overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -297,7 +292,7 @@ body.rail-hidden .rail { display: none; }
 .rail-group { margin-top: 16px; }
 .rail-group-label { display: flex; align-items: center; gap: 8px; padding: 0 8px 8px; }
 .rail-group-label .text {
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-3);
+  font-size: 10.5px; font-weight: 700; color: var(--text-3);
   white-space: nowrap;
 }
 .rail-group-label .rule { flex: 1; height: 1px; background: var(--line); }
@@ -328,7 +323,7 @@ body.rail-hidden .rail { display: none; }
 
 .rail-shortcuts { margin-top: 24px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 8px; }
 .rail-shortcuts-title {
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3);
+  font-size: 10.5px; font-weight: 700; color: var(--text-3);
   margin-bottom: 4px;
 }
 .rail-shortcuts-grid { display: grid; gap: 4px; font-size: 11px; color: var(--muted); }
@@ -356,7 +351,7 @@ main { flex: 1 1 0%; min-width: 0; min-height: 0; display: flex; flex-direction:
    built around a filled .split-shell below -- up to that content height instead of staying pinned
    to main's actual available space. */
 .main-inner { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px 24px 0; max-width: 1560px; width: 100%; margin: 0 auto; }
-.view { display: none; animation: fadein 0.18s ease; }
+.view { display: none; animation: fadein 0.15s ease; }
 .view.active { display: block; padding-bottom: 20px; }
 /* The five views built around a .split-shell (Timeline/Network/Sockets/Push/Crashes) need a real,
    filled height instead of every other view's auto/content height -- flex: 1 1 0% (grow to claim
@@ -378,7 +373,7 @@ main { flex: 1 1 0%; min-width: 0; min-height: 0; display: flex; flex-direction:
   flex: 1 1 0%;
   min-height: 0;
 }
-@keyframes fadein { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 
 /* View head */
 .view-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding-bottom: 12px; }
@@ -395,7 +390,7 @@ main { flex: 1 1 0%; min-width: 0; min-height: 0; display: flex; flex-direction:
 /* ---------------- Toolbar / inputs ---------------- */
 .toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 label.field { display: grid; gap: 4px; color: var(--muted); font-size: 11.5px; }
-label.field > span { text-transform: uppercase; letter-spacing: 0.07em; font-size: 10.5px; font-weight: 600; color: var(--text-3); }
+label.field > span { font-size: 10.5px; font-weight: 600; color: var(--text-3); }
 
 input, select, textarea, button {
   min-width: 0; color: var(--ink); background: var(--code-bg);
@@ -438,7 +433,7 @@ button.ghost { background: transparent; }
 
 /* Search field with a leading icon */
 .search-wrap { position: relative; display: flex; flex: 1 1 220px; min-width: 180px; }
-/* Uppercase label stacked over the search input, sharing the toolbar's flex-end baseline. */
+/* Label stacked over the search input, sharing the toolbar's flex-end baseline. */
 .search-field { flex: 1 1 260px; min-width: 200px; }
 .search-field .search-wrap { flex: 1 1 auto; min-width: 0; width: 100%; }
 .search-wrap .search-lead { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--text-3); }
@@ -510,7 +505,7 @@ button.ghost { background: transparent; }
 
 /* Applied-filters strip — scaffolding for result-count chips with a remove (×) action. */
 .applied-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
-.applied-filters-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+.applied-filters-label { font-size: 10.5px; font-weight: 600; color: var(--text-3); }
 .applied-filter {
   display: flex; align-items: center; gap: 8px; height: 24px; padding: 0 4px 0 8px;
   border: 1px solid var(--signal); border-radius: 99px; background: var(--signal-soft); color: var(--ink); cursor: pointer;
@@ -548,7 +543,7 @@ button.ghost { background: transparent; }
 /* Metrics strip — scaffolding for per-view summary rows. */
 .metrics-strip { display: flex; flex-wrap: wrap; flex-shrink: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
 .metric { flex: 1 1 130px; min-width: 130px; padding: 8px 16px 12px; border-left: 1px solid var(--line); }
-.metric-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metric-label { font-size: 10.5px; font-weight: 600; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .metric-value-row { display: flex; align-items: baseline; gap: 8px; margin-top: 4px; }
 .metric-value { font-family: var(--font-mono); font-size: 19px; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .metric-sub { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -576,7 +571,7 @@ button.ghost { background: transparent; }
 .card-shell { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .card-shell-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .card-shell-head .ic { width: 14px; height: 14px; }
-.card-shell-title { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; flex: 1; }
+.card-shell-title { margin: 0; font-size: 11px; font-weight: 700; flex: 1; }
 .card-shell-badge { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--text-3); }
 .card-shell-body { flex: 1; display: flex; flex-direction: column; padding: 12px var(--d-card-pad) var(--d-card-pad); }
 
@@ -591,7 +586,7 @@ button.ghost { background: transparent; }
 details.adv-filters { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; margin-bottom: 12px; }
 details.adv-filters > summary {
   list-style: none; cursor: pointer; padding: 10px 14px; display: flex; align-items: center; gap: 8px;
-  color: var(--muted); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); font-size: 11.5px; font-weight: 700;
 }
 details.adv-filters > summary::-webkit-details-marker { display: none; }
 details.adv-filters > summary .ic { color: var(--text-3); }
@@ -693,7 +688,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
   display: flex; align-items: center; gap: 12px; padding: 0 12px; height: 30px; flex: 0 0 30px;
   border-bottom: 1px solid var(--line); background: var(--surface-2);
 }
-.list-head span { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
+.list-head span { font-size: 10px; font-weight: 700; color: var(--text-3); white-space: nowrap; }
 /* overflow-anchor: none -- Network/Timeline/Sockets/Push (E4) rebuild this element's content on
    every scroll-driven virtualizer repaint; the browser's automatic scroll anchoring otherwise
    fights that rebuild (it tries to hold some now-removed node's visual position), producing a
@@ -860,7 +855,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .detail-expand.active { border-color: var(--signal); background: var(--signal-soft); color: var(--signal); }
 .detail-facts { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; }
 .detail-fact { display: flex; align-items: baseline; gap: 8px; font-size: 11.5px; }
-.detail-fact-k { font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+.detail-fact-k { font-size: 10px; font-weight: 600; color: var(--text-3); }
 .detail-fact-v { font-family: var(--font-mono); color: var(--ink); }
 /* Clickable fact (M2: "mock rule: <id>" linking to the Mocks view) — same layout as a plain
    .detail-fact but as a button, so it needs its own background/border/padding reset. */
@@ -868,7 +863,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .detail-fact-link:hover .detail-fact-v { color: var(--signal); text-decoration: underline; }
 
 /* Brief flash on a mock rule row when linked to from the Network detail pane's "mock rule: <id>"
-   fact — respects prefers-reduced-motion via the blanket `animation: none !important` below. */
+   fact — respects prefers-reduced-motion via the duration override below. */
 @keyframes dcRowFlash { from { background: var(--signal-soft); } to { background: transparent; } }
 .row-flash { animation: dcRowFlash 900ms ease; }
 .detail-actions-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
@@ -897,7 +892,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .sbs-pane { min-width: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
 .sbs-pane-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
 .sbs-pane-dot { width: 6px; height: 6px; border-radius: 99px; flex: 0 0 auto; }
-.sbs-pane-side { font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
+.sbs-pane-side { font-size: 10px; font-weight: 700; }
 /* Meta absorbs the squeeze (ellipsis) so the action buttons never clip at the pane edge. */
 .sbs-pane-meta { font-family: var(--font-mono); font-size: 10.5px; white-space: nowrap; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right; }
 .sbs-pane-action { display: flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; }
@@ -909,7 +904,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .detail-group-toggle { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; background: transparent; border: none; padding: 0; color: var(--text-3); }
 .detail-group-toggle .ic { width: 10px; height: 10px; transition: transform 0.12s ease; }
 .detail-group-toggle[aria-expanded="false"] .ic { transform: rotate(-90deg); }
-.detail-group-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.detail-group-label { font-size: 10px; font-weight: 700; }
 .detail-group-rule { flex: 1; min-width: 8px; height: 1px; background: var(--line); }
 .detail-group-meta { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); white-space: nowrap; }
 .detail-group-copy { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--muted); }
@@ -964,7 +959,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 
 /* Note textarea */
 .detail-note { display: grid; gap: 4px; margin-top: 16px; }
-.detail-note > span { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+.detail-note > span { font-size: 10.5px; font-weight: 600; color: var(--text-3); }
 .detail-note textarea { width: 100%; padding: 8px 12px; font-size: 12px; resize: vertical; }
 
 /* Redaction footnote */
@@ -1070,7 +1065,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 
 .card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .card-metric { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
-.card-metric-label { font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-metric-label { font-size: 10px; font-weight: 600; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-metric-val { font-family: var(--font-mono); font-size: 17px; margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .card-toggles { display: grid; gap: 1px; margin-bottom: 12px; }
@@ -1082,7 +1077,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 
 .card-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; }
 .card-table { border-collapse: collapse; width: 100%; min-width: 100%; }
-.card-table th { text-align: left; padding: 8px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
+.card-table th { text-align: left; padding: 8px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line); font-size: 10px; font-weight: 700; color: var(--text-3); white-space: nowrap; }
 .card-table td { padding: 8px 12px; border-bottom: 1px solid var(--line); font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
 .card-table tr:last-child td { border-bottom: none; }
 
@@ -1133,11 +1128,11 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
    WebSockets' Level/Source/Status/Method/Frame type/Direction/View). */
 .toolbar-group { display: flex; align-items: center; gap: 8px; }
 .toolbar-group-stack { display: grid; gap: 5px; }
-.toolbar-group-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+.toolbar-group-label { font-size: 10.5px; font-weight: 600; color: var(--text-3); }
 /* Pushes trailing toolbar controls (e.g. "Bookmarked only") to the right edge. */
 .toolbar-spacer { flex: 1; }
 
-.block-title { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); margin: 16px 0 6px; }
+.block-title { font-size: 10px; font-weight: 700; color: var(--text-3); margin: 16px 0 6px; }
 .card-field-help { font-size: 11px; color: var(--text-3); }
 
 /* ---------------- JSON tree (Composer's execute/import result, and — via the shared
@@ -1218,7 +1213,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 }
 @keyframes modalpop { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-.modal-title { font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+.modal-title { font-weight: 700; font-size: 12px; display: flex; align-items: center; gap: 8px; }
 .modal-title .ic { color: var(--signal); }
 .modal-close { border: 1px solid var(--line); border-radius: 8px; background: transparent; font-size: 20px; line-height: 1; color: var(--text-3); padding: 0 4px; }
 .modal-close:hover { color: var(--ink); border-color: var(--border-strong); }
@@ -1325,7 +1320,12 @@ kbd {
   .topbar { padding: 0 10px; gap: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 @media (pointer: coarse) {
   input, select, button, textarea { min-height: 44px; }
@@ -1365,7 +1365,7 @@ kbd {
   }
 }
 
-/* Keyboard skip link: off-screen until focused, then a visible signal-green pill. */
+/* Keyboard skip link: off-screen until focused, then a visible signal-colored control. */
 .skip-link {
   position: absolute; left: 8px; top: -48px; z-index: 1000;
   background: var(--signal); color: var(--signal-ink); font-weight: 700;
@@ -1373,7 +1373,6 @@ kbd {
   transition: top 0.15s ease;
 }
 .skip-link:focus { top: 8px; outline: 3px solid var(--ink); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .skip-link { transition: none; } }
 
 /* ============================================================
    Simple / Advanced mode (progressive disclosure) — task D1.
@@ -1461,4 +1460,3 @@ body.mode-simple .shortcut-row.adv-only .shortcut-adv-note { display: inline; }
 .crumb.crumb-sev-error { border-left-color: var(--error); }
 .crumb.crumb-sev-warn { border-left-color: var(--warn); }
 .crumb-empty { font-size: 11.5px; color: var(--muted); padding: 4px 0 8px; }
-
