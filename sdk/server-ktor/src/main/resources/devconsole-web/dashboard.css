@@ -121,7 +121,7 @@ body.mode-simple {
 }
 
 /* height: 100vh (not min-height) pins the whole app to one viewport-tall flex column: .topbar
-   takes its fixed 52px and .workspace below it gets the rest via flex — the chain that lets
+   takes its fixed 48px and .workspace below it gets the rest via flex — the chain that lets
    `main` (see below) resolve "100% - the real chrome above it" without guessing at a pixel
    number. Views that don't need a filled/bounded height (everything except the five .split-shell
    ones) are untouched by this — they still just size to content and `main`'s own overflow-y:auto
@@ -184,8 +184,8 @@ div::-webkit-scrollbar-track, nav::-webkit-scrollbar-track { background: transpa
 
 /* ---------------- Topbar ---------------- */
 .topbar {
-  display: flex; align-items: center; gap: 16px;
-  height: 52px; flex: 0 0 52px; padding: 0 16px;
+  display: flex; align-items: center; gap: 10px;
+  height: 48px; flex: 0 0 48px; padding: 0 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
   position: sticky; top: 0; z-index: 60;
@@ -194,15 +194,14 @@ div::-webkit-scrollbar-track, nav::-webkit-scrollbar-track { background: transpa
   display: grid; place-items: center; flex: 0 0 auto;
   /* padding: 0 overrides the generic button padding (9px 11px), which shrank this 30px box's
      content area below the icon size and pinned the icon to the content top -- visibly low. */
-  width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 8px;
+  width: 30px; height: 30px; padding: 0; border: 1px solid var(--control-outline); border-radius: 6px;
   background: var(--surface-2); color: var(--muted); cursor: pointer;
 }
 .rail-toggle:hover { color: var(--signal); border-color: var(--border-strong); }
 .rail-toggle[aria-pressed="true"] { border-color: var(--signal); background: var(--signal-soft); color: var(--signal); }
 .brand { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .brand-logo { display: inline-flex; align-items: center; justify-content: center; color: var(--signal); }
-.brand-name { font-size: 13px; font-weight: 700; letter-spacing: 0.15em; white-space: nowrap; }
-.topbar-divider { width: 1px; height: 22px; background: var(--line); flex: 0 0 auto; }
+.brand-name { font-size: 13px; font-weight: 650; letter-spacing: -0.01em; white-space: nowrap; }
 
 .session-pill {
   /* flex: 0 1 auto + min-width: 0 (not the old 0 0 auto) so the pill can actually shrink at
@@ -227,12 +226,12 @@ div::-webkit-scrollbar-track, nav::-webkit-scrollbar-track { background: transpa
 
 .stream-seg {
   display: flex; align-items: center; flex: 0 0 auto;
-  border: 1px solid var(--line); border-radius: 8px; overflow: hidden; height: 26px;
+  border: 1px solid var(--control-outline); border-radius: 6px; overflow: hidden; height: 26px;
 }
 .stream-seg button {
   position: relative; display: flex; align-items: center; gap: 8px;
   padding: 0 12px; height: 24px; border: none; border-right: 1px solid var(--line);
-  border-radius: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+  border-radius: 0; font-size: 11px; font-weight: 600;
   color: var(--muted); background: transparent; cursor: pointer;
 }
 .stream-seg button:last-child { border-right: none; }
@@ -246,10 +245,10 @@ div::-webkit-scrollbar-track, nav::-webkit-scrollbar-track { background: transpa
 .topbar-spacer { flex: 1; }
 
 
-.topbar-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.topbar-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 .icon-btn {
-  border: 1px solid var(--line); background: var(--surface-2); color: var(--muted);
-  width: 32px; height: 32px; padding: 0; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--control-outline); background: var(--surface-2); color: var(--muted);
+  width: 30px; height: 30px; padding: 0; border-radius: 6px; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
@@ -266,13 +265,12 @@ div::-webkit-scrollbar-track, nav::-webkit-scrollbar-track { background: transpa
 @media (max-width: 560px) { .stream-seg .stream-seg-label { display: none; } .stream-seg button { padding: 0 9px; } }
 @media (max-width: 480px) {
   .session-pill { max-width: 108px; }
-  /* Task E1: below ~480px the topbar's non-shrinkable groups (rail-toggle 30px + brand ~110px +
-     stream-seg ~62px icon-only + topbar-actions' four 32px icon buttons = 152px, fixed — nothing
-     here is ever hidden, per §2's "never imply a control doesn't exist") add up to more than a
-     375px viewport even with the session pill collapsed to nothing. Wrapping to a second row (via
+  /* Below ~480px the topbar's non-shrinkable groups (rail toggle + brand + stream control +
+     five global actions) no longer fit on one line even with the session pill compressed. Nothing
+     here is ever hidden, per §2's "never imply a control doesn't exist". Wrapping to a second row (via
      a full-width spacer, which forces a break right before .topbar-actions without touching
      source order) keeps every control reachable instead of clipping the row or hiding a button. */
-  .topbar { flex-wrap: wrap; height: auto; min-height: 52px; padding: 8px 10px; gap: 8px; row-gap: 8px; }
+  .topbar { flex: 0 0 auto; flex-wrap: wrap; height: auto; min-height: 48px; padding: 6px 10px; gap: 8px; row-gap: 6px; }
   .topbar-spacer { flex-basis: 100%; height: 0; }
 }
 
@@ -283,35 +281,35 @@ div::-webkit-scrollbar-track, nav::-webkit-scrollbar-track { background: transpa
    position: sticky/max-height/overflow-y still governs its own scroll, so it looks identical. */
 .workspace { display: flex; align-items: stretch; flex: 1 1 auto; min-height: 0; }
 .rail {
-  flex: 0 0 232px; width: 232px; padding: 8px 12px 28px;
+  flex: 0 0 216px; width: 216px; padding: 10px 8px 24px;
   border-right: 1px solid var(--line);
   background: var(--panel);
-  position: sticky; top: 52px; align-self: flex-start;
-  max-height: calc(100vh - 52px); overflow-y: auto;
+  position: sticky; top: 48px; align-self: flex-start;
+  max-height: calc(100vh - 48px); overflow-y: auto;
 }
 body.rail-hidden .rail { display: none; }
 
-.rail-group { margin-top: 16px; }
-.rail-group-label { display: flex; align-items: center; gap: 8px; padding: 0 8px 8px; }
+.rail-group { margin-top: 14px; }
+.rail-group-label { display: flex; align-items: center; gap: 8px; padding: 0 10px 5px; color: var(--text-3); font-size: 11px; font-weight: 600; }
 .rail-group-label .text {
-  font-size: 10.5px; font-weight: 700; color: var(--text-3);
+  font-size: inherit; font-weight: inherit; color: inherit; text-transform: none; letter-spacing: 0;
   white-space: nowrap;
 }
-.rail-group-label .rule { flex: 1; height: 1px; background: var(--line); }
+.rail-group-label .rule { display: none; }
 
 .rail button {
   position: relative; display: grid; grid-template-columns: 17px 1fr auto; align-items: center; gap: 12px;
-  width: 100%; height: 32px; margin-bottom: 2px; padding: 0 8px; border: none; border-radius: 8px;
+  width: 100%; height: 34px; margin-bottom: 2px; padding: 0 10px; border: none; border-radius: 6px;
   text-align: left; background: transparent; color: var(--muted); cursor: pointer;
   font: inherit; transition: background 0.12s, color 0.12s;
 }
 .rail button .ic { width: 16px; height: 16px; opacity: 0.9; color: inherit; }
 .rail button:hover { background: var(--surface-2); color: var(--ink); }
 .rail button.active, .rail button[aria-current="page"] {
-  background: var(--signal-soft); color: var(--ink); font-weight: 600;
+  background: var(--surface-2); color: var(--ink); font-weight: 600;
 }
 .rail button.active::before, .rail button[aria-current="page"]::before {
-  content: ""; position: absolute; left: 0; top: 5px; bottom: 5px; width: 2px; border-radius: 99px; background: var(--signal);
+  content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 2px; border-radius: 99px; background: var(--signal);
 }
 .rail-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rail button.active .rail-name, .rail button[aria-current="page"] .rail-name { font-weight: 600; }
@@ -323,13 +321,13 @@ body.rail-hidden .rail { display: none; }
 .rail-count.show { display: inline-block; }
 .rail button.active .rail-count, .rail button[aria-current="page"] .rail-count { background: var(--signal); color: var(--signal-ink); }
 
-.rail-shortcuts { margin-top: 24px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 8px; }
+.rail-shortcuts { margin-top: 24px; padding: 0 10px; color: var(--text-3); }
 .rail-shortcuts-title {
-  font-size: 10.5px; font-weight: 700; color: var(--text-3);
+  font-size: 11px; font-weight: 600; color: inherit;
   margin-bottom: 4px;
 }
-.rail-shortcuts-grid { display: grid; gap: 4px; font-size: 11px; color: var(--muted); }
-.rail-shortcuts-grid .key { font-family: var(--font-mono); color: var(--ink); }
+.rail-shortcuts-grid { display: grid; gap: 2px; font-size: 10.5px; line-height: 1.5; color: inherit; }
+.rail-shortcuts-grid .key { font-family: var(--font-mono); color: inherit; }
 
 /* <780px: rail collapses to an icon-only strip; \\ / the topbar toggle hides it entirely. */
 @media (max-width: 780px) {
@@ -1297,13 +1295,13 @@ kbd {
        680px  .session-pill      first width cut (260px → 150px) as the topbar's shrinkable slot.
        620px  .col-duration      the list row's "duration" column hides — least essential at a
                                  glance; still in the detail pane once a row is opened.
-       560px  .stream-seg        LIVE/PAUSED labels hide, icon-only.
+       560px  .stream-seg        Live/Paused labels hide, icon-only.
        480px  .session-pill      second width cut (150px → 108px);
-             .brand-name        wordmark shrinks;
+             .brand             wordmark shrinks and decorative mark hides;
              .topbar            wraps to two rows (a full-width spacer forces the break right
                                  before the always-visible icon-button cluster) — below this width
                                  the topbar's non-shrinkable groups (rail-toggle + brand + stream-seg
-                                 + the four topbar-action buttons) no longer fit on one line even
+                                 + the five topbar-action buttons) no longer fit on one line even
                                  with the session-pill collapsed to nothing, and nothing here is
                                  ever allowed to just disappear.
 
@@ -1319,7 +1317,7 @@ kbd {
 }
 @media (max-width: 480px) {
   .brand-name { font-size: 11.5px; }
-  .topbar { padding: 0 10px; gap: 10px; }
+  .brand-logo { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -1334,7 +1332,6 @@ kbd {
   /* The blanket 44px bump above breaks dense instrument-panel chrome that already meets WCAG
      2.5.8's 24px minimum target size at its mock geometry: .stream-seg and .seg sit in
      fixed-height, overflow:hidden containers (26px / 32px) so a 44px child gets visibly clipped;
-     .rail-toggle (30x30) and .rail button (32px nav rows) just get inflated past their mock size;
      .row-flag (24x24) sits in a fixed 34px .row with no overflow clipping, so inflating it would
      make it poke into neighboring rows -- .row-check/.col-check share that same unclipped .row
      geometry (and the same 24x24 footprint the export-selection checkbox note above ties to
@@ -1344,8 +1341,6 @@ kbd {
      leaves the knob off-center inside it. `min-height` (not `height`) is overridden here — these
      selectors already win the cascade on specificity, but height/min-height are different
      properties, so the smaller explicit height never on its own beats a larger min-height. */
-  .rail-toggle,
-  .rail button,
   .stream-seg button,
   .seg button,
   .row-flag,

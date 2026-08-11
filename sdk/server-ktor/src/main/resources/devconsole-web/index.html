@@ -68,18 +68,17 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <button type="button" class="rail-toggle" id="railToggle" aria-pressed="false" title="Hide the view list and give the content full width (\)"><svg class="ic" aria-hidden="true"><use href="#dc-sidebar"/></svg></button>
   <div class="brand">
     <span class="brand-logo"><svg class="ic brand-mark" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" stroke="currentColor" stroke-opacity=".35"/><circle cx="11" cy="11" r="6" stroke="currentColor" stroke-opacity=".6"/><circle cx="11" cy="11" r="2.4" fill="currentColor" stroke="none"/></svg></span>
-    <span class="brand-name">DEVCONSOLE</span>
+    <span class="brand-name">DevConsole</span>
   </div>
-  <div class="topbar-divider"></div>
+  <span class="host-line" id="hostLine" title="The device's More screen shows the connect QR and an 8-character, single-use code">Not connected — see the device's More screen for the connect QR</span>
   <div class="session-pill">
     <span class="dot" id="lamp"></span>
     <span class="label" id="status" title="Open DevConsole on the device, tap More, then scan the QR or copy the link — it shows on screen, never in logcat">Open DevConsole on device → More → scan the QR</span>
   </div>
   <div class="stream-seg" role="group" aria-label="Live tail control">
-    <button type="button" id="streamLive" title="Record live events (p)" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#dc-record"/></svg><span class="stream-seg-label">LIVE</span></button>
-    <button type="button" id="streamPaused" title="Pause the stream (p)" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#dc-pause"/></svg><span class="stream-seg-label">PAUSED</span></button>
+    <button type="button" id="streamLive" title="Record live events (p)" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#dc-record"/></svg><span class="stream-seg-label">Live</span></button>
+    <button type="button" id="streamPaused" title="Pause the stream (p)" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#dc-pause"/></svg><span class="stream-seg-label">Paused</span></button>
   </div>
-  <span class="host-line" id="hostLine" title="The device's More screen shows the connect QR and an 8-character, single-use code">Not connected — see the device's More screen for the connect QR</span>
   <div class="topbar-spacer"></div>
   <div class="topbar-actions">
     <button type="button" class="icon-btn" id="captureScreenshot" title="Capture a screenshot of the device's foreground screen — off by default; the host enables it via screenshotPolicy.enabled" aria-label="Capture screenshot" disabled><svg class="ic" aria-hidden="true"><use href="#dc-camera"/></svg></button>
@@ -106,7 +105,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <button type="button" id="viewTimeline"><svg class="ic" aria-hidden="true"><use href="#dc-activity"/></svg><span class="rail-name">Timeline</span><span class="rail-count" id="navCountTimeline">0</span></button>
       <button type="button" id="viewCrashes"><svg class="ic" aria-hidden="true"><use href="#dc-bug"/></svg><span class="rail-name">Crashes</span><span class="rail-count" id="navCountCrashes">0</span></button>
       <button type="button" id="viewPush"><svg class="ic" aria-hidden="true"><use href="#dc-push"/></svg><span class="rail-name">Push</span><span class="rail-count" id="navCountPush">0</span></button>
-      <button type="button" id="viewSdkHealth"><svg class="ic" aria-hidden="true"><use href="#dc-health"/></svg><span class="rail-name">SDK Health</span></button>
+      <button type="button" id="viewSdkHealth"><svg class="ic" aria-hidden="true"><use href="#dc-health"/></svg><span class="rail-name">SDK health</span></button>
     </div>
     <div class="rail-group">
       <div class="rail-group-label"><span class="text">Control</span><span class="rule"></span></div>
@@ -116,7 +115,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </div>
     <div class="rail-group" id="railGroupData">
       <div class="rail-group-label"><span class="text">Data</span><span class="rule"></span></div>
-      <button type="button" id="viewState"><svg class="ic" aria-hidden="true"><use href="#dc-flag"/></svg><span class="rail-name">State &amp; Flags</span></button>
+      <button type="button" id="viewState"><svg class="ic" aria-hidden="true"><use href="#dc-flag"/></svg><span class="rail-name">State &amp; flags</span></button>
       <button type="button" id="viewPreferences"><svg class="ic" aria-hidden="true"><use href="#dc-sliders"/></svg><span class="rail-name">Preferences</span></button>
       <button type="button" id="viewDatabase"><svg class="ic" aria-hidden="true"><use href="#dc-database"/></svg><span class="rail-name">Database</span></button>
       <button type="button" id="viewFiles"><svg class="ic" aria-hidden="true"><use href="#dc-folder"/></svg><span class="rail-name">Files</span></button>
@@ -124,7 +123,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="rail-group">
       <div class="rail-group-label"><span class="text">Report</span><span class="rule"></span></div>
       <button type="button" id="viewEvidence"><svg class="ic" aria-hidden="true"><use href="#dc-flag"/></svg><span class="rail-name">Evidence tray</span><span class="rail-count" id="navCountEvidence">0</span></button>
-      <button type="button" id="viewSession"><svg class="ic" aria-hidden="true"><use href="#dc-shield"/></svg><span class="rail-name">Session &amp; Security</span></button>
+      <button type="button" id="viewSession"><svg class="ic" aria-hidden="true"><use href="#dc-shield"/></svg><span class="rail-name">Session &amp; security</span></button>
     </div>
     <div class="rail-group rail-group-advanced" id="railGroupAdvanced" hidden>
       <button type="button" class="rail-group-label rail-adv-toggle" id="railAdvancedToggle" aria-expanded="false" aria-controls="railAdvancedBody">
@@ -133,10 +132,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div id="railAdvancedBody" hidden></div>
     </div>
     <div class="rail-shortcuts">
-      <div class="rail-shortcuts-title">Shortcuts</div>
+      <div class="rail-shortcuts-title">Keyboard shortcuts</div>
       <div class="rail-shortcuts-grid">
-        <div><span class="key">/</span> filter &nbsp;<span class="key">p</span> pause</div>
-        <div><span class="key">t</span> theme &nbsp;<span class="key">?</span> all shortcuts</div>
+        <div><span class="key">/</span> Filter &nbsp;<span class="key">p</span> Pause</div>
+        <div><span class="key">t</span> Theme &nbsp;<span class="key">?</span> All shortcuts</div>
       </div>
     </div>
   </nav>
