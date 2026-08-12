@@ -4,7 +4,7 @@
 
 # DevConsole
 
-**Debug your Android app from inside the app — or from any browser.**
+**An in-app debugger for Android, with a browser dashboard for when you want a bigger screen.**
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.devconsole-android/devconsole)](https://central.sonatype.com/artifact/io.github.devconsole-android/devconsole)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -13,22 +13,25 @@
 
 <br />
 
-<img src="docs/images/inspector-android.png" width="236" alt="In-app inspector — live traffic on the device" />&nbsp;&nbsp;<img src="docs/images/dashboard-web.png" width="614" alt="Web dashboard — overview with traffic health and signals" />
+<img src="docs/images/inspector-android.png" width="225" alt="In-app inspector showing live network traffic on the device" />&nbsp;&nbsp;<img src="docs/images/dashboard-web.png" width="620" alt="Web dashboard overview with traffic health and the latest signals" />
 
 </div>
 
-An on-device developer console for Android. Open a full inspector — network traffic, crashes,
-storage, feature flags, exports — right inside your **debug** app, by shake, floating button, or
-one line of code. When you want a bigger screen, the same data streams to any browser through an
-embedded web dashboard. Release builds compile against a no-op twin artifact, so none of this
-code ever ships to production, and the Gradle plugin fails the build if it would.
+Shake your debug build and DevConsole opens on top of it. Network traffic, crashes and ANRs,
+feature flags, SharedPreferences, SQLite, files — all of it on the device, no cable required.
 
-**1.0 is out, and the public API is stable.** From here, breaking changes to `sdk:api` need a
-major version, new API a minor, everything else a patch — enforced, not just promised: every
-published module carries a committed ABI baseline that fails the build on an unintended change.
-See the [changelog](CHANGELOG.md) for the full policy.
+When a phone screen isn't enough, start the embedded server and the same data live-tails into any
+browser, where you can also edit mock rules and export HAR, Postman, or a whole bug report.
 
-## TL;DR
+Your release build never sees any of it. It compiles against a no-op twin that records nothing and
+links no server code, and the Gradle plugin fails the build if the real runtime ever slips in.
+
+**Contents** · [Quick start](#quick-start) · [What you get](#what-you-get) ·
+[How it works](#how-it-works) · [Guide](#step-by-step-guide) · [Artifacts](#artifacts) ·
+[Permissions](#permissions) · [Security](#security-model) · [Samples](#sample-apps) ·
+[Docs](#documentation)
+
+## Quick start
 
 **1. Add the plugin and two dependencies** to your app's `build.gradle.kts`:
 
@@ -45,14 +48,14 @@ dependencies {
 ```
 
 **2. Open the inspector on the device.** The SDK auto-initializes on debuggable builds, so this
-works immediately — from any button in your debug UI:
+works right away from any button in your debug UI:
 
 ```kotlin
 DevConsole.open(context)
 ```
 
-or hands-free, by opting into the built-in triggers — shake the device (intensity adjustable) or
-tap a draggable floating button:
+Or go hands-free. Opt into the built-in triggers and shake the device, or tap a draggable floating
+button:
 
 ```kotlin
 DevConsole.initialize(
@@ -62,15 +65,14 @@ DevConsole.initialize(
 )
 ```
 
-That's the setup. The inspector shows crash/ANR reports, feature flags, and inspectors for
-SharedPreferences, SQLite, and files (read-only by default); wire your HTTP client with one line
-(["Wire up your network stack"](#wire-up-your-network-stack) below) and network, WebSocket, and
-MQTT traffic appears too.
+That's the setup. You now have crash and ANR reports, feature flags, and read-only inspectors for
+SharedPreferences, SQLite, and files. Add one line to your HTTP client
+(see [Wire up your network stack](#wire-up-your-network-stack)) and network, WebSocket, and MQTT
+traffic show up too.
 
-**3. Want a bigger screen? Start the browser dashboard** — the same data live-tailing in any
-browser, plus mock-rule editing and one-click HAR / Postman / bug-report exports. The easiest way:
-tap **Start server** on the inspector's **More** screen, which then shows the connect URL and a QR
-code. Or from code (either way, make sure your manifest has `INTERNET` — most apps already do):
+**3. Want a bigger screen? Start the browser dashboard.** Tap **Start server** on the inspector's
+**More** screen and it hands you a connect URL and a QR code. You can also do it from code. Either
+way your manifest needs `INTERNET`, which most apps already declare:
 
 ```kotlin
 lifecycleScope.launch { // startBrowser is a suspend function; the server never starts on its own
@@ -84,7 +86,8 @@ lifecycleScope.launch { // startBrowser is a suspend function; the server never 
 adb forward tcp:8080 tcp:8080   # use the port from the DevConsole log line
 ```
 
-then open the **whole URL** — the `#code=` fragment is the credential.
+Then open the **whole URL**. The `#code=` fragment is the credential, so a bare `http://host:port/`
+gets you nothing.
 
 ## What you get
 
@@ -102,30 +105,32 @@ then open the **whole URL** — the `#code=` fragment is the credential.
 | **Evidence tray & exports** | Flag anything, attach it to a bug report bundle or Markdown/Jira/GitHub clipboard text. Export HAR, Postman Collection, or a full session ZIP. |
 | **Background keep-alive** | Opt-in foreground service that keeps the server alive while your app is backgrounded. Manifest-only opt-in, zero SDK-declared permissions. |
 
-Capture is category-scoped: `DevConsoleConfig.withCaptureCategories(...)` narrows what's recorded
-(`NETWORK`, `SOCKET`, `MQTT`, `PUSH`, `LOGS`, `CRASHES`, `STATE`, `INSPECTION`, `MOCKS` — default
-is all). Events persist in a Room database bounded by a retention policy (7 days / 100 MB by
-default).
+Capture is category-scoped. `DevConsoleConfig.withCaptureCategories(...)` narrows what gets
+recorded to any of `NETWORK`, `SOCKET`, `MQTT`, `PUSH`, `LOGS`, `CRASHES`, `STATE`, `INSPECTION`,
+and `MOCKS`. All of them are on by default. Events land in a Room database with a retention policy
+that defaults to 7 days or 100 MB, whichever comes first.
 
 ## How it works
 
-`devconsole` (debug) and `devconsole-noop` (release) expose the **same public API**. The no-op
-twin records nothing, serves nothing, and links no server code — production safety comes from
-dependency selection, not a runtime flag. The Gradle plugin
-(`io.github.devconsole-android`) auto-wires the debug/release split if you omit the
-dependencies, and verifies — declared dependencies, resolved runtime classpath, and final
-APK/AAB bytes — that the full runtime never reaches a protected variant.
+`devconsole` (debug) and `devconsole-noop` (release) expose the **same public API**. The no-op twin
+records nothing, serves nothing, and links no server code. Production safety comes from which
+artifact you depend on, not from a runtime flag someone can forget to set.
 
-On debuggable builds the SDK auto-initializes from its own `ContentProvider`; no
-`Application.onCreate` boilerplate needed. The server itself **never auto-starts** — you always
-call `startBrowser(...)` explicitly.
+The Gradle plugin (`io.github.devconsole-android`) wires that debug/release split for you if you
+omit the dependencies. It then checks three things: your declared dependencies, the resolved runtime
+classpath, and the bytes in the final APK or AAB. If the full runtime reaches a protected variant,
+the build fails.
+
+On debuggable builds the SDK initializes itself from its own `ContentProvider`, so there is no
+`Application.onCreate` boilerplate. The server is the exception: it never auto-starts. You always
+call `startBrowser(...)` yourself.
 
 ## Step-by-step guide
 
 ### Open the in-app inspector
 
 `DevConsole.open(context)` opens the inspector from any trigger you like and returns an
-`InspectorOpenResult`. To let the SDK open it without host code, opt into the triggers — both are
+`InspectorOpenResult`. If you'd rather not write that call, opt into the built-in triggers. Both are
 off by default, and neither ever starts the server:
 
 ```kotlin
@@ -138,29 +143,30 @@ DevConsoleConfig.default().withOpenTriggers(
 )
 ```
 
-The floating button is **draggable** — press and move it anywhere on screen, and it stays put across
-Activity changes and rotation (it re-clamps into the window so it can never be stranded off-screen).
-It rests at 65% opacity so it doesn't hide the UI underneath, and goes fully opaque while you're
-touching it. A drag never counts as a tap, so moving it won't open the inspector.
+The floating button is **draggable**. Press and move it anywhere on screen and it stays there across
+Activity changes and rotation, re-clamping into the window so it can never strand itself off-screen.
+It sits at 65% opacity so it doesn't hide your UI, and goes fully opaque while you touch it. A drag
+never counts as a tap, so moving it won't open the inspector.
 
-Both triggers are **UI-framework agnostic**: the button is a plain `ImageView` added to the
-Activity's decor view and the shake detector is a sensor listener, so an XML/Views or Java host gets
-exactly the same behaviour as a Compose one — no `ui-compose` or `ui-views` dependency involved.
-Java: `OpenTriggers.builder().shakeToOpen(true).floatingButton(true).build()`, as
+Both triggers are **UI-framework agnostic**. The button is a plain `ImageView` on the Activity's
+decor view and the shake detector is a sensor listener, so an XML/Views or Java host behaves exactly
+like a Compose one, with no `ui-compose` or `ui-views` dependency involved. In Java that reads
+`OpenTriggers.builder().shakeToOpen(true).floatingButton(true).build()`, as
 [`views-java-app`](samples/views-java-app) does.
 
 Java: `DevConsoleConfig.builder().openTriggers(OpenTriggers.builder().shakeToOpen(true).build())`.
 
 ### Start and stop the dashboard server
 
-No code required: the inspector's **More** screen has Start/Stop buttons, and once running it
-shows the live connect URL — as text, a copy button, and a QR code to scan from another machine.
+No code required. The inspector's **More** screen has Start and Stop buttons, and once the server is
+up it shows the live connect URL three ways: as text, behind a copy button, and as a QR code you can
+scan from another machine.
 
-<p align="center"><img src="docs/images/inspector-more-server.png" width="300" alt="More screen — server started from the device, showing the connect URL" /></p>
+<p align="center"><img src="docs/images/inspector-more-server.png" width="300" alt="More screen with the server started, showing the connect URL and QR code" /></p>
 
-That button binds **loopback** by default, so the URL it shows needs `adb forward`. To make it bind
-LAN instead — so the QR code is scannable from another machine with no forwarding — declare it on
-the config, since the button issues no `StartRequest` of its own:
+That button binds **loopback** by default, so the URL it shows needs `adb forward`. To bind LAN
+instead, which is what makes the QR code scannable from another machine, declare it on the config.
+The button issues no `StartRequest` of its own:
 
 ```kotlin
 DevConsoleConfig.default().withBrowserConfig(BrowserConfig(binding = BrowserBinding.LAN))
@@ -210,23 +216,22 @@ After `startBrowser`, filter Logcat on the `DevConsole` tag:
 I/DevConsole: Dashboard available at: http://127.0.0.1:8080/ (access link available through the DevConsole API/launcher; binding: LOOPBACK)
 ```
 
-**The session code is deliberately absent from Logcat.** The full URL — with its
-`#code=<session code>` credential fragment — is available only from
-`StartResult.Started.access.connectUrl`, `DevConsole.accessInfo()`, and the device's More screen
-(as text and QR code). The port is the **first free one in 8080–8099**, so read it from the log
-rather than assuming 8080.
+**The session code is deliberately absent from Logcat.** The full URL, with its `#code=<session
+code>` credential fragment, comes from only three places: `StartResult.Started.access.connectUrl`,
+`DevConsole.accessInfo()`, and the device's More screen as text or a QR code. The port is the first
+free one in **8080–8099**, so read it from the log rather than assuming 8080.
 
 ### Connect from your browser
 
 - **Loopback (default):** run `adb forward tcp:<port> tcp:<port>`, then open the connect URL.
-- **LAN:** pass `BindingMode.LAN` and open the URL from any device on the same network — read
-  [the threat model](docs/THREAT_MODEL.md) first; the dashboard speaks plaintext HTTP. A LAN start
-  that finds no eligible network interface returns `StartResult.NoEligibleNetwork` — it never
-  silently falls back to loopback (or vice versa).
+- **LAN:** pass `BindingMode.LAN` and open the URL from any device on the same network. Read
+  [the threat model](docs/THREAT_MODEL.md) first, because the dashboard speaks plaintext HTTP. A
+  LAN start that finds no eligible network interface returns `StartResult.NoEligibleNetwork`. It
+  never quietly falls back to loopback, or the other way around.
 
-Open the **whole URL**. The `#code=` fragment is the credential: single-use, expires in five
-minutes, creates a session immediately with no approval step. Bare `http://host:port/` sits
-unauthenticated forever. Issue a fresh code from the device if one lapses.
+Open the **whole URL**. The `#code=` fragment is the credential. It is single-use, expires in five
+minutes, and creates a session immediately with no approval step. A bare `http://host:port/` sits
+unauthenticated forever. If a code lapses, issue a fresh one from the device.
 
 ### Wire up your network stack
 
@@ -260,21 +265,26 @@ DevConsole.recordPush(FirebaseRemoteMessageAdapter().toPushInput(remoteMessage))
 DevConsole.networkRecorder().record(requestInput, responseInput, startedAtMs, completedAtMs)
 ```
 
-One capture bound worth knowing up front: response bodies are captured up to a cap — 512 KiB on
-OkHttp (chunked/unknown-length bodies via a tee, recorded at EOF or close), 256 KiB on
-Ktor. `text/event-stream` and known-binary bodies stay metadata-only on both, since a live SSE feed
-is for all practical purposes endless. See
+One limit worth knowing up front: response bodies are captured up to a cap. That's 512 KiB on
+OkHttp, where chunked and unknown-length bodies go through a tee and get recorded at EOF or close,
+and 256 KiB on Ktor. On both adapters, `text/event-stream` and known-binary bodies stay
+metadata-only, since a live SSE feed is endless for all practical purposes. See
 [Chunked and streaming responses](docs/NETWORK_ADAPTERS.md#chunked-and-streaming-responses) for how
 the OkHttp tee works.
 
-Java equivalents exist throughout (e.g. `DevConsoleOkHttp.install(builder, recorder)`). Details:
-[docs/NETWORK_ADAPTERS.md](docs/NETWORK_ADAPTERS.md), [docs/MQTT_CAPTURE.md](docs/MQTT_CAPTURE.md),
-[docs/PUSH.md](docs/PUSH.md).
+Java equivalents exist throughout, such as `DevConsoleOkHttp.install(builder, recorder)`. For the
+details see [docs/NETWORK_ADAPTERS.md](docs/NETWORK_ADAPTERS.md),
+[docs/MQTT_CAPTURE.md](docs/MQTT_CAPTURE.md), and [docs/PUSH.md](docs/PUSH.md).
+
+Once traffic is flowing, every call shows up with its headers, payload, and body side by side, and
+you can replay it, clone it into the composer, or flag it into a bug report:
+
+<p align="center"><img src="docs/images/dashboard-network.png" width="820" alt="Network inspector in the browser dashboard, showing a captured request and response side by side" /></p>
 
 ## Artifacts
 
-Group `io.github.devconsole-android`, one version for everything. Two coordinates cover a normal
-integration (there is deliberately no BOM):
+Group `io.github.devconsole-android`, one version for everything. There is deliberately no BOM, and
+two coordinates cover a normal integration:
 
 | Coordinate | Scope | What it is |
 |---|---|---|
@@ -291,15 +301,15 @@ Opt-in add-ons (each `-noop` twin is the matching `releaseImplementation`):
 | `devconsole-socket-paho` | `devconsole-socket-paho-noop` | MQTT capture via Eclipse Paho |
 | `devconsole-push-firebase` | `devconsole-push-firebase-noop` | FCM push adapter (reflection-based) |
 
-Every other module (`devconsole-core`, `devconsole-storage-room`, …) arrives transitively — you
-never name it. All modules publish sources, javadoc, and signed POMs.
+Everything else (`devconsole-core`, `devconsole-storage-room`, and the rest) arrives transitively.
+You never name those. Every module publishes sources, javadoc, and a signed POM.
 
-### JitPack — for unreleased code
+### JitPack (for unreleased code)
 
-Maven Central above is the supported channel: signed, versioned, and what the Gradle plugin
-resolves. [JitPack](https://jitpack.io/#devconsole-android/DevConsole) exists alongside it for one
-job — trying a branch or an unreleased fix before it ships. Add the repository to your **settings**
-file, not the module:
+Maven Central is the supported channel: signed, versioned, and what the Gradle plugin resolves.
+[JitPack](https://jitpack.io/#devconsole-android/DevConsole) sits alongside it for one job, which is
+trying a branch or an unreleased fix before it ships. Add the repository to your **settings** file,
+not the module:
 
 ```kotlin
 dependencyResolutionManagement {
@@ -319,23 +329,23 @@ dependencies {
 ```
 
 A release tag works as the bare tag, as above. Any branch works as `<branch>-SNAPSHOT`, with `/`
-written as `~` — a `feature/x` branch is `feature~x-SNAPSHOT`. JitPack support starts at **1.1.1**;
-earlier tags do not build there. Three things to know before you rely on it:
+written as `~`, so a `feature/x` branch is `feature~x-SNAPSHOT`. JitPack support starts at
+**1.1.1**; earlier tags do not build there. Three things to know before you rely on it:
 
-- **The Gradle plugin is not on JitPack** — only the 31 library artifacts are, so the
+- **The Gradle plugin is not on JitPack.** Only the 31 library artifacts are, so the
   `plugins { id("io.github.devconsole-android") … }` block above does not apply. Name the
-  `debugImplementation`/`releaseImplementation` coordinates yourself, and you also give up the
-  plugin's variant-policy check that keeps the full SDK out of release builds.
+  `debugImplementation` and `releaseImplementation` coordinates yourself. You also give up the
+  plugin's variant-policy check, which is the thing that keeps the full SDK out of release builds.
 - **JitPack artifacts are unsigned.** Central's are signed; these are built on demand from a commit.
 - **Snapshots move.** `-SNAPSHOT` follows the branch, so a build that worked can change under you.
   Pin a tag for anything you keep.
 
-## Permissions — and why none of them ship
+## Permissions
 
-Short version: **nothing DevConsole needs reaches your release build**, so there is nothing to
-declare to Google Play and nothing for a store reviewer to ask about. The permissions live in
-`devconsole` (a `debugImplementation`); `devconsole-noop`, which is what your release variant
-compiles and ships against, declares none at all.
+**Nothing DevConsole needs reaches your release build.** There is nothing to declare to Google Play
+and nothing for a store reviewer to ask about. The permissions live in `devconsole`, which is a
+`debugImplementation`. Your release variant compiles against `devconsole-noop`, and that declares
+none at all.
 
 | Permission | Declared by | Why it exists | In your release build? |
 |---|---|---|---|
@@ -345,43 +355,43 @@ compiles and ships against, declares none at all.
 | `POST_NOTIFICATIONS` | **You**, in `src/debug` | Optional. Only decides whether the keep-alive notification is *visible* — the service runs either way. DevConsole never requests it unprompted; the inspector offers it. | **No** (same) |
 | `INTERNET` | **You**, in `src/main` | Binding the dashboard's TCP socket needs it. Not DevConsole-specific — most apps already declare it for their own networking, which is why DevConsole doesn't add it for you. | Yes — but it's yours, and almost certainly already there |
 
-Verify it yourself on any build, rather than taking the table's word for it:
+Don't take the table's word for it. Check any build yourself:
 
 ```bash
 aapt2 dump permissions app/build/outputs/apk/release/app-release.apk
 ```
 
-The Gradle plugin also enforces the split mechanically: `verifyDevConsoleProtectedArtifacts` fails
+The Gradle plugin enforces the same split mechanically. `verifyDevConsoleProtectedArtifacts` fails
 the build if the full runtime reaches a protected variant, checking declared dependencies, the
 resolved runtime classpath, and the final APK/AAB bytes. See
 [Build variants and production safety](docs/BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md).
 
-## Security model — read this
+## Security model
 
-DevConsole is a debugging tool that intentionally exposes your app's internals to a browser.
-The design keeps that safe by default, but you should know exactly where the edges are:
+DevConsole deliberately exposes your app's internals to a browser. It defaults to the safe end of
+every choice, but you should know where the edges are:
 
-- **The dashboard speaks plaintext HTTP.** There is no TLS. In LAN mode, anyone who can observe
-  your network packets can read everything the dashboard shows — headers, tokens, bodies, exports.
-  Loopback + `adb forward` is the default for this reason; LAN is always an explicit opt-in.
-- **The connect URL is a credential.** Possession of a live `#code=` fragment creates a session —
-  no on-device approval step. Codes are single-use with a five-minute TTL; sessions last 30
-  minutes. Treat the URL like a password; the device's More screen can revoke sessions.
-- **Redaction is an allowlist.** ~25 well-known field names (plus `Bearer` tokens) are masked.
-  Custom header names, signed-URL query params, and PII inside bodies pass through verbatim.
-  See [docs/SECURITY_AND_REDACTION.md](docs/SECURITY_AND_REDACTION.md).
-- **Screenshots cannot be redacted** — pixels don't have field names. Screenshot capture is **off
-  by default** and everything it produces is marked `UNREDACTED`.
+- **The dashboard speaks plaintext HTTP.** There is no TLS. In LAN mode, anyone who can watch your
+  network packets can read everything it shows: headers, tokens, bodies, exports. That is why
+  loopback plus `adb forward` is the default and LAN is always an explicit opt-in.
+- **The connect URL is a credential.** Holding a live `#code=` fragment creates a session, with no
+  approval step on the device. Codes are single-use and expire in five minutes; sessions last 30.
+  Treat the URL like a password. You can revoke sessions from the More screen.
+- **Redaction is an allowlist.** About 25 well-known field names and `Bearer` tokens get masked.
+  Custom header names, signed-URL query params, and PII inside bodies pass through verbatim. See
+  [docs/SECURITY_AND_REDACTION.md](docs/SECURITY_AND_REDACTION.md).
+- **Screenshots cannot be redacted.** Pixels don't have field names. Capture is **off by default**
+  and everything it produces is marked `UNREDACTED`.
 - **Editing is off by default.** Preferences/database/file writes, mock editing, and capture-rule
   editing are each gated per surface via `EditingCapabilities`; the composer and state mutation
   have their own `DevConsoleConfig` flags. Everything defaults to off/read-only.
 
-The full analysis, including what a malicious network peer or co-installed app can and cannot do:
-[docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+For the full analysis, including what a malicious network peer or a co-installed app can and cannot
+do, read [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 ## Sample apps
 
-Three runnable samples under [`samples/`](samples/) cover every integration style:
+Three runnable samples under [`samples/`](samples/), one per integration style:
 
 | Sample | Stack | Posture |
 |---|---|---|
@@ -393,8 +403,8 @@ Three runnable samples under [`samples/`](samples/) cover every integration styl
 ./gradlew :samples:compose-app:assembleDebug
 ```
 
-Each sample seeds preferences, a SQLite table, and files so the inspectors have real content, and
-includes a hazard section that triggers a real crash and a real ANR.
+Each one seeds preferences, a SQLite table, and files so the inspectors have something real to
+show, and each has a hazard section that triggers a genuine crash and a genuine ANR.
 
 ## Compatibility
 
@@ -406,11 +416,20 @@ includes a hazard section that triggers a real crash and a real ANR.
 | Gradle | 8.9+ (including 9.x) |
 | Kotlin | 2.2.20 |
 
+## Versioning
+
+1.0 shipped, and the public API is stable. Breaking changes to `sdk:api` need a major version, new
+API needs a minor, and everything else is a patch.
+
+That is enforced rather than promised. Every published module carries a committed ABI baseline, and
+an unintended change to any public surface fails the build before it can reach a release. The
+[changelog](CHANGELOG.md) has the full policy.
+
 ## Documentation
 
 Full index: [docs/README.md](docs/README.md). Highlights:
 
-- [Threat model and safe operation](docs/THREAT_MODEL.md) — **start here before LAN mode**
+- [Threat model and safe operation](docs/THREAT_MODEL.md) — **read this before using LAN mode**
 - Getting started: [Compose](docs/GETTING_STARTED_COMPOSE.md) ·
   [XML/Kotlin](docs/GETTING_STARTED_XML_KOTLIN.md) · [XML/Java](docs/GETTING_STARTED_XML_JAVA.md)
 - [Build variants and production safety](docs/BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md)
@@ -424,8 +443,8 @@ Full index: [docs/README.md](docs/README.md). Highlights:
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for build prerequisites and the test/lint/API-check
-commands. CI runs the same `./gradlew` tasks on every PR.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the build prerequisites and the test, lint, and API-check
+commands. CI runs those same `./gradlew` tasks on every PR, so if it passes locally it passes there.
 
 ## License
 

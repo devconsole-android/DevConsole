@@ -1,6 +1,9 @@
-# Getting started - Compose
+# Getting started: Compose
 
-1. Apply the production-safety plugin and split the dependency by variant. 
+About five minutes, most of it waiting for Gradle. By the end you'll have the inspector opening on
+your device and the dashboard reachable from a browser.
+
+1. Apply the production-safety plugin and split the dependency by variant.
 
 ```kotlin
 plugins {
@@ -83,8 +86,15 @@ setContent {
 }
 ```
 
-5. Tap Start — the panel now shows the bound address (e.g. `DevConsole server is running at 192.168.0.15:8080`)
-   — then open that address (or the connect URL from `StartResult.Started.access.connectUrl`) in a
-   browser on the same machine (or `adb forward tcp:8080 tcp:8080` first if the device isn't local).
+5. Tap Start. The panel shows the bound address, something like `DevConsole server is running at
+   192.168.0.15:8080`. Open that address in a browser, or use the connect URL from
+   `StartResult.Started.access.connectUrl`. If the device isn't local, run
+   `adb forward tcp:8080 tcp:8080` first.
 
-The full working example — network and WebSocket capture, mocks, push simulation, a feature flag, and a state provider, one button per capability — is [`samples/compose-app`](../samples/compose-app/src/main/kotlin/io/devconsole/sample/compose/MainActivity.kt). See [NETWORK_INSPECTOR.md](NETWORK_INSPECTOR.md), [WEBSOCKET_INSPECTOR.md](WEBSOCKET_INSPECTOR.md), [COMPOSER_AND_MOCKS.md](COMPOSER_AND_MOCKS.md), [PUSH.md](PUSH.md), and [STATE_AND_FLAGS.md](STATE_AND_FLAGS.md) for how each piece works.
+For a full working example, [`samples/compose-app`](../samples/compose-app/src/main/kotlin/io/devconsole/sample/compose/MainActivity.kt)
+has one button per capability: network and WebSocket capture, mocks, push simulation, a feature
+flag, and a state provider.
+
+For how each piece works, see [NETWORK_INSPECTOR.md](NETWORK_INSPECTOR.md),
+[WEBSOCKET_INSPECTOR.md](WEBSOCKET_INSPECTOR.md), [COMPOSER_AND_MOCKS.md](COMPOSER_AND_MOCKS.md),
+[PUSH.md](PUSH.md), and [STATE_AND_FLAGS.md](STATE_AND_FLAGS.md).

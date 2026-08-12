@@ -1,8 +1,9 @@
 # Contributing to DevConsole
 
-Thanks for taking a look. This project is a 25-module Android SDK plus two included Gradle
-builds (`build-logic`, `gradle-plugin`), so the fastest way in is to lean on the same commands CI
-runs — see [Verify](.github/workflows/verify.yml).
+Thanks for taking a look. This is a 31-module Android SDK plus two included Gradle builds
+(`build-logic` and `gradle-plugin`), which sounds like a lot until you realise you rarely touch more
+than one at a time. The quickest way in is to run the same commands CI runs, listed below and in
+[Verify](.github/workflows/verify.yml).
 
 ## Prerequisites
 
@@ -10,9 +11,8 @@ runs — see [Verify](.github/workflows/verify.yml).
   included builds target the same toolchain).
 - Android SDK with `compileSdk`/`targetSdk` 35 installed (Android Gradle Plugin 8.13.0, `minSdk`
   23). See the [compatibility table](README.md#compatibility) in the README for the full matrix.
-- No emulator or device is required to build, run unit tests, or lint — only the three sample
-  apps' instrumented tests would need one, and those aren't part of the default `build`/`test`
-  path below.
+- No emulator or device needed to build, test, or lint. Only the sample apps' instrumented tests
+  want one, and those sit outside the default `build` and `test` paths below.
 
 ## Building and testing
 
@@ -54,48 +54,50 @@ All commands run from the repository root.
 ./gradlew :samples:views-java-app:assembleDebug :samples:views-java-app:assembleRelease :samples:views-java-app:verifyDevConsoleProtectedArtifacts
 ```
 
-If you only touched one module, scope any of the above to it, e.g.
+Touched one module? Scope the command to it and save yourself the wait:
 `./gradlew :sdk:network-okhttp:test :sdk:network-okhttp:ktlintCheck`.
 
 ## Making a change
 
-- Public API changes to a module that carries `org.jetbrains.kotlinx.binary-compatibility-validator`
-  (anything with a committed `api/*.api` file, e.g. `sdk:api`) need `./gradlew apiDump` committed
-  alongside the change — `apiCheck` in CI fails otherwise.
-- Kotlin file header, view-id naming, and general style conventions used throughout this codebase
-  are documented informally by example — match the surrounding file. New Kotlin files start with:
+- Changing public API on a module with a committed `api/*.api` baseline means committing a
+  `./gradlew apiDump` alongside it. `apiCheck` fails in CI otherwise, which is the point.
+- Style is documented by example rather than by rule, so match the file you're in. New Kotlin files
+  start with:
   ```kotlin
   /**
    * @author <you>
    * @since DD/MM/YY
    */
   ```
-- Capture code (`sdk:network*`, `sdk:socket*`, `sdk:push*`) must never throw into the host app —
-  wrap recording paths defensively, matching the existing `runCatching`/`onFailure { logcatInfo(...) }`
-  pattern used throughout those modules.
-- Redaction happens at capture time (`RedactionEngine`, applied via `config.redactionPolicy`); code
-  that formats or displays already-captured text (dashboard JSON/XML rendering, Compose/Views
-  detail screens) must not need to know about redaction — if you're adding a redaction concern to a
-  formatter, something further upstream is probably the better place for it.
-- If your change touches a protected-variant boundary (a module with a release no-op counterpart,
-  or the Gradle plugin's variant-policy enforcement), run the sample assemble/verify commands above
-  for all three samples — that's what actually exercises the debug/release split.
+- Capture code (`sdk:network*`, `sdk:socket*`, `sdk:push*`) must never throw into the host app. A
+  debugging tool that crashes the app it exists to observe is worse than no tool. Wrap recording
+  paths defensively, following the `runCatching` / `onFailure { logcatInfo(...) }` pattern already
+  in those modules.
+- Redaction happens at capture time, in `RedactionEngine` via `config.redactionPolicy`. Code that
+  formats or displays already-captured text (dashboard JSON/XML rendering, the Compose and Views
+  detail screens) should never need to know redaction exists. If you find yourself adding a
+  redaction concern to a formatter, the fix probably belongs further upstream.
+- If your change touches a protected-variant boundary (a module with a release no-op twin, or the
+  Gradle plugin's variant-policy enforcement), run the sample assemble and verify commands above for
+  all three samples. That is what actually exercises the debug/release split.
 
 ## Opening a pull request
 
-- Keep PRs scoped to one logical change; the commit message should explain *why*, not just *what*.
+- Keep a PR to one logical change, and let the commit message explain *why* rather than *what*. The
+  diff already says what.
 - Include the specific `./gradlew` commands you ran to verify the change in the PR description.
 - If you changed public API, confirm `apiDump` is included in the diff.
-- If you changed anything security- or redaction-adjacent, call it out explicitly in the PR
-  description — see [SECURITY.md](SECURITY.md) for how to report a vulnerability privately instead
-  of through a public PR/issue.
-- No DCO or commit-sign-off is currently required or enforced by this repository (no `DCO` check
-  or commit-signing requirement is configured in CI) — standard `git commit` is fine. This may
-  change; check [.github/workflows](.github/workflows) if you're unsure what's currently enforced.
+- Changed anything security- or redaction-adjacent? Say so plainly in the PR description. If you're
+  reporting a vulnerability rather than fixing one, [SECURITY.md](SECURITY.md) explains how to do
+  that privately instead of in a public PR or issue.
+- No DCO or sign-off is required; a plain `git commit` is fine. That could change, so check
+  [.github/workflows](.github/workflows) if you want to be sure what's enforced today.
 
 ## Reporting bugs / requesting features
 
 Use the issue templates: [Bug report](.github/ISSUE_TEMPLATE/bug_report.md) or
-[Feature request](.github/ISSUE_TEMPLATE/feature_request.md). Do **not** file a public issue for a
-suspected credential exposure, production inclusion, authentication bypass, or remote code
-execution — see [SECURITY.md](SECURITY.md) for private reporting instead.
+[Feature request](.github/ISSUE_TEMPLATE/feature_request.md).
+
+One exception. Never open a public issue for a suspected credential exposure, an accidental
+production inclusion, an authentication bypass, or remote code execution.
+[SECURITY.md](SECURITY.md) has the private reporting route for those.

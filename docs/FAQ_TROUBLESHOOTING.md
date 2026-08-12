@@ -1,9 +1,9 @@
 # FAQ / troubleshooting
 
-**Can I connect from another machine on the same network?** Yes — pass
-`BindingMode.LAN` to `startBrowser(...)` and open the connect URL (or scan the QR code) from
-another device on the same network. Loopback + `adb forward` is still the safer default; only use
-LAN mode on a network you trust, since the dashboard speaks plaintext HTTP. See
+**Can I connect from another machine on the same network?** Yes. Pass `BindingMode.LAN` to
+`startBrowser(...)`, then open the connect URL or scan the QR code from the other device. Loopback
+plus `adb forward` is still the safer default. Only reach for LAN on a network you trust, because
+the dashboard speaks plaintext HTTP. See
 [LAN_PERMISSION_AND_TROUBLESHOOTING.md](LAN_PERMISSION_AND_TROUBLESHOOTING.md) and
 [THREAT_MODEL.md](THREAT_MODEL.md).
 
@@ -16,42 +16,43 @@ dashboard assets, and storage layer live only in `sdk:full`, and `verifyDevConso
 checks specifically for a dependency on that module, not for the absence of every DevConsole class.
 See [BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md](BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md).
 
-**I toggled a feature flag in the dashboard but my app didn't change.** Flags are read, not pushed
-— call `DevConsole.featureFlagValue(key)` from your own code at the point you'd otherwise check a
-local flag. There's no change notification; re-check after whatever user action would plausibly
-follow a QA override. See [STATE_AND_FLAGS.md](STATE_AND_FLAGS.md).
+**I toggled a feature flag in the dashboard but my app didn't change.** Flags are pulled, not
+pushed. Call `DevConsole.featureFlagValue(key)` wherever you'd otherwise check a local flag. There
+is no change notification, so re-check after whatever user action would plausibly follow a QA
+override. See [STATE_AND_FLAGS.md](STATE_AND_FLAGS.md).
 
-**Can I register a state provider or feature flag after `initialize()`?** No, by design — both are
-declared once via `DevConsoleConfig` at `initialize()` time, to avoid a race between a late
-registration and the dashboard having already read an earlier snapshot.
+**Can I register a state provider or feature flag after `initialize()`?** No, and that's deliberate.
+Both are declared once through `DevConsoleConfig` at `initialize()` time, which avoids a race
+between a late registration and a dashboard that already read an earlier snapshot.
 
-**Shaking the device does nothing, and there's no floating button.** Both triggers are opt-in via
-`DevConsoleConfig.openTriggers` and off by default — pass
+**Shaking the device does nothing, and there's no floating button.** Both triggers are off by
+default. Turn them on with
 `withOpenTriggers(OpenTriggers(shakeToOpen = true, floatingButton = true))` at `initialize()` time,
-and tune how hard a shake must be with `ShakeIntensity` (`LIGHT`/`MEDIUM`/`FIRM`). Either trigger
-only opens the in-app inspector; neither ever starts the server.
+and tune how hard a shake has to be with `ShakeIntensity` (`LIGHT`, `MEDIUM`, or `FIRM`). Either
+trigger only opens the in-app inspector. Neither ever starts the server.
 
-**A mock rule isn't matching.** Check the Mocks page's conflict detector first — a
-higher-priority or more-specific rule may be winning instead. Matching is deterministic: highest
-priority wins, ties broken by specificity, then by creation order. See
-[COMPOSER_AND_MOCKS.md](COMPOSER_AND_MOCKS.md).
+**A mock rule isn't matching.** Check the Mocks page's conflict detector first, since a
+higher-priority or more specific rule may be winning. Matching is deterministic: highest priority
+wins, ties break by specificity, then by creation order. Also check that the global switch is on;
+it and the per-rule toggles are independent. See [COMPOSER_AND_MOCKS.md](COMPOSER_AND_MOCKS.md).
 
-**My WebSocket/mock/network interceptor doesn't do anything in release builds.** That's correct —
-it's still wired in your `OkHttpClient.Builder`, but every recorder/engine behind it is
-`enabled = false` in `devconsole-noop`, so it becomes a fast no-op rather than something you need to
-conditionally remove.
+**My WebSocket, mock, or network interceptor does nothing in release builds.** That's the intent.
+It's still wired into your `OkHttpClient.Builder`, but every recorder and engine behind it is
+`enabled = false` in `devconsole-noop`. It becomes a fast no-op, so you never have to strip it out
+conditionally.
 
-**My session code says expired or invalid, and a second browser can't join.** Codes are single-use
-and one is live at a time with a 5-minute TTL — there is no on-device approval step and no automatic
-regeneration, so issue a fresh code from the device (More screen) for each new browser. See
+**My session code says expired or invalid, and a second browser can't join.** Codes are single-use,
+only one is live at a time, and each lasts five minutes. There's no approval step on the device and
+no automatic regeneration, so issue a fresh code from the More screen for each new browser. See
 [LAN_PERMISSION_AND_TROUBLESHOOTING.md](LAN_PERMISSION_AND_TROUBLESHOOTING.md#session-codes-session_code_expired--session_code_invalid).
 
-**Where do I report a security issue?** Not in a public issue — see [SECURITY.md](../SECURITY.md).
+**Where do I report a security issue?** Privately, never in a public issue.
+[SECURITY.md](../SECURITY.md) has the details.
 
 **Something else is broken.** Check the module-specific guide first (
 [NETWORK_INSPECTOR.md](NETWORK_INSPECTOR.md),
 [WEBSOCKET_INSPECTOR.md](WEBSOCKET_INSPECTOR.md),
 [PUSH.md](PUSH.md),
 [COMPOSER_AND_MOCKS.md](COMPOSER_AND_MOCKS.md),
-[STATE_AND_FLAGS.md](STATE_AND_FLAGS.md)) — each documents the exact capture/redaction bounds and
-known gaps for that feature.
+[STATE_AND_FLAGS.md](STATE_AND_FLAGS.md)). Each one spells out the exact capture and redaction
+bounds for that feature, plus its known gaps.

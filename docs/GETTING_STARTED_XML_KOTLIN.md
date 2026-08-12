@@ -1,6 +1,9 @@
-# Getting started - XML/Kotlin
+# Getting started: XML / Kotlin
 
-1. Apply the production-safety plugin and split the dependency by variant. 
+No Compose required. The inspector ships as an Activity, and the launcher panel is a plain `View`,
+so a Views-based host gets exactly what a Compose one does.
+
+1. Apply the production-safety plugin and split the dependency by variant.
 
 ```kotlin
 plugins {

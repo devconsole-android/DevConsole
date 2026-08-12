@@ -1,7 +1,8 @@
-# Getting started - XML/Java
+# Getting started: XML / Java
 
-DevConsole's public facade is a Kotlin `object`, but every method is annotated `@JvmStatic` (and the
-async variants are `@JvmOverloads`), so it reads like a plain Java utility class from Java code.
+DevConsole's public facade is a Kotlin `object`, but every method carries `@JvmStatic` and the async
+variants carry `@JvmOverloads`. From Java it reads like an ordinary utility class, and you never
+touch a coroutine: the `...Async` variants take a callback instead.
 
 1. Apply the production-safety plugin and split the dependency by variant (same `build.gradle.kts`
    shape as the Kotlin guide — see [GETTING_STARTED_XML_KOTLIN.md](GETTING_STARTED_XML_KOTLIN.md)

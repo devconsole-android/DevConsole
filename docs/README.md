@@ -1,5 +1,8 @@
 # Documentation
 
+Everything below assumes you've already done the [README](../README.md) quick start. If you only
+read one page here, make it the threat model, especially before you put the dashboard on your LAN.
+
 **Start here**
 - [Threat model and safe operation](THREAT_MODEL.md) — read before turning on LAN mode
 
