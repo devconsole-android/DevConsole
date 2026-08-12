@@ -8,9 +8,7 @@
 package io.devconsole.ui.compose
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -19,16 +17,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -50,13 +47,11 @@ internal fun GroupLabel(
     text: String,
     modifier: Modifier = Modifier,
 ) {
-    // The 8dp horizontal inset lines this up with the list rows below it, which the bare bottom
-    // padding was missing.
     Text(
-        text.uppercase(),
-        modifier = modifier.padding(start = 8.dp, top = 2.dp, end = 8.dp, bottom = 8.dp),
+        text,
+        modifier = modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp),
         color = DevConsoleTheme.colors.text3,
-        style = DevConsoleType.groupLabel,
+        style = MaterialTheme.typography.labelMedium,
     )
 }
 
@@ -89,7 +84,9 @@ private fun Modifier.tonalRowClickable(
 
 /**
  * A tonal list row: round mono lead badge, mono title + muted sub, trailing mono value + sub.
- * `min 74dp`, whole row clickable, `8dp` bottom margin baked in on every row (including the last).
+ * `min 48dp` (the Material touch-target floor), whole row clickable, content inset 16dp to match
+ * [GroupLabel], [HeroCard] and [CollapsibleSection]. Rows carry no margin of their own -- they sit
+ * flush against each other, and the list separates groups with [GroupLabel] instead.
  */
 @Suppress("LongParameterList") // One row primitive covers every Observe/Control/Data list item shape.
 @Composable
@@ -103,7 +100,7 @@ internal fun TonalListRow(
     modifier: Modifier = Modifier,
     trailValueColor: Color = DevConsoleTheme.colors.ink,
     trailSubtitle: String? = null,
-    containerColor: Color = DevConsoleTheme.colors.surface2,
+    containerColor: Color = Color.Transparent,
     /** Real composable trailing content (e.g. [TonalRowExpandChevron]) rendered after [trailValue]'s column. */
     trailContent: (@Composable () -> Unit)? = null,
     /** Optional composable rendered before the lead badge -- e.g. the traffic tab's selection checkbox. */
@@ -116,17 +113,22 @@ internal fun TonalListRow(
      * click action instead of folding both into one merged node.
      */
     mergeDescendants: Boolean = true,
+    /**
+     * `true` for a row a live capture just added, which washes it in signal for
+     * [InspectorMotion.ROW_FLASH_MS] -- see [arrivalFlash]. Feed it from [rememberArrivals] at the
+     * list level; a row can never work out on its own whether it is new or merely re-composed.
+     */
+    isArrival: Boolean = false,
 ) {
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp)
-                .heightIn(min = 74.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .heightIn(min = 48.dp)
                 .background(containerColor)
+                .arrivalFlash(isArrival)
                 .tonalRowClickable(onClick, onLongClick, mergeDescendants)
-                .padding(start = 12.dp, top = 12.dp, end = 16.dp, bottom = 12.dp),
+                .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -180,7 +182,7 @@ internal fun TonalListRow(
  * A real rotating chevron glyph for a [TonalListRow]'s expand/collapse affordance, replacing the
  * CJK presentation-form `︿` (U+FE3F) hack -- font-coverage dependent and announced as a symbol by
  * TalkBack. Same rotation convention [CollapsibleSection] uses: open -> 0deg (points down),
- * collapsed -> -90deg (points right), animated with the same 140ms tween.
+ * collapsed -> -90deg (points right), on the shared [chevronSpec] spring.
  */
 @Composable
 internal fun TonalRowExpandChevron(
@@ -190,7 +192,7 @@ internal fun TonalRowExpandChevron(
     val rotation by
         animateFloatAsState(
             targetValue = if (expanded) 0f else -90f,
-            animationSpec = tween(140),
+            animationSpec = chevronSpec(),
             label = "tonalRowExpandChevron",
         )
     InspectorGlyphIcon(
@@ -203,7 +205,7 @@ internal fun TonalRowExpandChevron(
     )
 }
 
-/** Warning-tinted note row: alert icon + 13sp muted text on a warn-soft card. */
+/** Warning-tinted note row: alert icon + 13sp muted text on a warn-soft block. */
 @Composable
 internal fun WarnNote(
     text: String,
@@ -213,7 +215,7 @@ internal fun WarnNote(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(MaterialTheme.shapes.large)
                 .background(DevConsoleTheme.colors.warnSoft)
                 .padding(16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -238,9 +240,10 @@ internal data class InspectorFilterChip(
 )
 
 /**
- * Horizontally scrolling filter chips: 44dp visual height, 12dp corners, selected = signal fill +
- * leading check. Each chip reserves a real 48dp touch target via [minimumInteractiveComponentSize]
- * even though it draws at 44dp.
+ * Horizontally scrolling filter chips on the shared 16dp gutter. Each chip is a stock M3
+ * [FilterChip] -- outlined on transparent when unselected, signal-tinted with a signal border when
+ * selected -- so it inherits Material's own height, shape ([DevConsoleShapes]' `small`) and 48dp
+ * touch target rather than restating them here.
  */
 @Composable
 internal fun FilterChipRow(
@@ -249,7 +252,11 @@ internal fun FilterChipRow(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         chips.forEach { chip -> InspectorChip(chip, onClick = { onChipClick(chip) }) }
@@ -261,37 +268,34 @@ private fun InspectorChip(
     chip: InspectorFilterChip,
     onClick: () -> Unit,
 ) {
-    val colors = DevConsoleTheme.colors
-    val borderColor = if (chip.selected) colors.signal else colors.line
-    val containerColor = if (chip.selected) colors.signal else Color.Transparent
-    val contentColor = if (chip.selected) colors.signalInk else colors.ink
-    Row(
-        modifier =
-            Modifier
-                .minimumInteractiveComponentSize()
-                .height(44.dp)
-                .border(1.dp, borderColor, RoundedCornerShape(12.dp))
-                .clip(RoundedCornerShape(12.dp))
-                .background(containerColor)
-                // toggleable (not a bare clickable+Role.Checkbox) so TalkBack announces the real checked state.
-                .toggleable(value = chip.selected, onValueChange = { onClick() }, role = Role.Checkbox)
-                .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (chip.selected) {
-            InspectorGlyphIcon(InspectorGlyph.Check, contentDescription = null, tint = contentColor, size = 15.dp)
-        }
-        Text(
-            chip.label,
-            color = contentColor,
-            fontSize = 13.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (chip.count != null) {
-            Text(chip.count, color = if (chip.selected) contentColor else colors.text3, fontSize = 12.sp)
-        }
-    }
+    FilterChip(
+        selected = chip.selected,
+        onClick = onClick,
+        label = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(chip.label)
+                if (chip.count != null) {
+                    Text(chip.count)
+                }
+            }
+        },
+        colors =
+            FilterChipDefaults.filterChipColors(
+                containerColor = Color.Transparent,
+                labelColor = DevConsoleTheme.colors.ink,
+                // signalSoft, not an ad-hoc alpha: the token is 0.13 in dark and 0.10 in light, so a
+                // literal .copy(alpha = ...) here would drift from every other signal-tinted surface
+                // in exactly one theme.
+                selectedContainerColor = DevConsoleTheme.colors.signalSoft,
+                selectedLabelColor = DevConsoleTheme.colors.signal,
+                selectedLeadingIconColor = DevConsoleTheme.colors.signal,
+            ),
+        border =
+            FilterChipDefaults.filterChipBorder(
+                enabled = true,
+                selected = chip.selected,
+                borderColor = DevConsoleTheme.colors.line,
+                selectedBorderColor = DevConsoleTheme.colors.signal,
+            ),
+    )
 }

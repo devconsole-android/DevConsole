@@ -542,6 +542,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Issues one request through the sample's instrumented OkHttp client.
+     *
+     * The response body is read here rather than discarded, for the same reason the Ktor call below
+     * reads its own: reading it is what the card demonstrates. These endpoints answer without a
+     * `Content-Length` (gzipped, chunked), so the interceptor captures the body through its tee as
+     * this call consumes it -- the same bytes, counted once. Abandoning the body would still be
+     * captured (the tee drains what is left on close), but a sample that shows the body it received
+     * is the honest demonstration.
+     */
     private suspend fun sendRequest(
         url: String,
         successLabel: String,
@@ -550,7 +560,10 @@ class MainActivity : ComponentActivity() {
             requestCount.incrementAndGet()
             try {
                 val request = Request.Builder().url(url).build()
-                instrumentedClient.newCall(request).execute().use { "$successLabel: ${it.code}" }
+                instrumentedClient.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    "$successLabel: ${response.code} (${body.length} chars)"
+                }
             } catch (cancellation: kotlinx.coroutines.CancellationException) {
                 throw cancellation
             } catch (error: Exception) {

@@ -126,6 +126,9 @@ import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.ContentTransformationException
+import io.ktor.server.plugins.UnsupportedMediaTypeException
 import io.ktor.server.plugins.origin
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.receiveParameters
@@ -148,7 +151,10 @@ import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
@@ -532,6 +538,13 @@ fun Application.devConsoleModule(
             proceed()
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (mediaType: UnsupportedMediaTypeException) {
+            // A malformed request is the caller's mistake; answering 500 sends them hunting a server bug.
+            call.respondClientError(HttpStatusCode.UnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", mediaType)
+        } catch (malformed: ContentTransformationException) {
+            call.respondClientError(HttpStatusCode.BadRequest, "VALIDATION_FAILED", malformed)
+        } catch (badRequest: BadRequestException) {
+            call.respondClientError(HttpStatusCode.BadRequest, "VALIDATION_FAILED", badRequest)
         } catch (throwable: Throwable) {
             call.application.environment.log.error(
                 "Unhandled exception handling ${call.request.httpMethod.value} ${call.request.uri}",
@@ -793,7 +806,7 @@ fun Application.devConsoleModule(
                 contentType = io.ktor.http.ContentType.Application.Json,
             )
         }
-        // Retained app-run history (D4's "previous-run banner": the Overview needs the most recent
+        // Retained app-run history (the "previous-run banner": the Overview needs the most recent
         // *non-active* run's StoredSessionStatus to know whether it CRASHED). Named "runs" rather
         // than reusing "session" -- that word is already spoken for by this dashboard's own bearer
         // session (see GET /api/v1/session just above) and would be ambiguous here. Read-only, bearer
@@ -1283,6 +1296,45 @@ fun Application.devConsoleModule(
             mockEngine.setEnabled(false)
             commandAuditLog.recordControlSuccess(session.id, "mock.disable_all", "mocks")
             call.respondText("{\"enabled\":false}", contentType = io.ktor.http.ContentType.Application.Json)
+        }
+        // The way back from `disable-all`. Capability-gated, unlike it: turning mocking ON changes
+        // how the app behaves.
+        post("/api/v1/mocks/enabled") {
+            val session =
+                call.mockRuleControlSession(
+                    sessionAuthority,
+                    commandAuditLog,
+                    mocksEditable,
+                    "mock.enabled",
+                    "mocks",
+                ) ?: return@post
+            if (!categoryEnabled("mocks")) {
+                commandAuditLog.recordControlFailure(session.id, "mock.enabled", "mocks")
+                call.respondCategoryDisabled("mocks")
+                return@post
+            }
+            val enabled =
+                call
+                    .receiveText()
+                    .trim()
+                    .trim('"')
+                    .toBooleanStrictOrNull()
+            if (enabled == null) {
+                commandAuditLog.recordControlFailure(session.id, "mock.enabled", "mocks")
+                call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
+                return@post
+            }
+            mockEngine.setEnabled(enabled)
+            commandAuditLog.recordControlSuccess(
+                session.id,
+                "mock.enabled",
+                "mocks",
+                mapOf("enabled" to enabled.toString()),
+            )
+            call.respondText(
+                "{\"enabled\":${mockEngine.isEnabled()}}",
+                contentType = io.ktor.http.ContentType.Application.Json,
+            )
         }
         get("/api/v1/mocks/rules") {
             if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) == null) {
@@ -3404,6 +3456,15 @@ class KtorLocalServerEngine(
     /** Public so the host facade can publish captured events into the live dashboard stream. */
     val streamHub: EventStreamHub = EventStreamHub()
 
+    /**
+     * Container for the embedded server's own coroutines, carrying [asyncBindFailureHandler] so a
+     * failed asynchronous bind is handled instead of reaching the host app's crash handler.
+     * `SupervisorJob` so one server's failure never cancels a later one started after a fall-forward.
+     * Deliberately never cancelled -- [stop] tears the server down through Ktor's own lifecycle, and
+     * cancelling this scope instead would make a stopped engine unable to start again.
+     */
+    private val serverScope = CoroutineScope(SupervisorJob() + asyncBindFailureHandler)
+
     @Volatile
     private var engine: EmbeddedServer<*, *>? = null
 
@@ -3521,49 +3582,55 @@ class KtorLocalServerEngine(
                 val configuration = runtimeConfiguration
                 val candidate =
                     runCatching {
-                        embeddedServer(CIO, host = endpoint.host, port = endpoint.port) {
-                            devConsoleModule(sessionAuthority, sessionCodeAuthority) {
-                                allowedHosts = setOf("localhost", endpoint.host)
-                                this.networkTransactions = this@KtorLocalServerEngine.networkTransactions
-                                this.socketStore = this@KtorLocalServerEngine.socketStore
-                                this.pushStore = this@KtorLocalServerEngine.pushStore
-                                this.stateRegistry = this@KtorLocalServerEngine.stateRegistry
-                                this.featureFlags = configuration.featureFlags
-                                this.featureFlagsEditable = configuration.featureFlagsEditable
-                                this.mockEngine = this@KtorLocalServerEngine.mockEngine
-                                this.mocksEditable = configuration.mocksEditable
-                                this.captureRules = this@KtorLocalServerEngine.captureRules
-                                this.captureRulesEditable = configuration.captureRulesEditable
-                                this.preferencesInspector = this@KtorLocalServerEngine.preferencesInspector
-                                this.preferencesEditable = configuration.preferencesEditable
-                                this.databaseInspector = this@KtorLocalServerEngine.databaseInspector
-                                this.databaseEditable = configuration.databaseEditable
-                                this.fileInspector = this@KtorLocalServerEngine.fileInspector
-                                this.filesEditable = configuration.filesEditable
-                                this.timeline = this@KtorLocalServerEngine.timeline
-                                this.metadata = this@KtorLocalServerEngine.metadata()
-                                this.sdkHealth = this@KtorLocalServerEngine.sdkHealth
-                                this.streamHub = this@KtorLocalServerEngine.streamHub
-                                this.annotations = this@KtorLocalServerEngine.annotations
-                                this.stateMutationsEnabled = configuration.stateMutationsEnabled
-                                this.composerEnabled = configuration.composerEnabled
-                                this.composerAllowedHosts = configuration.composerAllowedHosts
-                                this.composerExecutor = this@KtorLocalServerEngine.composerExecutor
-                                this.composerCollections = this@KtorLocalServerEngine.composerCollections
-                                this.pushSimulator = this@KtorLocalServerEngine.pushSimulator
-                                this.commandAuditLog = this@KtorLocalServerEngine.commandAuditLog
-                                this.redactionPolicy = configuration.redactionPolicy
-                                this.attachmentReader = this@KtorLocalServerEngine.attachmentReader
-                                this.attachmentMetadataReader = this@KtorLocalServerEngine.attachmentMetadataReader
-                                this.retainedCaptures = this@KtorLocalServerEngine.retainedCaptures
-                                this.evidenceStore = this@KtorLocalServerEngine.evidenceStore
-                                this.currentSessionId = this@KtorLocalServerEngine.currentSessionId
-                                this.sessionSnapshotProvider = this@KtorLocalServerEngine.sessionSnapshotProvider
-                                this.sessionsProvider = this@KtorLocalServerEngine.sessionsProvider
-                                this.screenshotCapture = this@KtorLocalServerEngine.screenshotCapture
-                                boundEndpoint = { currentEndpoint }
-                            }
-                        }.start(wait = false)
+                        serverScope
+                            .embeddedServer(
+                                CIO,
+                                host = endpoint.host,
+                                port = endpoint.port,
+                                parentCoroutineContext = asyncBindFailureHandler,
+                            ) {
+                                devConsoleModule(sessionAuthority, sessionCodeAuthority) {
+                                    allowedHosts = setOf("localhost", endpoint.host)
+                                    this.networkTransactions = this@KtorLocalServerEngine.networkTransactions
+                                    this.socketStore = this@KtorLocalServerEngine.socketStore
+                                    this.pushStore = this@KtorLocalServerEngine.pushStore
+                                    this.stateRegistry = this@KtorLocalServerEngine.stateRegistry
+                                    this.featureFlags = configuration.featureFlags
+                                    this.featureFlagsEditable = configuration.featureFlagsEditable
+                                    this.mockEngine = this@KtorLocalServerEngine.mockEngine
+                                    this.mocksEditable = configuration.mocksEditable
+                                    this.captureRules = this@KtorLocalServerEngine.captureRules
+                                    this.captureRulesEditable = configuration.captureRulesEditable
+                                    this.preferencesInspector = this@KtorLocalServerEngine.preferencesInspector
+                                    this.preferencesEditable = configuration.preferencesEditable
+                                    this.databaseInspector = this@KtorLocalServerEngine.databaseInspector
+                                    this.databaseEditable = configuration.databaseEditable
+                                    this.fileInspector = this@KtorLocalServerEngine.fileInspector
+                                    this.filesEditable = configuration.filesEditable
+                                    this.timeline = this@KtorLocalServerEngine.timeline
+                                    this.metadata = this@KtorLocalServerEngine.metadata()
+                                    this.sdkHealth = this@KtorLocalServerEngine.sdkHealth
+                                    this.streamHub = this@KtorLocalServerEngine.streamHub
+                                    this.annotations = this@KtorLocalServerEngine.annotations
+                                    this.stateMutationsEnabled = configuration.stateMutationsEnabled
+                                    this.composerEnabled = configuration.composerEnabled
+                                    this.composerAllowedHosts = configuration.composerAllowedHosts
+                                    this.composerExecutor = this@KtorLocalServerEngine.composerExecutor
+                                    this.composerCollections = this@KtorLocalServerEngine.composerCollections
+                                    this.pushSimulator = this@KtorLocalServerEngine.pushSimulator
+                                    this.commandAuditLog = this@KtorLocalServerEngine.commandAuditLog
+                                    this.redactionPolicy = configuration.redactionPolicy
+                                    this.attachmentReader = this@KtorLocalServerEngine.attachmentReader
+                                    this.attachmentMetadataReader = this@KtorLocalServerEngine.attachmentMetadataReader
+                                    this.retainedCaptures = this@KtorLocalServerEngine.retainedCaptures
+                                    this.evidenceStore = this@KtorLocalServerEngine.evidenceStore
+                                    this.currentSessionId = this@KtorLocalServerEngine.currentSessionId
+                                    this.sessionSnapshotProvider = this@KtorLocalServerEngine.sessionSnapshotProvider
+                                    this.sessionsProvider = this@KtorLocalServerEngine.sessionsProvider
+                                    this.screenshotCapture = this@KtorLocalServerEngine.screenshotCapture
+                                    boundEndpoint = { currentEndpoint }
+                                }
+                            }.start(wait = false)
                     }.getOrNull() ?: return@forEach
 
                 if (!isServerBound(endpoint.host, endpoint.port)) {
@@ -3729,7 +3796,30 @@ private class SlidingWindowRateLimiter(
     }
 }
 
+/**
+ * Keeps a *detected and recovered* bind failure from being reported as an unhandled crash.
+ *
+ * CIO binds asynchronously: `start(wait = false)` returns before the accept loop has the port, so
+ * losing the race between [isPortAvailable]'s probe and the real bind throws inside Ktor's own
+ * `httpServer` accept coroutine -- long after the `runCatching` around `start()` has returned.
+ * With nothing on the server's parent context that exception reaches the thread's default uncaught
+ * handler, which on Android is the *host app's* crash handler: a debug console taking down the app
+ * it exists to observe, for a condition it already handles correctly.
+ *
+ * [KtorLocalServerEngine.start] notices the failure the honest way -- `isServerBound` returns false
+ * and the loop falls forward to the next port -- so nothing is being hidden here that the engine
+ * does not already act on. The handler is deliberately silent rather than logging: this runs inside
+ * a host application, and the SDK's contract is that its own recovery is never the host's problem.
+ *
+ * Found via a flaky test: Gradle runs `testDebugUnitTest` and `testReleaseUnitTest` in parallel
+ * (`org.gradle.parallel=true`), both binding this module's fixed 8400..8419 range, and the loser's
+ * escaped BindException was landing on whichever unrelated test called `runTest` next as
+ * `UncaughtExceptionsBeforeTest`.
+ */
+private val asyncBindFailureHandler = CoroutineExceptionHandler { _, _ -> }
+
 /** A best-effort preflight lets the engine advance over occupied ports before CIO starts its async bind. */
+
 private fun isPortAvailable(
     host: String,
     port: Int,
@@ -3985,6 +4075,7 @@ private fun String.commandAuditIdentity(method: String): Pair<String, String>? =
             "capture.rule.enabled" to removePrefix("/api/v1/capture-rules/").removeSuffix("/enabled")
         startsWith("/api/v1/capture-rules/") && method == "DELETE" -> "capture.rule.delete" to substringAfterLast('/')
         this == "/api/v1/mocks/disable-all" -> "mock.disable_all" to "mocks"
+        this == "/api/v1/mocks/enabled" -> "mock.enabled" to "mocks"
         this == "/api/v1/mocks/rules" && method == "POST" -> "mock.rule.upsert" to "rule"
         startsWith("/api/v1/mocks/rules/") && endsWith("/enabled") ->
             "mock.rule.enabled" to removePrefix("/api/v1/mocks/rules/").removeSuffix("/enabled")
@@ -4961,6 +5052,20 @@ private suspend fun io.ktor.server.application.ApplicationCall.authorizeNetworkE
     }
     val ids = receiveParameters().getAll("id").orEmpty()
     return resolveNetworkExportTransactions(networkTransactions, bodyIds = ids)
+}
+
+/** Answers a malformed request with the JSON envelope at a 4xx. Debug-logged: rejections are routine. */
+private suspend fun io.ktor.server.application.ApplicationCall.respondClientError(
+    status: HttpStatusCode,
+    code: String,
+    cause: Throwable,
+) {
+    application.environment.log.debug(
+        "Rejected ${request.httpMethod.value} ${request.uri} as $code: ${cause.message}",
+    )
+    if (!response.isCommitted) {
+        respondText("{\"code\":\"$code\"}", status = status, contentType = ContentType.Application.Json)
+    }
 }
 
 private fun io.ktor.server.application.ApplicationCall.networkTransactionQuery(

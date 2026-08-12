@@ -75,7 +75,6 @@ private fun HeroCardPreview() {
             value = "4",
             valueSuffix = "of 15",
             subtitle = "2 client, 2 server, 1 timeout.",
-            containerColor = DevConsoleTheme.colors.errorSoft,
             labelColor = DevConsoleTheme.colors.error,
             valueColor = DevConsoleTheme.colors.error,
             onCollapse = {},
@@ -162,7 +161,7 @@ private fun InspectorBottomNavPreview() {
     var selected by remember { mutableStateOf(0) }
     val destinations = listOf("Observe", "Control", "Data", "More")
     DevConsoleTheme(darkTheme = isSystemInDarkTheme()) {
-        InspectorBottomNav(
+        InspectorNavigationBar(
             destinations.mapIndexed { index, label ->
                 InspectorNavItem(label, index == selected, { selected = index }) {
                     InspectorGlyphIcon(InspectorGlyph.Check, contentDescription = null, size = 20.dp)

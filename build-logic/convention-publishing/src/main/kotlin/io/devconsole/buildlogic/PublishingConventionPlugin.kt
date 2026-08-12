@@ -49,7 +49,9 @@ class PublishingConventionPlugin : Plugin<Project> {
                 // module's own generated HTML instead of shipping empty.
                 configureBasedOnAppliedPlugins(JavadocJar.Dokka("dokkaGeneratePublicationHtml"))
                 publishToMavenCentral()
-                signAllPublications()
+                // Unconditional signing fails with "no configured signatory" on any build without
+                // the key -- contributors and CI included.
+                if (hasSigningKey()) signAllPublications()
                 pom {
                     name.set("DevConsole ${target.name}")
                     description.set("DevConsole SDK module: ${target.name}")
@@ -77,9 +79,12 @@ class PublishingConventionPlugin : Plugin<Project> {
         }
     }
 
+    /** The key itself, not the id/password a machine may keep between releases. */
+    private fun Project.hasSigningKey(): Boolean = !(findProperty("signingInMemoryKey") as? String).isNullOrBlank()
+
     private companion object {
         const val MAVEN_GROUP = "io.github.devconsole-android"
-        const val SDK_VERSION = "1.0.1"
+        const val SDK_VERSION = "1.1.1"
         const val PROJECT_URL = "https://github.com/devconsole-android/DevConsole"
     }
 }

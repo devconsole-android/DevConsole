@@ -344,7 +344,7 @@ class DevConsoleOkHttpInterceptorTest {
     }
 
     @Test
-    fun `records exactly once with a partial body when the host closes the teed body early`() {
+    fun `records exactly once with the whole body when the host closes the teed body early`() {
         val server = MockWebServer()
         server.start()
         try {
@@ -369,22 +369,105 @@ class DevConsoleOkHttpInterceptorTest {
                         .singleOrNull()
                         ?.capture
                         ?.response
-                        ?.metadata
-                        ?.body
-                        ?.omittedReason == "partial"
+                        ?.body is BodyPreview.Text
                 }.single()
             val recordedResponse = transaction.capture.response!!
             assertEquals(200, recordedResponse.statusCode)
-            val capturedText = (recordedResponse.body as BodyPreview.Text).value
-            assertTrue("only bytes actually delivered to the host can be captured", capturedText.isNotEmpty())
-            assertTrue(fullBody.startsWith(capturedText))
-            // Closed before EOF: whatever fragment was delivered must never masquerade as the
-            // complete response body.
-            assertEquals("partial", recordedResponse.metadata.body.omittedReason)
+            // The host walked away after 5 bytes; the close-time drain must still recover the rest,
+            // so what DevConsole shows never depends on how much of the body the host wanted.
+            assertEquals(fullBody, (recordedResponse.body as BodyPreview.Text).value)
+            assertNull(recordedResponse.metadata.body.omittedReason)
+            assertEquals(fullBody.length.toLong(), recordedResponse.metadata.body.declaredLength)
             // Close raced EOF on nothing here, but the once-guard must still have recorded a single
             // transaction; give the async recorder a beat to surface any duplicate before asserting.
             Thread.sleep(100)
             assertEquals(1, awaitTransactions(transactions).size)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `captures the whole body of a response the host closes without reading at all`() {
+        val server = MockWebServer()
+        server.start()
+        try {
+            // The shape every sample and plenty of real call sites have: read the status code,
+            // close, never touch the body. Before the close-time drain this recorded an empty body
+            // for exactly the responses OkHttp reports no Content-Length for -- chunked, and every
+            // transparently-gzipped response -- while the same body *with* a Content-Length was
+            // captured whole by the eager peek.
+            val json = "{\"userId\":1,\"id\":1,\"title\":\"delectus aut autem\"}"
+            server.enqueue(
+                MockResponse()
+                    .setChunkedBody(json, 16)
+                    .addHeader("Content-Type", "application/json; charset=utf-8"),
+            )
+            val transactions =
+                InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
+            val client = clientRecordingTo(transactions)
+
+            client.newCall(Request.Builder().url(server.url("/todos/1")).build()).execute().use { it.code }
+
+            val transaction =
+                awaitTransactions(transactions) { list ->
+                    list
+                        .singleOrNull()
+                        ?.capture
+                        ?.response
+                        ?.body is BodyPreview.Text
+                }.single()
+            val recordedResponse = transaction.capture.response!!
+            assertEquals(json, (recordedResponse.body as BodyPreview.Text).value)
+            assertNull(recordedResponse.metadata.body.omittedReason)
+            assertEquals(json.length.toLong(), recordedResponse.metadata.body.declaredLength)
+            assertNotNull(transaction.completedAtEpochMs)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `bounds the drain so abandoning a live stream never stalls the host's close`() {
+        val server = MockWebServer()
+        server.start()
+        try {
+            // 8 bytes per 400ms: a stream that could never be drained inside the 300ms budget.
+            server.enqueue(
+                MockResponse()
+                    .setChunkedBody("x".repeat(64 * 1024), 8)
+                    .throttleBody(8, 400, TimeUnit.MILLISECONDS)
+                    .addHeader("Content-Type", "application/x-ndjson"),
+            )
+            val transactions =
+                InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
+            val client = clientRecordingTo(transactions)
+
+            val response = client.newCall(Request.Builder().url(server.url("/live")).build()).execute()
+            val closeStartedAtMs = System.currentTimeMillis()
+            response.close()
+            val closeDurationMs = System.currentTimeMillis() - closeStartedAtMs
+
+            assertTrue(
+                "close() must return on the drain budget, not on the stream's own pace: ${closeDurationMs}ms",
+                closeDurationMs < 3_000L,
+            )
+            val transaction =
+                awaitTransactions(transactions) { list ->
+                    list
+                        .singleOrNull()
+                        ?.capture
+                        ?.response
+                        ?.metadata
+                        ?.body
+                        ?.omittedReason == "partial"
+                }.single()
+            // A drain that ran out of budget must never present its fragment as the whole response.
+            assertEquals(
+                "partial",
+                transaction.capture.response!!
+                    .metadata.body.omittedReason,
+            )
         } finally {
             server.close()
         }

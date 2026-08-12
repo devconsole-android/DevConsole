@@ -110,4 +110,27 @@ class DevConsoleRuntimeTest {
         val result = runtime.initialize(DevConsoleConfig(eventBufferCapacity = 64))
         assertTrue("expected Conflict, got $result", result is InitResult.Conflict)
     }
+
+    /** Both surfaces reported a permanent 0 because nothing incremented these. */
+    @Test
+    fun `published and dropped events accumulate onto health`() {
+        val runtime = enabledRuntime()
+        runtime.initialize(DevConsoleConfig.default())
+        assertEquals(0L, runtime.health.value.publishedEventCount)
+
+        repeat(3) { runtime.recordPublishedEvent() }
+        runtime.recordDroppedEvents(2)
+
+        assertEquals(3L, runtime.health.value.publishedEventCount)
+        assertEquals(2L, runtime.health.value.droppedEventCount)
+    }
+
+    @Test
+    fun `a non-positive drop count leaves health untouched`() {
+        val runtime = enabledRuntime()
+        runtime.recordDroppedEvents(0)
+        runtime.recordDroppedEvents(-5)
+
+        assertEquals(0L, runtime.health.value.droppedEventCount)
+    }
 }

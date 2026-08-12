@@ -112,6 +112,21 @@ class DevConsoleRuntime(
         if (state.value == DevConsoleState.Starting) transitionTo(DevConsoleState.Failed(message))
     }
 
+    /** Counts one captured event onto [health]; platform capture funnels every emission through here. */
+    @Synchronized
+    fun recordPublishedEvent() {
+        mutableHealth.value =
+            mutableHealth.value.copy(publishedEventCount = mutableHealth.value.publishedEventCount + 1)
+    }
+
+    /** Counts events lost before reaching durable storage. */
+    @Synchronized
+    fun recordDroppedEvents(count: Long) {
+        if (count <= 0) return
+        mutableHealth.value =
+            mutableHealth.value.copy(droppedEventCount = mutableHealth.value.droppedEventCount + count)
+    }
+
     @Synchronized
     fun stop(reason: StopReason) {
         if (state.value == DevConsoleState.Stopped || state.value == DevConsoleState.Uninitialized) return

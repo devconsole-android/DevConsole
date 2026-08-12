@@ -20,6 +20,135 @@ joined this list.)
 
 ## Unreleased
 
+## 1.1.1 — 2026-08-12
+
+A build-and-distribution patch: no SDK code changed, and the public API is byte-for-byte the
+1.1.0 surface. It exists because 1.1.0 could not be built by anything that lacks the maintainer's
+signing key — including JitPack, which this release adds as a channel.
+
+### Added
+
+- **JitPack as a secondary channel, for unreleased code.** Maven Central remains the supported
+  one; JitPack covers trying a branch or an unmerged fix. Artifacts resolve under the group
+  `com.github.devconsole-android.DevConsole` with the same artifact ids
+  (`com.github.devconsole-android.DevConsole:devconsole:1.1.1`), and any branch resolves as
+  `<branch>-SNAPSHOT` (a `/` in the branch name is written `~`). Two limits worth knowing: the
+  Gradle plugin is **not** served there — it lives in an `includeBuild` and JitPack lists only the
+  31 library modules, so JitPack consumers name coordinates directly and give up the plugin's
+  variant-policy enforcement — and JitPack artifacts are unsigned.
+
+### Fixed
+
+- **`./gradlew publishToMavenLocal` failed for anyone without the maintainer's signing key.**
+  `signAllPublications()` registers a signing task *and* the resulting `.asc` files as publication
+  artifacts. With no key the task fails outright ("no configured signatory") rather than skipping,
+  and even when the task is explicitly excluded the publication still demands `.asc` files nothing
+  produced ("artifact file does not exist: …-release.aar.asc"). Both shapes broke the same three
+  audiences: contributors running the exact command `CONTRIBUTING.md` asks for, CI building from a
+  clean checkout, and JitPack. Publications are now signed only when a key is actually configured —
+  the key itself, not the id/password a maintainer's machine keeps between releases. Release
+  signing is unchanged and verified both ways: five signatures with the key present, none and a
+  green build without. `docs/MAVEN_PUBLISHING.md` has claimed since 1.0.0 that signing "no-ops when
+  no key is configured"; that is now true rather than aspirational.
+
+- **`docs/COMPOSER_AND_MOCKS.md` described re-enabling mocks without saying how**, from before
+  [1.1.0](#110--2026-08-12) added `POST /api/v1/mocks/enabled` — until then the browser genuinely
+  could not. Now documents both directions and why turning mocking on is capability-gated while
+  turning it off is not.
+
+## 1.1.0 — 2026-08-12
+
+A minor in the strict sense the [policy](#versioning-and-stability-policy) commits to: two additive
+methods on `DevConsoleRuntime`, one new REST route, and no change to any existing surface. Most of
+the release is the native-siblings UI pass across both surfaces, plus four defects a full
+feature sweep of the shipped build turned up.
+
+### Added
+
+- **`POST /api/v1/mocks/enabled` — the way back from the mock kill switch.** The browser could
+  disable all mocking (`POST /api/v1/mocks/disable-all`) but had no route to turn it back on, so
+  the only way to resume mocking was to restart the host app — while the Android in-app inspector
+  had a two-way toggle the whole time. The dashboard's "Disable all mocks" button is now a two-way
+  switch that reads its label from the engine's live state. The two directions gate differently and
+  deliberately: turning mocking *off* stays ungated (falling back to real traffic is always
+  allowed), while turning it back *on* requires the host's `mocks` editing capability, since it
+  changes how the app behaves.
+
+- **`DevConsoleRuntime.recordPublishedEvent()` / `recordDroppedEvents(count)`**, the counters behind
+  the fix below.
+
+### Fixed
+
+- **Every list row in the dashboard rendered without its path or summary.** `.row-main` is the
+  flexible column between a row's fixed ones, and those fixed columns — checkbox 24px, method badge
+  54px, duration 74px, status 62px, flag 24px, five 12px gaps, 20px padding — added up to 318px
+  inside a list pane whose default width was 320px. The path text was laid out into the leftover
+  2px and clipped to nothing, so Network, Timeline, WebSockets, Push, and Crashes all showed rows
+  identifiable only by their method badge and duration; on the two-column rows a sliver of the
+  leading `/` survived and read as a stray comma. The detail pane had the full URL all along, which
+  is what kept this from being obvious. The row gap is now 8px and the list column defaults to
+  440px with a 360px floor (it stays drag-resizable), leaving the main text 142px at the default.
+  The `.col-*` header cells were re-aligned to match, including `.col-flag`, which had been 34px
+  against the 24px flag button it labels.
+
+- **The SDK-health card reported "0 published events" no matter how much the SDK captured.**
+  `publishedEventCount` and `droppedEventCount` are surfaced on the dashboard's SDK Health screen
+  and the Android More screen's health rows, and both were hardcoded 0 in every shipping build:
+  the counters live on `EventPipeline`, which nothing in the runtime ever instantiates — real
+  captures funnel through `CaptureTimelineBridge.emit()` instead, and `DevConsoleRuntime`'s own
+  `SdkHealth` only ever tracked `initializationCount` and `state`. A dropped-event count that can
+  never rise is the more consequential half: it is the SDK's only signal that capture lost data to
+  buffer overflow. `emit()` now counts each published event and the persistence queue's existing
+  `onDrop` hook counts each dropped one.
+
+- **A malformed request answered `500 INTERNAL_ERROR`.** Routes that read a form body — `POST
+  /api/v1/push/simulate`, the `POST` halves of the HAR and Postman exports, `POST /api/v1/exports`,
+  and the rest — call `receiveParameters()`, which throws when handed JSON or no `Content-Type` at
+  all. That landed on the module's catch-all boundary and came back as a server error, sending
+  anyone writing a third-party client hunting a bug in the SDK for what was their own malformed
+  request. Content-transformation failures now answer `400 VALIDATION_FAILED` and the typed
+  media-type rejection answers `415 UNSUPPORTED_MEDIA_TYPE`, so an `INTERNAL_ERROR` from this
+  server once again means only a genuine server-side fault. The dashboard was never affected — it
+  sets the right content type on every one of these calls.
+
+- **A pill button clipped its own label.** `InspectorPillButton` laid its label out with `maxLines =
+  1` and the default clip overflow, so the More screen's "Code" action — squeezed by the "Copy URL"
+  pill's 2f weight — rendered as "Cod". The label now ellipsizes rather than silently dropping a
+  glyph, the pill's horizontal padding is 12dp, and the URL card's primary action takes 1.5f.
+
+- **Starting the server on a port that was taken between the availability probe and the real bind
+  could crash the host app.** `KtorLocalServerEngine.start` preflights each candidate port with
+  `isPortAvailable`, then calls `embeddedServer(CIO, ...).start(wait = false)` — which returns
+  *before* CIO's accept loop has actually bound. Losing that race throws `BindException` inside
+  Ktor's own accept coroutine, long after the `runCatching` around `start()` has returned, and with
+  nothing on the server's parent context it reached the thread's default uncaught handler: on
+  Android, the host application's crash handler. A debug console taking down the app it exists to
+  observe, for a condition it already handles — `isServerBound` sees the failure and the loop falls
+  forward to the next port exactly as intended. The embedded server now runs in an engine-owned
+  `SupervisorJob` scope carrying a `CoroutineExceptionHandler`, so a detected-and-recovered bind
+  failure stays the SDK's business. Surfaced by a flaky test rather than a report: Gradle runs
+  `testDebugUnitTest` and `testReleaseUnitTest` in parallel, both binding this module's fixed
+  `8400..8419` range, and the loser's escaped exception landed on whichever unrelated test called
+  `runTest` next as `UncaughtExceptionsBeforeTest` — roughly two failures in every five suite runs,
+  on two tests that had nothing to do with it.
+
+- **OkHttp responses without a `Content-Length` showed a blank response body unless the host read
+  the whole thing.** Those responses — `Transfer-Encoding: chunked`, and every transparently
+  gzipped response, which is most of them — are captured by the tee, which copies bytes *as the
+  host reads them*. A call site that reads only the status code and closes (`execute().use {
+  it.code }`, the shape all three samples had), or a parser that stops at the end of the value it
+  wanted, therefore left nothing to capture: the transaction was recorded with an empty body and
+  `bodyOmittedReason = "partial"`. The same response *with* a `Content-Length` was captured whole
+  by the eager `peekBody`, and the Ktor plugin — which drains its own half of the split channel —
+  was never affected, so identical app code showed the body on one client and a blank pane on the
+  other. `TeeCapturingSource.close()` now drains whatever the host left behind before completing
+  the close, bounded by the existing 512 KiB cap and a 300 ms deadline (the same
+  bounded-drain-on-close OkHttp itself performs for connection reuse). A body that runs out of that
+  budget is still recorded `"partial"`, and one no bytes were recovered from is now recorded with
+  no body instead of an empty one — an empty preview beside a 200 reads as "the server sent
+  nothing", which is a different claim. The compose sample's OkHttp card now reads its response
+  body, like its Ktor card already did.
+
 ## 1.0.1 — 2026-08-08
 
 A patch in the strict sense the [policy](#versioning-and-stability-policy) now commits to: one

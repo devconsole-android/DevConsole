@@ -25,6 +25,15 @@ protocol change.
 - **Access levels:** none. Every authenticated session is equivalent (`auth` in the tables below
   means "any live session"); mutating routes additionally gate on the host's `EditingCapabilities`
   flags (`mocks`, `captureRules`, `preferences`, `database`, `files`), not on a session-level role.
+- **Request-body content types.** Routes that read a form body (`POST /api/v1/push/simulate`, the
+  `POST` halves of `/api/v1/network/har` and `/api/v1/network/postman`, `POST /api/v1/exports`,
+  `POST /api/v1/preferences/{file}`, …) need
+  `Content-Type: application/x-www-form-urlencoded`; routes that read a raw scalar
+  (`POST /api/v1/flags/{key}`, the `/enabled` toggles) read the body as text. A form route sent the
+  wrong media type — JSON, or no `Content-Type` at all — answers `400 VALIDATION_FAILED` (Ktor
+  reports it as a failed content transformation); the rarer typed media-type rejection answers `415
+  UNSUPPORTED_MEDIA_TYPE`. Neither is reported as a `500`, so an `INTERNAL_ERROR` from this server
+  always means a genuine server-side fault worth reporting.
 
 ## 1. Host allowlist and rate limiting
 
@@ -176,7 +185,9 @@ actually end up in the Postman collection body.
 
 ### Mocks
 
-`GET /api/v1/mocks` (enabled flag), `POST /api/v1/mocks/disable-all` (auth), `GET
+`GET /api/v1/mocks` (enabled flag), `POST /api/v1/mocks/disable-all` (auth), `POST
+/api/v1/mocks/enabled` (auth + `mocks` capability — raw-text `"true"`/`"false"` body, returns the
+resulting `{"enabled":…}`), `GET
 /api/v1/mocks/rules`, `GET /api/v1/mocks/conflicts`, `POST /api/v1/mocks/rules` (auth — id must
 match `[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}`, status `100..599`), `DELETE
 /api/v1/mocks/rules/{id}` (auth). **Quirk:** `POST /api/v1/mocks/rules` can only ever create a
@@ -184,6 +195,11 @@ match `[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}`, status `100..599`), `DELETE
 override, template response, connection failure, passthrough) but they're only reachable by a host
 app registering rules directly against the engine, not over HTTP. `GET .../rules`'s `statusCode`
 field is `null` for any rule that isn't a `StaticResponse`.
+
+`disable-all` and `enabled` differ in more than direction: turning mocking *off* never needs the
+`mocks` editing capability (falling back to real traffic is always allowed), while turning it back
+*on* does, since it changes how the host app behaves. A host that publishes rules read-only can
+therefore disable mocking from the browser but not re-enable it.
 
 ### Feature flags
 

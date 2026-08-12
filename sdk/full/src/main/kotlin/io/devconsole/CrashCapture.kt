@@ -56,7 +56,7 @@ internal class CrashCapture(
     /** [CrashPolicy.maxStackChars] governs both kinds so an ANR dump is never re-truncated shorter. */
     private val policy: () -> CrashPolicy = { CrashPolicy() },
     /**
-     * D4's auto-flag: every crash and ANR is flagged into the evidence tray server-side at insert
+     * Auto-flag: every crash and ANR is flagged into the evidence tray server-side at insert
      * time, kind CRASH -- the one thing nobody should have to remember to click. Read inside
      * [persistNow]'s own timeout window, after the crash record's own insert, and failure-tolerant
      * on its own (see [autoFlagCrash]), so a missing/unavailable/over-quota evidence store can never

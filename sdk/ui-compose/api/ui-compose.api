@@ -52,10 +52,10 @@ public final class io/devconsole/ui/compose/ComposableSingletons$InspectorDesign
 	public final fun getLambda$-1632587973$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-1653499697$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-1712236940$ui_compose_release ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$-1721840425$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-1854085260$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-2009051545$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-2082092133$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-297085506$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-340653286$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-905408250$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$101096390$ui_compose_release ()Lkotlin/jvm/functions/Function2;
@@ -112,6 +112,7 @@ public final class io/devconsole/ui/compose/ComposableSingletons$InspectorMoreSc
 public final class io/devconsole/ui/compose/ComposableSingletons$InspectorNavComponentsKt {
 	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorNavComponentsKt;
 	public fun <init> ()V
+	public final fun getLambda$-1348228066$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$1070396343$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 }
 

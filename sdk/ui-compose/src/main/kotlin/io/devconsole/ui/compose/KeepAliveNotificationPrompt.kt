@@ -15,14 +15,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 
 /**
- * Process-scoped dismissal: closing the snackbar silences it until the next app run, matching the
- * spec ("in-memory, reappears next app run") without any persistence.
+ * Process-scoped dismissal: closing the snackbar silences it until the next app run, with no
+ * persistence.
  *
- * Kept as a top-level property rather than the brief's `object KeepAlivePromptState` wrapper --
- * detekt's `MatchingDeclarationName` flags a lone top-level object whose name doesn't match the
- * file name (`KeepAliveNotificationPrompt.kt`), and this file's name is fixed by the task spec.
- * A private top-level `var` is JVM-static-backed, so it's the same process-scoped storage with
- * one fewer top-level type for the rule to trip on.
+ * A top-level property rather than an enclosing object: detekt's `MatchingDeclarationName` flags a
+ * lone top-level object whose name doesn't match the file name. A private top-level `var` is
+ * JVM-static-backed, so it's the same process-scoped storage with one fewer type to name.
  */
 private var keepAlivePromptDismissedThisProcess: Boolean = false
 

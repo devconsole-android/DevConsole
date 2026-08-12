@@ -27,7 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -145,9 +145,10 @@ private fun TrafficList(
     colors: DevConsoleColors,
     selection: TrafficSelection,
 ) {
+    val arrivals = rememberArrivals(stats.rowsNewestFirst.map { it.id })
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
     ) {
         stickyHeader {
             if (selection.modeActive) {
@@ -191,6 +192,8 @@ private fun TrafficList(
                 selectionModeActive = selection.modeActive,
                 colors = colors,
                 actions = actions,
+                isArrival = transaction.id in arrivals,
+                modifier = Modifier.animateItem(),
             )
         }
     }
@@ -223,7 +226,7 @@ private fun TrafficSelectionBar(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(MaterialTheme.shapes.large)
                 .background(colors.surface2)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
@@ -322,7 +325,6 @@ private fun TrafficHero(
             value = stats.failCount.toString(),
             label = "of ${stats.total} requests failing",
             onExpand = actions.onToggleTrafficHero,
-            containerColor = if (failing) colors.errorSoft else colors.surface2,
             valueColor = if (failing) colors.error else colors.ink,
             labelColor = if (failing) colors.error else colors.text3,
         )
@@ -338,7 +340,6 @@ private fun TrafficHero(
             } else {
                 "No failing requests out of ${stats.total} captured."
             },
-        containerColor = if (failing) colors.errorSoft else colors.surface2,
         labelColor = if (failing) colors.error else colors.text3,
         valueColor = if (failing) colors.error else colors.ink,
         onCollapse = actions.onToggleTrafficHero,
@@ -366,59 +367,68 @@ private fun TrafficRow(
     selectionModeActive: Boolean,
     colors: DevConsoleColors,
     actions: ObserveActions,
+    modifier: Modifier = Modifier,
+    isArrival: Boolean = false,
 ) {
     val (leadColor, leadBg) = methodTint(transaction.method, colors)
     val mockedSuffix = if (transaction.isMocked) " · mocked" else ""
-    TonalListRow(
-        leadText = methodLeadText(transaction.method),
-        leadColor = leadColor,
-        leadContainerColor = leadBg,
-        title = transaction.path.substringBefore('?'),
-        subtitle = "${transaction.host} · ${formatCaptureClockTime(transaction.startedAtEpochMs)}$mockedSuffix",
-        trailValue = transaction.statusCode?.toString() ?: "ERR",
-        trailValueColor = statusTint(transaction.statusCode, colors),
-        trailSubtitle =
-            when {
-                transaction.statusCode == null -> "timeout"
-                transaction.durationMs != null -> "${transaction.durationMs} ms"
-                else -> null
-            },
-        containerColor =
-            if (isSelected) {
-                colors.putSoft
-            } else if (isFlagged) {
-                colors.signalSoft
-            } else {
-                colors.surface2
-            },
-        leading =
-            if (selectionModeActive) {
-                {
-                    TrafficRowSelectionCheckbox(
-                        checked = isSelected,
-                        onToggle = { actions.onToggleTransactionSelection(transaction.id) },
-                    )
+    Column(modifier = modifier.fillMaxWidth()) {
+        TonalListRow(
+            isArrival = isArrival,
+            leadText = methodLeadText(transaction.method),
+            leadColor = leadColor,
+            leadContainerColor = leadBg,
+            title = transaction.path.substringBefore('?'),
+            subtitle = "${transaction.host} · ${formatCaptureClockTime(transaction.startedAtEpochMs)}$mockedSuffix",
+            trailValue = transaction.statusCode?.toString() ?: "ERR",
+            trailValueColor = statusTint(transaction.statusCode, colors),
+            trailSubtitle =
+                when {
+                    transaction.statusCode == null -> "timeout"
+                    transaction.durationMs != null -> "${transaction.durationMs} ms"
+                    else -> null
+                },
+            containerColor =
+                if (isSelected) {
+                    colors.surface2
+                } else if (isFlagged) {
+                    colors.signalSoft
+                } else {
+                    Color.Transparent
+                },
+            leading =
+                if (selectionModeActive) {
+                    {
+                        TrafficRowSelectionCheckbox(
+                            checked = isSelected,
+                            onToggle = { actions.onToggleTransactionSelection(transaction.id) },
+                        )
+                    }
+                } else {
+                    null
+                },
+            // Long-press always toggles (entering selection mode on the first hit, since a non-empty
+            // selection *is* selection mode -- see TrafficTabContent). A plain tap opens the detail
+            // overlay normally, and instead toggles once selection mode is already active, matching the
+            // standard Android "long-press to start selecting, tap to extend" idiom.
+            onClick = {
+                if (selectionModeActive) {
+                    actions.onToggleTransactionSelection(transaction.id)
+                } else {
+                    actions.onOpenNetDetail(transaction.id)
                 }
-            } else {
-                null
             },
-        // Long-press always toggles (entering selection mode on the first hit, since a non-empty
-        // selection *is* selection mode -- see TrafficTabContent). A plain tap opens the detail
-        // overlay normally, and instead toggles once selection mode is already active, matching the
-        // standard Android "long-press to start selecting, tap to extend" idiom.
-        onClick = {
-            if (selectionModeActive) {
-                actions.onToggleTransactionSelection(transaction.id)
-            } else {
-                actions.onOpenNetDetail(transaction.id)
-            }
-        },
-        onLongClick = { actions.onToggleTransactionSelection(transaction.id) },
-        // The leading checkbox only exists once selection mode is active -- only then does it need
-        // to stay out of the row's merged semantics node so TalkBack exposes both the row's
-        // tap/long-press action and the checkbox's toggle independently.
-        mergeDescendants = !selectionModeActive,
-    )
+            onLongClick = { actions.onToggleTransactionSelection(transaction.id) },
+            // The leading checkbox only exists once selection mode is active -- only then does it need
+            // to stay out of the row's merged semantics node so TalkBack exposes both the row's
+            // tap/long-press action and the checkbox's toggle independently.
+            mergeDescendants = !selectionModeActive,
+        )
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(start = 76.dp),
+            color = colors.line,
+        )
+    }
 }
 
 /** Circular selection-mode checkbox (mirrors [InspectorChip]'s filled/outline convention for the checked state). */

@@ -394,13 +394,16 @@ carries `topic`/`qos`. A redesign should surface the protocol as a small badge/l
 The goal is reference-app-quality **presentation** applied to DevConsole **without** changing its
 identity. Decisions locked in:
 
-- **Palette:** keep DevConsole green.
+- **Palette:** The graphite-and-cobalt token set drives native and web rendering uniformly.
 - **Nav:** keep the rail; add polish (spacing, hierarchy, active-state clarity, group rhythm).
 - **Scope:** willing to do a full pass in one go.
 
 So: this is a **polish/representation upgrade on a fixed skeleton**, not a rebrand. Improve
 information hierarchy, density balance, empty states, table/detail readability, responsive behavior,
 and cross-surface consistency (web ↔ Android) — inside the tokens and constraints above.
+
+**Web Visual Contract**
+The final web visual contract relies on a rigid separation of concerns. `dashboard.css` establishes the `.metric`, `.row`, and `.card-shell` foundation so JavaScript dynamically constructs the views without embedded styles. This ensures that dynamic view rendering relies purely on semantic class names and the provided design system tokens.
 
 ---
 

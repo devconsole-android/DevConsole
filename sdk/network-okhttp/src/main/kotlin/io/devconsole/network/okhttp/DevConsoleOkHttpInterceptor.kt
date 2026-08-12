@@ -30,7 +30,10 @@ import okio.buffer
  * with its body wrapped in a bounded tee ([TeeCapturingSource]): bytes are copied as the host
  * consumes them -- up to [MAX_RESPONSE_PEEK_BYTES], pass-through-only past it -- and the transaction
  * is recorded once the body reaches EOF or is closed, whichever comes first, with `completedAt` set
- * to that moment. INVARIANT: every response `chain.proceed` returns is recorded. The tee upholds it
+ * to that moment. A host that closes the body without draining it (reading only the status code, or
+ * a parser that stops at the end of the value it wanted) does not get a truncated capture: the tee
+ * drains what is left within a bounded budget on close, so a recorded body does not depend on how
+ * much of it the host read. INVARIANT: every response `chain.proceed` returns is recorded. The tee upholds it
  * for bodies that stay open past a short grace period -- a long-lived stream (NDJSON, long-poll) or
  * a body the host never reads and never closes -- with a provisional metadata-only `"streaming"`
  * record that the completion record later replaces in place; see [DeferredResponseBodyCapture].

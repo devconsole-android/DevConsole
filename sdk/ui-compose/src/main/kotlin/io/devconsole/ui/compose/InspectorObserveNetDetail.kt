@@ -8,49 +8,49 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
- * Copy-as-cURL, share-as-JSON, and mock-from-capture header actions. "Pin as diff baseline" is
- * dropped: nothing in [InspectorState] tracks a pinned baseline or renders a diff view, so a Pin
- * button here would be a no-op affordance -- only header actions with real behavior are included.
- * "Mock this response" is always shown regardless of the mocks capability for an unmocked
- * transaction -- Save on the sheet it opens dispatches UpsertMockRule, which already gates and shows
- * a blocked toast, the same pattern the Control screen's own mock affordances use. [onMockAction] is
- * `null` entirely when this transaction is already mocked but its rule id is unknown: a mock/unmock
- * button with no rule to act on would be dead chrome.
+ * Share-as-JSON and flag-as-evidence header actions.
+ *
+ * Evidence flagging sits here and mocking sits in the footer ([netFooterActions]) -- the reverse of
+ * every other detail screen, and deliberate: mocking is the consequential act on this screen, since
+ * it changes what the host app receives on the next call, while flagging only files the capture for
+ * a report. The footer's labelled primary slot goes to the one with consequences.
+ *
+ * The flag still reads its armed state at a glance: signal on a signal-soft container once flagged,
+ * muted on transparent before, with the same wording the footer button used carried on the content
+ * description so TalkBack announces the state rather than just "flag".
+ *
+ * Copy-as-cURL is deliberately *not* here, though every other detail screen does put a copy action
+ * in the header: this one already carries a labelled "cURL" button in its footer bar running the
+ * identical `copyText(transaction.toCurlCommand())`. Two controls, same Copy glyph, same effect,
+ * one of them unlabelled -- so the header icon goes and the footer button, which says what it
+ * copies, stays.
+ *
+ * "Pin as diff baseline" is dropped for the same no-dead-chrome reason: nothing in [InspectorState]
+ * tracks a pinned baseline or renders a diff view.
  */
 private fun netHeaderActions(
     transaction: InspectorTransactionUi,
     colors: DevConsoleColors,
-    copyText: (String) -> Unit,
     shareText: (String, String) -> Unit,
-    onMockAction: (() -> Unit)?,
+    isFlagged: Boolean,
+    onToggleFlag: () -> Unit,
 ): List<InspectorTopAction> =
-    buildList {
-        add(
-            InspectorTopAction(
-                contentDescription = "Copy as cURL",
-                onClick = { copyText(transaction.toCurlCommand()) },
-                icon = copyIconAction(colors.muted),
-            ),
-        )
-        add(
-            InspectorTopAction(
-                contentDescription = "Share transaction as JSON",
-                onClick = { shareText(transaction.toJsonSnippet(), "Share transaction JSON") },
-                icon = shareIconAction(colors.muted),
-            ),
-        )
-        if (onMockAction != null) {
-            add(
-                InspectorTopAction(
-                    contentDescription = if (transaction.isMocked) "Unmock this response" else "Mock this response",
-                    onClick = onMockAction,
-                    icon = {
-                        ObserveGlyphIcon(ObserveGlyph.Tag, contentDescription = null, tint = colors.muted, size = 18.dp)
-                    },
-                ),
-            )
-        }
-    }
+    listOf(
+        InspectorTopAction(
+            contentDescription = "Share transaction as JSON",
+            onClick = { shareText(transaction.toJsonSnippet(), "Share transaction JSON") },
+            icon = shareIconAction(colors.muted),
+        ),
+        InspectorTopAction(
+            contentDescription = if (isFlagged) "Flagged as evidence" else "Flag as evidence",
+            onClick = onToggleFlag,
+            icon = {
+                val tint = if (isFlagged) colors.signal else colors.muted
+                InspectorGlyphIcon(InspectorGlyph.Flag, contentDescription = null, tint = tint, size = 18.dp)
+            },
+            containerColor = if (isFlagged) colors.signalSoft else Color.Transparent,
+        ),
+    )
 
 /**
  * One [InspectorProgressStat] per captured phase, in wire order. A null phase is legitimately
@@ -269,36 +269,56 @@ private fun netSections(
     )
 }
 
+/**
+ * Mock-from-capture as the primary action, cURL beside it.
+ *
+ * Mocking takes the labelled 2:1 slot because it is the one action here that changes what the host
+ * app receives on its next call; flagging, which only files the capture, moved to the header. An
+ * already-mocked transaction shows the armed treatment (signal-soft on signal, "Unmock this
+ * response") the flag button used to carry, so the state stays readable from the button itself.
+ *
+ * "Mock this response" is shown regardless of the mocks capability for an unmocked transaction --
+ * Save on the sheet it opens dispatches UpsertMockRule, which already gates and shows a blocked
+ * toast, the same pattern the Control screen's own mock affordances use. [onMockAction] is `null`
+ * entirely when this transaction is already mocked but its rule id is unknown: a mock/unmock button
+ * with no rule to act on would be dead chrome, and the footer falls back to cURL alone rather than
+ * showing a disabled primary.
+ */
 private fun netFooterActions(
     transaction: InspectorTransactionUi,
     colors: DevConsoleColors,
-    isFlagged: Boolean,
-    onToggleFlag: () -> Unit,
+    onMockAction: (() -> Unit)?,
     copyText: (String) -> Unit,
 ): List<InspectorFooterAction> =
-    listOf(
-        InspectorFooterAction(
-            label = if (isFlagged) "Flagged as evidence" else "Flag as evidence",
-            onClick = onToggleFlag,
-            weight = 2f,
-            icon = {
-                val tint = if (isFlagged) colors.signal else colors.signalInk
-                InspectorGlyphIcon(InspectorGlyph.Flag, contentDescription = null, tint = tint, size = 18.dp)
-            },
-            containerColor = if (isFlagged) colors.signalSoft else colors.signal,
-            contentColor = if (isFlagged) colors.signal else colors.signalInk,
-        ),
-        InspectorFooterAction(
-            label = "cURL",
-            onClick = { copyText(transaction.toCurlCommand()) },
-            weight = 1f,
-            icon = {
-                InspectorGlyphIcon(InspectorGlyph.Copy, contentDescription = null, tint = colors.ink, size = 18.dp)
-            },
-            containerColor = colors.surface3,
-            contentColor = colors.ink,
-        ),
-    )
+    buildList {
+        if (onMockAction != null) {
+            add(
+                InspectorFooterAction(
+                    label = if (transaction.isMocked) "Unmock this response" else "Mock this response",
+                    onClick = onMockAction,
+                    weight = 2f,
+                    icon = {
+                        val tint = if (transaction.isMocked) colors.signal else colors.signalInk
+                        ObserveGlyphIcon(ObserveGlyph.Tag, contentDescription = null, tint = tint, size = 18.dp)
+                    },
+                    containerColor = if (transaction.isMocked) colors.signalSoft else colors.signal,
+                    contentColor = if (transaction.isMocked) colors.signal else colors.signalInk,
+                ),
+            )
+        }
+        add(
+            InspectorFooterAction(
+                label = "cURL",
+                onClick = { copyText(transaction.toCurlCommand()) },
+                weight = 1f,
+                icon = {
+                    InspectorGlyphIcon(InspectorGlyph.Copy, contentDescription = null, tint = colors.ink, size = 18.dp)
+                },
+                containerColor = colors.surface3,
+                contentColor = colors.ink,
+            ),
+        )
+    }
 
 /**
  * Builds the full net (HTTP transaction) capture detail, degraded to real fields only. [mockDiff] is
@@ -355,12 +375,12 @@ internal fun netDetailContent(
                 subtitle = subtitle,
                 status = transaction.statusCode?.toString() ?: "ERR",
                 statusColor = statusColor,
-                actions = netHeaderActions(transaction, colors, copyText, shareText, onMockAction),
+                actions = netHeaderActions(transaction, colors, shareText, isFlagged, onToggleFlag),
             ),
         sections = netSections(transaction, colors, statusColor, copyText, mockDiff),
         // Request payload + Response body both open by default --
         // an operator debugging a transaction usually needs to compare both sides at a glance.
         initiallyOpenSectionKeys = setOf("req", "res"),
-        footerActions = netFooterActions(transaction, colors, isFlagged, onToggleFlag, copyText),
+        footerActions = netFooterActions(transaction, colors, onMockAction, copyText),
     )
 }

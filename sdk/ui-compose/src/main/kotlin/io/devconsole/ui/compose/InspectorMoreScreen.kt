@@ -21,8 +21,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -346,7 +346,6 @@ private fun MoreHero(
     onToggleCollapse: () -> Unit,
     colors: DevConsoleColors,
 ) {
-    val containerColor = if (info.running) colors.signalSoft else colors.surface2
     val accentColor = if (info.running) colors.signal else colors.text3
     val valueColor = if (info.running) colors.signal else colors.muted
     if (collapsed) {
@@ -354,7 +353,6 @@ private fun MoreHero(
             value = info.value,
             label = info.bar,
             onExpand = onToggleCollapse,
-            containerColor = containerColor,
             valueColor = valueColor,
             labelColor = accentColor,
         )
@@ -365,7 +363,6 @@ private fun MoreHero(
         value = info.value,
         valueSuffix = info.of,
         subtitle = info.sub,
-        containerColor = containerColor,
         labelColor = accentColor,
         valueColor = valueColor,
         valueFontFamily = FontFamily.Monospace,
@@ -390,7 +387,7 @@ private fun ServerControlCard(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(MaterialTheme.shapes.large)
                 .background(if (running) colors.signalSoft else colors.surface2)
                 .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -456,6 +453,7 @@ private fun StaleAddressUrlCard(
 ) {
     InspectorUrlCard(
         dotColor = colors.warn,
+        dotPulsing = true,
         label = "Server address changed",
         url = "—",
         subtitle =
@@ -488,6 +486,7 @@ private fun RunningUrlCard(
     val rotation = remainingTtlMs?.let { " · rotates in ${formatDuration(it)}" }.orEmpty()
     InspectorUrlCard(
         dotColor = colors.signal,
+        dotPulsing = true,
         label = "Open in a browser",
         url = url,
         subtitle = "Session code $code$rotation. Plaintext on your LAN — debug builds only.",
@@ -507,7 +506,8 @@ private fun runningUrlCardActions(
             { actions.onCopyUrl(url) },
             colors.signal,
             colors.signalInk,
-            flex = 2f,
+            // 2f squeezed the secondary pills until their labels clipped.
+            flex = 1.5f,
             icon = { UrlActionCopyIcon(colors.signalInk) },
         ),
         InspectorUrlAction(
@@ -579,7 +579,7 @@ private fun LanWarningBanner(browser: InspectorBrowserUi?) {
             Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .clip(MaterialTheme.shapes.large)
                 .background(colors.errorSoft)
                 .padding(16.dp),
     ) {
@@ -893,7 +893,7 @@ private fun formatUptime(elapsedMs: Long): String {
     return "%02d:%02d:%02d".format(Locale.US, hours, minutes, seconds)
 }
 
-/** Hand-built fixture for [MoreScreenPreview] -- previews are the only visual check on this branch. */
+/** Hand-built fixture for [MoreScreenPreview]. */
 private fun moreScreenPreviewState() =
     InspectorState(
         available = true,

@@ -11,10 +11,13 @@
 package io.devconsole.ui.compose
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
@@ -22,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.devconsole.api.CaptureCategory
 import java.util.Locale
@@ -59,11 +63,12 @@ internal fun SocketsTabContent(
                 }
             }
         }
+    val arrivals = rememberArrivals(searchedIndices.map { frameKeys[it] })
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        // 12dp start/end/top padding, extra bottom clearance for every Observe tab's scroll container.
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
+        // 16dp start/end, 12dp top, extra bottom clearance for every Observe tab's scroll container.
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
     ) {
         stickyHeader {
             InspectorSearchBar(
@@ -78,7 +83,14 @@ internal fun SocketsTabContent(
         item { GroupLabel("Recent frames") }
         itemsIndexed(searchedIndices, key = { _, index -> frameKeys[index] }) { _, index ->
             val (socket, frame) = recentFrames[index]
-            SocketFrameRow(socket, frame, colors) { actions.onOpenFrameDetail(socket, frame) }
+            SocketFrameRow(
+                socket = socket,
+                frame = frame,
+                colors = colors,
+                modifier = Modifier.animateItem(),
+                isArrival = frameKeys[index] in arrivals,
+                onClick = { actions.onOpenFrameDetail(socket, frame) },
+            )
         }
     }
 }
@@ -96,7 +108,6 @@ private fun SocketsHero(
             value = openCount.toString(),
             label = "of ${sockets.size} connections open",
             onExpand = actions.onToggleSocketsHero,
-            containerColor = colors.surface2,
             valueColor = colors.signal,
             labelColor = colors.text3,
         )
@@ -121,19 +132,21 @@ private fun SocketsHero(
         value = openCount.toString(),
         valueSuffix = "of ${sockets.size}",
         subtitle = sub,
-        containerColor = colors.surface2,
         labelColor = colors.text3,
         valueColor = colors.signal,
         onCollapse = actions.onToggleSocketsHero,
     )
 }
 
+@Suppress("LongParameterList") // Row content, its socket, and the live-arrival flash.
 @Composable
 private fun SocketFrameRow(
     socket: InspectorSocketUi,
     frame: InspectorSocketFrameUi,
     colors: DevConsoleColors,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isArrival: Boolean = false,
 ) {
     val received = frame.direction == "RECEIVED"
     val leadColor = if (received) colors.put else colors.signal
@@ -143,18 +156,25 @@ private fun SocketFrameRow(
     // An MQTT frame's topic is what an operator scanning this list actually wants to see -- the
     // socket's own URL is just the broker address, identical across every message on the connection.
     val title = frame.topic ?: path
-    TonalListRow(
-        leadText = if (received) "↓" else "↑",
-        leadColor = leadColor,
-        leadContainerColor = leadBg,
-        title = title,
-        subtitle = "$protocolBadge · ${frame.frameType} · ${frame.preview.orEmpty().take(34)}",
-        trailValue = socketFrameSizeLabel(frame),
-        trailValueColor = colors.ink,
-        trailSubtitle = formatCaptureClockTime(frame.timestampEpochMs),
-        containerColor = colors.surface2,
-        onClick = onClick,
-    )
+    Column(modifier = modifier.fillMaxWidth()) {
+        TonalListRow(
+            isArrival = isArrival,
+            leadText = if (received) "↓" else "↑",
+            leadColor = leadColor,
+            leadContainerColor = leadBg,
+            title = title,
+            subtitle = "$protocolBadge · ${frame.frameType} · ${frame.preview.orEmpty().take(34)}",
+            trailValue = socketFrameSizeLabel(frame),
+            trailValueColor = colors.ink,
+            trailSubtitle = formatCaptureClockTime(frame.timestampEpochMs),
+            containerColor = Color.Transparent,
+            onClick = onClick,
+        )
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(start = 76.dp),
+            color = colors.line,
+        )
+    }
 }
 
 /** "MQTT" for an MQTT-protocol connection, "WS" otherwise -- shown as a prefix in [SocketFrameRow]'s subtitle. */
@@ -204,11 +224,12 @@ internal fun PushTabContent(
                 }
             }
         }
+    val arrivals = rememberArrivals(searchedIndices.map { pushKeys[it] })
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        // 12dp start/end/top padding, extra bottom clearance for every Observe tab's scroll container.
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
+        // 16dp start/end, 12dp top, extra bottom clearance for every Observe tab's scroll container.
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
     ) {
         stickyHeader {
             InspectorSearchBar(
@@ -223,7 +244,13 @@ internal fun PushTabContent(
         item { GroupLabel("Lifecycle") }
         itemsIndexed(searchedIndices, key = { _, index -> pushKeys[index] }) { _, index ->
             val push = state.pushEvents[index]
-            PushRow(push, colors) { actions.onOpenPushDetail(push) }
+            PushRow(
+                push = push,
+                colors = colors,
+                modifier = Modifier.animateItem(),
+                isArrival = pushKeys[index] in arrivals,
+                onClick = { actions.onOpenPushDetail(push) },
+            )
         }
     }
 }
@@ -240,7 +267,6 @@ private fun PushHero(
             value = pushEvents.size.toString(),
             label = "push events delivered",
             onExpand = actions.onTogglePushHero,
-            containerColor = colors.surface2,
             valueColor = colors.ink,
             labelColor = colors.text3,
         )
@@ -259,7 +285,6 @@ private fun PushHero(
         value = pushEvents.size.toString(),
         valueSuffix = "events",
         subtitle = sub,
-        containerColor = colors.surface2,
         labelColor = colors.text3,
         valueColor = colors.ink,
         onCollapse = actions.onTogglePushHero,
@@ -271,22 +296,31 @@ private fun PushRow(
     push: InspectorPushUi,
     colors: DevConsoleColors,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isArrival: Boolean = false,
 ) {
     val leadColor = if (push.simulated) colors.warn else colors.signal
     val leadBg = if (push.simulated) colors.warnSoft else colors.signalSoft
     val title = push.dataPreview["title"] ?: push.messageId ?: "Push notification"
-    TonalListRow(
-        leadText = push.provider.uppercase(Locale.US),
-        leadColor = leadColor,
-        leadContainerColor = leadBg,
-        title = title,
-        subtitle = "${push.messageId ?: "no id"} · ${if (push.simulated) "simulated" else "captured"}",
-        trailValue = pushLifecycleShortLabel(push.lifecycle),
-        trailValueColor = colors.muted,
-        trailSubtitle = formatCaptureClockTimeShort(push.receivedAtEpochMs),
-        containerColor = colors.surface2,
-        onClick = onClick,
-    )
+    Column(modifier = modifier.fillMaxWidth()) {
+        TonalListRow(
+            isArrival = isArrival,
+            leadText = push.provider.uppercase(Locale.US),
+            leadColor = leadColor,
+            leadContainerColor = leadBg,
+            title = title,
+            subtitle = "${push.messageId ?: "no id"} · ${if (push.simulated) "simulated" else "captured"}",
+            trailValue = pushLifecycleShortLabel(push.lifecycle),
+            trailValueColor = colors.muted,
+            trailSubtitle = formatCaptureClockTimeShort(push.receivedAtEpochMs),
+            containerColor = Color.Transparent,
+            onClick = onClick,
+        )
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(start = 76.dp),
+            color = colors.line,
+        )
+    }
 }
 
 /** Logs tab: warnings+errors hero + a newest-first event list. */
@@ -315,11 +349,12 @@ internal fun LogsTabContent(
             }
         }
     val rowsNewestFirst = searched.asReversed()
+    val arrivals = rememberArrivals(rowsNewestFirst.map { it.id })
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        // 12dp start/end/top padding, extra bottom clearance for every Observe tab's scroll container.
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
+        // 16dp start/end, 12dp top, extra bottom clearance for every Observe tab's scroll container.
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
     ) {
         stickyHeader {
             InspectorSearchBar(
@@ -333,7 +368,13 @@ internal fun LogsTabContent(
         item { Spacer(Modifier.height(16.dp)) }
         item { GroupLabel("Newest first") }
         itemsIndexed(rowsNewestFirst, key = { _, log -> log.id }) { _, log ->
-            LogRow(log, colors) { actions.onOpenLogDetail(log.id) }
+            LogRow(
+                log = log,
+                colors = colors,
+                modifier = Modifier.animateItem(),
+                isArrival = log.id in arrivals,
+                onClick = { actions.onOpenLogDetail(log.id) },
+            )
         }
     }
 }
@@ -351,7 +392,6 @@ private fun LogsHero(
             value = flagged.size.toString(),
             label = "of ${logs.size} events need attention",
             onExpand = actions.onToggleLogsHero,
-            containerColor = colors.warnSoft,
             valueColor = colors.warn,
             labelColor = colors.warn,
         )
@@ -376,7 +416,6 @@ private fun LogsHero(
         value = flagged.size.toString(),
         valueSuffix = "of ${logs.size}",
         subtitle = sub,
-        containerColor = colors.warnSoft,
         labelColor = colors.warn,
         valueColor = colors.warn,
         onCollapse = actions.onToggleLogsHero,
@@ -388,19 +427,28 @@ private fun LogRow(
     log: InspectorLogUi,
     colors: DevConsoleColors,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isArrival: Boolean = false,
 ) {
     val (leadColor, leadBg) = logLevelTint(log.kind, colors)
-    TonalListRow(
-        leadText = logLevelShortLabel(log.kind),
-        leadColor = leadColor,
-        leadContainerColor = leadBg,
-        title = if (log.summary.length > 40) log.summary.take(40) + "…" else log.summary,
-        subtitle = "${log.source} · ${log.kind}",
-        trailValue = formatCaptureClockTime(log.timestampEpochMs),
-        trailValueColor = colors.muted,
-        containerColor = colors.surface2,
-        onClick = onClick,
-    )
+    Column(modifier = modifier.fillMaxWidth()) {
+        TonalListRow(
+            isArrival = isArrival,
+            leadText = logLevelShortLabel(log.kind),
+            leadColor = leadColor,
+            leadContainerColor = leadBg,
+            title = if (log.summary.length > 40) log.summary.take(40) + "…" else log.summary,
+            subtitle = "${log.source} · ${log.kind}",
+            trailValue = formatCaptureClockTime(log.timestampEpochMs),
+            trailValueColor = colors.muted,
+            containerColor = Color.Transparent,
+            onClick = onClick,
+        )
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(start = 76.dp),
+            color = colors.line,
+        )
+    }
 }
 
 @Composable

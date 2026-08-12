@@ -7,6 +7,12 @@
 package io.devconsole.ui.compose
 
 import android.content.Context
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,9 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -443,6 +451,58 @@ private fun rememberAppIdentitySubtitle(): String {
     }
 }
 
+/**
+ * The selected tab's content, entering along the axis the tabs themselves run on -- Material's
+ * shared-axis-X. Moving right slides the incoming content in from the right; moving left reverses
+ * it, so the transition agrees with the indicator travelling under the tab row and with the
+ * operator's own sense of where they are in an ordered set.
+ *
+ * The offset is [InspectorMotion.sharedAxisOffset], not a screen width: two live capture lists are
+ * composed at once for the length of this transition, and a short nudge keeps that window brief on
+ * the low-end hardware this console has to stay honest on. Under reduced motion [feedbackSpec]
+ * flattens the whole thing to a cut.
+ *
+ * Keyed on the tab itself, so each tab's content keeps being a fresh composition on switch exactly
+ * as the plain `when` made it -- the transition changes how it arrives, never what it holds.
+ */
+@Composable
+private fun ObserveTabPager(
+    selected: ObserveTab,
+    visibleTabs: List<ObserveTab>,
+    state: InspectorState,
+    ui: ObserveUiState,
+    actions: ObserveActions,
+) {
+    // Hoisted out of transitionSpec: that lambda is neither a composable nor a density scope, so
+    // the gated specs and the dp->px conversion have to be resolved here and captured.
+    val slideSpec = feedbackSpec<IntOffset>()
+    val fadeSpec = feedbackSpec<Float>()
+    val offsetPx = with(LocalDensity.current) { InspectorMotion.sharedAxisOffset.roundToPx() }
+    AnimatedContent(
+        targetState = selected,
+        transitionSpec = {
+            val forward = visibleTabs.indexOf(targetState) >= visibleTabs.indexOf(initialState)
+            val enterFrom = if (forward) 1 else -1
+            (
+                slideInHorizontally(slideSpec) { width -> enterFrom * minOf(width, offsetPx) } +
+                    fadeIn(fadeSpec)
+            ) togetherWith (
+                slideOutHorizontally(slideSpec) { width -> -enterFrom * minOf(width, offsetPx) } +
+                    fadeOut(fadeSpec)
+            )
+        },
+        label = "observeTab",
+    ) { tab ->
+        when (tab) {
+            ObserveTab.TRAFFIC -> TrafficTabContent(state, ui, actions)
+            ObserveTab.SOCKETS -> SocketsTabContent(state, ui, actions)
+            ObserveTab.PUSH -> PushTabContent(state, ui, actions)
+            ObserveTab.LOGS -> LogsTabContent(state, ui, actions)
+            ObserveTab.CRASHES -> CrashesTabContent(state, ui, actions)
+        }
+    }
+}
+
 private fun ObserveTab.title(): String =
     when (this) {
         ObserveTab.TRAFFIC -> "Traffic"
@@ -497,14 +557,7 @@ internal fun ObserveScreen(
                     // screen didn't cause (e.g. a `SelectObserveTab` dispatched before that snap runs)
                     // must render nothing rather than a hidden tab's content.
                     state.observeTab !in visibleTabs -> ObserveTabEmptyState("This section is not available.")
-                    else ->
-                        when (state.observeTab) {
-                            ObserveTab.TRAFFIC -> TrafficTabContent(state, ui, actions)
-                            ObserveTab.SOCKETS -> SocketsTabContent(state, ui, actions)
-                            ObserveTab.PUSH -> PushTabContent(state, ui, actions)
-                            ObserveTab.LOGS -> LogsTabContent(state, ui, actions)
-                            ObserveTab.CRASHES -> CrashesTabContent(state, ui, actions)
-                        }
+                    else -> ObserveTabPager(state.observeTab, visibleTabs, state, ui, actions)
                 }
             }
         }
@@ -520,7 +573,7 @@ internal fun ObserveScreen(
 }
 
 /**
- * D4's previous-run-crashed marker: the most recent *non-active* session (i.e. not the one
+ * The previous-run-crashed marker: the most recent *non-active* session (i.e. not the one
  * currently capturing) whose [InspectorSessionUi.status] is `"CRASHED"` -- mirroring
  * `StoredSessionStatus.CRASHED`, which `io.devconsole.CrashCapture.markCrashed` writes on every
  * uncaught exception, and which session bootstrap writes for a run that died before that could

@@ -149,6 +149,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             streamHub = { if (::serverEngine.isInitialized) serverEngine.streamHub else null },
             nextSequence = timelineSequence::incrementAndGet,
             breadcrumbs = breadcrumbs,
+            onPublished = runtime::recordPublishedEvent,
         )
     private val sessionMarkerRecorder = SessionMarkerRecorder(captureBridge)
     private var sessionMarkerMonitor: AndroidSessionMarkerMonitor? = null
@@ -475,6 +476,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             scope = lifecycleScope,
             capacity = capacity,
             onDrop = { event, _ ->
+                runtime.recordDroppedEvents(1)
                 if (reportingPersistenceDrop.compareAndSet(false, true)) {
                     try {
                         sessionMarkerMonitor?.dataDropped(event.pluginId, 1)

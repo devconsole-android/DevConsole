@@ -55,6 +55,16 @@ in-flight and future `decide()` call returns `Passthrough` until re-enabled. A r
 (a bad template, a malformed regex) fails open to passthrough and records an error event — it never
 crashes the host request.
 
+The same dashboard button turns mocking back on (it reads its label from the engine's live state),
+as does the Android inspector's Control screen. The two directions gate differently on purpose:
+turning mocking *off* needs only an authenticated session, since falling back to real traffic is
+always a safe thing to allow, while turning it back *on* also needs the host's `mocks` editing
+capability, because it changes how the app behaves. A host that publishes rules read-only
+(`EditingCapabilities(mocks = false)`) can therefore disable mocking from the browser but not
+re-enable it — the engine is still switchable in-process through `DevConsole.mockEngine()`.
+Individual rules toggle independently of this switch; with the engine off, no rule applies
+regardless of its own state.
+
 ## No production capture
 
 `sdk:noop`'s `MockEngine` is constructed with `enabled = false`: `decide()` always returns

@@ -48,7 +48,7 @@ your local `~/.gradle/gradle.properties`.
 Central's release path does **not** accept `-SNAPSHOT` versions. Before the first real publish,
 change `SDK_VERSION` in
 `build-logic/convention-publishing/src/main/kotlin/io/devconsole/buildlogic/PublishingConventionPlugin.kt`
-(and `version` in `gradle-plugin/build.gradle.kts`) to a real version, e.g. `1.0.1`.
+(and `version` in `gradle-plugin/build.gradle.kts`) to a real version, e.g. `1.1.1`.
 
 **Locally:**
 
@@ -103,3 +103,20 @@ dependencies {
 
 See [BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md](BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md) for what
 the plugin enforces about that split.
+
+## JitPack
+
+Nothing to run: JitPack builds a ref on first request and serves the result under the group
+`com.github.devconsole-android.DevConsole`. `jitpack.yml` pins the JDK to 17 and otherwise leaves
+JitPack's default command alone — that default already passes `-xtest -xlint
+-xsignMavenPublication`, so overriding it with an `install:` block would silently start running the
+full unit suite on every consumer-triggered build.
+
+Because JitPack skips the signing *task* but Gradle still validates the publication, a publication
+that registers `.asc` artifacts fails there with "artifact file does not exist". That is why
+`PublishingConventionPlugin` calls `signAllPublications()` only when a key is configured — the same
+condition that lets a contributor run `publishToMavenLocal` without one.
+
+Only the 31 library modules are served; `gradle-plugin` is an `includeBuild` and is not among them,
+so JitPack consumers use plain coordinates rather than the plugin. Check a build at
+`https://jitpack.io/api/builds/com.github.devconsole-android/DevConsole`.
