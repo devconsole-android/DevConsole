@@ -35,12 +35,12 @@ See the [changelog](CHANGELOG.md) for the full policy.
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.devconsole-android") version "1.1.0"
+    id("io.github.devconsole-android") version "1.1.1"
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:1.1.0")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.1.0")
+    debugImplementation("io.github.devconsole-android:devconsole:1.1.1")
+    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.1.1")
 }
 ```
 
@@ -313,14 +313,14 @@ dependencyResolutionManagement {
 ```kotlin
 dependencies {
     // Group is com.github.devconsole-android.DevConsole; artifact ids match the tables above.
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:main-SNAPSHOT")
-    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:main-SNAPSHOT")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.1.1")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.1.1")
 }
 ```
 
-Any branch works as `<branch>-SNAPSHOT`, with `/` written as `~` (a `feature/x` branch is
-`feature~x-SNAPSHOT`); a release tag works as the bare tag. Three things to know before you rely on
-it:
+A release tag works as the bare tag, as above. Any branch works as `<branch>-SNAPSHOT`, with `/`
+written as `~` — a `feature/x` branch is `feature~x-SNAPSHOT`. JitPack support starts at **1.1.1**;
+earlier tags do not build there. Three things to know before you rely on it:
 
 - **The Gradle plugin is not on JitPack** — only the 31 library artifacts are, so the
   `plugins { id("io.github.devconsole-android") … }` block above does not apply. Name the

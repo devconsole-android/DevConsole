@@ -48,7 +48,7 @@ your local `~/.gradle/gradle.properties`.
 Central's release path does **not** accept `-SNAPSHOT` versions. Before the first real publish,
 change `SDK_VERSION` in
 `build-logic/convention-publishing/src/main/kotlin/io/devconsole/buildlogic/PublishingConventionPlugin.kt`
-(and `version` in `gradle-plugin/build.gradle.kts`) to a real version, e.g. `1.1.0`.
+(and `version` in `gradle-plugin/build.gradle.kts`) to a real version, e.g. `1.1.1`.
 
 **Locally:**
 

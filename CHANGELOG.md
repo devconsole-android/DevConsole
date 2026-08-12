@@ -20,6 +20,42 @@ joined this list.)
 
 ## Unreleased
 
+## 1.1.1 — 2026-08-12
+
+A build-and-distribution patch: no SDK code changed, and the public API is byte-for-byte the
+1.1.0 surface. It exists because 1.1.0 could not be built by anything that lacks the maintainer's
+signing key — including JitPack, which this release adds as a channel.
+
+### Added
+
+- **JitPack as a secondary channel, for unreleased code.** Maven Central remains the supported
+  one; JitPack covers trying a branch or an unmerged fix. Artifacts resolve under the group
+  `com.github.devconsole-android.DevConsole` with the same artifact ids
+  (`com.github.devconsole-android.DevConsole:devconsole:1.1.1`), and any branch resolves as
+  `<branch>-SNAPSHOT` (a `/` in the branch name is written `~`). Two limits worth knowing: the
+  Gradle plugin is **not** served there — it lives in an `includeBuild` and JitPack lists only the
+  31 library modules, so JitPack consumers name coordinates directly and give up the plugin's
+  variant-policy enforcement — and JitPack artifacts are unsigned.
+
+### Fixed
+
+- **`./gradlew publishToMavenLocal` failed for anyone without the maintainer's signing key.**
+  `signAllPublications()` registers a signing task *and* the resulting `.asc` files as publication
+  artifacts. With no key the task fails outright ("no configured signatory") rather than skipping,
+  and even when the task is explicitly excluded the publication still demands `.asc` files nothing
+  produced ("artifact file does not exist: …-release.aar.asc"). Both shapes broke the same three
+  audiences: contributors running the exact command `CONTRIBUTING.md` asks for, CI building from a
+  clean checkout, and JitPack. Publications are now signed only when a key is actually configured —
+  the key itself, not the id/password a maintainer's machine keeps between releases. Release
+  signing is unchanged and verified both ways: five signatures with the key present, none and a
+  green build without. `docs/MAVEN_PUBLISHING.md` has claimed since 1.0.0 that signing "no-ops when
+  no key is configured"; that is now true rather than aspirational.
+
+- **`docs/COMPOSER_AND_MOCKS.md` described re-enabling mocks without saying how**, from before
+  [1.1.0](#110--2026-08-12) added `POST /api/v1/mocks/enabled` — until then the browser genuinely
+  could not. Now documents both directions and why turning mocking on is capability-gated while
+  turning it off is not.
+
 ## 1.1.0 — 2026-08-12
 
 A minor in the strict sense the [policy](#versioning-and-stability-policy) commits to: two additive
