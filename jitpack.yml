@@ -1,0 +1,5 @@
+# AGP 8.13 and the Kotlin/JVM modules' jvmToolchain(17) both need a 17 JDK; JitPack defaults to 8.
+jdk:
+  - openjdk17
+install:
+  - ./gradlew publishToMavenLocal -x dokkaGeneratePublicationHtml --no-daemon
