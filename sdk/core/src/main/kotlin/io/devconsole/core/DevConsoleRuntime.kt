@@ -112,19 +112,14 @@ class DevConsoleRuntime(
         if (state.value == DevConsoleState.Starting) transitionTo(DevConsoleState.Failed(message))
     }
 
-    /**
-     * Counts one captured event onto [health]. Platform capture funnels every timeline emission
-     * through here so `publishedEventCount` reports what the SDK actually captured; without it the
-     * dashboard's SDK-health card and the Android More screen both read a permanent 0 while the
-     * timeline filled up behind them.
-     */
+    /** Counts one captured event onto [health]; platform capture funnels every emission through here. */
     @Synchronized
     fun recordPublishedEvent() {
         mutableHealth.value =
             mutableHealth.value.copy(publishedEventCount = mutableHealth.value.publishedEventCount + 1)
     }
 
-    /** Counts [count] events lost before they reached durable storage -- the queue-overflow path. */
+    /** Counts events lost before reaching durable storage. */
     @Synchronized
     fun recordDroppedEvents(count: Long) {
         if (count <= 0) return

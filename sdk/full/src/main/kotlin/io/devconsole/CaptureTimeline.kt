@@ -38,7 +38,7 @@ internal class CaptureTimelineBridge(
     private val streamHub: () -> EventStreamHub?,
     private val nextSequence: () -> Long,
     private val breadcrumbs: BreadcrumbRingBuffer? = null,
-    /** Counts the emission onto SDK health; defaults away for the callers with no runtime to count on. */
+    /** Counts the emission onto SDK health. */
     private val onPublished: () -> Unit = {},
 ) {
     constructor(

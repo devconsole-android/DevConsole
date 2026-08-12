@@ -1350,11 +1350,7 @@ class DevConsoleKtorModuleTest {
             assertEquals("mock.disable_all", audit.events().single().commandType)
         }
 
-    /**
-     * The way back from the kill switch. Before this route existed the browser could only turn
-     * mocking off; getting it back meant restarting the host app, even though the Android in-app
-     * inspector had a two-way toggle the whole time.
-     */
+    /** The way back from the kill switch; before this route it meant restarting the host app. */
     @Test
     fun `mock engine can be re-enabled after the kill switch`() =
         testApplication {

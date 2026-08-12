@@ -162,11 +162,7 @@ class ExceptionBoundaryTest {
             assertFalse("the response must not leak a stack frame", body.contains("ThrowingCommandAuditLog"))
         }
 
-    /**
-     * A form-body route handed JSON used to reach the catch-all and answer `500 INTERNAL_ERROR`,
-     * which reads as "the SDK broke" for what is really a malformed request. The boundary now
-     * separates the two, so a `500` from this server always means a genuine server-side fault.
-     */
+    /** A malformed body used to answer 500, reading as "the SDK broke". */
     @Test
     fun `a form route sent the wrong content type answers a 4xx rather than 500`() =
         testApplication {
@@ -185,9 +181,7 @@ class ExceptionBoundaryTest {
                     setBody("{\"id\":\"whatever\"}")
                 }
 
-            // Ktor reports a JSON body handed to receiveParameters() as a failed content
-            // transformation rather than an unsupported media type, so this lands on the 400 branch;
-            // the 415 branch covers the routes and Ktor paths that do raise the typed media error.
+            // Ktor raises a content-transformation failure here, not the typed media-type error.
             assertEquals(HttpStatusCode.BadRequest, response.status)
             val body = response.bodyAsText()
             assertTrue("expected the typed client error, got: $body", body.contains("VALIDATION_FAILED"))

@@ -228,8 +228,7 @@ internal fun InspectorPillButton(
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             icon?.invoke()
-            // Ellipsis rather than the default clip: these pills are laid out by weight, so a label
-            // that outgrows its share used to lose its last glyph silently ("Code" rendered "Cod").
+            // Ellipsis, not the default clip: weighted pills used to drop a label's last glyph.
             Text(
                 label,
                 color = contentColor,

@@ -656,10 +656,8 @@ details.adv-filters > summary .ic { color: var(--text-3); }
 .filter-grid-flush { padding: 0; }
 
 /* ---------------- List / detail split ---------------- */
-/* The list column's floor and default are what leave `.row-main` room to render. A `.row` spends
-   298px on fixed columns (check 24, badge 50, duration 74, status 62, flag 24, five 8px gaps, 20px
-   padding), so the old 320px default left the path/summary text 2px and every row rendered blank.
-   360px is the floor and 440px the default, giving the main text 62px/142px. */
+/* A `.row` spends 298px on fixed columns, so the list column must stay well above that or
+   `.row-main` collapses and rows render blank. */
 .split-shell { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); flex: 1 1 0%; min-height: 360px; display: grid; grid-template-columns: minmax(360px, var(--list-w, 440px)) 5px minmax(360px, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
 body.detail-zoom .split-shell { grid-template-columns: 1fr; }
 body.detail-zoom .split-shell > .list-pane, body.detail-zoom .split-shell > .splitter { display: none; }
@@ -736,8 +734,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
   font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3);
 }
 
-/* Header cells mirror the `.row` column widths exactly, so the two stay aligned. `.col-flag`
-   also stands in for the flag button on rows that have none, so it matches `.row-flag`'s 24px. */
+/* Mirror the `.row` column widths exactly, or header and rows drift apart. */
 .col-badge { flex: 0 0 50px; text-align: center; }
 .col-main { flex: 1; min-width: 0; text-align: left; }
 .col-duration { flex: 0 0 74px; text-align: right; }
@@ -788,10 +785,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
   flex: 0 0 auto; font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
   padding: 1px 4px; border-radius: 99px; border: 1px solid var(--border-strong);
 }
-/* These two slots are shared by five very different lists: Network puts "198 ms"/"200" in them,
-   but Timeline puts an event type (`socket.frame.text.received`) and Sockets/Push/Crashes put a
-   frame size, lifecycle, or thread name beside a wall-clock time. They are sized for those longer
-   consumers, which is why the list column -- not these -- is where `.row-main` gets its room. */
+/* Sized for the longest consumers: Timeline puts an event type here, not Network's "198 ms". */
 .row-duration { flex: 0 0 74px; font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; color: var(--text-3); }
 .row-status { flex: 0 0 62px; font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .row-flag {

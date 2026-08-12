@@ -506,7 +506,7 @@ private fun runningUrlCardActions(
             { actions.onCopyUrl(url) },
             colors.signal,
             colors.signalInk,
-            // 1.5f, not 2f: at 2f the two secondary pills were squeezed until "Code" lost its "e".
+            // 2f squeezed the secondary pills until their labels clipped.
             flex = 1.5f,
             icon = { UrlActionCopyIcon(colors.signalInk) },
         ),

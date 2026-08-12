@@ -539,9 +539,7 @@ fun Application.devConsoleModule(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (mediaType: UnsupportedMediaTypeException) {
-            // A form-body route (push/simulate, the network exports, exports, preferences, ...) that
-            // was handed JSON or no Content-Type at all. That is the caller's mistake, not the SDK's,
-            // and answering 500 sends every third-party client and curl user hunting a server bug.
+            // A malformed request is the caller's mistake; answering 500 sends them hunting a server bug.
             call.respondClientError(HttpStatusCode.UnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", mediaType)
         } catch (malformed: ContentTransformationException) {
             call.respondClientError(HttpStatusCode.BadRequest, "VALIDATION_FAILED", malformed)
@@ -1299,11 +1297,8 @@ fun Application.devConsoleModule(
             commandAuditLog.recordControlSuccess(session.id, "mock.disable_all", "mocks")
             call.respondText("{\"enabled\":false}", contentType = io.ktor.http.ContentType.Application.Json)
         }
-        // The way back from `disable-all`. Without it the browser could only ever turn the engine
-        // off -- re-enabling meant restarting the host app, while the Android in-app inspector had a
-        // two-way toggle all along. Turning mocking back ON changes how the app behaves, so unlike
-        // `disable-all` this is gated by the host's `mocks` editing capability, exactly like the
-        // per-rule toggle it complements.
+        // The way back from `disable-all`. Capability-gated, unlike it: turning mocking ON changes
+        // how the app behaves.
         post("/api/v1/mocks/enabled") {
             val session =
                 call.mockRuleControlSession(
@@ -5059,11 +5054,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.authorizeNetworkE
     return resolveNetworkExportTransactions(networkTransactions, bodyIds = ids)
 }
 
-/**
- * Answers a malformed request with the API's JSON envelope at a 4xx the caller can act on. Logged at
- * debug, not error: a rejected request is routine traffic, and logging it at error level would bury
- * the genuine 500s this module's boundary also reports.
- */
+/** Answers a malformed request with the JSON envelope at a 4xx. Debug-logged: rejections are routine. */
 private suspend fun io.ktor.server.application.ApplicationCall.respondClientError(
     status: HttpStatusCode,
     code: String,
