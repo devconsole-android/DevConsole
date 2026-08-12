@@ -1,5 +1,4 @@
-# AGP 8.13 and the Kotlin/JVM modules' jvmToolchain(17) both need a 17 JDK; JitPack defaults to 8.
+# JitPack's own default command already excludes tests, lint, and signing; only the JDK is pinned
+# here, so its defaults keep applying. AGP 8.13 and jvmToolchain(17) both need 17.
 jdk:
   - openjdk17
-install:
-  - ./gradlew publishToMavenLocal -x dokkaGeneratePublicationHtml --no-daemon

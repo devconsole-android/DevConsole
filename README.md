@@ -294,6 +294,42 @@ Opt-in add-ons (each `-noop` twin is the matching `releaseImplementation`):
 Every other module (`devconsole-core`, `devconsole-storage-room`, …) arrives transitively — you
 never name it. All modules publish sources, javadoc, and signed POMs.
 
+### JitPack — for unreleased code
+
+Maven Central above is the supported channel: signed, versioned, and what the Gradle plugin
+resolves. [JitPack](https://jitpack.io/#devconsole-android/DevConsole) exists alongside it for one
+job — trying a branch or an unreleased fix before it ships. Add the repository to your **settings**
+file, not the module:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+```
+
+```kotlin
+dependencies {
+    // Group is com.github.devconsole-android.DevConsole; artifact ids match the tables above.
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:main-SNAPSHOT")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:main-SNAPSHOT")
+}
+```
+
+Any branch works as `<branch>-SNAPSHOT`, with `/` written as `~` (a `feature/x` branch is
+`feature~x-SNAPSHOT`); a release tag works as the bare tag. Three things to know before you rely on
+it:
+
+- **The Gradle plugin is not on JitPack** — only the 31 library artifacts are, so the
+  `plugins { id("io.github.devconsole-android") … }` block above does not apply. Name the
+  `debugImplementation`/`releaseImplementation` coordinates yourself, and you also give up the
+  plugin's variant-policy check that keeps the full SDK out of release builds.
+- **JitPack artifacts are unsigned.** Central's are signed; these are built on demand from a commit.
+- **Snapshots move.** `-SNAPSHOT` follows the branch, so a build that worked can change under you.
+  Pin a tag for anything you keep.
+
 ## Permissions — and why none of them ship
 
 Short version: **nothing DevConsole needs reaches your release build**, so there is nothing to
