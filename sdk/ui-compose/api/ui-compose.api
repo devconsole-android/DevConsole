@@ -20,6 +20,7 @@ public final class io/devconsole/ui/compose/ComposableSingletons$DevConsolePanel
 public final class io/devconsole/ui/compose/ComposableSingletons$InspectorControlScreenKt {
 	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorControlScreenKt;
 	public fun <init> ()V
+	public final fun getLambda$-1143782739$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$-1373757892$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$-153603954$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-1946392255$ui_compose_release ()Lkotlin/jvm/functions/Function3;
@@ -1249,6 +1250,50 @@ public final class io/devconsole/ui/compose/InspectorQueryResultUi {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/devconsole/ui/compose/InspectorRemoteConfigEntryUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZ)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZ)Lio/devconsole/ui/compose/InspectorRemoteConfigEntryUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorRemoteConfigEntryUi;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorRemoteConfigEntryUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getKey ()Ljava/lang/String;
+	public final fun getRedacted ()Z
+	public final fun getSource ()Ljava/lang/String;
+	public final fun getTruncated ()Z
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorRemoteConfigUi {
+	public static final field $stable I
+	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Ljava/lang/Long;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/Long;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/util/List;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorRemoteConfigUi;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorRemoteConfigUi;Ljava/lang/String;Ljava/util/List;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorRemoteConfigUi;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEntries ()Ljava/util/List;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getLastFetchEpochMs ()Ljava/lang/Long;
+	public final fun getMinimumFetchIntervalSeconds ()Ljava/lang/Long;
+	public final fun getStatus ()Ljava/lang/String;
+	public final fun getUnavailableReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class io/devconsole/ui/compose/InspectorRetentionUi {
 	public static final field $stable I
 	public fun <init> (IJJ)V
@@ -1291,8 +1336,8 @@ public final class io/devconsole/ui/compose/InspectorSessionUi {
 public final class io/devconsole/ui/compose/InspectorSnapshot {
 	public static final field $stable I
 	public fun <init> ()V
-	public fun <init> (ZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;ZLjava/util/Set;)V
-	public synthetic fun <init> (ZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;ZLjava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;ZLjava/util/Set;)V
+	public synthetic fun <init> (ZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;ZLjava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Z
 	public final fun component10 ()Ljava/util/List;
 	public final fun component11 ()Ljava/util/List;
@@ -1301,12 +1346,13 @@ public final class io/devconsole/ui/compose/InspectorSnapshot {
 	public final fun component14 ()Ljava/util/List;
 	public final fun component15 ()Ljava/util/List;
 	public final fun component16 ()Ljava/util/List;
-	public final fun component17 ()Lio/devconsole/ui/compose/InspectorHealthUi;
-	public final fun component18 ()Lio/devconsole/ui/compose/InspectorBrowserUi;
-	public final fun component19 ()Lio/devconsole/ui/compose/InspectorRetentionUi;
+	public final fun component17 ()Ljava/util/List;
+	public final fun component18 ()Lio/devconsole/ui/compose/InspectorHealthUi;
+	public final fun component19 ()Lio/devconsole/ui/compose/InspectorBrowserUi;
 	public final fun component2 ()Ljava/util/List;
-	public final fun component20 ()Z
-	public final fun component21 ()Ljava/util/Set;
+	public final fun component20 ()Lio/devconsole/ui/compose/InspectorRetentionUi;
+	public final fun component21 ()Z
+	public final fun component22 ()Ljava/util/Set;
 	public final fun component3 ()Lio/devconsole/ui/compose/InspectorEditingUi;
 	public final fun component4 ()Z
 	public final fun component5 ()Ljava/util/List;
@@ -1314,8 +1360,8 @@ public final class io/devconsole/ui/compose/InspectorSnapshot {
 	public final fun component7 ()Ljava/util/List;
 	public final fun component8 ()Ljava/util/List;
 	public final fun component9 ()Ljava/util/List;
-	public final fun copy (ZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;ZLjava/util/Set;)Lio/devconsole/ui/compose/InspectorSnapshot;
-	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorSnapshot;ZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;ZLjava/util/Set;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorSnapshot;
+	public final fun copy (ZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;ZLjava/util/Set;)Lio/devconsole/ui/compose/InspectorSnapshot;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorSnapshot;ZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;ZLjava/util/Set;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorSnapshot;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAvailable ()Z
 	public final fun getBrowser ()Lio/devconsole/ui/compose/InspectorBrowserUi;
@@ -1333,6 +1379,7 @@ public final class io/devconsole/ui/compose/InspectorSnapshot {
 	public final fun getMocksEnabled ()Z
 	public final fun getPreferenceFiles ()Ljava/util/List;
 	public final fun getPushEvents ()Ljava/util/List;
+	public final fun getRemoteConfig ()Ljava/util/List;
 	public final fun getRetention ()Lio/devconsole/ui/compose/InspectorRetentionUi;
 	public final fun getSessions ()Ljava/util/List;
 	public final fun getSockets ()Ljava/util/List;
@@ -1450,8 +1497,8 @@ public final class io/devconsole/ui/compose/InspectorSqlResultUi$Wrote : io/devc
 public final class io/devconsole/ui/compose/InspectorState {
 	public static final field $stable I
 	public fun <init> ()V
-	public fun <init> (ZZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorCommandResult;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Lio/devconsole/ui/compose/ObserveTab;Ljava/util/Set;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorFileListingUi;Lio/devconsole/ui/compose/InspectorFilePreviewUi;Ljava/lang/String;Ljava/util/List;Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Lio/devconsole/ui/compose/InspectorQueryResultUi;Lio/devconsole/ui/compose/InspectorSqlResultUi;Ljava/util/List;Ljava/lang/String;ZLio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;Lio/devconsole/api/ScreenshotResult;ZLjava/util/Set;)V
-	public synthetic fun <init> (ZZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorCommandResult;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Lio/devconsole/ui/compose/ObserveTab;Ljava/util/Set;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorFileListingUi;Lio/devconsole/ui/compose/InspectorFilePreviewUi;Ljava/lang/String;Ljava/util/List;Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Lio/devconsole/ui/compose/InspectorQueryResultUi;Lio/devconsole/ui/compose/InspectorSqlResultUi;Ljava/util/List;Ljava/lang/String;ZLio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;Lio/devconsole/api/ScreenshotResult;ZLjava/util/Set;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ZZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorCommandResult;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Lio/devconsole/ui/compose/ObserveTab;Ljava/util/Set;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorFileListingUi;Lio/devconsole/ui/compose/InspectorFilePreviewUi;Ljava/lang/String;Ljava/util/List;Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Lio/devconsole/ui/compose/InspectorQueryResultUi;Lio/devconsole/ui/compose/InspectorSqlResultUi;Ljava/util/List;Ljava/lang/String;ZLio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;Lio/devconsole/api/ScreenshotResult;ZLjava/util/Set;)V
+	public synthetic fun <init> (ZZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorCommandResult;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Lio/devconsole/ui/compose/ObserveTab;Ljava/util/Set;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorFileListingUi;Lio/devconsole/ui/compose/InspectorFilePreviewUi;Ljava/lang/String;Ljava/util/List;Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Lio/devconsole/ui/compose/InspectorQueryResultUi;Lio/devconsole/ui/compose/InspectorSqlResultUi;Ljava/util/List;Ljava/lang/String;ZLio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;Lio/devconsole/api/ScreenshotResult;ZLjava/util/Set;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Z
 	public final fun component10 ()Ljava/util/List;
 	public final fun component11 ()Ljava/util/List;
@@ -1465,31 +1512,32 @@ public final class io/devconsole/ui/compose/InspectorState {
 	public final fun component19 ()Ljava/util/List;
 	public final fun component2 ()Z
 	public final fun component20 ()Ljava/util/List;
-	public final fun component21 ()Lio/devconsole/ui/compose/InspectorFileListingUi;
-	public final fun component22 ()Lio/devconsole/ui/compose/InspectorFilePreviewUi;
-	public final fun component23 ()Ljava/lang/String;
-	public final fun component24 ()Ljava/util/List;
-	public final fun component25 ()Lio/devconsole/ui/compose/InspectorDatabaseListingUi;
-	public final fun component26 ()Lio/devconsole/ui/compose/InspectorQueryResultUi;
-	public final fun component27 ()Lio/devconsole/ui/compose/InspectorSqlResultUi;
-	public final fun component28 ()Ljava/util/List;
-	public final fun component29 ()Ljava/lang/String;
+	public final fun component21 ()Ljava/util/List;
+	public final fun component22 ()Lio/devconsole/ui/compose/InspectorFileListingUi;
+	public final fun component23 ()Lio/devconsole/ui/compose/InspectorFilePreviewUi;
+	public final fun component24 ()Ljava/lang/String;
+	public final fun component25 ()Ljava/util/List;
+	public final fun component26 ()Lio/devconsole/ui/compose/InspectorDatabaseListingUi;
+	public final fun component27 ()Lio/devconsole/ui/compose/InspectorQueryResultUi;
+	public final fun component28 ()Lio/devconsole/ui/compose/InspectorSqlResultUi;
+	public final fun component29 ()Ljava/util/List;
 	public final fun component3 ()Ljava/util/List;
-	public final fun component30 ()Z
-	public final fun component31 ()Lio/devconsole/ui/compose/InspectorHealthUi;
-	public final fun component32 ()Lio/devconsole/ui/compose/InspectorBrowserUi;
-	public final fun component33 ()Lio/devconsole/ui/compose/InspectorRetentionUi;
-	public final fun component34 ()Lio/devconsole/api/ScreenshotResult;
-	public final fun component35 ()Z
-	public final fun component36 ()Ljava/util/Set;
+	public final fun component30 ()Ljava/lang/String;
+	public final fun component31 ()Z
+	public final fun component32 ()Lio/devconsole/ui/compose/InspectorHealthUi;
+	public final fun component33 ()Lio/devconsole/ui/compose/InspectorBrowserUi;
+	public final fun component34 ()Lio/devconsole/ui/compose/InspectorRetentionUi;
+	public final fun component35 ()Lio/devconsole/api/ScreenshotResult;
+	public final fun component36 ()Z
+	public final fun component37 ()Ljava/util/Set;
 	public final fun component4 ()Lio/devconsole/ui/compose/InspectorEditingUi;
 	public final fun component5 ()Z
 	public final fun component6 ()Ljava/util/List;
 	public final fun component7 ()Ljava/util/List;
 	public final fun component8 ()Lio/devconsole/ui/compose/InspectorCommandResult;
 	public final fun component9 ()Ljava/util/List;
-	public final fun copy (ZZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorCommandResult;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Lio/devconsole/ui/compose/ObserveTab;Ljava/util/Set;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorFileListingUi;Lio/devconsole/ui/compose/InspectorFilePreviewUi;Ljava/lang/String;Ljava/util/List;Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Lio/devconsole/ui/compose/InspectorQueryResultUi;Lio/devconsole/ui/compose/InspectorSqlResultUi;Ljava/util/List;Ljava/lang/String;ZLio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;Lio/devconsole/api/ScreenshotResult;ZLjava/util/Set;)Lio/devconsole/ui/compose/InspectorState;
-	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorState;ZZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorCommandResult;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Lio/devconsole/ui/compose/ObserveTab;Ljava/util/Set;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorFileListingUi;Lio/devconsole/ui/compose/InspectorFilePreviewUi;Ljava/lang/String;Ljava/util/List;Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Lio/devconsole/ui/compose/InspectorQueryResultUi;Lio/devconsole/ui/compose/InspectorSqlResultUi;Ljava/util/List;Ljava/lang/String;ZLio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;Lio/devconsole/api/ScreenshotResult;ZLjava/util/Set;IILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorState;
+	public final fun copy (ZZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorCommandResult;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Lio/devconsole/ui/compose/ObserveTab;Ljava/util/Set;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorFileListingUi;Lio/devconsole/ui/compose/InspectorFilePreviewUi;Ljava/lang/String;Ljava/util/List;Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Lio/devconsole/ui/compose/InspectorQueryResultUi;Lio/devconsole/ui/compose/InspectorSqlResultUi;Ljava/util/List;Ljava/lang/String;ZLio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;Lio/devconsole/api/ScreenshotResult;ZLjava/util/Set;)Lio/devconsole/ui/compose/InspectorState;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorState;ZZLjava/util/List;Lio/devconsole/ui/compose/InspectorEditingUi;ZLjava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorCommandResult;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Lio/devconsole/ui/compose/ObserveTab;Ljava/util/Set;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;Lio/devconsole/ui/compose/InspectorFileListingUi;Lio/devconsole/ui/compose/InspectorFilePreviewUi;Ljava/lang/String;Ljava/util/List;Lio/devconsole/ui/compose/InspectorDatabaseListingUi;Lio/devconsole/ui/compose/InspectorQueryResultUi;Lio/devconsole/ui/compose/InspectorSqlResultUi;Ljava/util/List;Ljava/lang/String;ZLio/devconsole/ui/compose/InspectorHealthUi;Lio/devconsole/ui/compose/InspectorBrowserUi;Lio/devconsole/ui/compose/InspectorRetentionUi;Lio/devconsole/api/ScreenshotResult;ZLjava/util/Set;IILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorState;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAvailable ()Z
 	public final fun getBrowser ()Lio/devconsole/ui/compose/InspectorBrowserUi;
@@ -1517,6 +1565,7 @@ public final class io/devconsole/ui/compose/InspectorState {
 	public final fun getPreferenceFiles ()Ljava/util/List;
 	public final fun getPushEvents ()Ljava/util/List;
 	public final fun getQueryResult ()Lio/devconsole/ui/compose/InspectorQueryResultUi;
+	public final fun getRemoteConfig ()Ljava/util/List;
 	public final fun getRetention ()Lio/devconsole/ui/compose/InspectorRetentionUi;
 	public final fun getSelectedSessionId ()Ljava/lang/String;
 	public final fun getSelectedTransactionIds ()Ljava/util/Set;

@@ -21,6 +21,7 @@ dependencies {
     implementation(project(":sdk:composer"))
     implementation(project(":sdk:push"))
     implementation(project(":sdk:state"))
+    implementation(project(":sdk:remote-config"))
     implementation(project(":sdk:export"))
     implementation(project(":sdk:storage-api"))
     implementation("io.ktor:ktor-server-core:3.0.3")

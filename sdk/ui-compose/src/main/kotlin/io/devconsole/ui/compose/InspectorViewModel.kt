@@ -239,6 +239,7 @@ class InspectorViewModel
                             },
                         featureFlags = snapshot.featureFlags,
                         stateProviders = snapshot.stateProviders,
+                        remoteConfig = snapshot.remoteConfig,
                         preferenceFiles = snapshot.preferenceFiles,
                         fileRoots = snapshot.fileRoots,
                         databases = snapshot.databases,

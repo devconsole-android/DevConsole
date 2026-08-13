@@ -20,6 +20,36 @@ joined this list.)
 
 ## Unreleased
 
+### Added
+
+- **Remote Config inspector** ([#6](https://github.com/devconsole-android/DevConsole/issues/6)).
+  Read-only view of the Remote Config values active on the device, with the attribution that makes
+  them diagnosable: whether each value came from the server, an in-app default, the SDK's static
+  fallback, or a local override — plus last fetch time, last fetch status, and minimum fetch
+  interval. A key serving a default because the fetch was throttled is otherwise indistinguishable
+  from one you actually published.
+
+  Three new modules following the existing push triad: `devconsole-remote-config` (vendor-neutral
+  model and registry), `devconsole-remote-config-firebase` (reads `FirebaseRemoteConfig` by
+  reflection, so Firebase stays off the classpath of consumers that do not use it), and
+  `devconsole-remote-config-firebase-noop` (the protected-build twin, which reports
+  `disabled-build` rather than pretending config is simply empty). Neither adapter is re-exported by
+  the `devconsole` umbrella.
+
+  Surfaces on both the browser dashboard (a Remote Config page under Data) and the Compose
+  inspector's Control screen, and over `GET /api/v1/remote-config`. Gated by the existing
+  `CaptureCategory.STATE`, alongside state providers and feature flags. Register a provider with
+  `DevConsoleConfig.withRemoteConfigProviders(...)` or, for a lazily-built client,
+  `DevConsole.registerRemoteConfigProvider(...)`. Read-only by design: DevConsole does not set
+  overrides and never triggers `fetch()`/`activate()`. See
+  [docs/REMOTE_CONFIG.md](docs/REMOTE_CONFIG.md).
+
+  Values are redacted by key name at a single boundary shared by both surfaces — the on-device
+  inspector reads in-process and never crosses the HTTP boundary, so redacting at the route alone
+  would have left it exposed. Matching is separator-insensitive here, unlike the raw
+  `RedactionPolicy`, whose defaults are an HTTP-header list compared by exact name: `api_key` and
+  `apiKey` now match the policy's `api-key` instead of being displayed in full.
+
 ## 1.1.1 — 2026-08-12
 
 A build-and-distribution patch: no SDK code changed, and the public API is byte-for-byte the

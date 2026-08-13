@@ -33,6 +33,9 @@ import io.devconsole.network.NetworkTransactionQuery
 import io.devconsole.push.InMemoryPushStore
 import io.devconsole.push.PushEvent
 import io.devconsole.push.PushStore
+import io.devconsole.remoteconfig.RemoteConfigRegistry
+import io.devconsole.security.RedactionEngine
+import io.devconsole.security.RedactionPolicy
 import io.devconsole.server.api.DatabaseExecResult
 import io.devconsole.server.api.DatabaseInspector
 import io.devconsole.server.api.DatabaseListingData
@@ -85,6 +88,8 @@ import io.devconsole.ui.compose.InspectorPreferenceEntryUi
 import io.devconsole.ui.compose.InspectorPreferenceFileUi
 import io.devconsole.ui.compose.InspectorPushUi
 import io.devconsole.ui.compose.InspectorQueryResultUi
+import io.devconsole.ui.compose.InspectorRemoteConfigEntryUi
+import io.devconsole.ui.compose.InspectorRemoteConfigUi
 import io.devconsole.ui.compose.InspectorRetentionUi
 import io.devconsole.ui.compose.InspectorSessionUi
 import io.devconsole.ui.compose.InspectorSnapshot
@@ -120,6 +125,11 @@ internal class FullInspectorDataSource(
     private val timelineSupplier: () -> Timeline? = { null },
     private val featureFlagsSupplier: () -> FeatureFlagProvider? = { null },
     private val stateRegistry: StateRegistry? = null,
+    /**
+     * Remote Config sources, read on demand. Null on a build where no host provider was registered,
+     * which reads as "no remote config" rather than as an error.
+     */
+    private val remoteConfigRegistry: RemoteConfigRegistry? = null,
     private val preferencesInspector: PreferencesInspector? = null,
     private val fileInspector: FileInspector? = null,
     private val databaseInspector: DatabaseInspector? = null,
@@ -342,6 +352,7 @@ internal class FullInspectorDataSource(
             crashes = if (CaptureCategory.CRASHES in categories) readCrashes() else emptyList(),
             featureFlags = if (stateOn) readFeatureFlags() else emptyList(),
             stateProviders = if (stateOn) readStateProviders() else emptyList(),
+            remoteConfig = if (stateOn) readRemoteConfig(config) else emptyList(),
             preferenceFiles =
                 if (inspectionOn) preferencesInspector?.files().orEmpty().map { it.toUi() } else emptyList(),
             fileRoots = if (inspectionOn) fileInspector?.roots().orEmpty() else emptyList(),
@@ -408,6 +419,35 @@ internal class FullInspectorDataSource(
         val provider = featureFlagsSupplier() ?: return emptyList()
         val overrides = provider.overrides()
         return provider.flags().map { flag -> flag.toUi(provider.value(flag.key), overrides.containsKey(flag.key)) }
+    }
+
+    /**
+     * Redacts here rather than trusting the caller: this is the in-process path the Compose
+     * inspector reads, and it never passes through the server's redaction boundary.
+     */
+    private fun readRemoteConfig(config: DevConsoleConfig?): List<InspectorRemoteConfigUi> {
+        val registry = remoteConfigRegistry ?: return emptyList()
+        val policy = config?.redactionPolicy ?: RedactionPolicy.default()
+        val redacting = RedactingRemoteConfig(RedactionEngine(policy), policy)
+        return registry.snapshots().map { snapshot ->
+            InspectorRemoteConfigUi(
+                id = snapshot.providerId,
+                entries =
+                    redacting.apply(snapshot.entries).map { entry ->
+                        InspectorRemoteConfigEntryUi(
+                            key = entry.key,
+                            value = entry.value,
+                            source = entry.source.wireName,
+                            redacted = entry.redacted,
+                            truncated = entry.truncated,
+                        )
+                    },
+                lastFetchEpochMs = snapshot.fetchInfo.lastFetchEpochMs,
+                status = snapshot.fetchInfo.status.wireName,
+                minimumFetchIntervalSeconds = snapshot.fetchInfo.minimumFetchIntervalSeconds,
+                unavailableReason = snapshot.unavailableReason,
+            )
+        }
     }
 
     private fun readStateProviders(): List<InspectorStateProviderUi> {

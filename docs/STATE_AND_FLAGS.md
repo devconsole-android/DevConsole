@@ -64,6 +64,12 @@ The State & Flags page shows a provider tree with sensitivity badges, and a flag
 source/default/current/override columns plus a "reset all session overrides" command. Every flag
 change produces both a command-audit record and a timeline event with the before/after values.
 
+## Remote Config
+
+Values fetched from a Remote Config service are inspected separately, with source attribution
+(remote / default / static / override) and fetch metadata — see [REMOTE_CONFIG.md](REMOTE_CONFIG.md).
+It shares the `CaptureCategory.STATE` gate with everything on this page.
+
 ## Flags with named options (environment switching)
 
 A flag is not limited to on/off. `FeatureFlag.ofOptions` declares a set of named values, which is

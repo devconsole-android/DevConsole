@@ -18,6 +18,7 @@ import io.devconsole.mocks.MockEngine
 import io.devconsole.network.NetworkTransactionRecorder
 import io.devconsole.push.PushEvent
 import io.devconsole.push.PushInput
+import io.devconsole.remoteconfig.RemoteConfigProvider
 import io.devconsole.socket.SocketRecorder
 import io.devconsole.state.StateProvider
 import kotlinx.coroutines.CoroutineScope
@@ -186,6 +187,14 @@ object DevConsole {
     /** Registers a state provider after [initialize], for features that are constructed lazily. */
     @JvmStatic
     fun registerStateProvider(provider: StateProvider): Boolean = this.provider.registerStateProvider(provider)
+
+    /**
+     * Registers a Remote Config source after [initialize], for a client built lazily through DI.
+     * Returns false when the runtime is disabled or the STATE capture category is off.
+     */
+    @JvmStatic
+    fun registerRemoteConfigProvider(provider: RemoteConfigProvider): Boolean =
+        this.provider.registerRemoteConfigProvider(provider)
 
     /** Address of the running server, or null when it is not running. Survives activity recreation. */
     @JvmStatic

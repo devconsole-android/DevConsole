@@ -1,0 +1,107 @@
+public final class io/devconsole/remoteconfig/RemoteConfigEntry {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ZZ)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lio/devconsole/remoteconfig/RemoteConfigSource;
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ZZ)Lio/devconsole/remoteconfig/RemoteConfigEntry;
+	public static synthetic fun copy$default (Lio/devconsole/remoteconfig/RemoteConfigEntry;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ZZILjava/lang/Object;)Lio/devconsole/remoteconfig/RemoteConfigEntry;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getKey ()Ljava/lang/String;
+	public final fun getRedacted ()Z
+	public final fun getSource ()Lio/devconsole/remoteconfig/RemoteConfigSource;
+	public final fun getTruncated ()Z
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/remoteconfig/RemoteConfigFetchInfo {
+	public static final field Companion Lio/devconsole/remoteconfig/RemoteConfigFetchInfo$Companion;
+	public fun <init> (Ljava/lang/Long;Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;Ljava/lang/Long;)V
+	public final fun component1 ()Ljava/lang/Long;
+	public final fun component2 ()Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;
+	public final fun component3 ()Ljava/lang/Long;
+	public final fun copy (Ljava/lang/Long;Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;Ljava/lang/Long;)Lio/devconsole/remoteconfig/RemoteConfigFetchInfo;
+	public static synthetic fun copy$default (Lio/devconsole/remoteconfig/RemoteConfigFetchInfo;Ljava/lang/Long;Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;Ljava/lang/Long;ILjava/lang/Object;)Lio/devconsole/remoteconfig/RemoteConfigFetchInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLastFetchEpochMs ()Ljava/lang/Long;
+	public final fun getMinimumFetchIntervalSeconds ()Ljava/lang/Long;
+	public final fun getStatus ()Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+	public static final fun unknown ()Lio/devconsole/remoteconfig/RemoteConfigFetchInfo;
+}
+
+public final class io/devconsole/remoteconfig/RemoteConfigFetchInfo$Companion {
+	public final fun unknown ()Lio/devconsole/remoteconfig/RemoteConfigFetchInfo;
+}
+
+public final class io/devconsole/remoteconfig/RemoteConfigFetchStatus : java/lang/Enum {
+	public static final field FAILURE Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;
+	public static final field NO_FETCH_YET Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;
+	public static final field SUCCESS Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;
+	public static final field THROTTLED Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;
+	public static final field UNKNOWN Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWireName ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;
+	public static fun values ()[Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;
+}
+
+public abstract interface class io/devconsole/remoteconfig/RemoteConfigProvider {
+	public abstract fun getId ()Ljava/lang/String;
+	public abstract fun snapshot ()Lio/devconsole/remoteconfig/RemoteConfigSnapshot;
+}
+
+public final class io/devconsole/remoteconfig/RemoteConfigRegistry {
+	public static final field Companion Lio/devconsole/remoteconfig/RemoteConfigRegistry$Companion;
+	public static final field MAX_VALUE_LENGTH I
+	public fun <init> ()V
+	public final fun providerIds ()Ljava/util/List;
+	public final fun register (Lio/devconsole/remoteconfig/RemoteConfigProvider;)V
+	public final fun snapshot (Ljava/lang/String;)Lio/devconsole/remoteconfig/RemoteConfigSnapshot;
+	public final fun snapshots ()Ljava/util/List;
+}
+
+public final class io/devconsole/remoteconfig/RemoteConfigRegistry$Companion {
+}
+
+public final class io/devconsole/remoteconfig/RemoteConfigSnapshot {
+	public fun <init> (Ljava/lang/String;Ljava/util/List;Lio/devconsole/remoteconfig/RemoteConfigFetchInfo;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;Lio/devconsole/remoteconfig/RemoteConfigFetchInfo;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Lio/devconsole/remoteconfig/RemoteConfigFetchInfo;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/util/List;Lio/devconsole/remoteconfig/RemoteConfigFetchInfo;Ljava/lang/String;)Lio/devconsole/remoteconfig/RemoteConfigSnapshot;
+	public static synthetic fun copy$default (Lio/devconsole/remoteconfig/RemoteConfigSnapshot;Ljava/lang/String;Ljava/util/List;Lio/devconsole/remoteconfig/RemoteConfigFetchInfo;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/remoteconfig/RemoteConfigSnapshot;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEntries ()Ljava/util/List;
+	public final fun getFetchInfo ()Lio/devconsole/remoteconfig/RemoteConfigFetchInfo;
+	public final fun getProviderId ()Ljava/lang/String;
+	public final fun getUnavailableReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/remoteconfig/RemoteConfigSource : java/lang/Enum {
+	public static final field Companion Lio/devconsole/remoteconfig/RemoteConfigSource$Companion;
+	public static final field DEFAULT Lio/devconsole/remoteconfig/RemoteConfigSource;
+	public static final field OVERRIDE Lio/devconsole/remoteconfig/RemoteConfigSource;
+	public static final field REMOTE Lio/devconsole/remoteconfig/RemoteConfigSource;
+	public static final field STATIC Lio/devconsole/remoteconfig/RemoteConfigSource;
+	public static final field UNKNOWN Lio/devconsole/remoteconfig/RemoteConfigSource;
+	public static final fun fromWireName (Ljava/lang/String;)Lio/devconsole/remoteconfig/RemoteConfigSource;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWireName ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/remoteconfig/RemoteConfigSource;
+	public static fun values ()[Lio/devconsole/remoteconfig/RemoteConfigSource;
+}
+
+public final class io/devconsole/remoteconfig/RemoteConfigSource$Companion {
+	public final fun fromWireName (Ljava/lang/String;)Lio/devconsole/remoteconfig/RemoteConfigSource;
+}
+

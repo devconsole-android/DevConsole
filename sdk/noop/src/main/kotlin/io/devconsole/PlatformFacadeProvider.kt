@@ -25,6 +25,7 @@ import io.devconsole.push.InMemoryPushStore
 import io.devconsole.push.PushEvent
 import io.devconsole.push.PushInput
 import io.devconsole.push.PushRecorder
+import io.devconsole.remoteconfig.RemoteConfigProvider
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
 import io.devconsole.socket.InMemorySocketStore
@@ -88,6 +89,8 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     override suspend fun captureScreenshot(): ScreenshotResult = ScreenshotResult.DisabledForBuild
 
     override fun registerStateProvider(provider: StateProvider): Boolean = false
+
+    override fun registerRemoteConfigProvider(provider: RemoteConfigProvider): Boolean = false
 
     override fun endpoint(): BrowserEndpoint? = null
 

@@ -1,5 +1,6 @@
 package io.devconsole.api
 
+import io.devconsole.remoteconfig.RemoteConfigProvider
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
 import io.devconsole.state.FeatureFlag
@@ -70,6 +71,14 @@ data class DevConsoleConfig(
     var openTriggers: OpenTriggers = OpenTriggers()
         private set
 
+    /**
+     * Remote Config sources the inspector reads. Like [stateProviders] these are pull-based, so a
+     * provider constructed after `initialize` can still be added through
+     * [io.devconsole.DevConsole.registerRemoteConfigProvider]. Gated by [CaptureCategory.STATE].
+     */
+    var remoteConfigProviders: List<RemoteConfigProvider> = emptyList()
+        private set
+
     fun withStoragePolicy(value: StoragePolicy): DevConsoleConfig =
         duplicate().also {
             it.storagePolicy = value
@@ -111,6 +120,9 @@ data class DevConsoleConfig(
     fun withCaptureCategories(vararg values: CaptureCategory): DevConsoleConfig = withCaptureCategories(values.toSet())
 
     fun withOpenTriggers(value: OpenTriggers): DevConsoleConfig = duplicate().also { it.openTriggers = value }
+
+    fun withRemoteConfigProviders(value: List<RemoteConfigProvider>): DevConsoleConfig =
+        duplicate().also { it.remoteConfigProviders = value.toList() }
 
     fun capturesCategory(category: CaptureCategory): Boolean = category in captureCategories
 
@@ -160,7 +172,8 @@ data class DevConsoleConfig(
             crashPolicy == other.crashPolicy &&
             screenshotPolicy == other.screenshotPolicy &&
             captureCategories == other.captureCategories &&
-            openTriggers == other.openTriggers
+            openTriggers == other.openTriggers &&
+            remoteConfigProviders == other.remoteConfigProviders
 
     private fun duplicate(): DevConsoleConfig =
         copy().also {
@@ -173,6 +186,7 @@ data class DevConsoleConfig(
             it.screenshotPolicy = screenshotPolicy
             it.captureCategories = captureCategories
             it.openTriggers = openTriggers
+            it.remoteConfigProviders = remoteConfigProviders
         }
 
     /** Mutable builder for Java callers and for incremental construction. */
@@ -194,6 +208,7 @@ data class DevConsoleConfig(
         private var screenshotPolicy = ScreenshotPolicy()
         private var captureCategories: Set<CaptureCategory> = CaptureCategory.all()
         private var openTriggers = OpenTriggers()
+        private val remoteConfigProviders = mutableListOf<RemoteConfigProvider>()
 
         fun eventBufferCapacity(value: Int) = apply { eventBufferCapacity = value }
 
@@ -229,6 +244,8 @@ data class DevConsoleConfig(
 
         fun openTriggers(value: OpenTriggers) = apply { openTriggers = value }
 
+        fun addRemoteConfigProvider(value: RemoteConfigProvider) = apply { remoteConfigProviders += value }
+
         fun build(): DevConsoleConfig {
             val configured =
                 DevConsoleConfig(
@@ -247,6 +264,7 @@ data class DevConsoleConfig(
                     .withScreenshotPolicy(screenshotPolicy)
                     .withCaptureCategories(captureCategories)
                     .withOpenTriggers(openTriggers)
+                    .withRemoteConfigProviders(remoteConfigProviders)
             return retentionPolicy?.let(configured::withRetentionPolicy) ?: configured
         }
     }

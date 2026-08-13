@@ -1,0 +1,1 @@
+-keep class io.devconsole.internal.enabled.RemoteConfigFirebaseCaptureMarker { *; }

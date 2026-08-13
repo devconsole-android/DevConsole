@@ -51,6 +51,8 @@ import io.devconsole.push.PushEvent
 import io.devconsole.push.PushInput
 import io.devconsole.push.PushSimulator
 import io.devconsole.push.PushStore
+import io.devconsole.remoteconfig.RemoteConfigEntry
+import io.devconsole.remoteconfig.RemoteConfigSnapshot
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
 import io.devconsole.server.api.BindingMode
@@ -214,6 +216,13 @@ class DevConsoleModuleConfig {
     var stateRegistry: StateRegistry = StateRegistry()
     var stateMutationsEnabled: Boolean = false
 
+    /**
+     * Remote Config snapshots, **already redacted** by the caller. `:sdk:full` owns that boundary
+     * because the Compose inspector reads the same registry in-process without passing through here,
+     * so redacting at this route would protect only the browser.
+     */
+    var remoteConfigSnapshots: () -> List<RemoteConfigSnapshot> = { emptyList() }
+
     /** Reads (file/entry listing) always work; [preferencesEditable] mirrors `EditingCapabilities.preferences`. */
     var preferencesInspector: PreferencesInspector? = null
     var preferencesEditable: Boolean = false
@@ -316,6 +325,7 @@ fun Application.devConsoleModule(
     val featureFlags = config.featureFlags
     val featureFlagsEditable = config.featureFlagsEditable
     val stateRegistry = config.stateRegistry
+    val remoteConfigSnapshots = config.remoteConfigSnapshots
     val stateMutationsEnabled = config.stateMutationsEnabled
     val preferencesInspector = config.preferencesInspector
     val preferencesEditable = config.preferencesEditable
@@ -1525,6 +1535,22 @@ fun Application.devConsoleModule(
                         "\"mutable\":${flag.mutable},\"allowedValues\":[$allowed]}"
                 }
             call.respondText("{\"data\":[$flags]}", contentType = io.ktor.http.ContentType.Application.Json)
+        }
+        get("/api/v1/remote-config") {
+            if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) ==
+                null
+            ) {
+                call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
+                return@get
+            }
+            // Remote Config sits under the same "state" category as state providers and feature
+            // flags -- it is the same kind of data, so it is gated the same way.
+            if (!categoryEnabled("state")) {
+                call.respondCategoryDisabled("state")
+                return@get
+            }
+            val providers = remoteConfigSnapshots().joinToString(",") { it.json() }
+            call.respondText("{\"data\":[$providers]}", contentType = io.ktor.http.ContentType.Application.Json)
         }
         post("/api/v1/flags/{key}") {
             val session = sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization])
@@ -3415,6 +3441,8 @@ class KtorLocalServerEngine(
     private val socketStore: SocketStore = InMemorySocketStore(),
     private val pushStore: PushStore = InMemoryPushStore(),
     private val stateRegistry: StateRegistry = StateRegistry(),
+    /** Already-redacted Remote Config snapshots; see [DevConsoleModuleConfig.remoteConfigSnapshots]. */
+    private val remoteConfigSnapshots: () -> List<RemoteConfigSnapshot> = { emptyList() },
     featureFlags: SessionFeatureFlags = SessionFeatureFlags(emptyList()),
     featureFlagsEditable: Boolean = false,
     private val mockEngine: MockEngine = MockEngine(emptyList()),
@@ -3595,6 +3623,7 @@ class KtorLocalServerEngine(
                                     this.socketStore = this@KtorLocalServerEngine.socketStore
                                     this.pushStore = this@KtorLocalServerEngine.pushStore
                                     this.stateRegistry = this@KtorLocalServerEngine.stateRegistry
+                                    this.remoteConfigSnapshots = this@KtorLocalServerEngine.remoteConfigSnapshots
                                     this.featureFlags = configuration.featureFlags
                                     this.featureFlagsEditable = configuration.featureFlagsEditable
                                     this.mockEngine = this@KtorLocalServerEngine.mockEngine
@@ -4464,6 +4493,27 @@ private fun CaptureRule.json(): String =
         "\"method\":${method?.let { "\"${it.escapeJson()}\"" } ?: "null"}," +
         "\"pathPrefix\":${pathPrefix?.let { "\"${it.escapeJson()}\"" } ?: "null"}," +
         "\"enabled\":$enabled}"
+
+/**
+ * Wire names deliberately differ from the Kotlin field names -- `providerId` serializes as `id` and
+ * `fetchInfo` as `fetch` -- and these names, not the Kotlin ones, are the stable contract the
+ * dashboard reads. Keys and values originate in the host's Remote Config console, so both are
+ * escaped. `lastFetchEpochMs` is emitted as literal `null` for a never-fetched provider rather than
+ * as a sentinel number, so the dashboard can render "never" instead of a 1970 date.
+ */
+private fun RemoteConfigSnapshot.json(): String {
+    val rows = entries.joinToString(",") { it.json() }
+    return "{\"id\":\"${providerId.escapeJson()}\"," +
+        "\"fetch\":{\"lastFetchEpochMs\":${fetchInfo.lastFetchEpochMs ?: "null"}," +
+        "\"status\":\"${fetchInfo.status.wireName}\"," +
+        "\"minimumFetchIntervalSeconds\":${fetchInfo.minimumFetchIntervalSeconds ?: "null"}}," +
+        "\"unavailableReason\":${unavailableReason?.let { "\"${it.escapeJson()}\"" } ?: "null"}," +
+        "\"entries\":[$rows]}"
+}
+
+private fun RemoteConfigEntry.json(): String =
+    "{\"key\":\"${key.escapeJson()}\",\"value\":\"${value.escapeJson()}\"," +
+        "\"source\":\"${source.wireName}\",\"redacted\":$redacted,\"truncated\":$truncated}"
 
 /**
  * Rule ids, hosts, and paths are user-supplied, so every string field is escaped. [stats] comes

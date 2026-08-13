@@ -437,6 +437,7 @@ Full index: [docs/README.md](docs/README.md). Highlights:
   [Push](docs/PUSH.md)
 - [Data inspectors and exports](docs/DATA_INSPECTORS_AND_EXPORTS.md) ·
   [Evidence and bug reports](docs/EVIDENCE_AND_BUG_REPORTS.md)
+- [State and feature flags](docs/STATE_AND_FLAGS.md) · [Remote Config](docs/REMOTE_CONFIG.md)
 - [Crash and ANR capture](docs/CRASH_AND_ANR.md) ·
   [Background keep-alive](docs/BACKGROUND_KEEPALIVE.md)
 - [FAQ / troubleshooting](docs/FAQ_TROUBLESHOOTING.md)

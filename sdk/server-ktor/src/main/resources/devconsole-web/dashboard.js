@@ -1026,7 +1026,7 @@
   // applyRailAdvancedGrouping) since the eight advanced-only views visually relocate into one
   // collapsed group rather than merely hiding in place.
   // ================================================================
-  const RAIL_ADVANCED_IDS = ['viewSdkHealth', 'viewComposer', 'viewCaptureRules', 'viewState', 'viewPreferences', 'viewDatabase', 'viewFiles', 'viewSession'];
+  const RAIL_ADVANCED_IDS = ['viewSdkHealth', 'viewComposer', 'viewCaptureRules', 'viewState', 'viewRemoteConfig', 'viewPreferences', 'viewDatabase', 'viewFiles', 'viewSession'];
   const RAIL_ADVANCED_VIEWS = new Set(['sdkHealth', 'composer', 'captureRules', 'state', 'preferences', 'database', 'files', 'session']);
 
   // ================================================================
@@ -1042,7 +1042,9 @@
     push: { ids: ['viewPush'], views: ['push'] },
     logs: { ids: ['viewTimeline'], views: ['timeline'] },
     crashes: { ids: ['viewCrashes'], views: ['crashes'] },
-    state: { ids: ['viewState'], views: ['state'] },
+    // Remote Config shares the STATE category with state providers and feature flags -- it is the
+    // same kind of data, and the route is gated identically.
+    state: { ids: ['viewState', 'viewRemoteConfig'], views: ['state', 'remoteConfig'] },
     inspection: { ids: ['viewPreferences', 'viewDatabase', 'viewFiles'], views: ['preferences', 'database', 'files'] },
     mocks: { ids: ['viewMocks', 'viewCaptureRules'], views: ['mocks', 'captureRules'] },
   };
@@ -4387,6 +4389,74 @@
   }
 
   // ================================================================
+  // Remote Config
+  // ================================================================
+  let remoteConfigProviders = [];
+  let remoteConfigQuery = '';
+  let remoteConfigSourceFilter = 'all';
+  const REMOTE_CONFIG_SOURCE_TONE = { remote: 'signal', override: 'warn', default: 'muted', static: 'muted', unknown: 'muted' };
+  async function loadRemoteConfig() {
+    if (!token) return;
+    const r = await fetch('/api/v1/remote-config', { headers: auth() });
+    if (!r.ok) {
+      remoteConfigProviders = [];
+      cardsGridHtml('remoteConfigCards', [{ icon: 'sliders', iconTone: 'signal', title: 'Remote Config', lede: 'Remote Config unavailable: ' + r.status }]);
+      return;
+    }
+    remoteConfigProviders = (await r.json()).data || [];
+    renderRemoteConfigCards();
+  }
+  /** Never-fetched is spelled out; rendering epoch 0 (or a sentinel) as a date would read as a real fetch. */
+  function remoteConfigFetchLine(provider) {
+    const fetchInfo = provider.fetch || {};
+    const when = fetchInfo.lastFetchEpochMs == null ? 'never' : new Date(fetchInfo.lastFetchEpochMs).toLocaleString();
+    const status = (fetchInfo.status || 'unknown').replace(/_/g, ' ');
+    const interval = fetchInfo.minimumFetchIntervalSeconds == null ? '' : ' · min interval ' + fetchInfo.minimumFetchIntervalSeconds + 's';
+    return 'last fetch: ' + when + ' · ' + status + interval;
+  }
+  function renderRemoteConfigCards() {
+    const total = remoteConfigProviders.reduce((sum, p) => sum + (p.entries || []).length, 0);
+    $('navCountRemoteConfig').textContent = total;
+    $('remoteConfigBadge').textContent = remoteConfigProviders.length
+      ? total + ' key' + (total === 1 ? '' : 's') + ' · ' + remoteConfigProviders.length + ' provider' + (remoteConfigProviders.length === 1 ? '' : 's')
+      : 'no providers';
+    if (!remoteConfigProviders.length) {
+      cardsGridHtml('remoteConfigCards', [{
+        icon: 'sliders', iconTone: 'signal', title: 'Remote Config', span: 2,
+        lede: 'No Remote Config provider is registered for this session. Register one with DevConsoleConfig.withRemoteConfigProviders(...) — see docs/REMOTE_CONFIG.md.',
+      }]);
+      return;
+    }
+    const needle = remoteConfigQuery.trim().toLowerCase();
+    cardsGridHtml('remoteConfigCards', remoteConfigProviders.map((provider) => {
+      const all = provider.entries || [];
+      const shown = all.filter((e) => (!needle || e.key.toLowerCase().includes(needle))
+        && (remoteConfigSourceFilter === 'all' || e.source === remoteConfigSourceFilter));
+      // Four distinct states, none of which may render as an unexplained blank table.
+      let lede = false;
+      if (provider.unavailableReason) lede = 'Remote Config unavailable: ' + provider.unavailableReason;
+      else if (!all.length) {
+        lede = (provider.fetch || {}).lastFetchEpochMs == null
+          ? 'No values — this provider has not completed a fetch yet.'
+          : 'No values returned by the last fetch.';
+      } else if (!shown.length) lede = 'No key matches the current filter.';
+      return {
+        icon: 'sliders', iconTone: provider.unavailableReason ? 'warn' : 'signal', span: 2,
+        title: 'Remote Config · ' + provider.id,
+        badge: remoteConfigFetchLine(provider), badgeTone: provider.unavailableReason ? 'warn' : 'muted',
+        lede,
+        rows: shown.map((e) => ({
+          k: e.key,
+          v: e.redacted ? '<redacted>' : e.value,
+          tone: e.source === 'remote' ? 'ink' : 'muted',
+          tag: (e.source || 'unknown').toUpperCase() + (e.truncated ? ' · TRUNCATED' : ''),
+          tagTone: REMOTE_CONFIG_SOURCE_TONE[e.source] || 'muted',
+        })),
+      };
+    }));
+  }
+
+  // ================================================================
   // Preferences
   // ================================================================
   const SENSITIVE_KEY_PATTERN = /token|secret|password|passwd|auth|credential|cookie/i;
@@ -6938,6 +7008,7 @@
       network: 'networkView',
       socket: 'socketView',
       state: 'stateView',
+      remoteConfig: 'remoteConfigView',
       preferences: 'preferencesView',
       database: 'databaseView',
       files: 'filesView',
@@ -6960,6 +7031,7 @@
       network: 'viewNetwork',
       socket: 'viewSockets',
       state: 'viewState',
+      remoteConfig: 'viewRemoteConfig',
       preferences: 'viewPreferences',
       database: 'viewDatabase',
       files: 'viewFiles',
@@ -6994,6 +7066,7 @@
       network: loadNetwork,
       socket: loadSockets,
       state: loadState,
+      remoteConfig: loadRemoteConfig,
       preferences: loadPreferences,
       database: loadDatabases,
       files: loadFileRoots,
@@ -7200,6 +7273,7 @@
     $('viewNetwork').onclick = () => show('network');
     $('viewSockets').onclick = () => show('socket');
     $('viewState').onclick = () => show('state');
+    $('viewRemoteConfig').onclick = () => show('remoteConfig');
     $('viewPush').onclick = () => show('push');
     $('viewComposer').onclick = () => show('composer');
     $('viewMocks').onclick = () => show('mocks');
@@ -7209,6 +7283,10 @@
     $('viewFiles').onclick = () => show('files');
     $('viewSdkHealth').onclick = () => show('sdkHealth');
     $('viewSession').onclick = () => show('session');
+
+    $('remoteConfigRefresh').onclick = loadRemoteConfig;
+    $('remoteConfigSearch').oninput = (e) => { remoteConfigQuery = e.target.value; renderRemoteConfigCards(); };
+    wireSeg($('remoteConfigSourceSeg'), (value) => { remoteConfigSourceFilter = value; renderRemoteConfigCards(); });
 
     $('prefFile').onchange = (e) => renderPreferenceFile(e.target.value);
 

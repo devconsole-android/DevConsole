@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -221,6 +222,26 @@ internal fun ControlScreen(
                     FlagRow(flag, colors) { onToggleFlag(flag) }
                 }
                 item { Spacer(Modifier.height(8.dp)) }
+            }
+            // Remote Config is read-only and shares the STATE category with flags. The section
+            // renders whenever a provider is registered -- including one that reports nothing --
+            // because "fetched nothing" and "never fetched" are the answers you came here for.
+            if (state.captures(CaptureCategory.STATE) && state.remoteConfig.isNotEmpty()) {
+                state.remoteConfig.forEach { provider ->
+                    item(key = "rc-head-${provider.id}") { RemoteConfigHeader(provider, colors) }
+                    if (provider.unavailableReason != null) {
+                        item(key = "rc-unavailable-${provider.id}") {
+                            WarnNote("Remote Config unavailable: ${provider.unavailableReason}")
+                        }
+                    } else if (provider.entries.isEmpty()) {
+                        item(key = "rc-empty-${provider.id}") { RemoteConfigEmptyNote(provider, colors) }
+                    } else {
+                        items(provider.entries, key = { "rc-${provider.id}-${it.key}" }) { entry ->
+                            RemoteConfigRow(entry, colors)
+                        }
+                    }
+                    item(key = "rc-space-${provider.id}") { Spacer(Modifier.height(8.dp)) }
+                }
             }
             item {
                 WarnNote(
@@ -500,6 +521,94 @@ private fun FlagRow(
         trailValue = if (flag.isOverridden) "local" else "remote",
         trailValueColor = if (flag.isOverridden) colors.warn else colors.muted,
         onClick = onClick,
+    )
+}
+
+/**
+ * Header for one Remote Config provider. The fetch line is the reason this screen exists: a value
+ * serving an in-app default because the last fetch was throttled looks identical to a published one
+ * until you can see when the fetch happened and how it ended.
+ */
+@Composable
+private fun RemoteConfigHeader(
+    provider: InspectorRemoteConfigUi,
+    colors: DevConsoleColors,
+) {
+    GroupLabel("Remote Config · ${provider.id}")
+    Text(
+        text = remoteConfigFetchLine(provider),
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+        color = colors.text3,
+        style = MaterialTheme.typography.bodySmall,
+    )
+}
+
+/** "Never fetched" is spelled out rather than shown as an epoch date. */
+private fun remoteConfigFetchLine(provider: InspectorRemoteConfigUi): String =
+    buildString {
+        append("last fetch: ")
+        append(
+            provider.lastFetchEpochMs?.let(::formatCaptureClockTime) ?: "never",
+        )
+        append(" · ")
+        append(provider.status.replace('_', ' '))
+        provider.minimumFetchIntervalSeconds?.let { append(" · min interval ${it}s") }
+    }
+
+/**
+ * The `NO_FETCH_YET` case, which is the most commonly misread state: an empty table alone reads as
+ * "this app has no Remote Config", when the truth is usually that no fetch has completed yet.
+ */
+@Composable
+private fun RemoteConfigEmptyNote(
+    provider: InspectorRemoteConfigUi,
+    colors: DevConsoleColors,
+) {
+    Text(
+        text =
+            if (provider.lastFetchEpochMs == null) {
+                "No values — this provider has not completed a fetch yet."
+            } else {
+                "No values returned by the last fetch."
+            },
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+        color = colors.muted,
+        style = MaterialTheme.typography.bodySmall,
+    )
+}
+
+@Composable
+private fun RemoteConfigRow(
+    entry: InspectorRemoteConfigEntryUi,
+    colors: DevConsoleColors,
+) {
+    // Colour carries the same meaning as the flag rows above: signal = came from the server,
+    // warn = a local override is masking it, muted = never reached the server at all.
+    val leadColor =
+        when (entry.source) {
+            "remote" -> colors.signal
+            "override" -> colors.warn
+            else -> colors.text3
+        }
+    val leadBg =
+        when (entry.source) {
+            "remote" -> colors.signalSoft
+            "override" -> colors.warnSoft
+            else -> colors.surface3
+        }
+    val sub =
+        buildString {
+            append(if (entry.redacted) "<redacted>" else entry.value)
+            if (entry.truncated) append(" · truncated")
+        }
+    TonalListRow(
+        leadText = entry.source.take(3).uppercase(),
+        leadColor = leadColor,
+        leadContainerColor = leadBg,
+        title = entry.key,
+        subtitle = sub,
+        trailValue = entry.source,
+        trailValueColor = if (entry.source == "remote") colors.signal else colors.muted,
     )
 }
 

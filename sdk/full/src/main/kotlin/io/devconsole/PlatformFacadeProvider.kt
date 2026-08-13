@@ -44,6 +44,9 @@ import io.devconsole.push.PushRecorder
 import io.devconsole.push.PushSimulationCallback
 import io.devconsole.push.PushSimulator
 import io.devconsole.push.PushStore
+import io.devconsole.remoteconfig.RemoteConfigProvider
+import io.devconsole.remoteconfig.RemoteConfigRegistry
+import io.devconsole.remoteconfig.RemoteConfigSnapshot
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
 import io.devconsole.server.api.BrowserPrincipal
@@ -171,6 +174,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     private val inMemoryPushStore = InMemoryPushStore()
     private val pushStore = TeeingPushStore(inMemoryPushStore, captureBridge, liveCaptureLock)
     private val stateRegistry = StateRegistry()
+    private val remoteConfigRegistry = RemoteConfigRegistry()
     private val mockEngineInstance = MockEngine(emptyList()).withOutcomeSink(::recordMockOutcome)
 
     /** Handed back by [mockEngine] instead of [mockEngineInstance] while MOCKS is off. Never mutated. */
@@ -694,6 +698,9 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
         redaction.updatePolicy(config.redactionPolicy)
         if (config.capturesCategory(CaptureCategory.STATE)) {
             config.stateProviders.forEach(stateRegistry::register)
+            // A duplicate id from a host that both configured and late-registered a provider must
+            // not take down initialize(); the registration is simply ignored.
+            config.remoteConfigProviders.forEach { provider -> safely { remoteConfigRegistry.register(provider) } }
         }
         featureFlags = SessionFeatureFlags(config.featureFlags)
         buildOrReconfigureServerEngine(
@@ -738,6 +745,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 timelineSupplier = { cachedTimeline },
                 featureFlagsSupplier = { if (::featureFlags.isInitialized) featureFlags else null },
                 stateRegistry = stateRegistry,
+                remoteConfigRegistry = remoteConfigRegistry,
                 preferencesInspector = gatedPreferencesInspector,
                 fileInspector = gatedFileInspector,
                 databaseInspector = gatedDatabaseInspector,
@@ -905,6 +913,10 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             socketStore = socketStore,
             pushStore = pushStore,
             stateRegistry = stateRegistry,
+            // Redacted here, not in the route: the Compose inspector reads the same registry
+            // in-process and never crosses the HTTP boundary, so this is the shared boundary both
+            // surfaces go through.
+            remoteConfigSnapshots = { redactedRemoteConfigSnapshots(config) },
             featureFlags = featureFlags,
             featureFlagsEditable = featureFlagsEditable,
             mockEngine = mockEngineInstance,
@@ -1110,6 +1122,17 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     @Synchronized
     override fun registerStateProvider(provider: StateProvider): Boolean =
         categoryEnabled(CaptureCategory.STATE) && safely { stateRegistry.register(provider) }
+
+    @Synchronized
+    override fun registerRemoteConfigProvider(provider: RemoteConfigProvider): Boolean =
+        categoryEnabled(CaptureCategory.STATE) && safely { remoteConfigRegistry.register(provider) }
+
+    /** Empty when the STATE category is off, so the dashboard route cannot outflank the host's gate. */
+    private fun redactedRemoteConfigSnapshots(config: DevConsoleConfig): List<RemoteConfigSnapshot> {
+        if (!config.capturesCategory(CaptureCategory.STATE)) return emptyList()
+        val redacting = RedactingRemoteConfig(redaction, config.redactionPolicy)
+        return remoteConfigRegistry.snapshots().map { it.copy(entries = redacting.apply(it.entries)) }
+    }
 
     /** Late registration must never throw into the host; a rejected duplicate just returns false. */
     private inline fun safely(block: () -> Unit): Boolean = runCatching(block).isSuccess

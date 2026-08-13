@@ -116,6 +116,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="rail-group" id="railGroupData">
       <div class="rail-group-label"><span class="text">Data</span><span class="rule"></span></div>
       <button type="button" id="viewState"><svg class="ic" aria-hidden="true"><use href="#dc-flag"/></svg><span class="rail-name">State &amp; flags</span></button>
+      <button type="button" id="viewRemoteConfig"><svg class="ic" aria-hidden="true"><use href="#dc-sliders"/></svg><span class="rail-name">Remote Config</span><span class="rail-count" id="navCountRemoteConfig">0</span></button>
       <button type="button" id="viewPreferences"><svg class="ic" aria-hidden="true"><use href="#dc-sliders"/></svg><span class="rail-name">Preferences</span></button>
       <button type="button" id="viewDatabase"><svg class="ic" aria-hidden="true"><use href="#dc-database"/></svg><span class="rail-name">Database</span></button>
       <button type="button" id="viewFiles"><svg class="ic" aria-hidden="true"><use href="#dc-folder"/></svg><span class="rail-name">Files</span></button>
@@ -462,6 +463,20 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div class="view-head"><h1 class="view-title">State &amp; Flags</h1><p class="view-hint">App state snapshots and feature flags. Each flag's own `mutable` bit gates its toggle — the SDK reports no session-wide write switch for either.</p></div>
       <div id="stateGate" role="status" aria-live="polite" aria-atomic="true" hidden></div>
       <div id="stateCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-flag"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect state and flags.</div></div></div>
+    </section>
+
+    <!-- REMOTE CONFIG -->
+    <section class="view" id="remoteConfigView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">Remote Config</h1><span class="view-badge" id="remoteConfigBadge"></span></div>
+        <p class="view-hint">Read-only view of the Remote Config values active on this device. The source badge is the point: a key serving a <em>default</em> because the last fetch failed or was throttled looks identical to a published one until you can see where it came from.</p>
+      </div>
+      <div class="toolbar">
+        <label class="field search-field"><span>Find key</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="remoteConfigSearch" placeholder="checkout_v2, banner…"></span></label>
+        <div class="toolbar-group"><span class="toolbar-group-label">Source</span><div class="seg" id="remoteConfigSourceSeg" role="group" aria-label="Filter by value source"><button type="button" class="active" data-value="all">All</button><button type="button" data-value="remote">Remote</button><button type="button" data-value="default">Default</button><button type="button" data-value="static">Static</button></div></div>
+        <button type="button" class="btn" id="remoteConfigRefresh"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Refresh</button>
+      </div>
+      <div id="remoteConfigCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-sliders"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect Remote Config.</div></div></div>
     </section>
 
     <!-- PREFERENCES -->
