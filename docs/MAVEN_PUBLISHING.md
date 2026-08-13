@@ -1,6 +1,6 @@
 # Publishing to Maven Central
 
-All 31 modules under `sdk/` are wired with the
+All 34 modules under `sdk/` are wired with the
 [Vanniktech Maven Publish plugin](https://github.com/vanniktech/gradle-maven-publish-plugin)
 (via the `devconsole.publishing` convention), targeting the Sonatype **Central Portal** under the
 group `io.github.devconsole-android`. Artifact IDs follow the mapping in
@@ -117,6 +117,6 @@ that registers `.asc` artifacts fails there with "artifact file does not exist".
 `PublishingConventionPlugin` calls `signAllPublications()` only when a key is configured — the same
 condition that lets a contributor run `publishToMavenLocal` without one.
 
-Only the 31 library modules are served; `gradle-plugin` is an `includeBuild` and is not among them,
+Only the 34 library modules are served; `gradle-plugin` is an `includeBuild` and is not among them,
 so JitPack consumers use plain coordinates rather than the plugin. Check a build at
 `https://jitpack.io/api/builds/com.github.devconsole-android/DevConsole`.
