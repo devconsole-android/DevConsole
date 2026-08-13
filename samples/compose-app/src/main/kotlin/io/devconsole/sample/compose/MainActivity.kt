@@ -94,6 +94,12 @@ import io.devconsole.mocks.MockRule
 import io.devconsole.mocks.okhttp.DevConsoleMockInterceptor
 import io.devconsole.network.okhttp.installDevConsole
 import io.devconsole.push.PushInput
+import io.devconsole.remoteconfig.RemoteConfigEntry
+import io.devconsole.remoteconfig.RemoteConfigFetchInfo
+import io.devconsole.remoteconfig.RemoteConfigFetchStatus
+import io.devconsole.remoteconfig.RemoteConfigProvider
+import io.devconsole.remoteconfig.RemoteConfigSnapshot
+import io.devconsole.remoteconfig.RemoteConfigSource
 import io.devconsole.socket.okhttp.DevConsoleOkHttpWebSocketListener
 import io.devconsole.socket.okhttp.DevConsoleRecordingWebSocket
 import io.devconsole.socket.paho.DevConsolePahoMqtt
@@ -117,6 +123,47 @@ import java.util.concurrent.atomic.AtomicInteger
 
 private const val SHOW_ORDER_HISTORY_FLAG = "compose_sample.show_order_history"
 private const val MOCK_RULE_ID = "compose-sample-orders"
+
+/**
+ * Stands in for a real Remote Config client so the sample can demonstrate the inspector without
+ * requiring a Firebase project. A Firebase-backed app registers
+ * `FirebaseRemoteConfigAdapter(Firebase.remoteConfig)` from
+ * `devconsole-remote-config-firebase` instead, and reaches the identical view.
+ *
+ * The values are chosen to show each thing the inspector is for: one key served from the server,
+ * one that fell back to an in-app default, one the server has never heard of, one masked by a local
+ * override, and one whose name trips redaction — `api_key` is written snake_case on purpose,
+ * because that is how Remote Config keys are actually written and it is the case a header-shaped
+ * allowlist misses.
+ */
+private class SampleRemoteConfigProvider : RemoteConfigProvider {
+    override val id: String = "sample-remote-config"
+
+    override fun snapshot(): RemoteConfigSnapshot =
+        RemoteConfigSnapshot(
+            providerId = id,
+            entries =
+                listOf(
+                    RemoteConfigEntry("checkout_v2_enabled", "true", RemoteConfigSource.REMOTE),
+                    RemoteConfigEntry("promo_banner_text", "Free delivery this week", RemoteConfigSource.REMOTE),
+                    RemoteConfigEntry("max_cart_items", "20", RemoteConfigSource.DEFAULT),
+                    RemoteConfigEntry("courier_eta_strategy", "", RemoteConfigSource.STATIC),
+                    RemoteConfigEntry("api_base_url", "https://staging.example.test", RemoteConfigSource.OVERRIDE),
+                    RemoteConfigEntry("api_key", "super-secret-value", RemoteConfigSource.REMOTE),
+                ),
+            fetchInfo =
+                RemoteConfigFetchInfo(
+                    lastFetchEpochMs = System.currentTimeMillis() - FETCH_AGE_MS,
+                    status = RemoteConfigFetchStatus.SUCCESS,
+                    minimumFetchIntervalSeconds = 3600L,
+                ),
+        )
+
+    private companion object {
+        const val FETCH_AGE_MS = 90_000L
+    }
+}
+
 private val requestCount = AtomicInteger(0)
 
 /**
@@ -285,6 +332,8 @@ class MainActivity : ComponentActivity() {
             composerAllowedHosts = setOf("jsonplaceholder.typicode.com", "example.test", "postman-echo.com"),
             // Lets the dashboard drive registered state mutations; state is read-only otherwise.
             stateMutationsEnabled = true,
+        ).withRemoteConfigProviders(
+            listOf(SampleRemoteConfigProvider()),
         ).withBrowserConfig(
             // Governs the in-app inspector's own More-screen Start button, which issues no
             // StartRequest of its own -- without this it would bind loopback while the sample's
