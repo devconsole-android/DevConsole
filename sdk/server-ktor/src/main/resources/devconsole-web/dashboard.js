@@ -663,13 +663,12 @@
       return { pad, k, v, cls, hit };
     });
   }
-  /** `title` is a cheap, already-plain-text label for the fullscreen overlay's header (a group
-   * label, card title, filename, etc.) — pass it whenever one is sitting in scope already; falls
-   * back to "JSON body" in the overlay itself when omitted. Every code block gets the same
-   * top-right fullscreen affordance (wireCodeFullscreen), wired once via delegated click. */
-  function codeBlockHtml(lines, large, title) {
-    if (!lines || !lines.length) return '';
-    const block = `<div class="code-block${large ? ' code-block-lg' : ''}">${lines
+  /** The bare `.code-block` element, without the fullscreen affordance `codeBlockHtml` wraps around
+   * it. Split out for the two callers that must not offer a nested expand: the fullscreen overlay
+   * itself (already fullscreen) and the Remote Config value modal (a second overlay opening from
+   * inside the first would fight it over Escape). */
+  function codeLinesHtml(lines, large) {
+    return `<div class="code-block${large ? ' code-block-lg' : ''}">${lines
       .map(
         (l) =>
           `<div class="code-line${l.hit ? ' hit' : ''}${l.diffHit ? ' diff' : ''}"><span class="code-pad">${esc(l.pad)}</span><span class="code-key">${esc(
@@ -677,6 +676,14 @@
           )}</span><span class="${l.cls}">${esc(l.v)}</span></div>`,
       )
       .join('')}</div>`;
+  }
+  /** `title` is a cheap, already-plain-text label for the fullscreen overlay's header (a group
+   * label, card title, filename, etc.) — pass it whenever one is sitting in scope already; falls
+   * back to "JSON body" in the overlay itself when omitted. Every code block gets the same
+   * top-right fullscreen affordance (wireCodeFullscreen), wired once via delegated click. */
+  function codeBlockHtml(lines, large, title) {
+    if (!lines || !lines.length) return '';
+    const block = codeLinesHtml(lines, large);
     return `<div class="code-block-wrap"><button type="button" class="code-fullscreen-btn" data-code-fullscreen${
       title ? ` data-code-title="${esc(title)}"` : ''
     } title="Full screen" aria-label="Full screen">${icon('expand', 'ic-sm')}</button>${block}</div>`;
@@ -772,15 +779,20 @@
       .map((s) => `<span class="card-stack-legend-item"><span class="card-stack-dot tone-bg-${s.tone}"></span>${esc(s.label)}<span class="val">${esc(s.val)}</span></span>`)
       .join('')}</div></div>`;
   }
+  /** `r.click`, when set, makes the row a real `<button>` dispatching that id through
+   * wireCardGrid's `onRow` — a button rather than a clickable div so focus, Enter/Space and the
+   * screen-reader role all come for free. Rows without it render exactly as before. */
   function cardRowsHtml(rows) {
     if (!rows || !rows.length) return '';
     return `<div class="card-rows">${rows
-      .map(
-        (r) =>
-          `<div class="card-row"><span class="card-row-k">${esc(r.k)}</span><span class="card-row-v tone-text-${r.tone || 'ink'}">${esc(r.v)}</span>${
-            r.tag ? `<span class="card-row-tag tone-text-${r.tagTone || 'muted'}">${esc(r.tag)}</span>` : '<span></span>'
-          }</div>`,
-      )
+      .map((r) => {
+        const inner = `<span class="card-row-k">${esc(r.k)}</span><span class="card-row-v tone-text-${r.tone || 'ink'}">${esc(r.v)}</span>${
+          r.tag ? `<span class="card-row-tag tone-text-${r.tagTone || 'muted'}">${esc(r.tag)}</span>` : '<span></span>'
+        }`;
+        return r.click
+          ? `<button type="button" class="card-row card-row-click" data-card-row="${esc(r.click)}" title="${esc(r.clickTitle || r.k)}">${inner}</button>`
+          : `<div class="card-row">${inner}</div>`;
+      })
       .join('')}</div>`;
   }
   function cardMetricsHtml(metrics) {
@@ -917,7 +929,7 @@
     if (wiredCardGrids.has(containerId)) return;
     wiredCardGrids.add(containerId);
     $(containerId).addEventListener('click', (e) => {
-      const { onToggle, onButton, onTree, onDelete, onEdit } = cardGridHandlers[containerId];
+      const { onToggle, onButton, onTree, onDelete, onEdit, onRow } = cardGridHandlers[containerId];
       const ed = e.target.closest('[data-card-edit]');
       if (ed && onEdit) {
         onEdit(ed.dataset.cardEdit);
@@ -936,6 +948,11 @@
       const b = e.target.closest('[data-card-btn]');
       if (b && onButton) {
         onButton(b.dataset.cardBtn);
+        return;
+      }
+      const row = e.target.closest('[data-card-row]');
+      if (row && onRow) {
+        onRow(row.dataset.cardRow);
         return;
       }
       const n = e.target.closest('[data-tree-id]');
@@ -1347,6 +1364,8 @@
     const overlay = $('codeFullscreenModal');
     if (!overlay || !sourceBlock) return;
     $('codeFullscreenTitle').textContent = title || 'JSON body';
+    // Clones the already-escaped markup rather than re-deriving it from data, so this cannot
+    // disagree with what the page underneath is showing.
     $('codeFullscreenBody').innerHTML = `<div class="code-block code-block-lg">${sourceBlock.innerHTML}</div>`;
     codeFullscreenOpenerEl = document.activeElement;
     overlay.hidden = false;
@@ -4448,12 +4467,127 @@
         rows: shown.map((e) => ({
           k: e.key,
           v: e.redacted ? '<redacted>' : e.value,
+          // A [providerId, key] pair, not a position in `shown`: the search box and the source
+          // filter re-render this list constantly, and an index would point at a different key
+          // after either one changes. Same composite-dataset-key shape the mock diff rows use.
+          click: JSON.stringify([provider.id, e.key]),
+          clickTitle: 'Show the full value of ' + e.key,
           tone: e.source === 'remote' ? 'ink' : 'muted',
           tag: (e.source || 'unknown').toUpperCase() + (e.truncated ? ' · TRUNCATED' : ''),
           tagTone: REMOTE_CONFIG_SOURCE_TONE[e.source] || 'muted',
         })),
       };
     }));
+  }
+
+  // ================================================================
+  // Remote Config value modal — a Remote Config value is a *string* on the wire (see
+  // RemoteConfigEntry's own doc), so the card row can only ever show a one-line preview of it.
+  // This is where you read the whole thing: pretty-printed when it really is JSON, verbatim when
+  // it is not. Deliberately never renders a non-JSON value as a quoted JSON string — the quotes
+  // would be this viewer's invention, not something the server sent, which is the same rule the
+  // source badge follows.
+  // ================================================================
+  let remoteConfigValueTarget = null; // { providerId, key } — null while the modal is closed
+  let remoteConfigValueMode = 'json'; // 'json' | 'raw'
+  let remoteConfigValueOpenerEl = null;
+  function remoteConfigEntryAt(providerId, key) {
+    const provider = remoteConfigProviders.find((p) => p.id === providerId);
+    return provider ? (provider.entries || []).find((e) => e.key === key) : undefined;
+  }
+  /** Pretty JSON is offered only when the value actually parses. A redacted value has no real
+   * content to parse, and a truncated one is a cut string that will almost never parse — both are
+   * told apart from "just not JSON" so nobody debugs a parse failure that is really a length cut. */
+  function remoteConfigValueView(entry) {
+    if (!entry) return { mode: 'raw', jsonOk: false, text: '', notice: '' };
+    if (entry.redacted) {
+      return { mode: 'raw', jsonOk: false, text: '<redacted>', notice: 'Value withheld by the redaction policy.' };
+    }
+    const text = entry.value == null ? '' : String(entry.value);
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return {
+        mode: 'raw', jsonOk: false, text,
+        notice: entry.truncated
+          ? 'Value was truncated on capture, so it no longer parses as JSON — showing raw text.'
+          : 'Not valid JSON — showing raw text.',
+      };
+    }
+    return { mode: 'json', jsonOk: true, parsed, text, notice: entry.truncated ? 'Value was truncated on capture.' : '' };
+  }
+  function renderRemoteConfigValueModal() {
+    if (!remoteConfigValueTarget) return;
+    const entry = remoteConfigEntryAt(remoteConfigValueTarget.providerId, remoteConfigValueTarget.key);
+    const view = remoteConfigValueView(entry);
+    const source = (entry && entry.source) || 'unknown';
+    $('remoteConfigValueTitle').textContent = remoteConfigValueTarget.key;
+    const badge = $('remoteConfigValueSource');
+    badge.textContent = source.toUpperCase() + (entry && entry.truncated ? ' · TRUNCATED' : '');
+    badge.className = 'card-row-tag tone-text-' + (REMOTE_CONFIG_SOURCE_TONE[source] || 'muted');
+    $('remoteConfigValueProvider').textContent = remoteConfigValueTarget.providerId;
+    const jsonBtn = $('remoteConfigValueSeg').querySelector('button[data-value="json"]');
+    jsonBtn.disabled = !view.jsonOk;
+    jsonBtn.title = view.jsonOk ? 'Pretty-print this value as JSON' : 'This value is not valid JSON';
+    $('remoteConfigValueSeg').querySelectorAll('button').forEach((b) => {
+      const on = b.dataset.value === remoteConfigValueMode;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+    const notice = $('remoteConfigValueNotice');
+    notice.textContent = view.notice;
+    notice.hidden = !view.notice;
+    $('remoteConfigValueBody').innerHTML = remoteConfigValueMode === 'json' && view.jsonOk
+      ? codeLinesHtml(formatJsonLines(view.parsed, ''), true)
+      : `<div class="code-block code-block-lg"><div class="code-line rc-raw-line">${esc(view.text)}</div></div>`;
+  }
+  function openRemoteConfigValue(rowId) {
+    let providerId, key;
+    try {
+      [providerId, key] = JSON.parse(rowId);
+    } catch {
+      return;
+    }
+    const entry = remoteConfigEntryAt(providerId, key);
+    if (!entry) return;
+    remoteConfigValueTarget = { providerId, key };
+    // Pretty JSON is the default, but only where it means anything: a plain string value opens on
+    // Raw with the JSON segment disabled rather than on an error you have to click past.
+    remoteConfigValueMode = remoteConfigValueView(entry).mode;
+    remoteConfigValueOpenerEl = document.activeElement;
+    renderRemoteConfigValueModal();
+    $('remoteConfigValueModal').hidden = false;
+    document.addEventListener('keydown', remoteConfigValueKeydown);
+    $('remoteConfigValueClose').focus();
+  }
+  function closeRemoteConfigValue() {
+    const overlay = $('remoteConfigValueModal');
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    $('remoteConfigValueBody').innerHTML = '';
+    remoteConfigValueTarget = null;
+    document.removeEventListener('keydown', remoteConfigValueKeydown);
+    remoteConfigValueOpenerEl?.focus?.();
+    remoteConfigValueOpenerEl = null;
+  }
+  function remoteConfigValueKeydown(e) {
+    const overlay = $('remoteConfigValueModal');
+    if (e.key === 'Escape') { closeRemoteConfigValue(); return; }
+    if (e.key !== 'Tab') return;
+    const focusable = [...overlay.querySelectorAll('button')].filter((el) => !el.disabled && el.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+  /** Copies what is on screen, not always the raw value: someone who switched to Pretty JSON to
+   * read it wants the indented text they are looking at. */
+  function copyRemoteConfigValue() {
+    if (!remoteConfigValueTarget) return;
+    const view = remoteConfigValueView(remoteConfigEntryAt(remoteConfigValueTarget.providerId, remoteConfigValueTarget.key));
+    const text = remoteConfigValueMode === 'json' && view.jsonOk ? JSON.stringify(view.parsed, null, 2) : view.text;
+    copyToClipboard(text, remoteConfigValueTarget.key);
   }
 
   // ================================================================
@@ -7287,6 +7421,11 @@
     $('remoteConfigRefresh').onclick = loadRemoteConfig;
     $('remoteConfigSearch').oninput = (e) => { remoteConfigQuery = e.target.value; renderRemoteConfigCards(); };
     wireSeg($('remoteConfigSourceSeg'), (value) => { remoteConfigSourceFilter = value; renderRemoteConfigCards(); });
+    wireCardGrid('remoteConfigCards', { onRow: openRemoteConfigValue });
+    $('remoteConfigValueClose').onclick = closeRemoteConfigValue;
+    $('remoteConfigValueCopy').onclick = copyRemoteConfigValue;
+    $('remoteConfigValueModal').addEventListener('click', (e) => { if (e.target.id === 'remoteConfigValueModal') closeRemoteConfigValue(); });
+    wireSeg($('remoteConfigValueSeg'), (value) => { remoteConfigValueMode = value; renderRemoteConfigValueModal(); });
 
     $('prefFile').onchange = (e) => renderPreferenceFile(e.target.value);
 

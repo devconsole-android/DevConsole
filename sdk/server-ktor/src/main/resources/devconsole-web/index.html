@@ -733,6 +733,26 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   </div>
 </div>
 
+<!-- Remote Config value viewer: a config value is a string on the wire, so the table row can only
+     preview it. This shows the whole thing, pretty-printed when it genuinely is JSON. -->
+<div class="modal-overlay" id="remoteConfigValueModal" hidden>
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="remoteConfigValueTitle">
+    <div class="modal-header">
+      <span class="modal-title"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-sliders"/></svg><span id="remoteConfigValueTitle">Remote Config value</span><span class="card-row-tag tone-text-muted" id="remoteConfigValueSource"></span></span>
+      <button type="button" class="modal-close" id="remoteConfigValueClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="rc-value-toolbar">
+        <div class="seg" id="remoteConfigValueSeg" role="group" aria-label="Value format"><button type="button" class="active" data-value="json">Pretty JSON</button><button type="button" data-value="raw">Raw</button></div>
+        <span class="rc-value-provider">provider <span id="remoteConfigValueProvider"></span></span>
+        <button type="button" class="btn" id="remoteConfigValueCopy"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-copy"/></svg>Copy</button>
+      </div>
+      <p class="rc-value-notice" id="remoteConfigValueNotice" hidden></p>
+      <div id="remoteConfigValueBody"></div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="/assets/dashboard.js"></script>

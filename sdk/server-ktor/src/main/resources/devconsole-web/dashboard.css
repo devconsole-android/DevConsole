@@ -1062,6 +1062,13 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .card-row-k { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-row-v { font-family: var(--font-mono); font-size: 12.5px; overflow-wrap: anywhere; }
 .card-row-tag { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border-strong); white-space: nowrap; }
+/* A row that opens a detail window is a real <button>; these are the resets that keep it looking
+   identical to the plain rows beside it. The value stays on one line here (unlike .card-row-v's
+   wrapping default) because the window behind the click is where the whole value is read. */
+.card-row-click { width: 100%; font: inherit; color: inherit; text-align: left; background: none; border-width: 0 0 1px 0; cursor: pointer; }
+.card-row-click:hover { background: var(--surface-2); }
+.card-row-click:hover .card-row-k { color: var(--ink); }
+.card-row-click .card-row-v { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .card-metric { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
@@ -1228,6 +1235,18 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
    JSON/code body gets real room. Its .code-block-lg content scrolls inside .modal-body-code. */
 .modal.modal-fullscreen { max-width: 96vw; width: 96vw; height: 92vh; max-height: 92vh; }
 .modal-body-code { padding: 12px 16px 16px; }
+
+/* Remote Config value viewer: format toggle + provider + copy on one line, then the value itself
+   in a code block capped so the dialog stays a dialog rather than growing past the viewport on a
+   large config. The raw line wraps instead of scrolling sideways — a config value is one long
+   string far more often than it is many lines. */
+.rc-value-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.rc-value-provider { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-value-notice { margin: -4px 0 12px; font-size: 11.5px; color: var(--text-3); }
+#remoteConfigValueBody .code-block { max-height: 60vh; overflow-y: auto; }
+/* Block, not .code-line's flex: this line holds bare text with no pad/key spans to lay out, and a
+   flex item would resist wrapping the long unbroken strings config values so often are. */
+.rc-raw-line { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* Shortcuts modal is narrower than the generic .modal and its close button/body
    diverge from the generic pattern — scoped overrides rather than changing every modal. */
