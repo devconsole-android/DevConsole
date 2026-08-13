@@ -100,10 +100,24 @@ shown. Add your own names through `RedactionPolicy.sensitiveFieldNames`.
 
 The browser dashboard's **Remote Config** page (under Data, next to State & flags) lists each
 provider with its fetch line and a Key / Value / Source table, filterable by key and by source. The
-Compose inspector shows the same data as a section on its **Control** screen, beside feature flags.
+Compose inspector shows the same data on the **Config** tab of its Observe screen. That tab appears
+only when at least one provider is registered — the on-device tab row splits its width equally
+between tabs, so it does not spend one on an app that has no Remote Config.
 
 Both distinguish four states explicitly rather than rendering a blank table: no provider registered,
 capture category disabled, provider unavailable, and "fetched nothing / never fetched".
+
+### Reading a value in full
+
+A Remote Config value is a string of any length, so both surfaces show only a preview in the table
+and open the whole value on demand: click a key in the dashboard for a value window, or tap a row on
+the Config tab for the key's detail screen.
+
+Both default to pretty-printed JSON and fall back to the raw string, with a toggle between the two.
+The fallback is deliberate — plenty of values are plain strings like `on` or `v2`, and neither
+surface will re-quote one to make it parse, because the quotes would be the viewer's invention
+rather than something the server sent. A value that was truncated on capture, or withheld by
+redaction, says so instead of failing to parse for an unexplained reason.
 
 ## Scope
 

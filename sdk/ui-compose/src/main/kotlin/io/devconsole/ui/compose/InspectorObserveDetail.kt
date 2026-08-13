@@ -263,6 +263,7 @@ internal fun InspectorObserveDetailScreen(
     footerActions: List<InspectorFooterAction>,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    searchPlaceholder: String = DEFAULT_DETAIL_SEARCH_PLACEHOLDER,
 ) {
     var query by rememberSaveable(resetKey) { mutableStateOf("") }
     val openState =
@@ -328,6 +329,7 @@ internal fun InspectorObserveDetailScreen(
                 onQueryChange = { query = it },
                 matchLabel = if (query.isBlank()) "" else "$totalHits match${if (totalHits == 1) "" else "es"}",
                 modifier = Modifier.padding(top = 12.dp),
+                placeholder = searchPlaceholder,
             )
         },
         footer = { InspectorDetailFooterBar(footerActions) },
@@ -349,7 +351,16 @@ internal data class ObserveDetailContent(
     val sections: List<InspectorDetailSectionSpec>,
     val initiallyOpenSectionKeys: Set<String>,
     val footerActions: List<InspectorFooterAction>,
+    /**
+     * Overridden only by kinds whose sections are not a captured request/response. The default names
+     * what a network, socket, push, log or crash detail actually holds; a Remote Config key holds
+     * one value, and offering to search its "headers" would be describing a screen that isn't there.
+     */
+    val searchPlaceholder: String = DEFAULT_DETAIL_SEARCH_PLACEHOLDER,
 )
+
+/** Matches [InspectorDetailSearchField]'s own default; named here so callers can opt out of it. */
+internal const val DEFAULT_DETAIL_SEARCH_PLACEHOLDER = "Find in headers, payload, response"
 
 /** Redacted-aware header/kv rows shared by every kind's detail sections that render a raw string map. */
 internal fun headerRowsBody(

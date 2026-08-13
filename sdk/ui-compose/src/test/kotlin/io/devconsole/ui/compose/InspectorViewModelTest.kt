@@ -1405,6 +1405,37 @@ class InspectorViewModelTest {
                     .isEmpty(),
             )
         }
+
+    /**
+     * The Remote Config tab is gated on data, not only on its category, so it can vanish while
+     * selected without any capture category changing -- e.g. the host tears its provider down. The
+     * existing snap has to cover that case too, or the operator is left on a tab the row no longer
+     * draws.
+     */
+    @Test
+    fun `losing the last Remote Config provider moves observeTab off the Config tab`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val withProvider =
+                InspectorSnapshot(
+                    available = true,
+                    captureCategories = setOf(CaptureCategory.NETWORK, CaptureCategory.STATE),
+                    remoteConfig = listOf(InspectorRemoteConfigUi(id = "firebase")),
+                )
+            val source = RecordingInspectorDataSource(withProvider)
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+            viewModel.dispatch(InspectorAction.SelectObserveTab(ObserveTab.REMOTE_CONFIG))
+            dispatcher.scheduler.advanceUntilIdle()
+            assertEquals(ObserveTab.REMOTE_CONFIG, viewModel.state.value.observeTab)
+
+            // Same categories, no provider: the tab stops existing on the next poll.
+            source.snapshotToReturn = withProvider.copy(remoteConfig = emptyList())
+            viewModel.dispatch(InspectorAction.Refresh)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(ObserveTab.TRAFFIC, viewModel.state.value.observeTab)
+        }
 }
 
 private fun sampleTransaction(id: String = "tx-1") =

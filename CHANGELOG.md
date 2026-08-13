@@ -37,12 +37,21 @@ joined this list.)
   the `devconsole` umbrella.
 
   Surfaces on both the browser dashboard (a Remote Config page under Data) and the Compose
-  inspector's Control screen, and over `GET /api/v1/remote-config`. Gated by the existing
+  inspector's Observe screen (a **Config** tab, shown only when a provider is registered, since the
+  on-device tab row splits its width equally and should not spend a tab on an app with no Remote
+  Config), and over `GET /api/v1/remote-config`. Gated by the existing
   `CaptureCategory.STATE`, alongside state providers and feature flags. Register a provider with
   `DevConsoleConfig.withRemoteConfigProviders(...)` or, for a lazily-built client,
   `DevConsole.registerRemoteConfigProvider(...)`. Read-only by design: DevConsole does not set
   overrides and never triggers `fetch()`/`activate()`. See
   [docs/REMOTE_CONFIG.md](docs/REMOTE_CONFIG.md).
+
+  A config value is a string of any length, so the tables show a preview and open the full value on
+  demand: click a key on the dashboard, tap a row on the Config tab. Both default to pretty-printed
+  JSON and fall back to the raw string with a toggle between them — a value like `on` or `v2` is
+  never re-quoted to make it parse, since the quotes would be the viewer's invention rather than
+  something the server sent, and a truncated or redacted value says so rather than failing to parse
+  for an unexplained reason.
 
   Values are redacted by key name at a single boundary shared by both surfaces — the on-device
   inspector reads in-process and never crosses the HTTP boundary, so redacting at the route alone

@@ -20,7 +20,6 @@ public final class io/devconsole/ui/compose/ComposableSingletons$DevConsolePanel
 public final class io/devconsole/ui/compose/ComposableSingletons$InspectorControlScreenKt {
 	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorControlScreenKt;
 	public fun <init> ()V
-	public final fun getLambda$-1143782739$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$-1373757892$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$-153603954$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-1946392255$ui_compose_release ()Lkotlin/jvm/functions/Function3;
@@ -134,10 +133,19 @@ public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObserv
 	public final fun getLambda$-650102098$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-970086269$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-998201989$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$1640041240$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$1735444109$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$31180393$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$506389634$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$59331127$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$924899110$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObserveRemoteConfigTabKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorObserveRemoteConfigTabKt;
+	public fun <init> ()V
+	public final fun getLambda$-1047114689$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-1125610964$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 }
 
 public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObserveSignalsKt {
@@ -1714,6 +1722,7 @@ public final class io/devconsole/ui/compose/ObserveTab : java/lang/Enum {
 	public static final field CRASHES Lio/devconsole/ui/compose/ObserveTab;
 	public static final field LOGS Lio/devconsole/ui/compose/ObserveTab;
 	public static final field PUSH Lio/devconsole/ui/compose/ObserveTab;
+	public static final field REMOTE_CONFIG Lio/devconsole/ui/compose/ObserveTab;
 	public static final field SOCKETS Lio/devconsole/ui/compose/ObserveTab;
 	public static final field TRAFFIC Lio/devconsole/ui/compose/ObserveTab;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;

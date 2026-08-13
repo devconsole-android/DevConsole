@@ -379,8 +379,8 @@ data class InspectorRetentionUi(
 )
 
 /**
- * One Remote Config key on the Control surface. Mirrors `remoteconfig.RemoteConfigEntry` without a
- * `:sdk:remote-config` dependency, the same way [InspectorBodyKind] mirrors `network.BodyPreview`.
+ * One Remote Config key on the Observe surface's Config tab. Mirrors `remoteconfig.RemoteConfigEntry`
+ * without a `:sdk:remote-config` dependency, the same way [InspectorBodyKind] mirrors `network.BodyPreview`.
  * [source] carries the wire name (`remote`/`default`/`static`/`override`/`unknown`) rather than an
  * enum, so this module never has to track the producer's type.
  */
@@ -392,7 +392,7 @@ data class InspectorRemoteConfigEntryUi(
     val truncated: Boolean = false,
 )
 
-/** One Remote Config provider and its fetch state, as shown on the Control surface. */
+/** One Remote Config provider and its fetch state, as shown on the Observe surface's Config tab. */
 data class InspectorRemoteConfigUi(
     val id: String,
     val entries: List<InspectorRemoteConfigEntryUi> = emptyList(),

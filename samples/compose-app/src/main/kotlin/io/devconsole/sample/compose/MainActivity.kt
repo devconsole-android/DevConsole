@@ -135,6 +135,10 @@ private const val MOCK_RULE_ID = "compose-sample-orders"
  * override, and one whose name trips redaction — `api_key` is written snake_case on purpose,
  * because that is how Remote Config keys are actually written and it is the case a header-shaped
  * allowlist misses.
+ *
+ * `checkout_experiment` holds a JSON object because that is the value shape the row can only ever
+ * preview: opening it shows the pretty-printed tree, while `promo_banner_text` beside it opens as
+ * raw text, since a plain string is not JSON and is not dressed up as though it were.
  */
 private class SampleRemoteConfigProvider : RemoteConfigProvider {
     override val id: String = "sample-remote-config"
@@ -145,6 +149,7 @@ private class SampleRemoteConfigProvider : RemoteConfigProvider {
             entries =
                 listOf(
                     RemoteConfigEntry("checkout_v2_enabled", "true", RemoteConfigSource.REMOTE),
+                    RemoteConfigEntry("checkout_experiment", CHECKOUT_EXPERIMENT_JSON, RemoteConfigSource.REMOTE),
                     RemoteConfigEntry("promo_banner_text", "Free delivery this week", RemoteConfigSource.REMOTE),
                     RemoteConfigEntry("max_cart_items", "20", RemoteConfigSource.DEFAULT),
                     RemoteConfigEntry("courier_eta_strategy", "", RemoteConfigSource.STATIC),
@@ -161,6 +166,11 @@ private class SampleRemoteConfigProvider : RemoteConfigProvider {
 
     private companion object {
         const val FETCH_AGE_MS = 90_000L
+
+        /** One line, exactly as a Remote Config server sends it — the viewer does the indenting. */
+        const val CHECKOUT_EXPERIMENT_JSON =
+            """{"id":"checkout-flow-2026-08","variant":"b","rollout":0.25,""" +
+                """"steps":["cart","address","payment"],"fallback":null}"""
     }
 }
 
