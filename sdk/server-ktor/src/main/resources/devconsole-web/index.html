@@ -116,6 +116,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="rail-group" id="railGroupData">
       <div class="rail-group-label"><span class="text">Data</span><span class="rule"></span></div>
       <button type="button" id="viewState"><svg class="ic" aria-hidden="true"><use href="#dc-flag"/></svg><span class="rail-name">State &amp; flags</span></button>
+      <button type="button" id="viewRemoteConfig"><svg class="ic" aria-hidden="true"><use href="#dc-sliders"/></svg><span class="rail-name">Remote Config</span><span class="rail-count" id="navCountRemoteConfig">0</span></button>
       <button type="button" id="viewPreferences"><svg class="ic" aria-hidden="true"><use href="#dc-sliders"/></svg><span class="rail-name">Preferences</span></button>
       <button type="button" id="viewDatabase"><svg class="ic" aria-hidden="true"><use href="#dc-database"/></svg><span class="rail-name">Database</span></button>
       <button type="button" id="viewFiles"><svg class="ic" aria-hidden="true"><use href="#dc-folder"/></svg><span class="rail-name">Files</span></button>
@@ -464,6 +465,20 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div id="stateCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-flag"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect state and flags.</div></div></div>
     </section>
 
+    <!-- REMOTE CONFIG -->
+    <section class="view" id="remoteConfigView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">Remote Config</h1><span class="view-badge" id="remoteConfigBadge"></span></div>
+        <p class="view-hint">Read-only view of the Remote Config values active on this device. The source badge is the point: a key serving a <em>default</em> because the last fetch failed or was throttled looks identical to a published one until you can see where it came from.</p>
+      </div>
+      <div class="toolbar">
+        <label class="field search-field"><span>Find key</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="remoteConfigSearch" placeholder="checkout_v2, banner…"></span></label>
+        <div class="toolbar-group"><span class="toolbar-group-label">Source</span><div class="seg" id="remoteConfigSourceSeg" role="group" aria-label="Filter by value source"><button type="button" class="active" data-value="all">All</button><button type="button" data-value="remote">Remote</button><button type="button" data-value="default">Default</button><button type="button" data-value="static">Static</button><button type="button" data-value="override">Override</button><button type="button" data-value="unknown">Unknown</button></div></div>
+        <button type="button" class="btn" id="remoteConfigRefresh"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Refresh</button>
+      </div>
+      <div id="remoteConfigCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-sliders"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect Remote Config.</div></div></div>
+    </section>
+
     <!-- PREFERENCES -->
     <section class="view" id="preferencesView">
       <div class="view-head">
@@ -715,6 +730,26 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <button type="button" class="modal-close" id="codeFullscreenClose" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body modal-body-code" id="codeFullscreenBody"></div>
+  </div>
+</div>
+
+<!-- Remote Config value viewer: a config value is a string on the wire, so the table row can only
+     preview it. This shows the whole thing, pretty-printed when it genuinely is JSON. -->
+<div class="modal-overlay" id="remoteConfigValueModal" hidden>
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="remoteConfigValueTitle">
+    <div class="modal-header">
+      <span class="modal-title"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-sliders"/></svg><span id="remoteConfigValueTitle">Remote Config value</span><span class="card-row-tag tone-text-muted" id="remoteConfigValueSource"></span></span>
+      <button type="button" class="modal-close" id="remoteConfigValueClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="rc-value-toolbar">
+        <div class="seg" id="remoteConfigValueSeg" role="group" aria-label="Value format"><button type="button" class="active" data-value="json">Pretty JSON</button><button type="button" data-value="raw">Raw</button></div>
+        <span class="rc-value-provider">provider <span id="remoteConfigValueProvider"></span></span>
+        <button type="button" class="btn" id="remoteConfigValueCopy"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-copy"/></svg>Copy</button>
+      </div>
+      <p class="rc-value-notice" id="remoteConfigValueNotice" hidden></p>
+      <div id="remoteConfigValueBody"></div>
+    </div>
   </div>
 </div>
 

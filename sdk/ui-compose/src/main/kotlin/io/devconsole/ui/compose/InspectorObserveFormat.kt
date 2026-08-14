@@ -2,7 +2,12 @@
  * @author Shakib
  * @since 04/08/26
  */
+@file:Suppress("TooManyFunctions")
+
 package io.devconsole.ui.compose
+
+// TooManyFunctions is suppressed above because this file is one small, independent formatter per
+// thing the inspector renders: its function count tracks that list, not any complexity.
 
 import android.content.Context
 import android.content.Intent
@@ -62,6 +67,7 @@ internal fun pushLifecycleShortLabel(lifecycle: String): String =
 
 private const val CAPTURE_CLOCK_FORMAT = "HH:mm:ss"
 private const val CAPTURE_CLOCK_FORMAT_SHORT = "HH:mm"
+private const val CAPTURE_DATE_TIME_FORMAT = "d MMM, HH:mm:ss"
 
 /** `HH:mm:ss` of [epochMs] in the device's default locale digits (fresh formatter per call, not shared/cached). */
 internal fun formatCaptureClockTime(epochMs: Long): String =
@@ -70,6 +76,16 @@ internal fun formatCaptureClockTime(epochMs: Long): String =
 /** `HH:mm` of [epochMs], for rows tight on trailing-column width. */
 internal fun formatCaptureClockTimeShort(epochMs: Long): String =
     SimpleDateFormat(CAPTURE_CLOCK_FORMAT_SHORT, Locale.US).format(Date(epochMs))
+
+/**
+ * `d MMM, HH:mm:ss` of [epochMs], for timestamps that are routinely not from today. Captures are
+ * session-scoped and a bare clock time reads fine for them, but a Remote Config fetch is throttled
+ * to a 12h minimum interval by default -- so `09:14:02` alone reads identically whether the fetch
+ * was a minute ago or last week, which is the distinction that surface exists to make. The
+ * dashboard's `toLocaleString()` already carries the date; this is the on-device counterpart.
+ */
+internal fun formatCaptureDateTime(epochMs: Long): String =
+    SimpleDateFormat(CAPTURE_DATE_TIME_FORMAT, Locale.US).format(Date(epochMs))
 
 private const val BYTES_PER_KB = 1024L
 private const val BYTES_PER_MB = BYTES_PER_KB * 1024L

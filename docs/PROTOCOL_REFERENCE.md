@@ -210,6 +210,15 @@ accepted since surrounding quotes are trimmed). `FeatureFlagType` has two member
 allowed values the declared option set) — see [STATE_AND_FLAGS.md](STATE_AND_FLAGS.md#flags-with-named-options-environment-switching)
 for the named-options use case (environment/account-tier switching).
 
+### Remote Config
+
+`GET /api/v1/remote-config` (auth). Read-only; there is no write route. Returns one object per
+registered provider: `id`, `fetch` (`lastFetchEpochMs` — **null**, never a sentinel, when no fetch
+has completed — plus `status` and `minimumFetchIntervalSeconds`), `unavailableReason`, and `entries`
+(`key`, `value`, `source`, `redacted`, `truncated`). `source` is one of `remote`, `default`,
+`static`, `override`, `unknown`. Gated by the `state` capture category, the same one that covers
+state providers and feature flags. See [REMOTE_CONFIG.md](REMOTE_CONFIG.md).
+
 ### Composer
 
 `POST /api/v1/composer/execute` (auth — one-off request; `method` restricted to

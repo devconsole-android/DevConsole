@@ -7,8 +7,12 @@ package io.devconsole.ui.compose
 import io.devconsole.api.CaptureCategory
 import io.devconsole.api.ScreenshotResult
 
-/** Sub-surfaces of the Observe workspace: live traffic plus the other captured signal sources. */
-enum class ObserveTab { TRAFFIC, SOCKETS, PUSH, LOGS, CRASHES }
+/**
+ * Sub-surfaces of the Observe workspace: live traffic plus the other captured signal sources.
+ * [REMOTE_CONFIG] is last because it is the one tab that is not a stream of captures arriving over
+ * time -- it is the current resolved snapshot of the app's config.
+ */
+enum class ObserveTab { TRAFFIC, SOCKETS, PUSH, LOGS, CRASHES, REMOTE_CONFIG }
 
 /**
  * Presentation state for the Observe and Control surfaces. Both surfaces read the same
@@ -35,6 +39,8 @@ data class InspectorState(
     val selectedTransactionIds: Set<String> = emptySet(),
     val featureFlags: List<InspectorFeatureFlagUi> = emptyList(),
     val stateProviders: List<InspectorStateProviderUi> = emptyList(),
+    /** Remote Config providers, already redacted and STATE-gated by the data source. */
+    val remoteConfig: List<InspectorRemoteConfigUi> = emptyList(),
     val preferenceFiles: List<InspectorPreferenceFileUi> = emptyList(),
     val fileRoots: List<String> = emptyList(),
     val fileListing: InspectorFileListingUi? = null,
@@ -75,6 +81,14 @@ internal fun InspectorState.captures(category: CaptureCategory): Boolean = categ
  * plain WebSocket and MQTT capture -- either one enabled is enough to keep the tab (its contents,
  * [InspectorSocketUi.protocol], already distinguish the two per-row). Order matches [ObserveTab]'s
  * declaration order, which is also the tab row's display order.
+ *
+ * REMOTE_CONFIG is the one tab gated on *data* rather than on its category alone, and deliberately
+ * so: `InspectorTabRow` is a fixed Row that splits its width equally between the tabs it is given,
+ * so a tab that exists whenever STATE is captured -- which is on by default -- would narrow every
+ * other tab in every app, including the majority that register no Remote Config provider at all.
+ * The condition is the one the Control screen's section already used, so which sessions can see
+ * Remote Config is unchanged; only where it lives moved. A provider list that empties mid-session
+ * is handled for free by [InspectorViewModel]'s existing snap onto the first still-visible tab.
  */
 internal fun InspectorState.visibleObserveTabs(): List<ObserveTab> =
     ObserveTab.entries.filter { tab ->
@@ -84,6 +98,7 @@ internal fun InspectorState.visibleObserveTabs(): List<ObserveTab> =
             ObserveTab.PUSH -> captures(CaptureCategory.PUSH)
             ObserveTab.LOGS -> captures(CaptureCategory.LOGS)
             ObserveTab.CRASHES -> captures(CaptureCategory.CRASHES)
+            ObserveTab.REMOTE_CONFIG -> captures(CaptureCategory.STATE) && remoteConfig.isNotEmpty()
         }
     }
 

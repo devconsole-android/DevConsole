@@ -77,6 +77,53 @@ class DashboardAssetsTest {
     }
 
     @Test
+    fun `remote config keys open a value viewer offering both pretty JSON and raw`() {
+        val dashboard = DashboardAssets.index()
+        val script = DashboardAssets.js()
+
+        listOf(
+            "remoteConfigValueModal",
+            "remoteConfigValueSeg",
+            "remoteConfigValueBody",
+            "remoteConfigValueNotice",
+            "remoteConfigValueCopy",
+            "remoteConfigValueClose",
+        ).forEach { id ->
+            assertTrue("expected dashboard to contain id=\"$id\"", dashboard.contains("id=\"$id\""))
+        }
+        // Pretty JSON is the segment that carries `active` in the static markup, so the viewer
+        // opens on it for every value that actually parses.
+        assertTrue(
+            dashboard.contains("<button type=\"button\" class=\"active\" data-value=\"json\">Pretty JSON</button>"),
+        )
+        assertTrue(dashboard.contains("data-value=\"raw\">Raw</button>"))
+        // The rows have to be clickable for any of the above to be reachable.
+        assertTrue(script.contains("openRemoteConfigValue"))
+        assertTrue(script.contains("data-card-row"))
+    }
+
+    @Test
+    fun `remote config rail count goes through setNavCount and every source is filterable`() {
+        val dashboard = DashboardAssets.index()
+        val script = DashboardAssets.js()
+
+        // Setting .textContent directly leaves the badge at `display: none` -- only setNavCount
+        // adds the `.show` class, and it is also what applies the 999+ clamp.
+        assertTrue(script.contains("setNavCount('navCountRemoteConfig'"))
+        assertFalse(script.contains("\$('navCountRemoteConfig').textContent"))
+        // Every source in the model is reachable: the matcher is an exact `===`, so a source with
+        // no button cannot be isolated at all -- `override` above all, which is the whole question
+        // the source column exists to answer.
+        listOf("all", "remote", "default", "static", "override", "unknown").forEach { source ->
+            assertTrue("no source filter for \"$source\"", dashboard.contains("data-value=\"$source\""))
+        }
+        // The rail button and the view id move together: the id gates the auto-expand that keeps
+        // the active button from being stranded inside a collapsed Advanced group.
+        assertTrue(script.contains("'viewRemoteConfig'"))
+        assertTrue(script.contains("'remoteConfig', 'preferences'"))
+    }
+
+    @Test
     fun `network view offers a Postman export next to the existing HAR export`() {
         val dashboard = DashboardAssets.index()
         val script = DashboardAssets.js()

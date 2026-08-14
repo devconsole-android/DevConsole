@@ -8,6 +8,7 @@ import io.devconsole.mocks.MockEngine
 import io.devconsole.network.NetworkTransactionRecorder
 import io.devconsole.push.PushEvent
 import io.devconsole.push.PushInput
+import io.devconsole.remoteconfig.RemoteConfigProvider
 import io.devconsole.socket.SocketRecorder
 import io.devconsole.state.StateProvider
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +43,19 @@ interface DevConsoleFacadeProvider {
      * the runtime is disabled.
      */
     fun registerStateProvider(provider: StateProvider): Boolean
+
+    /**
+     * Registers a Remote Config source after [initialize]. Safe to call late -- unlike feature
+     * flags, providers here are read on demand rather than snapshotted at startup, so there is no
+     * race with a dashboard that already read an earlier list. Returns false if the runtime is
+     * disabled or [CaptureCategory.STATE] is off.
+     *
+     * Abstract, not defaulted, like every other member here: the compiler refusing to build a
+     * facade that misses a member is what guarantees full/no-op parity (see
+     * `NoopFacadeProviderContractTest`). A default would let the no-op facade silently inherit
+     * "registered nothing" for a capture-gated method instead of stating it deliberately.
+     */
+    fun registerRemoteConfigProvider(provider: RemoteConfigProvider): Boolean
 
     /**
      * The endpoint of the running server, or null when it is not running. [DevConsoleState.Running]

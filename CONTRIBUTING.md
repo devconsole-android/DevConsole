@@ -1,6 +1,6 @@
 # Contributing to DevConsole
 
-Thanks for taking a look. This is a 31-module Android SDK plus two included Gradle builds
+Thanks for taking a look. This is a 34-module Android SDK plus two included Gradle builds
 (`build-logic` and `gradle-plugin`), which sounds like a lot until you realise you rarely touch more
 than one at a time. The quickest way in is to run the same commands CI runs, listed below and in
 [Verify](.github/workflows/verify.yml).

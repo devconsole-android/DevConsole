@@ -11,6 +11,7 @@ dependencies {
     api(project(":sdk:socket"))
     api(project(":sdk:push"))
     api(project(":sdk:state"))
+    api(project(":sdk:remote-config"))
     api(project(":sdk:security"))
     api(project(":sdk:mocks"))
     api(project(":sdk:logs"))

@@ -20,6 +20,62 @@ joined this list.)
 
 ## Unreleased
 
+### Added
+
+- **Remote Config inspector** ([#6](https://github.com/devconsole-android/DevConsole/issues/6)).
+  Read-only view of the Remote Config values active on the device, with the attribution that makes
+  them diagnosable: whether each value came from the server, an in-app default, the SDK's static
+  fallback, or a local override — plus last fetch time, last fetch status, and minimum fetch
+  interval. A key serving a default because the fetch was throttled is otherwise indistinguishable
+  from one you actually published.
+
+  Three new modules following the existing push triad: `devconsole-remote-config` (vendor-neutral
+  model and registry), `devconsole-remote-config-firebase` (reads `FirebaseRemoteConfig` by
+  reflection, so Firebase stays off the classpath of consumers that do not use it), and
+  `devconsole-remote-config-firebase-noop` (the protected-build twin, which reports
+  `disabled-build` rather than pretending config is simply empty). Neither adapter is re-exported by
+  the `devconsole` umbrella.
+
+  Surfaces on both the browser dashboard (a Remote Config page under Data) and the Compose
+  inspector's Observe screen (a **Config** tab, shown only when a provider is registered, since the
+  on-device tab row splits its width equally and should not spend a tab on an app with no Remote
+  Config), and over `GET /api/v1/remote-config`. Gated by the existing
+  `CaptureCategory.STATE`, alongside state providers and feature flags. Register a provider with
+  `DevConsoleConfig.withRemoteConfigProviders(...)` or, for a lazily-built client,
+  `DevConsole.registerRemoteConfigProvider(...)`. Read-only by design: DevConsole does not set
+  overrides and never triggers `fetch()`/`activate()`. See
+  [docs/REMOTE_CONFIG.md](docs/REMOTE_CONFIG.md).
+
+  A config value is a string of any length, so the tables show a preview and open the full value on
+  demand: click a key on the dashboard, tap a row on the Config tab. Both default to pretty-printed
+  JSON and fall back to the raw string with a toggle between them — a value like `on` or `v2` is
+  never re-quoted to make it parse, since the quotes would be the viewer's invention rather than
+  something the server sent, and a truncated or redacted value says so rather than failing to parse
+  for an unexplained reason.
+
+  Values are redacted by key name at a single boundary shared by both surfaces — the on-device
+  inspector reads in-process and never crosses the HTTP boundary, so redacting at the route alone
+  would have left it exposed. Matching is separator-insensitive here, unlike the raw
+  `RedactionPolicy`, whose defaults are an HTTP-header list compared by exact name: `api_key` and
+  `apiKey` now match the policy's `api-key` instead of being displayed in full.
+
+### Fixed
+
+- **State providers no longer race their readers.** `StateRegistry` held a plain `LinkedHashMap`
+  read without a lock, so a host registering a provider late — through
+  `DevConsole.registerStateProvider`, which is a documented path — while the dashboard's server
+  thread or the in-app inspector was iterating could throw `ConcurrentModificationException` into
+  the app being debugged. Every access is guarded now, and the insertion order surfaces list
+  providers in is preserved. `RemoteConfigRegistry` had the same shape and got the same fix before
+  it ever shipped.
+
+- **Re-initializing replaces registered providers instead of silently keeping the old ones.** Both
+  registries reject a duplicate id, and neither was cleared between `initialize()` calls, so a
+  `stop()` → `initialize(...)` carrying a replacement provider under the same id had its
+  registration refused — leaving every surface reading through the torn-down original. Both are now
+  cleared as part of the same per-init reset, and a duplicate id within one config is ignored rather
+  than thrown out of `initialize()` (state providers previously threw; Remote Config already did not).
+
 ## 1.1.1 — 2026-08-12
 
 A build-and-distribution patch: no SDK code changed, and the public API is byte-for-byte the

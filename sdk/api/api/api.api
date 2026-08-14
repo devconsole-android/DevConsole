@@ -256,6 +256,7 @@ public final class io/devconsole/api/DevConsoleConfig {
 	public final fun getFeatureFlags ()Ljava/util/List;
 	public final fun getOpenTriggers ()Lio/devconsole/api/OpenTriggers;
 	public final fun getRedactionPolicy ()Lio/devconsole/security/RedactionPolicy;
+	public final fun getRemoteConfigProviders ()Ljava/util/List;
 	public final fun getRetentionPolicy ()Lio/devconsole/api/RetentionPolicy;
 	public final fun getScreenshotPolicy ()Lio/devconsole/api/ScreenshotPolicy;
 	public final fun getSessionPolicy ()Lio/devconsole/api/SessionPolicy;
@@ -274,6 +275,7 @@ public final class io/devconsole/api/DevConsoleConfig {
 	public final fun withCrashPolicy (Lio/devconsole/api/CrashPolicy;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withEditingCapabilities (Lio/devconsole/api/EditingCapabilities;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withOpenTriggers (Lio/devconsole/api/OpenTriggers;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withRemoteConfigProviders (Ljava/util/List;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withRetentionPolicy (Lio/devconsole/api/RetentionPolicy;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withScreenshotPolicy (Lio/devconsole/api/ScreenshotPolicy;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withSessionPolicy (Lio/devconsole/api/SessionPolicy;)Lio/devconsole/api/DevConsoleConfig;
@@ -284,6 +286,7 @@ public final class io/devconsole/api/DevConsoleConfig$Builder {
 	public fun <init> ()V
 	public final fun addCaptureCategory (Lio/devconsole/api/CaptureCategory;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun addFeatureFlag (Lio/devconsole/state/FeatureFlag;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun addRemoteConfigProvider (Lio/devconsole/remoteconfig/RemoteConfigProvider;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun addStateProvider (Lio/devconsole/state/StateProvider;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun browserConfig (Lio/devconsole/api/BrowserConfig;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun build ()Lio/devconsole/api/DevConsoleConfig;
@@ -320,6 +323,7 @@ public abstract interface class io/devconsole/api/DevConsoleFacadeProvider {
 	public abstract fun networkRecorder ()Lio/devconsole/network/NetworkTransactionRecorder;
 	public abstract fun openInspector (Landroid/content/Context;)Lio/devconsole/api/InspectorOpenResult;
 	public abstract fun recordPush (Lio/devconsole/push/PushInput;)Lio/devconsole/push/PushEvent;
+	public abstract fun registerRemoteConfigProvider (Lio/devconsole/remoteconfig/RemoteConfigProvider;)Z
 	public abstract fun registerStateProvider (Lio/devconsole/state/StateProvider;)Z
 	public abstract fun socketRecorder ()Lio/devconsole/socket/SocketRecorder;
 	public abstract fun startBrowser (Lio/devconsole/api/StartRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

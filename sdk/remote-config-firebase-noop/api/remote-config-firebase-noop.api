@@ -1,0 +1,8 @@
+public final class io/devconsole/remoteconfig/firebase/FirebaseRemoteConfigAdapter : io/devconsole/remoteconfig/RemoteConfigProvider {
+	public fun <init> (Ljava/lang/Object;)V
+	public fun <init> (Ljava/lang/Object;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/Object;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getId ()Ljava/lang/String;
+	public fun snapshot ()Lio/devconsole/remoteconfig/RemoteConfigSnapshot;
+}
+

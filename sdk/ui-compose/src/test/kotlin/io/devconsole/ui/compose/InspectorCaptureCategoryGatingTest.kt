@@ -32,10 +32,60 @@ class InspectorCaptureCategoryGatingTest {
 
     @Test
     fun `every category enabled shows every tab and every destination`() {
-        val state = InspectorState(captureCategories = CaptureCategory.all())
+        // A registered provider as well as every category: REMOTE_CONFIG is the one tab that also
+        // needs data to exist, so "every category on" alone is no longer enough to show them all.
+        val state =
+            InspectorState(
+                captureCategories = CaptureCategory.all(),
+                remoteConfig = listOf(InspectorRemoteConfigUi(id = "firebase")),
+            )
 
         assertEquals(ObserveTab.entries, state.visibleObserveTabs())
         assertEquals(InspectorDestination.entries, state.visibleDestinations())
+    }
+
+    @Test
+    fun `the Remote Config tab needs a registered provider as well as the STATE category`() {
+        val provider = listOf(InspectorRemoteConfigUi(id = "firebase"))
+
+        // STATE on but nothing registered: the tab must not exist. InspectorTabRow splits its width
+        // equally, so an always-present sixth tab would narrow the other five in every app that has
+        // no Remote Config at all -- which, with STATE on by default, is most of them.
+        assertTrue(
+            ObserveTab.REMOTE_CONFIG !in
+                InspectorState(captureCategories = setOf(CaptureCategory.STATE)).visibleObserveTabs(),
+        )
+        // A provider registered but STATE off: still hidden, the same way the route is gated.
+        assertTrue(
+            ObserveTab.REMOTE_CONFIG !in
+                InspectorState(captureCategories = setOf(CaptureCategory.NETWORK), remoteConfig = provider)
+                    .visibleObserveTabs(),
+        )
+        assertEquals(
+            listOf(ObserveTab.REMOTE_CONFIG),
+            InspectorState(captureCategories = setOf(CaptureCategory.STATE), remoteConfig = provider)
+                .visibleObserveTabs(),
+        )
+    }
+
+    @Test
+    fun `a provider that reports nothing at all still gets the tab`() {
+        // "Fetched nothing" and "never fetched" are answers you came to this surface for, so a
+        // provider with no entries -- or one that could not be read -- must not read as "no Remote
+        // Config". Only *no provider registered* hides the tab.
+        val empty = listOf(InspectorRemoteConfigUi(id = "firebase", entries = emptyList()))
+        val unavailable = listOf(InspectorRemoteConfigUi(id = "firebase", unavailableReason = "no such class"))
+
+        assertTrue(
+            ObserveTab.REMOTE_CONFIG in
+                InspectorState(captureCategories = setOf(CaptureCategory.STATE), remoteConfig = empty)
+                    .visibleObserveTabs(),
+        )
+        assertTrue(
+            ObserveTab.REMOTE_CONFIG in
+                InspectorState(captureCategories = setOf(CaptureCategory.STATE), remoteConfig = unavailable)
+                    .visibleObserveTabs(),
+        )
     }
 
     @Test

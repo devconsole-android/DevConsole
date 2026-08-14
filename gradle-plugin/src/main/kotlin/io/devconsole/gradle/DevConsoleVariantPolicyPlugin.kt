@@ -153,7 +153,8 @@ abstract class VerifyDevConsoleProtectedArtifactsTask : DefaultTask() {
             Regex(
                 "^io\\.github\\.devconsole-android:" +
                     "(?:devconsole|devconsole-network-okhttp|devconsole-mocks-okhttp|" +
-                    "devconsole-socket-okhttp|devconsole-socket-paho|devconsole-push-firebase):.+",
+                    "devconsole-socket-okhttp|devconsole-socket-paho|devconsole-push-firebase|" +
+                    "devconsole-remote-config-firebase):.+",
             )
     }
 }
@@ -388,6 +389,7 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
                 "DEVCONSOLE_ENABLED_MOCKS_OKHTTP_V1",
                 "DEVCONSOLE_ENABLED_SOCKET_OKHTTP_V1",
                 "DEVCONSOLE_ENABLED_PUSH_FIREBASE_V1",
+                "DEVCONSOLE_ENABLED_REMOTE_CONFIG_FIREBASE_V1",
                 "Lio/devconsole/server/ktor/KtorLocalServerEngine;",
                 "io.devconsole.DevConsoleInitializer",
                 ".devconsoleinitializer",
@@ -431,6 +433,7 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
                     ":sdk:socket-okhttp",
                     ":sdk:socket-paho",
                     ":sdk:push-firebase",
+                    ":sdk:remote-config-firebase",
                 ),
             )
             // PROTECTED by default: a release-signed staging/beta/preprod build type (anything not in

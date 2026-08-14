@@ -378,6 +378,32 @@ data class InspectorRetentionUi(
     val maxBytes: Long,
 )
 
+/**
+ * One Remote Config key on the Observe surface's Config tab. Mirrors `remoteconfig.RemoteConfigEntry`
+ * without a `:sdk:remote-config` dependency, the same way [InspectorBodyKind] mirrors `network.BodyPreview`.
+ * [source] carries the wire name (`remote`/`default`/`static`/`override`/`unknown`) rather than an
+ * enum, so this module never has to track the producer's type.
+ */
+data class InspectorRemoteConfigEntryUi(
+    val key: String,
+    val value: String,
+    val source: String,
+    val redacted: Boolean = false,
+    val truncated: Boolean = false,
+)
+
+/** One Remote Config provider and its fetch state, as shown on the Observe surface's Config tab. */
+data class InspectorRemoteConfigUi(
+    val id: String,
+    val entries: List<InspectorRemoteConfigEntryUi> = emptyList(),
+    /** Null means never fetched -- rendered as "never", never as a 1970 timestamp. */
+    val lastFetchEpochMs: Long? = null,
+    val status: String = "unknown",
+    val minimumFetchIntervalSeconds: Long? = null,
+    /** Non-null when the provider could not be read at all; shown instead of an empty table. */
+    val unavailableReason: String? = null,
+)
+
 data class InspectorSnapshot(
     val available: Boolean = false,
     val transactions: List<InspectorTransactionUi> = emptyList(),
@@ -391,6 +417,11 @@ data class InspectorSnapshot(
     val crashes: List<InspectorCrashUi> = emptyList(),
     val featureFlags: List<InspectorFeatureFlagUi> = emptyList(),
     val stateProviders: List<InspectorStateProviderUi> = emptyList(),
+    /**
+     * Remote Config providers, already redacted and gated by [CaptureCategory.STATE]. Defaults to
+     * empty so every existing adapter and test fake keeps compiling unchanged.
+     */
+    val remoteConfig: List<InspectorRemoteConfigUi> = emptyList(),
     val preferenceFiles: List<InspectorPreferenceFileUi> = emptyList(),
     val fileRoots: List<String> = emptyList(),
     val databases: List<String> = emptyList(),

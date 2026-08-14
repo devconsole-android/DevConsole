@@ -36,6 +36,7 @@ class NoopRuntimeExcludesFullModulesTest {
             "sdk/socket-okhttp-noop",
             "sdk/socket-paho-noop",
             "sdk/push-firebase-noop",
+            "sdk/remote-config-firebase-noop",
         )
 
     /**
@@ -59,6 +60,7 @@ class NoopRuntimeExcludesFullModulesTest {
             ":sdk:mocks-okhttp",
             ":sdk:socket-okhttp",
             ":sdk:socket-paho",
+            ":sdk:remote-config-firebase",
         )
 
     @Test

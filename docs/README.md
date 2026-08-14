@@ -28,6 +28,7 @@ read one page here, make it the threat model, especially before you put the dash
 - [Composer and mocks](COMPOSER_AND_MOCKS.md)
 - [Push](PUSH.md)
 - [State and feature flags](STATE_AND_FLAGS.md)
+- [Remote Config](REMOTE_CONFIG.md)
 - [Crash and ANR capture](CRASH_AND_ANR.md) — all-thread dumps, breadcrumbs, `CrashPolicy`, and the
   Crashes surface on both web and Android
 - [Data inspectors, exports, and the More screen](DATA_INSPECTORS_AND_EXPORTS.md) — preferences,

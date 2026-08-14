@@ -101,6 +101,7 @@ gets you nothing.
 | **Crash & ANR capture** | Uncaught exceptions and a main-looper watchdog with bounded all-thread dumps and breadcrumbs. Always delegates to any crash reporter you already have. |
 | **Push timeline** | Record FCM (or any) push messages and their lifecycle: received → displayed → opened. The Firebase adapter uses reflection — no compile-time Firebase dependency. |
 | **State & feature flags** | Snapshot host-registered state and override feature flags from the browser. |
+| **Remote Config inspector** | Every Remote Config value active on the device, and where each one came from — server, in-app default, static fallback, or a local override — plus last fetch time and status. Read-only. The Firebase adapter uses reflection — no compile-time Firebase dependency. |
 | **Data inspectors** | Browse SharedPreferences, SQLite (incl. a SQL console), and app files. Read-only by default; every edit surface is opt-in. |
 | **Evidence tray & exports** | Flag anything, attach it to a bug report bundle or Markdown/Jira/GitHub clipboard text. Export HAR, Postman Collection, or a full session ZIP. |
 | **Background keep-alive** | Opt-in foreground service that keeps the server alive while your app is backgrounded. Manifest-only opt-in, zero SDK-declared permissions. |
@@ -281,6 +282,63 @@ you can replay it, clone it into the composer, or flag it into a bug report:
 
 <p align="center"><img src="docs/images/dashboard-network.png" width="820" alt="Network inspector in the browser dashboard, showing a captured request and response side by side" /></p>
 
+### Set up Remote Config
+
+Add the adapter — it is not part of the `devconsole` umbrella, so that Firebase never lands on the
+classpath of an app that doesn't use it:
+
+```kotlin
+debugImplementation("io.github.devconsole-android:devconsole-remote-config-firebase:1.2.0")
+releaseImplementation("io.github.devconsole-android:devconsole-remote-config-firebase-noop:1.2.0")
+```
+
+> These two artifacts are new: `1.1.1` predates them, and `1.2.0` is the release they first ship in.
+> To try them before that lands, take them off the branch through
+> [JitPack](#jitpack-for-unreleased-code).
+
+Then hand DevConsole your `FirebaseRemoteConfig` instance at init:
+
+```kotlin
+DevConsole.initialize(
+    application,
+    DevConsoleConfig(/* … */)
+        .withRemoteConfigProviders(listOf(FirebaseRemoteConfigAdapter(Firebase.remoteConfig))),
+)
+```
+
+If the client is built lazily — through DI, or only once a first fetch completes — register it when
+you have it. This is safe to call late, unlike feature flags, because values are read on demand
+rather than snapshotted at startup:
+
+```kotlin
+DevConsole.registerRemoteConfigProvider(FirebaseRemoteConfigAdapter(Firebase.remoteConfig))
+```
+
+That's the whole setup. Values then appear on the dashboard's **Remote Config** page and on the
+in-app inspector's **Config** tab, each tagged with where it came from:
+
+| Source | Meaning |
+|---|---|
+| `remote` | Fetched from the server and activated. |
+| `default` | An in-app default (`setDefaultsAsync`) — no server value is active for this key. |
+| `static` | Set nowhere — the SDK's static fallback for an unknown key. |
+| `override` | A local override is masking whatever the provider resolved. |
+
+That last column is the reason this inspector exists. Knowing a flag reads `false` is rarely the
+hard part; knowing whether it reads `false` because you published it, or because the last fetch was
+throttled and the app quietly fell back to a default, is. Each provider also reports its last fetch
+time, last fetch status, and minimum fetch interval — and a provider that has never fetched says
+`never`, rather than showing an epoch date.
+
+Not using Firebase? Implement `RemoteConfigProvider` for any other service — the model is
+vendor-neutral, and [docs/REMOTE_CONFIG.md](docs/REMOTE_CONFIG.md) has a worked example. The
+inspector is read-only: DevConsole never sets overrides and never triggers `fetch()` or `activate()`.
+
+Values are redacted by key name before either surface sees them, matched separator-insensitively so
+`api_key` and `apiKey` are caught as well as `api-key`. It is still an allowlist, so a secret under
+a name nobody listed is shown in full — extend `RedactionPolicy.sensitiveFieldNames` if you keep
+anything sensitive in Remote Config.
+
 ## Artifacts
 
 Group `io.github.devconsole-android`, one version for everything. There is deliberately no BOM, and
@@ -300,6 +358,7 @@ Opt-in add-ons (each `-noop` twin is the matching `releaseImplementation`):
 | `devconsole-network-ktor` | *(none)* | Ktor `HttpClient` capture plugin (full request + response body capture, any engine; see [Network adapters](docs/NETWORK_ADAPTERS.md)) |
 | `devconsole-socket-paho` | `devconsole-socket-paho-noop` | MQTT capture via Eclipse Paho |
 | `devconsole-push-firebase` | `devconsole-push-firebase-noop` | FCM push adapter (reflection-based) |
+| `devconsole-remote-config-firebase` | `devconsole-remote-config-firebase-noop` | Firebase Remote Config adapter (reflection-based; see [Remote Config](docs/REMOTE_CONFIG.md)) |
 
 Everything else (`devconsole-core`, `devconsole-storage-room`, and the rest) arrives transitively.
 You never name those. Every module publishes sources, javadoc, and a signed POM.
@@ -332,7 +391,7 @@ A release tag works as the bare tag, as above. Any branch works as `<branch>-SNA
 written as `~`, so a `feature/x` branch is `feature~x-SNAPSHOT`. JitPack support starts at
 **1.1.1**; earlier tags do not build there. Three things to know before you rely on it:
 
-- **The Gradle plugin is not on JitPack.** Only the 31 library artifacts are, so the
+- **The Gradle plugin is not on JitPack.** Only the 34 library artifacts are, so the
   `plugins { id("io.github.devconsole-android") … }` block above does not apply. Name the
   `debugImplementation` and `releaseImplementation` coordinates yourself. You also give up the
   plugin's variant-policy check, which is the thing that keeps the full SDK out of release builds.
@@ -437,6 +496,7 @@ Full index: [docs/README.md](docs/README.md). Highlights:
   [Push](docs/PUSH.md)
 - [Data inspectors and exports](docs/DATA_INSPECTORS_AND_EXPORTS.md) ·
   [Evidence and bug reports](docs/EVIDENCE_AND_BUG_REPORTS.md)
+- [State and feature flags](docs/STATE_AND_FLAGS.md) · [Remote Config](docs/REMOTE_CONFIG.md)
 - [Crash and ANR capture](docs/CRASH_AND_ANR.md) ·
   [Background keep-alive](docs/BACKGROUND_KEEPALIVE.md)
 - [FAQ / troubleshooting](docs/FAQ_TROUBLESHOOTING.md)

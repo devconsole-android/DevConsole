@@ -35,7 +35,7 @@ internal fun InspectorDetailSearchField(
     onQueryChange: (String) -> Unit,
     matchLabel: String,
     modifier: Modifier = Modifier,
-    placeholder: String = "Find in headers, payload, response",
+    placeholder: String = DEFAULT_DETAIL_SEARCH_PLACEHOLDER,
     matchColor: Color = DevConsoleTheme.colors.muted,
 ) {
     Row(

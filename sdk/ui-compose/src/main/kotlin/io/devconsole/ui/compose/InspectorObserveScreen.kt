@@ -72,6 +72,12 @@ internal sealed interface ObserveDetailTarget {
     data class Crash(
         val crashId: String,
     ) : ObserveDetailTarget
+
+    /** `(provider, key)` rather than a position: the tab's search box re-filters the list under it. */
+    data class RemoteConfigKey(
+        val providerId: String,
+        val key: String,
+    ) : ObserveDetailTarget
 }
 
 /**
@@ -91,6 +97,7 @@ internal data class ObserveUiState(
     val pushSearch: String = "",
     val logsSearch: String = "",
     val crashesSearch: String = "",
+    val remoteConfigSearch: String = "",
     val flaggedTransactionIds: Set<String> = emptySet(),
     val bookmarkedLogIds: Set<String> = emptySet(),
     val flaggedCrashIds: Set<String> = emptySet(),
@@ -121,6 +128,8 @@ internal data class ObserveActions(
     val onOpenLogDetail: (String) -> Unit,
     val onCrashesSearchChange: (String) -> Unit,
     val onOpenCrashDetail: (String) -> Unit,
+    val onRemoteConfigSearchChange: (String) -> Unit,
+    val onOpenRemoteConfigDetail: (String, String) -> Unit,
     val onToggleCrashFlag: (String) -> Unit,
     val onToggleCrashesHero: () -> Unit,
     /** The previous-run-crashed banner's action: opens that session's crash on the Crashes tab. */
@@ -177,6 +186,7 @@ private class ObserveRouteState(
     pushSearchState: MutableState<String>,
     logsSearchState: MutableState<String>,
     crashesSearchState: MutableState<String>,
+    remoteConfigSearchState: MutableState<String>,
     trafficHeroCollapsedState: MutableState<Boolean>,
     socketsHeroCollapsedState: MutableState<Boolean>,
     pushHeroCollapsedState: MutableState<Boolean>,
@@ -189,6 +199,7 @@ private class ObserveRouteState(
     var pushSearch by pushSearchState
     var logsSearch by logsSearchState
     var crashesSearch by crashesSearchState
+    var remoteConfigSearch by remoteConfigSearchState
     var bookmarkedIds by mutableStateOf(emptySet<String>())
     var detailTarget by mutableStateOf<ObserveDetailTarget?>(null)
     var mockDraft by mockDraftState
@@ -215,6 +226,7 @@ private fun rememberObserveRouteState(mockDraftState: MutableState<MockRuleEdito
     val pushSearchState = rememberSaveable { mutableStateOf("") }
     val logsSearchState = rememberSaveable { mutableStateOf("") }
     val crashesSearchState = rememberSaveable { mutableStateOf("") }
+    val remoteConfigSearchState = rememberSaveable { mutableStateOf("") }
     // Collapsed by default on every tab.
     val trafficHeroCollapsedState = rememberSaveable { mutableStateOf(true) }
     val socketsHeroCollapsedState = rememberSaveable { mutableStateOf(true) }
@@ -230,6 +242,7 @@ private fun rememberObserveRouteState(mockDraftState: MutableState<MockRuleEdito
             pushSearchState = pushSearchState,
             logsSearchState = logsSearchState,
             crashesSearchState = crashesSearchState,
+            remoteConfigSearchState = remoteConfigSearchState,
             trafficHeroCollapsedState = trafficHeroCollapsedState,
             socketsHeroCollapsedState = socketsHeroCollapsedState,
             pushHeroCollapsedState = pushHeroCollapsedState,
@@ -251,6 +264,7 @@ private fun ObserveRouteState.toUiState(
     pushSearch = pushSearch,
     logsSearch = logsSearch,
     crashesSearch = crashesSearch,
+    remoteConfigSearch = remoteConfigSearch,
     flaggedTransactionIds = flaggedTransactionIds,
     bookmarkedLogIds = bookmarkedIds,
     flaggedCrashIds = flaggedCrashIds,
@@ -358,6 +372,10 @@ private fun rememberObserveActions(
         onOpenLogDetail = { id -> routeState.detailTarget = ObserveDetailTarget.Log(id) },
         onCrashesSearchChange = { routeState.crashesSearch = it },
         onOpenCrashDetail = { id -> routeState.detailTarget = ObserveDetailTarget.Crash(id) },
+        onRemoteConfigSearchChange = { routeState.remoteConfigSearch = it },
+        onOpenRemoteConfigDetail = { providerId, key ->
+            routeState.detailTarget = ObserveDetailTarget.RemoteConfigKey(providerId, key)
+        },
         // Flag/unflag now go through the durable EvidenceStore via the ViewModel; the resulting
         // toast comes from InspectorState.lastCommandResult (see ObserveRoute's own LaunchedEffect),
         // not a locally-composed message here.
@@ -499,6 +517,7 @@ private fun ObserveTabPager(
             ObserveTab.PUSH -> PushTabContent(state, ui, actions)
             ObserveTab.LOGS -> LogsTabContent(state, ui, actions)
             ObserveTab.CRASHES -> CrashesTabContent(state, ui, actions)
+            ObserveTab.REMOTE_CONFIG -> RemoteConfigTabContent(state, ui, actions)
         }
     }
 }
@@ -510,6 +529,9 @@ private fun ObserveTab.title(): String =
         ObserveTab.PUSH -> "Push"
         ObserveTab.LOGS -> "Logs"
         ObserveTab.CRASHES -> "Crashes"
+        // One word, like every other tab: the row divides its width equally, so "Remote Config"
+        // would wrap or truncate on a phone.
+        ObserveTab.REMOTE_CONFIG -> "Config"
     }
 
 /**
@@ -748,6 +770,22 @@ private fun resolveObserveDetail(
                     )
                 target.crashId to content
             }
+        is ObserveDetailTarget.RemoteConfigKey ->
+            state.remoteConfig
+                .firstOrNull { it.id == target.providerId }
+                ?.let { provider ->
+                    provider.entries.firstOrNull { it.key == target.key }?.let { entry ->
+                        val content =
+                            remoteConfigDetailContent(
+                                provider = provider,
+                                entry = entry,
+                                colors = colors,
+                                copyText = actions.copyText,
+                                shareText = actions.shareText,
+                            )
+                        "${target.providerId}/${target.key}" to content
+                    }
+                }
     }
 
 /** Dispatches [target] to the matching `*DetailContent` builder and renders [InspectorObserveDetailScreen]. */
@@ -789,6 +827,7 @@ private fun ObserveDetailFromContent(
         initiallyOpenSectionKeys = content.initiallyOpenSectionKeys,
         footerActions = content.footerActions,
         onBack = onBack,
+        searchPlaceholder = content.searchPlaceholder,
     )
 }
 

@@ -222,6 +222,10 @@ internal fun ControlScreen(
                 }
                 item { Spacer(Modifier.height(8.dp)) }
             }
+            // Remote Config used to render here, beside flags. It moved to the Observe surface's
+            // Config tab (see RemoteConfigTabContent): it is read-only, so nothing on it was ever
+            // a control, and a value big enough to need reading in full needed a detail screen
+            // this list had no way to open.
             item {
                 WarnNote(
                     "Composer is intentionally absent — typing URLs on a phone is hostile, so " +

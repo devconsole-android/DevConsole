@@ -2,9 +2,12 @@
  * @author Shakib
  * @since 04/08/26
  */
-@file:Suppress("FunctionNaming", "MagicNumber", "UnusedPrivateMember")
+@file:Suppress("FunctionNaming", "MagicNumber", "UnusedPrivateMember", "TooManyFunctions")
 
 package io.devconsole.ui.compose
+
+// TooManyFunctions is suppressed above because this file is one @Preview function per Observe tab
+// and per detail worth eyeballing: its function count tracks the number of tabs, not complexity.
 
 import android.content.res.Configuration
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -136,6 +139,7 @@ private val PreviewObserveState =
         logs = PreviewLogs,
         crashes = PreviewCrashes,
         sessions = PreviewSessions,
+        remoteConfig = remoteConfigPreviewProviders(),
         capabilities = InspectorEditingUi(requestExecution = true),
     )
 
@@ -155,6 +159,8 @@ private val PreviewObserveActions =
         onOpenLogDetail = {},
         onCrashesSearchChange = {},
         onOpenCrashDetail = {},
+        onRemoteConfigSearchChange = {},
+        onOpenRemoteConfigDetail = { _, _ -> },
         onToggleCrashFlag = {},
         onToggleCrashesHero = {},
         onViewPreviousCrash = {},
@@ -233,6 +239,32 @@ private fun ObserveScreenCrashesPreview() {
         ObserveScreen(
             state = PreviewObserveState.copy(observeTab = ObserveTab.CRASHES),
             ui = PreviewObserveUi,
+            actions = PreviewObserveActions,
+        )
+    }
+}
+
+@Preview(name = "Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, backgroundColor = 0xFF0B0E0D)
+@Preview(name = "Light", uiMode = Configuration.UI_MODE_NIGHT_NO, showBackground = true, backgroundColor = 0xFFF3F6EE)
+@Composable
+private fun ObserveScreenRemoteConfigPreview() {
+    DevConsoleTheme(darkTheme = isSystemInDarkTheme()) {
+        ObserveScreen(
+            state = PreviewObserveState.copy(observeTab = ObserveTab.REMOTE_CONFIG),
+            ui = PreviewObserveUi,
+            actions = PreviewObserveActions,
+        )
+    }
+}
+
+/** The JSON case: `checkout_v2` parses, so the detail opens on the formatted tree rather than raw. */
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, backgroundColor = 0xFF0B0E0D)
+@Composable
+private fun ObserveScreenRemoteConfigDetailPreview() {
+    DevConsoleTheme(darkTheme = isSystemInDarkTheme()) {
+        ObserveScreen(
+            state = PreviewObserveState.copy(observeTab = ObserveTab.REMOTE_CONFIG),
+            ui = PreviewObserveUi.copy(detailTarget = ObserveDetailTarget.RemoteConfigKey("firebase", "checkout_v2")),
             actions = PreviewObserveActions,
         )
     }
