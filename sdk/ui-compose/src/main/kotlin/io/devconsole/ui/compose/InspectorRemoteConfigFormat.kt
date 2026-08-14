@@ -46,7 +46,7 @@ internal fun remoteConfigFetchLine(provider: InspectorRemoteConfigUi): String =
     buildString {
         append("last fetch: ")
         append(
-            provider.lastFetchEpochMs?.let(::formatCaptureClockTime) ?: "never",
+            provider.lastFetchEpochMs?.let(::formatCaptureDateTime) ?: "never",
         )
         append(" · ")
         append(provider.status.replace('_', ' '))

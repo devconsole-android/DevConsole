@@ -1044,7 +1044,7 @@
   // collapsed group rather than merely hiding in place.
   // ================================================================
   const RAIL_ADVANCED_IDS = ['viewSdkHealth', 'viewComposer', 'viewCaptureRules', 'viewState', 'viewRemoteConfig', 'viewPreferences', 'viewDatabase', 'viewFiles', 'viewSession'];
-  const RAIL_ADVANCED_VIEWS = new Set(['sdkHealth', 'composer', 'captureRules', 'state', 'preferences', 'database', 'files', 'session']);
+  const RAIL_ADVANCED_VIEWS = new Set(['sdkHealth', 'composer', 'captureRules', 'state', 'remoteConfig', 'preferences', 'database', 'files', 'session']);
 
   // ================================================================
   // Capture-category gating: which rail buttons/views a server-reported disabled category (see
@@ -4418,7 +4418,11 @@
     if (!token) return;
     const r = await fetch('/api/v1/remote-config', { headers: auth() });
     if (!r.ok) {
+      // Counter and badge are reset here too: leaving the last successful load's numbers next to a
+      // card that says the fetch failed is the one reading that is worse than either alone.
       remoteConfigProviders = [];
+      setNavCount('navCountRemoteConfig', 0);
+      $('remoteConfigBadge').textContent = 'unavailable';
       cardsGridHtml('remoteConfigCards', [{ icon: 'sliders', iconTone: 'signal', title: 'Remote Config', lede: 'Remote Config unavailable: ' + r.status }]);
       return;
     }
@@ -4435,7 +4439,7 @@
   }
   function renderRemoteConfigCards() {
     const total = remoteConfigProviders.reduce((sum, p) => sum + (p.entries || []).length, 0);
-    $('navCountRemoteConfig').textContent = total;
+    setNavCount('navCountRemoteConfig', total);
     $('remoteConfigBadge').textContent = remoteConfigProviders.length
       ? total + ' key' + (total === 1 ? '' : 's') + ' · ' + remoteConfigProviders.length + ' provider' + (remoteConfigProviders.length === 1 ? '' : 's')
       : 'no providers';

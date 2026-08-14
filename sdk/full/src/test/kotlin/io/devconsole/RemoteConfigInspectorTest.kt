@@ -191,7 +191,15 @@ class RemoteConfigInspectorTest {
     fun `matches sensitive names across separator styles`() {
         val entries =
             redactingBoundary().apply(
-                listOf(entry("api_key", "raw"), entry("apiKey", "raw"), entry("API-KEY", "raw")),
+                // `api.key` included: dotted keys are an ordinary Remote Config naming style (the
+                // sample's own flags use `compose_sample.show_order_history`), and collapsing only
+                // `-`/`_` left it matching neither `api-key` nor `apikey`, shown in full.
+                listOf(
+                    entry("api_key", "raw"),
+                    entry("apiKey", "raw"),
+                    entry("API-KEY", "raw"),
+                    entry("api.key", "raw"),
+                ),
             )
 
         assertTrue(entries.all { it.redacted })

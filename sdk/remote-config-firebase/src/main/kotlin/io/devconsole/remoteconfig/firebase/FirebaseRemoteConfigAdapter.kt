@@ -10,6 +10,11 @@ import io.devconsole.remoteconfig.RemoteConfigFetchStatus
 import io.devconsole.remoteconfig.RemoteConfigProvider
 import io.devconsole.remoteconfig.RemoteConfigSnapshot
 import io.devconsole.remoteconfig.RemoteConfigSource
+import java.lang.reflect.Method
+
+// Deliberately not the exception's message: the throw is swallowed inside `call`. Kept a private
+// top-level const rather than a companion one, which would compile to a public static field.
+private const val UNREADABLE_REASON = "Firebase Remote Config could not be read reflectively"
 
 /**
  * Optional Firebase bridge with no Firebase compile-time dependency. Consumers pass a
@@ -22,20 +27,33 @@ class FirebaseRemoteConfigAdapter
         private val remoteConfig: Any,
         override val id: String = "firebase",
     ) : RemoteConfigProvider {
-        override fun snapshot(): RemoteConfigSnapshot =
-            RemoteConfigSnapshot(
+        override fun snapshot(): RemoteConfigSnapshot {
+            // `getAll` returning a non-Map is how a non-Firebase object, or a getAll that blew up
+            // (R8, a renamed method), reaches us. Reporting that as an empty-but-fine snapshot would
+            // make both surfaces say "this provider has not completed a fetch yet" -- a confident
+            // claim about a provider we never got an answer out of, and exactly the confusion the
+            // no-op twin exists to avoid. An unavailableReason says we could not read it instead.
+            val all =
+                remoteConfig.call("getAll") as? Map<*, *>
+                    ?: return RemoteConfigSnapshot(
+                        providerId = id,
+                        entries = emptyList(),
+                        fetchInfo = RemoteConfigFetchInfo.unknown(),
+                        unavailableReason = UNREADABLE_REASON,
+                    )
+            return RemoteConfigSnapshot(
                 providerId = id,
-                entries = readEntries(),
+                entries = readEntries(all),
                 fetchInfo = readFetchInfo(),
             )
+        }
 
         /**
          * Sorted by key: Firebase hands back an unordered map, and an inspector whose rows reshuffle
          * on every refresh is unreadable when you are watching one key.
          */
-        private fun readEntries(): List<RemoteConfigEntry> {
-            val all = remoteConfig.call("getAll") as? Map<*, *> ?: return emptyList()
-            return all.entries
+        private fun readEntries(all: Map<*, *>): List<RemoteConfigEntry> =
+            all.entries
                 .mapNotNull { (key, value) ->
                     val name = key as? String ?: return@mapNotNull null
                     RemoteConfigEntry(
@@ -44,13 +62,12 @@ class FirebaseRemoteConfigAdapter
                         source = sourceOf(value),
                     )
                 }.sortedBy(RemoteConfigEntry::key)
-        }
 
         private fun sourceOf(value: Any?): RemoteConfigSource =
             when ((value?.call("getSource") as? Number)?.toInt()) {
-                constant("VALUE_SOURCE_REMOTE", VALUE_SOURCE_REMOTE) -> RemoteConfigSource.REMOTE
-                constant("VALUE_SOURCE_DEFAULT", VALUE_SOURCE_DEFAULT) -> RemoteConfigSource.DEFAULT
-                constant("VALUE_SOURCE_STATIC", VALUE_SOURCE_STATIC) -> RemoteConfigSource.STATIC
+                sourceRemote -> RemoteConfigSource.REMOTE
+                sourceDefault -> RemoteConfigSource.DEFAULT
+                sourceStatic -> RemoteConfigSource.STATIC
                 else -> RemoteConfigSource.UNKNOWN
             }
 
@@ -70,30 +87,58 @@ class FirebaseRemoteConfigAdapter
 
         private fun statusOf(info: Any): RemoteConfigFetchStatus =
             when ((info.call("getLastFetchStatus") as? Number)?.toInt()) {
-                constant("LAST_FETCH_STATUS_SUCCESS", LAST_FETCH_STATUS_SUCCESS) -> RemoteConfigFetchStatus.SUCCESS
-                constant("LAST_FETCH_STATUS_NO_FETCH_YET", LAST_FETCH_STATUS_NO_FETCH_YET) ->
-                    RemoteConfigFetchStatus.NO_FETCH_YET
-                constant("LAST_FETCH_STATUS_FAILURE", LAST_FETCH_STATUS_FAILURE) -> RemoteConfigFetchStatus.FAILURE
-                constant(
-                    "LAST_FETCH_STATUS_THROTTLED",
-                    LAST_FETCH_STATUS_THROTTLED,
-                ),
-                -> RemoteConfigFetchStatus.THROTTLED
+                statusSuccess -> RemoteConfigFetchStatus.SUCCESS
+                statusNoFetchYet -> RemoteConfigFetchStatus.NO_FETCH_YET
+                statusFailure -> RemoteConfigFetchStatus.FAILURE
+                statusThrottled -> RemoteConfigFetchStatus.THROTTLED
                 else -> RemoteConfigFetchStatus.UNKNOWN
             }
 
         /**
-         * Prefers the constant declared on the supplied Firebase class over the literal below, so a
-         * future renumbering in the Firebase SDK cannot silently mis-badge every row.
+         * Resolved once per adapter rather than per `when` evaluation: these sat inside the branch
+         * conditions, so every entry's source and every fetch-status read re-ran a `getField`
+         * lookup. Still prefers the constant declared on the supplied Firebase class over the
+         * literal fallback, so a future renumbering in the Firebase SDK cannot silently mis-badge
+         * every row.
          */
         private fun constant(
             name: String,
             fallback: Int,
         ): Int = runCatching { remoteConfig.javaClass.getField(name).getInt(null) }.getOrDefault(fallback)
 
+        private val sourceStatic by lazy { constant("VALUE_SOURCE_STATIC", VALUE_SOURCE_STATIC) }
+        private val sourceDefault by lazy { constant("VALUE_SOURCE_DEFAULT", VALUE_SOURCE_DEFAULT) }
+        private val sourceRemote by lazy { constant("VALUE_SOURCE_REMOTE", VALUE_SOURCE_REMOTE) }
+        private val statusSuccess by lazy { constant("LAST_FETCH_STATUS_SUCCESS", LAST_FETCH_STATUS_SUCCESS) }
+        private val statusNoFetchYet by lazy {
+            constant("LAST_FETCH_STATUS_NO_FETCH_YET", LAST_FETCH_STATUS_NO_FETCH_YET)
+        }
+        private val statusFailure by lazy { constant("LAST_FETCH_STATUS_FAILURE", LAST_FETCH_STATUS_FAILURE) }
+        private val statusThrottled by lazy { constant("LAST_FETCH_STATUS_THROTTLED", LAST_FETCH_STATUS_THROTTLED) }
+
+        /**
+         * `Class.getMethods()` allocates a fresh defensive copy on every call and this then linear-
+         * scans it, which at a few hundred keys ran twice per entry (`asString`, `getSource`) on
+         * every inspector refresh and every dashboard poll. Cached per receiver *class*, not per
+         * receiver: the map's values are `FirebaseRemoteConfigValue` instances, one per key, all of
+         * the same class. A null result is cached too -- a name that is absent stays absent.
+         */
+        private val methodCache = HashMap<Pair<Class<*>, String>, Method?>()
+
         private fun Any.call(name: String): Any? =
             runCatching {
-                javaClass.methods.firstOrNull { it.name == name && it.parameterCount == 0 }?.invoke(this)
+                val key = javaClass to name
+                val method =
+                    synchronized(methodCache) {
+                        if (methodCache.containsKey(key)) {
+                            methodCache[key]
+                        } else {
+                            javaClass.methods
+                                .firstOrNull { it.name == name && it.parameterCount == 0 }
+                                .also { methodCache[key] = it }
+                        }
+                    }
+                method?.invoke(this)
             }.getOrNull()
 
         private companion object {

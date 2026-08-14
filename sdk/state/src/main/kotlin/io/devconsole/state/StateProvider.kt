@@ -82,17 +82,37 @@ fun stateProvider(
     }
 
 class StateRegistry {
+    /**
+     * Guarded by [lock] on every access, read included: providers may be registered late (through
+     * `DevConsole.registerStateProvider`) while the dashboard's Ktor thread and the in-app
+     * inspector's dispatcher are reading, and an unguarded `LinkedHashMap` would throw
+     * `ConcurrentModificationException` into whichever of them happened to be iterating. A
+     * `ConcurrentHashMap` would drop the insertion order surfaces list providers in.
+     */
+    private val lock = Any()
     private val providers = linkedMapOf<String, StateProvider>()
 
     fun register(provider: StateProvider) {
         require(provider.id.isNotBlank()) { "State provider id must not be blank" }
-        require(provider.id !in providers) { "Duplicate state provider: ${provider.id}" }
-        providers[provider.id] = provider
+        synchronized(lock) {
+            require(provider.id !in providers) { "Duplicate state provider: ${provider.id}" }
+            providers[provider.id] = provider
+        }
     }
 
-    fun snapshot(id: String): StateSnapshot? = providers[id]?.snapshot()
+    /**
+     * Drops every registration, so a re-`initialize()` starts from the new config's providers
+     * instead of keeping the previous session's. Public for the same reason [mutators] is: the
+     * caller is `sdk:full`, a separate Gradle module.
+     */
+    fun clear() {
+        synchronized(lock) { providers.clear() }
+    }
 
-    fun providerIds(): List<String> = providers.keys.toList()
+    /** Read outside the lock: [StateProvider.snapshot] calls into host code of unknown cost. */
+    fun snapshot(id: String): StateSnapshot? = synchronized(lock) { providers[id] }?.snapshot()
+
+    fun providerIds(): List<String> = synchronized(lock) { providers.keys.toList() }
 
     /**
      * The mutation catalogue for a provider -- empty (not null) for an unknown id or a read-only
@@ -105,11 +125,12 @@ class StateRegistry {
      * artifact -- so a caller who upcasts the result would otherwise get a live handle into the
      * provider's own mutable state instead of a snapshot of its catalogue.
      */
-    fun mutators(id: String): List<StateMutator> = providers[id]?.mutators?.toList().orEmpty()
+    fun mutators(id: String): List<StateMutator> = synchronized(lock) { providers[id] }?.mutators?.toList().orEmpty()
 
     fun mutate(
         providerId: String,
         mutatorId: String,
         input: String,
-    ): StateMutationResult? = providers[providerId]?.mutators?.firstOrNull { it.id == mutatorId }?.execute(input)
+    ): StateMutationResult? =
+        synchronized(lock) { providers[providerId] }?.mutators?.firstOrNull { it.id == mutatorId }?.execute(input)
 }

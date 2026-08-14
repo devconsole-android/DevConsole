@@ -115,6 +115,7 @@ public final class io/devconsole/state/StateProviderKt {
 
 public final class io/devconsole/state/StateRegistry {
 	public fun <init> ()V
+	public final fun clear ()V
 	public final fun mutate (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/state/StateMutationResult;
 	public final fun mutators (Ljava/lang/String;)Ljava/util/List;
 	public final fun providerIds ()Ljava/util/List;

@@ -12,20 +12,42 @@ package io.devconsole.remoteconfig
  * having to remember them.
  */
 class RemoteConfigRegistry {
+    /**
+     * Guarded by [lock] on every access, read included. Late registration is a documented path
+     * (`DevConsole.registerRemoteConfigProvider`), and the readers are the Ktor thread and the
+     * inspector's dispatcher -- so a host registering a provider from a post-fetch listener while
+     * the dashboard polls would otherwise throw `ConcurrentModificationException` straight out of
+     * the read path, into the host app. That is the one outcome [read]'s own doc promises not to
+     * cause. A `ConcurrentHashMap` would drop the insertion order surfaces list providers in, so
+     * the readers copy under the lock and iterate outside it instead.
+     */
+    private val lock = Any()
     private val providers = linkedMapOf<String, RemoteConfigProvider>()
 
     fun register(provider: RemoteConfigProvider) {
         require(provider.id.isNotBlank()) { "Remote config provider id must not be blank" }
-        require(provider.id !in providers) { "Duplicate remote config provider: ${provider.id}" }
-        providers[provider.id] = provider
+        synchronized(lock) {
+            require(provider.id !in providers) { "Duplicate remote config provider: ${provider.id}" }
+            providers[provider.id] = provider
+        }
     }
 
-    fun providerIds(): List<String> = providers.keys.toList()
+    /** Drops every registration. Called when a session ends so a re-`initialize()` starts clean. */
+    fun clear() {
+        synchronized(lock) { providers.clear() }
+    }
+
+    fun providerIds(): List<String> = synchronized(lock) { providers.keys.toList() }
 
     /** Null for an unknown id; a provider that throws yields an unavailable snapshot, never an exception. */
-    fun snapshot(id: String): RemoteConfigSnapshot? = providers[id]?.let { read(id, it) }
+    fun snapshot(id: String): RemoteConfigSnapshot? = synchronized(lock) { providers[id] }?.let { read(id, it) }
 
-    fun snapshots(): List<RemoteConfigSnapshot> = providers.map { (id, provider) -> read(id, provider) }
+    /**
+     * The copy is taken under the lock and read outside it: [read] calls into host code, which may
+     * be slow or may itself register a provider, and neither should happen with the lock held.
+     */
+    fun snapshots(): List<RemoteConfigSnapshot> =
+        synchronized(lock) { providers.toList() }.map { (id, provider) -> read(id, provider) }
 
     /**
      * A debugging tool that crashes the app it exists to observe is worse than no tool, so a

@@ -130,6 +130,12 @@ internal class FullInspectorDataSource(
      * which reads as "no remote config" rather than as an error.
      */
     private val remoteConfigRegistry: RemoteConfigRegistry? = null,
+    /**
+     * The host's live [RedactionEngine], supplied so [readRemoteConfig] does not rebuild one (and
+     * recompile every text pattern) on each snapshot. Null on a build that wires no engine, where
+     * one is constructed from the active policy as before.
+     */
+    private val redactionEngine: () -> RedactionEngine? = { null },
     private val preferencesInspector: PreferencesInspector? = null,
     private val fileInspector: FileInspector? = null,
     private val databaseInspector: DatabaseInspector? = null,
@@ -428,7 +434,7 @@ internal class FullInspectorDataSource(
     private fun readRemoteConfig(config: DevConsoleConfig?): List<InspectorRemoteConfigUi> {
         val registry = remoteConfigRegistry ?: return emptyList()
         val policy = config?.redactionPolicy ?: RedactionPolicy.default()
-        val redacting = RedactingRemoteConfig(RedactionEngine(policy), policy)
+        val redacting = RedactingRemoteConfig(redactionEngine() ?: RedactionEngine(policy), policy)
         return registry.snapshots().map { snapshot ->
             InspectorRemoteConfigUi(
                 id = snapshot.providerId,

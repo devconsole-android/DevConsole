@@ -288,9 +288,13 @@ Add the adapter — it is not part of the `devconsole` umbrella, so that Firebas
 classpath of an app that doesn't use it:
 
 ```kotlin
-debugImplementation("io.github.devconsole-android:devconsole-remote-config-firebase:1.1.1")
-releaseImplementation("io.github.devconsole-android:devconsole-remote-config-firebase-noop:1.1.1")
+debugImplementation("io.github.devconsole-android:devconsole-remote-config-firebase:1.2.0")
+releaseImplementation("io.github.devconsole-android:devconsole-remote-config-firebase-noop:1.2.0")
 ```
+
+> These two artifacts are new: `1.1.1` predates them, and `1.2.0` is the release they first ship in.
+> To try them before that lands, take them off the branch through
+> [JitPack](#jitpack-for-unreleased-code).
 
 Then hand DevConsole your `FirebaseRemoteConfig` instance at init:
 
@@ -310,8 +314,8 @@ rather than snapshotted at startup:
 DevConsole.registerRemoteConfigProvider(FirebaseRemoteConfigAdapter(Firebase.remoteConfig))
 ```
 
-That's the whole setup. Values then appear on the dashboard's **Remote Config** page and in the
-in-app inspector's **Control** screen, each tagged with where it came from:
+That's the whole setup. Values then appear on the dashboard's **Remote Config** page and on the
+in-app inspector's **Config** tab, each tagged with where it came from:
 
 | Source | Meaning |
 |---|---|

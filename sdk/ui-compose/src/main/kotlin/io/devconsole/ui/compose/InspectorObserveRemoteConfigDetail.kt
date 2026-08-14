@@ -76,19 +76,26 @@ private fun remoteConfigDetailHeader(
     subtitle = "${provider.id} · ${remoteConfigFetchLine(provider)}",
     status = entry.source.uppercase(Locale.US),
     statusColor = if (entry.source == "remote") colors.signal else colors.muted,
+    // Dropped entirely for a redacted entry, matching the Value section's own copy affordance,
+    // which is already withheld. Keeping them would put two copy buttons on one screen disagreeing
+    // about whether this value is copyable, and open a share sheet holding the placeholder.
     actions =
-        listOf(
-            InspectorTopAction(
-                contentDescription = "Copy value",
-                onClick = { copyText(entry.value) },
-                icon = copyIconAction(colors.muted),
-            ),
-            InspectorTopAction(
-                contentDescription = "Share value",
-                onClick = { shareText(entry.value, "Share ${entry.key}") },
-                icon = shareIconAction(colors.muted),
-            ),
-        ),
+        if (entry.redacted) {
+            emptyList()
+        } else {
+            listOf(
+                InspectorTopAction(
+                    contentDescription = "Copy value",
+                    onClick = { copyText(entry.value) },
+                    icon = copyIconAction(colors.muted),
+                ),
+                InspectorTopAction(
+                    contentDescription = "Share value",
+                    onClick = { shareText(entry.value, "Share ${entry.key}") },
+                    icon = shareIconAction(colors.muted),
+                ),
+            )
+        },
 )
 
 /** The provider's fetch state travels with the key: it is what tells a `default` apart from a bug. */
@@ -101,7 +108,7 @@ private fun remoteConfigDetailEntries(
         add(InspectorKeyValue("key", entry.key))
         add(InspectorKeyValue("source", entry.source, if (entry.source == "remote") null else colors.muted))
         add(InspectorKeyValue("provider", provider.id))
-        add(InspectorKeyValue("last fetch", provider.lastFetchEpochMs?.let(::formatCaptureClockTime) ?: "never"))
+        add(InspectorKeyValue("last fetch", provider.lastFetchEpochMs?.let(::formatCaptureDateTime) ?: "never"))
         add(InspectorKeyValue("fetch status", provider.status.replace('_', ' ')))
         provider.minimumFetchIntervalSeconds?.let { add(InspectorKeyValue("min fetch interval", "${it}s")) }
         // Both are called out only when true: a "truncated: false" row on every key would be noise,

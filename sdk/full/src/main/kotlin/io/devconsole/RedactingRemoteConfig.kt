@@ -56,6 +56,13 @@ internal class RedactingRemoteConfig(
     }
 
     private companion object {
-        fun String.collapseSeparators(): String = replace("-", "").replace("_", "")
+        /**
+         * `.` as well as `-`/`_`: dotted keys are an ordinary Remote Config naming style (the
+         * sample's own flags use `compose_sample.show_order_history`), and without it `api.key`
+         * matches neither `api-key` nor `apikey` and is shown in full.
+         */
+        private val SEPARATORS = Regex("[-_.]")
+
+        fun String.collapseSeparators(): String = replace(SEPARATORS, "")
     }
 }

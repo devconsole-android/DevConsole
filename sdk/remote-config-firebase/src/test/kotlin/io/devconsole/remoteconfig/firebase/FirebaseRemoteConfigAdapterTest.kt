@@ -7,6 +7,7 @@ package io.devconsole.remoteconfig.firebase
 import io.devconsole.remoteconfig.RemoteConfigFetchStatus
 import io.devconsole.remoteconfig.RemoteConfigSource
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -169,6 +170,31 @@ class FirebaseRemoteConfigAdapterTest {
         assertTrue(snapshot.entries.isEmpty())
         assertEquals(RemoteConfigFetchStatus.UNKNOWN, snapshot.fetchInfo.status)
         assertNull(snapshot.fetchInfo.lastFetchEpochMs)
+        // The assertion this test was named for. Without it, "unavailable" was true of nothing a
+        // user could see: an empty snapshot with a null reason renders on both surfaces as "this
+        // provider has not completed a fetch yet", which is a claim about a fetch we never made.
+        assertNotNull(snapshot.unavailableReason)
+    }
+
+    @Test
+    fun `a remote config whose getAll throws is unavailable rather than silently empty`() {
+        val exploding =
+            object {
+                fun getAll(): Map<String, Any> = error("firebase exploded")
+            }
+
+        val snapshot = FirebaseRemoteConfigAdapter(exploding).snapshot()
+
+        assertTrue(snapshot.entries.isEmpty())
+        assertNotNull(snapshot.unavailableReason)
+    }
+
+    @Test
+    fun `a readable config reports no unavailable reason`() {
+        val snapshot = FirebaseRemoteConfigAdapter(FakeRemoteConfig(mapOf("k" to FakeValue("v", 2)))).snapshot()
+
+        assertNull(snapshot.unavailableReason)
+        assertTrue(snapshot.entries.isNotEmpty())
     }
 
     @Test

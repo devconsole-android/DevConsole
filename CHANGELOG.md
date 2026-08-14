@@ -59,6 +59,23 @@ joined this list.)
   `RedactionPolicy`, whose defaults are an HTTP-header list compared by exact name: `api_key` and
   `apiKey` now match the policy's `api-key` instead of being displayed in full.
 
+### Fixed
+
+- **State providers no longer race their readers.** `StateRegistry` held a plain `LinkedHashMap`
+  read without a lock, so a host registering a provider late — through
+  `DevConsole.registerStateProvider`, which is a documented path — while the dashboard's server
+  thread or the in-app inspector was iterating could throw `ConcurrentModificationException` into
+  the app being debugged. Every access is guarded now, and the insertion order surfaces list
+  providers in is preserved. `RemoteConfigRegistry` had the same shape and got the same fix before
+  it ever shipped.
+
+- **Re-initializing replaces registered providers instead of silently keeping the old ones.** Both
+  registries reject a duplicate id, and neither was cleared between `initialize()` calls, so a
+  `stop()` → `initialize(...)` carrying a replacement provider under the same id had its
+  registration refused — leaving every surface reading through the torn-down original. Both are now
+  cleared as part of the same per-init reset, and a duplicate id within one config is ignored rather
+  than thrown out of `initialize()` (state providers previously threw; Remote Config already did not).
+
 ## 1.1.1 — 2026-08-12
 
 A build-and-distribution patch: no SDK code changed, and the public API is byte-for-byte the

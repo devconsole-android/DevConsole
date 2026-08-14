@@ -697,9 +697,17 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
         // Apply the host's policy at the shared capture engine so every recorder redacts by it.
         redaction.updatePolicy(config.redactionPolicy)
         if (config.capturesCategory(CaptureCategory.STATE)) {
-            config.stateProviders.forEach(stateRegistry::register)
-            // A duplicate id from a host that both configured and late-registered a provider must
-            // not take down initialize(); the registration is simply ignored.
+            // Cleared first, not merged into: both registries reject a duplicate id, so on a
+            // stop() -> initialize(configB) carrying a *replacement* provider under the same id
+            // (a fresh FirebaseRemoteConfigAdapter over a new client, say) the registration would
+            // be refused and every surface would keep reading through the torn-down original --
+            // silently, since safely{}'s result is discarded here. Configured providers are owned
+            // by the config, so the new config's set is the whole truth.
+            stateRegistry.clear()
+            remoteConfigRegistry.clear()
+            // A duplicate id *within one config*, or from a host that both configured and
+            // late-registered a provider, must not take down initialize(); it is simply ignored.
+            config.stateProviders.forEach { provider -> safely { stateRegistry.register(provider) } }
             config.remoteConfigProviders.forEach { provider -> safely { remoteConfigRegistry.register(provider) } }
         }
         featureFlags = SessionFeatureFlags(config.featureFlags)
@@ -746,6 +754,11 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 featureFlagsSupplier = { if (::featureFlags.isInitialized) featureFlags else null },
                 stateRegistry = stateRegistry,
                 remoteConfigRegistry = remoteConfigRegistry,
+                // The one engine PlatformFacadeProvider keeps current via updatePolicy, rather than
+                // a fresh one per snapshot(): constructing a RedactionEngine recompiles the whole
+                // textPatterns set, which is why redactionValidationError() guards it at all. This
+                // also keeps the in-process path on the exact engine the HTTP path redacts with.
+                redactionEngine = { redaction },
                 preferencesInspector = gatedPreferencesInspector,
                 fileInspector = gatedFileInspector,
                 databaseInspector = gatedDatabaseInspector,
@@ -916,7 +929,12 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             // Redacted here, not in the route: the Compose inspector reads the same registry
             // in-process and never crosses the HTTP boundary, so this is the shared boundary both
             // surfaces go through.
-            remoteConfigSnapshots = { redactedRemoteConfigSnapshots(config) },
+            // `activeConfig`, not this call's `config`: createServerEngine runs once, while
+            // reconfigure() handles every later initialize() and carries no snapshot supplier of
+            // its own -- so capturing the parameter would pin the route to the first config's
+            // redaction policy and STATE gate for the process's life, while FullInspectorDataSource
+            // (which reads the same live field) moved on. Same field, two surfaces, one answer.
+            remoteConfigSnapshots = { redactedRemoteConfigSnapshots(activeConfig) },
             featureFlags = featureFlags,
             featureFlagsEditable = featureFlagsEditable,
             mockEngine = mockEngineInstance,
@@ -1127,9 +1145,12 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     override fun registerRemoteConfigProvider(provider: RemoteConfigProvider): Boolean =
         categoryEnabled(CaptureCategory.STATE) && safely { remoteConfigRegistry.register(provider) }
 
-    /** Empty when the STATE category is off, so the dashboard route cannot outflank the host's gate. */
-    private fun redactedRemoteConfigSnapshots(config: DevConsoleConfig): List<RemoteConfigSnapshot> {
-        if (!config.capturesCategory(CaptureCategory.STATE)) return emptyList()
+    /**
+     * Empty when the STATE category is off, so the dashboard route cannot outflank the host's gate.
+     * A null config means initialize() has not landed yet, which reads the same way: nothing to serve.
+     */
+    private fun redactedRemoteConfigSnapshots(config: DevConsoleConfig?): List<RemoteConfigSnapshot> {
+        if (config == null || !config.capturesCategory(CaptureCategory.STATE)) return emptyList()
         val redacting = RedactingRemoteConfig(redaction, config.redactionPolicy)
         return remoteConfigRegistry.snapshots().map { it.copy(entries = redacting.apply(it.entries)) }
     }

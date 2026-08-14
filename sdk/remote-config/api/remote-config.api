@@ -60,6 +60,7 @@ public final class io/devconsole/remoteconfig/RemoteConfigRegistry {
 	public static final field Companion Lio/devconsole/remoteconfig/RemoteConfigRegistry$Companion;
 	public static final field MAX_VALUE_LENGTH I
 	public fun <init> ()V
+	public final fun clear ()V
 	public final fun providerIds ()Ljava/util/List;
 	public final fun register (Lio/devconsole/remoteconfig/RemoteConfigProvider;)V
 	public final fun snapshot (Ljava/lang/String;)Lio/devconsole/remoteconfig/RemoteConfigSnapshot;

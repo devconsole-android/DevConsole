@@ -9,6 +9,8 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 
 class RemoteConfigRegistryTest {
     @Test
@@ -157,6 +159,66 @@ class RemoteConfigRegistryTest {
             status = RemoteConfigFetchStatus.UNKNOWN,
             minimumFetchIntervalSeconds = null,
         )
+
+    @Test
+    fun `clear drops every registration so the same id can be registered again`() {
+        val registry = RemoteConfigRegistry()
+        registry.register(provider("firebase", entry("k", "old", RemoteConfigSource.REMOTE)))
+
+        registry.clear()
+        // The point of clear(): re-registering the same id must be accepted, not refused as a
+        // duplicate. A stop() -> initialize() carrying a replacement adapter under the same id
+        // would otherwise leave every surface reading through the torn-down original.
+        registry.register(provider("firebase", entry("k", "new", RemoteConfigSource.REMOTE)))
+
+        assertEquals(listOf("firebase"), registry.providerIds())
+        val reread = registry.snapshots().single()
+        assertEquals("new", reread.entries.single().value)
+    }
+
+    /**
+     * Registering while reading is a documented path (`DevConsole.registerRemoteConfigProvider`
+     * from a post-fetch listener) and the readers are the Ktor thread and the inspector's
+     * dispatcher, so an unguarded `LinkedHashMap` would throw `ConcurrentModificationException`
+     * into the host app -- the one thing the read path promises never to do.
+     */
+    @Test
+    fun `registering while snapshots is iterating does not throw into the reader`() {
+        val registry = RemoteConfigRegistry()
+        repeat(INITIAL_PROVIDERS) { i ->
+            registry.register(provider("p$i", entry("k", "v", RemoteConfigSource.REMOTE)))
+        }
+        val failures = CopyOnWriteArrayList<Throwable>()
+        val start = CountDownLatch(1)
+
+        val writer =
+            Thread {
+                start.await()
+                repeat(LATE_PROVIDERS) { i ->
+                    runCatching { registry.register(provider("late$i", entry("k", "v", RemoteConfigSource.REMOTE))) }
+                }
+            }
+        val reader =
+            Thread {
+                start.await()
+                repeat(READ_ROUNDS) {
+                    runCatching { registry.snapshots() }.onFailure(failures::add)
+                }
+            }
+        writer.start()
+        reader.start()
+        start.countDown()
+        writer.join()
+        reader.join()
+
+        assertTrue("reader saw ${failures.firstOrNull()}", failures.isEmpty())
+    }
+
+    private companion object {
+        const val INITIAL_PROVIDERS = 20
+        const val LATE_PROVIDERS = 200
+        const val READ_ROUNDS = 200
+    }
 
     private fun entry(
         key: String,
