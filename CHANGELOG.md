@@ -18,7 +18,12 @@ before it can reach a release. (There was briefly a separate `sdk:plugin-api` mo
 third-party plugin framework; it was removed before ever shipping — see Removed, below — so it never
 joined this list.)
 
-## Unreleased
+## 1.2.0 — 2026-08-15
+
+A minor under the [policy](#versioning-and-stability-policy): the Remote Config inspector is
+entirely additive — three new modules, one new REST route, and new API on the config and runtime
+facades — with no change to any existing surface. Two concurrency fixes to the state registry ride
+along.
 
 ### Added
 

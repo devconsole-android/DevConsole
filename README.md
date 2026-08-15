@@ -38,12 +38,12 @@ links no server code, and the Gradle plugin fails the build if the real runtime 
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.devconsole-android") version "1.1.1"
+    id("io.github.devconsole-android") version "1.2.0"
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:1.1.1")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.1.1")
+    debugImplementation("io.github.devconsole-android:devconsole:1.2.0")
+    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.2.0")
 }
 ```
 
@@ -292,9 +292,7 @@ debugImplementation("io.github.devconsole-android:devconsole-remote-config-fireb
 releaseImplementation("io.github.devconsole-android:devconsole-remote-config-firebase-noop:1.2.0")
 ```
 
-> These two artifacts are new: `1.1.1` predates them, and `1.2.0` is the release they first ship in.
-> To try them before that lands, take them off the branch through
-> [JitPack](#jitpack-for-unreleased-code).
+> These two artifacts first ship in `1.2.0`; earlier versions do not have them.
 
 Then hand DevConsole your `FirebaseRemoteConfig` instance at init:
 
@@ -382,8 +380,8 @@ dependencyResolutionManagement {
 ```kotlin
 dependencies {
     // Group is com.github.devconsole-android.DevConsole; artifact ids match the tables above.
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.1.1")
-    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.1.1")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.2.0")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.0")
 }
 ```
 

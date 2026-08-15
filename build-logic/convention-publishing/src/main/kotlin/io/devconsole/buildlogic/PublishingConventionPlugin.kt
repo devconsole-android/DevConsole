@@ -84,7 +84,7 @@ class PublishingConventionPlugin : Plugin<Project> {
 
     private companion object {
         const val MAVEN_GROUP = "io.github.devconsole-android"
-        const val SDK_VERSION = "1.1.1"
+        const val SDK_VERSION = "1.2.0"
         const val PROJECT_URL = "https://github.com/devconsole-android/DevConsole"
     }
 }
