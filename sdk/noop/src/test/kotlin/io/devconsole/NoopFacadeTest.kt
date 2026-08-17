@@ -20,6 +20,7 @@ class NoopFacadeTest {
             assertEquals(InitResult.Disabled, DevConsole.initialize(Application(), DevConsoleConfig.default()))
             assertEquals(DevConsoleState.DisabledForBuild, DevConsole.state().value)
             assertEquals(StartResult.DisabledForBuild, DevConsole.startBrowser())
+            assertTrue(!DevConsole.mockEngine().isEnabled())
         }
 
     @Test

@@ -36,14 +36,14 @@ class FocusedConfigurationTest {
     }
 
     @Test
-    fun `focused policies use persistent sessions and direct loopback defaults`() {
+    fun `focused policies use persistent sessions and LAN defaults`() {
         val retention = RetentionPolicy()
         val browser = BrowserConfig()
 
         assertEquals(10, retention.maxSessions)
         assertEquals(7L * 24L * 60L * 60L * 1000L, retention.maxAgeMs)
         assertEquals(100L * 1024L * 1024L, retention.maxBytes)
-        assertEquals(BrowserBinding.LOOPBACK, browser.binding)
+        assertEquals(BrowserBinding.LAN, browser.binding)
         assertEquals(8080..8099, browser.portRange)
     }
 

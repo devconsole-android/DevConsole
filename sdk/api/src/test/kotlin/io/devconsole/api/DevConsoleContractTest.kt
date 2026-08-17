@@ -50,6 +50,11 @@ class DevConsoleContractTest {
     }
 
     @Test
+    fun `default start request uses LAN binding`() {
+        assertEquals(BindingMode.LAN, StartRequest().bindingMode)
+    }
+
+    @Test
     fun `default configuration is valid and uses documented session and storage limits`() {
         val config = DevConsoleConfig.default()
 

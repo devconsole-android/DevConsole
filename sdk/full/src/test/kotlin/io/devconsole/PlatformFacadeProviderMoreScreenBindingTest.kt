@@ -29,8 +29,8 @@ import org.robolectric.annotation.Config
  * always bound loopback, which meant a host configured for LAN still got a `127.0.0.1` connect URL
  * whenever the start came from the device rather than from its own code.
  *
- * Both directions are asserted: the default config must still bind loopback (the safe default is the
- * whole reason LAN is opt-in), and a LAN-configured host must actually reach LAN.
+ * Both directions are asserted: the default config binds LAN, and a host can explicitly select
+ * loopback as the secondary safer choice.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -52,10 +52,26 @@ class PlatformFacadeProviderMoreScreenBindingTest {
         }
 
     @Test
-    fun `More screen start still binds loopback under the default config`() =
+    fun `More screen start binds LAN under the default config`() =
         runTest {
             val provider = PlatformFacadeProvider()
             provider.initialize(ApplicationProvider.getApplicationContext(), DevConsoleConfig.default())
+
+            assertEquals(BindingMode.LAN, provider.startFromMoreScreen().bindingMode)
+
+            provider.stop(StopReason.UserRequested)
+        }
+
+    @Test
+    fun `More screen start binds loopback when the host explicitly configures loopback`() =
+        runTest {
+            val provider = PlatformFacadeProvider()
+            provider.initialize(
+                ApplicationProvider.getApplicationContext(),
+                DevConsoleConfig.default().withBrowserConfig(
+                    BrowserConfig(binding = BrowserBinding.LOOPBACK, portRange = 8640..8659),
+                ),
+            )
 
             assertEquals(BindingMode.LOOPBACK, provider.startFromMoreScreen().bindingMode)
 
