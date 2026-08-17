@@ -157,6 +157,13 @@ public final class io/devconsole/mocks/MockEngine {
 	public final fun withOutcomeSink (Lio/devconsole/mocks/MockOutcomeSink;)Lio/devconsole/mocks/MockEngine;
 }
 
+public final class io/devconsole/mocks/MockEngineRegistry {
+	public static final field INSTANCE Lio/devconsole/mocks/MockEngineRegistry;
+	public final fun active ()Lio/devconsole/mocks/MockEngine;
+	public final fun clear ()V
+	public final fun publish (Lio/devconsole/mocks/MockEngine;)V
+}
+
 public abstract interface class io/devconsole/mocks/MockOutcome {
 }
 

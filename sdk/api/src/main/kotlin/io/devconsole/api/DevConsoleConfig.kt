@@ -42,7 +42,8 @@ data class DevConsoleConfig(
     var sessionPolicy: SessionPolicy = SessionPolicy()
         private set
 
-    var editingCapabilities: EditingCapabilities = EditingCapabilities.readOnly()
+    /** Defaults to [EditingCapabilities]'s own defaults -- everything read-only but mocks. */
+    var editingCapabilities: EditingCapabilities = EditingCapabilities()
         private set
 
     var retentionPolicy: RetentionPolicy = RetentionPolicy()
@@ -201,7 +202,7 @@ data class DevConsoleConfig(
         private var redactionPolicy: RedactionPolicy = RedactionPolicy.default()
         private var storagePolicy: StoragePolicy = StoragePolicy()
         private var sessionPolicy: SessionPolicy = SessionPolicy()
-        private var editingCapabilities = EditingCapabilities.readOnly()
+        private var editingCapabilities = EditingCapabilities()
         private var retentionPolicy: RetentionPolicy? = null
         private var browserConfig = BrowserConfig()
         private var crashPolicy = CrashPolicy()

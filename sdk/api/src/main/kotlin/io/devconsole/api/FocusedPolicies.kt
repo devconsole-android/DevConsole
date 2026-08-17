@@ -16,11 +16,18 @@ private const val DEFAULT_PORT_RANGE_END = 8099
  * binds what this field says. Configure this when you want an on-device start to reach the browser
  * over the network; pass [StartRequest.bindingMode] when your own code is doing the starting.
  *
- * [LOOPBACK] is the default here for the same reason it is on [BindingMode]: the dashboard speaks
- * plaintext HTTP, so [LAN] is an explicit decision to expose captured headers, tokens, and bodies to
- * anyone who can see the traffic. See the KDoc on [BindingMode] and `docs/THREAT_MODEL.md`.
+ * [AUTO] is the default here for the same reason it is on [BindingMode]: an on-device Start should
+ * hand back a URL that works, which means preferring a real network interface and settling for
+ * loopback when there is none. The dashboard speaks plaintext HTTP, so a start that does reach the
+ * network exposes captured headers, tokens, and bodies to anyone who can see the traffic; set
+ * [LOOPBACK] to rule that out, or [LAN] to fail loudly instead of settling. See the KDoc on
+ * [BindingMode] and `docs/THREAT_MODEL.md`.
+ *
+ * Choosing [LAN] here has one practical edge over [AUTO] on this surface: an unpermitted LAN start
+ * surfaces [StartResult.PermissionRequired] through the More screen's own state polling, which is
+ * how the inspector prompts for `ACCESS_LOCAL_NETWORK`. [AUTO] binds loopback instead of prompting.
  */
-enum class BrowserBinding { LOOPBACK, LAN }
+enum class BrowserBinding { LOOPBACK, LAN, AUTO }
 
 data class RetentionPolicy(
     val maxSessions: Int = DEFAULT_MAX_SESSIONS,
@@ -49,7 +56,7 @@ data class RetentionPolicy(
 
 /** SESSION_CODE is the only browser-access flow; there is no longer an access-mode field to set. */
 data class BrowserConfig(
-    val binding: BrowserBinding = BrowserBinding.LOOPBACK,
+    val binding: BrowserBinding = BrowserBinding.AUTO,
     val portRange: IntRange = DEFAULT_PORT_RANGE_START..DEFAULT_PORT_RANGE_END,
     val sessionCodeTtlMs: Long = DEFAULT_SESSION_CODE_TTL_MS,
 ) {

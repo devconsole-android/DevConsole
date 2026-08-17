@@ -7,6 +7,7 @@ public final class io/devconsole/api/AccessInfo {
 }
 
 public final class io/devconsole/api/BindingMode : java/lang/Enum {
+	public static final field AUTO Lio/devconsole/api/BindingMode;
 	public static final field LAN Lio/devconsole/api/BindingMode;
 	public static final field LOOPBACK Lio/devconsole/api/BindingMode;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
@@ -15,6 +16,7 @@ public final class io/devconsole/api/BindingMode : java/lang/Enum {
 }
 
 public final class io/devconsole/api/BrowserBinding : java/lang/Enum {
+	public static final field AUTO Lio/devconsole/api/BrowserBinding;
 	public static final field LAN Lio/devconsole/api/BrowserBinding;
 	public static final field LOOPBACK Lio/devconsole/api/BrowserBinding;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;

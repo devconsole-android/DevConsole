@@ -96,7 +96,9 @@ class FullFacadeTest {
             val started = provider.startBrowser(StartRequest())
             assertTrue(started is StartResult.Started)
             started as StartResult.Started
-            assertEquals(BindingMode.LOOPBACK, started.endpoint.bindingMode)
+            // A bare StartRequest() is BindingMode.AUTO, and Robolectric presents an eligible
+            // interface, so the default start reaches the network. See PlatformFacadeProviderAutoBindingTest.
+            assertEquals(BindingMode.LAN, started.endpoint.bindingMode)
             assertTrue(started.endpoint.port in 8080..8099)
             assertTrue(started.access.connectUrl.contains("#code="))
             assertEquals(DevConsoleState.Running, provider.state().value)

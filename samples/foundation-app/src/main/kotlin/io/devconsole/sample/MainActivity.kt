@@ -37,7 +37,6 @@ import io.devconsole.api.StartResult
 import io.devconsole.api.StopReason
 import io.devconsole.mocks.MockAction
 import io.devconsole.mocks.MockRule
-import io.devconsole.mocks.okhttp.DevConsoleMockInterceptor
 import io.devconsole.network.okhttp.installDevConsole
 import io.devconsole.push.PushInput
 import io.devconsole.socket.okhttp.DevConsoleOkHttpWebSocketListener
@@ -88,10 +87,11 @@ private const val ANR_BLOCK_MS = 6_000L
  * button below exercises exactly one capability so it can be tested in isolation.
  *
  * Capability-flag posture (see compose-app's `MainActivity` for the full three-sample matrix):
- * every [EditingCapabilities] flag is left at its `false` default here, on purpose -- this sample
- * is the locked-down contrast to compose-app's fully-unlocked one. The Data rail (preferences/
- * database/files, seeded below) is still visible and browsable in both the browser dashboard and
- * the SDK's in-app inspector; only the write/edit actions are refused.
+ * [EditingCapabilities.readOnly] refuses every write here, on purpose -- this sample is the
+ * locked-down contrast to compose-app's fully-unlocked one. Note that this now takes an explicit
+ * call: the SDK's own default leaves `mocks` editable, and `readOnly()` is what opts back out. The
+ * Data rail (preferences/database/files, seeded below) is still visible and browsable in both the
+ * browser dashboard and the SDK's in-app inspector; only the write/edit actions are refused.
  *
  * Screenshot capture follows the same posture: `ScreenshotPolicy.enabled` is left at its SDK-wide
  * `false` default (no `withScreenshotPolicy` override), so the "Capture screenshot" button here
@@ -110,9 +110,10 @@ class MainActivity : Activity() {
         OkHttpClient
             .Builder()
             // One-call installer: wires the event listener factory and the interceptor together so
-            // the Network inspector's timing bar (DNS/connect/TLS/send/wait/receive) is populated.
+            // the Network inspector's timing bar (DNS/connect/TLS/send/wait/receive) is populated,
+            // and wires mock rules from the engine DevConsole published at initialize -- no separate
+            // DevConsoleMockInterceptor line needed.
             .installDevConsole(DevConsole.networkRecorder())
-            .addInterceptor(DevConsoleMockInterceptor(DevConsole.mockEngine()))
             .build()
     }
 

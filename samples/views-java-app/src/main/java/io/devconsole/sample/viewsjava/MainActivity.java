@@ -52,7 +52,6 @@ import io.devconsole.api.StopReason;
 import io.devconsole.mocks.MockAction;
 import io.devconsole.mocks.MockRule;
 import io.devconsole.mocks.MockScope;
-import io.devconsole.mocks.okhttp.DevConsoleMockInterceptor;
 import io.devconsole.network.okhttp.DevConsoleOkHttp;
 import io.devconsole.push.PushEvent;
 import io.devconsole.push.PushInput;
@@ -152,9 +151,9 @@ public final class MainActivity extends Activity {
         // DevConsoleOkHttp.install() is the Java-friendly one-call installer: it wires the event
         // listener factory and interceptor together so the Network inspector's timing bar
         // (DNS/connect/TLS/send/wait/receive) is populated -- see its kdoc for why the equivalent
-        // manual three-step form is easy to get wrong from Java.
+        // manual three-step form is easy to get wrong from Java. Mock rules come with it, from the
+        // engine DevConsole published at initialize, so no DevConsoleMockInterceptor line is needed.
         client = DevConsoleOkHttp.install(new OkHttpClient.Builder(), DevConsole.networkRecorder())
-                .addInterceptor(new DevConsoleMockInterceptor(DevConsole.mockEngine()))
                 .build();
         socketClient = new OkHttpClient();
         // Mock rules are SESSION-scoped and dropped on every server restart -- restoreRunningSession
