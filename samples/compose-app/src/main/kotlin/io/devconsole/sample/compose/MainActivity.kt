@@ -91,7 +91,6 @@ import io.devconsole.api.StartResult
 import io.devconsole.api.StopReason
 import io.devconsole.mocks.MockAction
 import io.devconsole.mocks.MockRule
-import io.devconsole.mocks.okhttp.DevConsoleMockInterceptor
 import io.devconsole.network.okhttp.installDevConsole
 import io.devconsole.push.PushInput
 import io.devconsole.remoteconfig.RemoteConfigEntry
@@ -264,8 +263,8 @@ class MainActivity : ComponentActivity() {
             // Wires the event listener and interceptor together so the Network inspector's timing
             // bar (DNS/connect/TLS/send/wait/receive) is actually populated -- see the kdoc on
             // installDevConsole for why the equivalent three-step manual form is easy to get wrong.
+            // Mock rules ride along on the same call, from the engine published at initialize.
             .installDevConsole(DevConsole.networkRecorder())
-            .addInterceptor(DevConsoleMockInterceptor(DevConsole.mockEngine()))
             .build()
     }
 

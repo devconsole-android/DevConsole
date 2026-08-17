@@ -18,6 +18,82 @@ before it can reach a release. (There was briefly a separate `sdk:plugin-api` mo
 third-party plugin framework; it was removed before ever shipping — see Removed, below — so it never
 joined this list.)
 
+## Unreleased
+
+Three default changes, aimed at the same complaint: a fresh integration showed a `127.0.0.1` URL
+that needed `adb forward` before it displayed anything, and a Mocks screen that could not add a
+mock. See [docs/MIGRATION.md](docs/MIGRATION.md#upgrading-from-120) for the upgrade path.
+
+**Version note, deliberately unresolved here:** under this file's own
+[policy](#versioning-and-stability-policy), adding a constant to a public enum is source-breaking
+for any host that `when`s exhaustively over `BindingMode`/`BrowserBinding`, and flipping a security
+default is a behavioural break. That reads as a major, not a minor. The number is left for the
+release decision rather than assumed.
+
+### Added
+
+- **`BindingMode.AUTO` and `BrowserBinding.AUTO`**, now the default for `StartRequest.bindingMode`
+  and `BrowserConfig.binding`. AUTO binds a real network interface when the device has one and
+  quietly binds loopback when it does not, so a start always yields a working server and the
+  connect URL is scannable from another machine without configuration.
+
+  Introduced as a third mode rather than by re-pointing the default at `LAN`, because `LAN` earns
+  its keep by *not* degrading: a host sharing a connect URL with another device needs
+  `NoEligibleNetwork`/`PermissionRequired` back, not a `127.0.0.1` link that works for nobody but
+  itself. Explicit `LOOPBACK` and `LAN` behave exactly as before.
+
+  `BrowserEndpoint.bindingMode` never reports `AUTO` — it reports the socket that actually bound, so
+  the QR code, the connect URL, and the "LAN MODE — UNENCRYPTED" banner stay truthful. AUTO
+  fallbacks are logged with their reason.
+
+  The name is reused, not restored: the pre-1.0 `BindingMode.AUTO` came with zero-config auto-start
+  and NSD service discovery, both still removed. This one only picks a binding.
+
+- **`MockEngineRegistry`** (`sdk:mocks`), a process-wide handle the enabled facade publishes its
+  `MockEngine` to at `initialize`. It exists to close a module-layering gap — `sdk:network-okhttp`
+  sits below the facade and cannot call `DevConsole.mockEngine()` — and is what lets
+  `installDevConsole` wire mocking without the host naming an engine. The protected build publishes
+  nothing, so a release APK reads `null` and wires no mock interceptor.
+
+### Changed
+
+- **The default binding now reaches the network.** This is a deliberate loosening of a security
+  default: the dashboard speaks plaintext HTTP, so on a network you do not administer, headers,
+  tokens, and bodies are readable by anyone who can see the traffic. Pass `BindingMode.LOOPBACK`
+  (and `BrowserConfig(binding = BrowserBinding.LOOPBACK)` for the on-device Start button) to keep
+  1.2.0 behaviour. [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) has been rewritten around the new
+  default rather than patched.
+
+  One consequence worth knowing: **AUTO never prompts for `ACCESS_LOCAL_NETWORK`.** It treats a
+  missing grant as a reason to bind loopback, not a reason to fail, so on an API 37+ device it
+  settles for `127.0.0.1` until something requests the grant. Hosts that want
+  `StartResult.PermissionRequired` back to drive a prompt ask for `BindingMode.LAN` by name — which
+  all three samples still do.
+
+- **`installDevConsole` wires mock rules.** Both the Kotlin extension and the Java-friendly
+  `DevConsoleOkHttp.install` gained a `mockEngine` parameter defaulting to the published engine, so
+  the separate `.addInterceptor(DevConsoleMockInterceptor(DevConsole.mockEngine()))` line is no
+  longer needed. The mock interceptor is added after the capture interceptor, so a served mock is
+  still recorded and tagged `mocked`. Pass `mockEngine = null` to opt out.
+
+  The 2- and 3-argument overloads are still emitted, so Java call sites and existing bytecode are
+  unaffected; Kotlin callers relying on default arguments should recompile, since the synthetic
+  `$default` signature changed.
+
+- **`EditingCapabilities.mocks` defaults to `true`**, and `DevConsoleConfig` seeds
+  `EditingCapabilities()` instead of `EditingCapabilities.readOnly()`. A mock rule writes nothing of
+  the host's — it only short-circuits DevConsole's own interceptor — so the read-only posture that
+  protects preferences, databases, and files had nothing to protect here. `readOnly()` is now
+  spelled out field by field rather than delegating to the constructor, so it still grants nothing
+  at all, mocks included.
+
+### Fixed
+
+- **A `Delay` mock rule is no longer applied twice** when a host keeps its own
+  `DevConsoleMockInterceptor` alongside the one `installDevConsole` now adds. The second interceptor
+  recognises the first one's request tag and stands down. Without this, upgrading would have
+  silently doubled every simulated latency that proceeds up the chain.
+
 ## 1.2.0 — 2026-08-15
 
 A minor under the [policy](#versioning-and-stability-policy): the Remote Config inspector is

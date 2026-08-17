@@ -18,6 +18,13 @@ class DevConsoleMockInterceptor(
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        // `installDevConsole` wires one of these by default, so a host that also kept its own manual
+        // `.addInterceptor(DevConsoleMockInterceptor(...))` line now has two in the chain. Deciding
+        // twice is not merely redundant: a Delay rule would sleep in both passes, silently doubling
+        // every simulated latency the moment the host upgraded. Whoever got there first owns the call.
+        if (request.tag(NetworkCaptureContext::class.java)?.tags?.containsKey("mocked") == true) {
+            return chain.proceed(request)
+        }
         val decision =
             engine.decide(
                 MockRequest(

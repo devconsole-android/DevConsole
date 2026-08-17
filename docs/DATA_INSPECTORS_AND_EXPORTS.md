@@ -5,8 +5,10 @@ than network/socket/push traffic: the **Data** inspectors (preferences, database
 device's **More** screen, and the **export** formats (HAR, Postman, and the Android session ZIP).
 All of it sits behind the same SESSION_CODE auth as everything else — see
 [PROTOCOL_REFERENCE.md](PROTOCOL_REFERENCE.md#2-auth-handshake-session_code) — and every mutating
-action additionally gates on the host's `EditingCapabilities`, which default to all-`false`
-(`EditingCapabilities.readOnly()`). A host opts specific features in:
+action additionally gates on the host's `EditingCapabilities`. Every one of them defaults to `false`
+except `mocks`, which ships editable because a mock rule writes nothing of the host's — it only
+short-circuits DevConsole's own interceptor. `EditingCapabilities.readOnly()` still refuses
+everything, mocks included. A host opts specific features in:
 
 ```kotlin
 DevConsole.initialize(

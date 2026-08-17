@@ -6,12 +6,21 @@ is the honest version of that trade-off. Read it before turning on LAN mode.
 
 ## The one-paragraph summary
 
-The dashboard is served over **plaintext HTTP**. There is no TLS anywhere in this SDK. In LAN mode
-the bearer token, every captured request and response header, every WebSocket frame, every push
-payload, and every HAR export cross the network unencrypted. Anyone in a position to observe that
-traffic — another device on the same Wi-Fi, a compromised router, a guest network operator, someone
-running a packet capture in a café — reads all of it. **Loopback plus `adb forward` avoids this
-entirely and should be your default.**
+The dashboard is served over **plaintext HTTP**. There is no TLS anywhere in this SDK. Whenever the
+server is bound to a network address, the bearer token, every captured request and response header,
+every WebSocket frame, every push payload, and every HAR export cross the network unencrypted.
+Anyone in a position to observe that traffic — another device on the same Wi-Fi, a compromised
+router, a guest network operator, someone running a packet capture in a café — reads all of it.
+
+**The default binding reaches the network.** `BindingMode.AUTO` — what a bare
+`StartRequest()` and an unconfigured `BrowserConfig` both mean — binds a real interface whenever the
+device has one, and only falls back to `127.0.0.1` when it does not. Reachability is the default
+because a debug-only dashboard that needs an `adb forward` incantation before it shows anything is a
+dashboard most people never see. **The exposure is real regardless of the reasoning: on any network
+you do not administer, pass `BindingMode.LOOPBACK` (and set
+`BrowserConfig(binding = BrowserBinding.LOOPBACK)` for the on-device Start button).** Loopback plus
+`adb forward` still avoids this entire class of attack; it is now something you ask for rather than
+something you get.
 
 ## Screenshots are unredactable by construction
 
@@ -173,8 +182,8 @@ Bodies are also truncated to 64 KiB before storage. That is a resource bound, no
 
 ## Safe defaults
 
-**Untrusted or shared network — use loopback.** This is the recommended posture and the SDK's own
-default binding mode:
+**Untrusted or shared network — use loopback.** This is the recommended posture, and it is no
+longer the SDK's default: you have to ask for it.
 
 ```kotlin
 DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))
@@ -193,19 +202,32 @@ reasonable place for LAN mode. A conference Wi-Fi, a hotel, a café, or any netw
 administer is not. Note that LAN mode binds one specific interface address, never `0.0.0.0`, which
 limits reach but does not make the traffic private.
 
-**LAN mode is always an explicit opt-in.** `startBrowser()` never picks a binding mode for you --
-the default `StartRequest()` binds loopback, and LAN only happens when you pass
-`bindingMode = BindingMode.LAN` yourself. So on a network you do not trust, simply don't ask for
-LAN:
+**Staying off the network is the explicit choice.** This used to be the other way round.
+`startBrowser()`
+picks `BindingMode.AUTO` when you pass no mode, and AUTO reaches the network whenever it can. On a
+network you do not trust, say so:
 `DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))`.
 
-There is a second way to start the server, and it has its own opt-in: the **Start button on the
-in-app inspector's More screen**, which issues no `StartRequest` and instead binds whatever
-`DevConsoleConfig.browserConfig.binding` declares. That field also defaults to `LOOPBACK`, so an
-on-device start is loopback unless a host explicitly configures
-`BrowserConfig(binding = BrowserBinding.LAN)`. The two settings are independent and neither
-overrides the other -- a host that wants LAN from both surfaces has to say so twice, and a host that
-sets only `StartRequest(bindingMode = LAN)` leaves the on-device button on loopback.
+The three modes differ only in what they do when LAN is unavailable:
+
+| Mode | Network available | No eligible interface | `ACCESS_LOCAL_NETWORK` ungranted (API 37+) |
+|---|---|---|---|
+| `AUTO` (default) | binds LAN | binds loopback | binds loopback |
+| `LAN` | binds LAN | `NoEligibleNetwork` | `PermissionRequired` |
+| `LOOPBACK` | binds loopback | binds loopback | binds loopback |
+
+Two consequences worth internalising. First, **AUTO never prompts for the local-network
+permission** — it treats a missing grant as a reason to settle rather than a reason to ask — so on an
+API 37+ device an AUTO start quietly serves `127.0.0.1` until something requests the grant. Ask for
+`LAN` by name if you want the `PermissionRequired` result to drive a prompt. Second,
+`StartResult.Started.endpoint.bindingMode` is the only honest answer to "did this reach the
+network?"; it reports the socket, never the request, and is never `AUTO`.
+
+There is a second way to start the server: the **Start button on the in-app inspector's More
+screen**, which issues no `StartRequest` and instead binds whatever
+`DevConsoleConfig.browserConfig.binding` declares. That field defaults to `BrowserBinding.AUTO` too.
+The two settings are independent and neither overrides the other -- a host that wants to pin one
+surface to loopback has to say so on that surface.
 
 **Stop the server when you are done.** `DevConsole.stop(...)` revokes browser sessions immediately
 and unbinds the port. A dashboard left running on a desk overnight is an open dashboard.
