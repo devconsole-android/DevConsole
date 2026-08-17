@@ -53,9 +53,10 @@ Requesting it at runtime is still your app's job — use `ActivityResultContract
 with `StartResult.PermissionRequired.permission` when you get that result back, exactly as all three
 samples do.
 
-## Loopback / ADB reverse mode
+## Explicit loopback / ADB mode
 
-Still the safer default when you don't need cross-device access:
+Use this explicit secondary mode when you don't need cross-device access or the current network is
+not trusted:
 
 ```kotlin
 DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK, portRange = 8080..8099))

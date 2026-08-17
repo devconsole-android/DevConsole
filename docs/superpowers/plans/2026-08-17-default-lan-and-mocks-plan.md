@@ -61,7 +61,8 @@ class StartRequestDefaultsTest {
 Run:
 
 ```bash
-./gradlew :sdk:api:test --tests io.devconsole.api.FocusedConfigurationTest --tests io.devconsole.api.DevConsoleContractTest :sdk:server-api:test --tests io.devconsole.server.api.StartRequestDefaultsTest
+./gradlew :sdk:api:test --tests io.devconsole.api.FocusedConfigurationTest --tests io.devconsole.api.DevConsoleContractTest
+./gradlew :sdk:server-api:testDebugUnitTest --tests io.devconsole.server.api.StartRequestDefaultsTest
 ```
 
 Expected: the new/changed assertions fail because the current defaults are `LOOPBACK`.
@@ -234,7 +235,7 @@ Run:
 
 ```bash
 ./gradlew :sdk:api:test --tests io.devconsole.api.FocusedConfigurationTest --tests io.devconsole.api.DevConsoleContractTest \
-  :sdk:server-api:test --tests io.devconsole.server.api.StartRequestDefaultsTest \
+  :sdk:server-api:testDebugUnitTest --tests io.devconsole.server.api.StartRequestDefaultsTest \
   :sdk:mocks:test --tests io.devconsole.mocks.MockEngineTest \
   :sdk:full:testDebugUnitTest --tests io.devconsole.FullFacadeTest --tests io.devconsole.PlatformFacadeProviderMoreScreenBindingTest \
   :sdk:noop:testDebugUnitTest --tests io.devconsole.NoopFacadeTest

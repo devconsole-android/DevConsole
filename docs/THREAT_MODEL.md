@@ -173,11 +173,13 @@ Bodies are also truncated to 64 KiB before storage. That is a resource bound, no
 
 ## Safe defaults
 
-**Untrusted or shared network — use loopback.** This is the recommended posture and the SDK's own
-default binding mode:
+LAN is the primary default for both existing start entry points so cross-device debugging works
+without extra configuration. On an untrusted or shared network, use the explicit loopback form
+below instead:
 
 ```kotlin
-DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))
+DevConsole.startBrowser(StartRequest()) // LAN default
+DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK)) // explicit safer mode
 ```
 
 ```bash
@@ -193,19 +195,17 @@ reasonable place for LAN mode. A conference Wi-Fi, a hotel, a café, or any netw
 administer is not. Note that LAN mode binds one specific interface address, never `0.0.0.0`, which
 limits reach but does not make the traffic private.
 
-**LAN mode is always an explicit opt-in.** `startBrowser()` never picks a binding mode for you --
-the default `StartRequest()` binds loopback, and LAN only happens when you pass
-`bindingMode = BindingMode.LAN` yourself. So on a network you do not trust, simply don't ask for
-LAN:
-`DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))`.
+**Loopback is the explicit safer choice.** `startBrowser()` uses LAN when its request is omitted,
+so on a network you do not trust, pass
+`DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))` and use `adb forward`.
+LAN never quietly falls back to loopback, and loopback never quietly changes to LAN.
 
-There is a second way to start the server, and it has its own opt-in: the **Start button on the
+There is a second way to start the server: the **Start button on the
 in-app inspector's More screen**, which issues no `StartRequest` and instead binds whatever
-`DevConsoleConfig.browserConfig.binding` declares. That field also defaults to `LOOPBACK`, so an
-on-device start is loopback unless a host explicitly configures
-`BrowserConfig(binding = BrowserBinding.LAN)`. The two settings are independent and neither
-overrides the other -- a host that wants LAN from both surfaces has to say so twice, and a host that
-sets only `StartRequest(bindingMode = LAN)` leaves the on-device button on loopback.
+`DevConsoleConfig.browserConfig.binding` declares. That field defaults to `LAN`, so an on-device
+start defaults to LAN; configure
+`BrowserConfig(binding = BrowserBinding.LOOPBACK)` for explicit loopback. The two settings remain
+independent and neither overrides the other, even though both defaults are now LAN.
 
 **Stop the server when you are done.** `DevConsole.stop(...)` revokes browser sessions immediately
 and unbinds the port. A dashboard left running on a desk overnight is an open dashboard.

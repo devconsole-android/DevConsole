@@ -76,14 +76,20 @@ way your manifest needs `INTERNET`, which most apps already declare:
 
 ```kotlin
 lifecycleScope.launch { // startBrowser is a suspend function; the server never starts on its own
-    val result = DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))
+    val result = DevConsole.startBrowser() // LAN by default
     val connectUrl = (result as? StartResult.Started)?.access?.connectUrl
-    // e.g. http://127.0.0.1:8080/#code=B7KQ2XWZ — surface this in your debug UI
+    // e.g. http://192.168.1.42:8080/#code=B7KQ2XWZ — surface this in your debug UI
 }
 ```
 
+For USB/ADB-only access, choose loopback explicitly:
+
+```kotlin
+val result = DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))
+```
+
 ```bash
-adb forward tcp:8080 tcp:8080   # use the port from the DevConsole log line
+adb forward tcp:8080 tcp:8080   # use the port from the loopback start's log line
 ```
 
 Then open the **whole URL**. The `#code=` fragment is the credential, so a bare `http://host:port/`
@@ -165,16 +171,19 @@ scan from another machine.
 
 <p align="center"><img src="docs/images/inspector-more-server.png" width="300" alt="More screen with the server started, showing the connect URL and QR code" /></p>
 
-That button binds **loopback** by default, so the URL it shows needs `adb forward`. To bind LAN
-instead, which is what makes the QR code scannable from another machine, declare it on the config.
-The button issues no `StartRequest` of its own:
+That button binds **LAN** by default, so its QR code is reachable from another device on the same
+network. For the safer USB/ADB-only mode, configure loopback explicitly; the button issues no
+`StartRequest` of its own:
 
 ```kotlin
-DevConsoleConfig.default().withBrowserConfig(BrowserConfig(binding = BrowserBinding.LAN))
+DevConsoleConfig.default().withBrowserConfig(
+    BrowserConfig(binding = BrowserBinding.LOOPBACK),
+)
 ```
 
-This is independent of the `bindingMode` you pass to `startBrowser` yourself; set both if you start
-the server from your own UI too. Read [the threat model](docs/THREAT_MODEL.md) before choosing LAN.
+This is independent of the `bindingMode` you pass to `startBrowser` yourself; both existing entry
+points default to LAN, and each can explicitly select loopback. Read [the threat model](docs/THREAT_MODEL.md)
+before using LAN on a network you do not administer.
 
 From code:
 
@@ -183,7 +192,7 @@ From code:
 DevConsole.initialize(application, DevConsoleConfig.default())
 
 // startBrowser and stop are suspend functions — call them from a coroutine:
-val result = DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))
+val result = DevConsole.startBrowser(StartRequest()) // LAN by default
 when (result) {
     is StartResult.Started -> {
         result.endpoint              // host + port actually bound
@@ -214,7 +223,7 @@ DevConsole.startBrowserAsync(request, result -> runOnUiThread(() -> {
 After `startBrowser`, filter Logcat on the `DevConsole` tag:
 
 ```text
-I/DevConsole: Dashboard available at: http://127.0.0.1:8080/ (access link available through the DevConsole API/launcher; binding: LOOPBACK)
+I/DevConsole: Dashboard available at: http://192.168.1.42:8080/ (access link available through the DevConsole API/launcher; binding: LAN)
 ```
 
 **The session code is deliberately absent from Logcat.** The full URL, with its `#code=<session
@@ -224,11 +233,12 @@ free one in **8080–8099**, so read it from the log rather than assuming 8080.
 
 ### Connect from your browser
 
-- **Loopback (default):** run `adb forward tcp:<port> tcp:<port>`, then open the connect URL.
-- **LAN:** pass `BindingMode.LAN` and open the URL from any device on the same network. Read
+- **LAN (default):** open the URL from another device on the same network. Read
   [the threat model](docs/THREAT_MODEL.md) first, because the dashboard speaks plaintext HTTP. A
   LAN start that finds no eligible network interface returns `StartResult.NoEligibleNetwork`. It
-  never quietly falls back to loopback, or the other way around.
+  never quietly falls back to loopback.
+- **Loopback (explicit):** run `adb forward tcp:<port> tcp:<port>`, then open the connect URL. The
+  server never silently changes an explicit loopback request to LAN.
 
 Open the **whole URL**. The `#code=` fragment is the credential. It is single-use, expires in five
 minutes, and creates a session immediately with no approval step. A bare `http://host:port/` sits
@@ -425,12 +435,13 @@ resolved runtime classpath, and the final APK/AAB bytes. See
 
 ## Security model
 
-DevConsole deliberately exposes your app's internals to a browser. It defaults to the safe end of
-every choice, but you should know where the edges are:
+DevConsole deliberately exposes your app's internals to a browser. LAN is the default to make
+cross-device debugging work immediately, while loopback remains the safer explicit choice on
+untrusted or shared networks:
 
 - **The dashboard speaks plaintext HTTP.** There is no TLS. In LAN mode, anyone who can watch your
-  network packets can read everything it shows: headers, tokens, bodies, exports. That is why
-  loopback plus `adb forward` is the default and LAN is always an explicit opt-in.
+  network packets can read everything it shows: headers, tokens, bodies, exports. Use
+  `BindingMode.LOOPBACK` with `adb forward` when the network is not trusted.
 - **The connect URL is a credential.** Holding a live `#code=` fragment creates a session, with no
   approval step on the device. Codes are single-use and expire in five minutes; sessions last 30.
   Treat the URL like a password. You can revoke sessions from the More screen.
