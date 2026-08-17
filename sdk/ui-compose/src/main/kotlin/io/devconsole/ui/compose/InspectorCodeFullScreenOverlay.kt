@@ -61,9 +61,10 @@ internal fun InspectorCodeFullScreenOverlay(
     copyContentDescription: String = "Copy $title",
 ) {
     val sectionMatches = searchMatches.filter { it.sectionKey == sectionKey || sectionKey.isEmpty() }
-    val highlightIndex = remember(sectionMatches, currentMatchOrdinal) {
-        indexInspectorSearchHighlights(sectionMatches, currentMatchOrdinal)
-    }
+    val highlightIndex =
+        remember(sectionMatches, currentMatchOrdinal) {
+            indexInspectorSearchHighlights(sectionMatches, currentMatchOrdinal)
+        }
     InspectorCodeFullScreenOverlay(
         title = title,
         onDismiss = onDismiss,

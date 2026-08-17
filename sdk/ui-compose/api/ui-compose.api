@@ -1,7 +1,7 @@
 public final class io/devconsole/ui/compose/ComposableSingletons$CollapsibleSectionKt {
 	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$CollapsibleSectionKt;
 	public fun <init> ()V
-	public final fun getLambda$-1132852660$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-231784725$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 }
 
 public final class io/devconsole/ui/compose/ComposableSingletons$DevConsoleActivityKt {
@@ -65,7 +65,7 @@ public final class io/devconsole/ui/compose/ComposableSingletons$InspectorDesign
 public final class io/devconsole/ui/compose/ComposableSingletons$InspectorDetailHeaderKt {
 	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorDetailHeaderKt;
 	public fun <init> ()V
-	public final fun getLambda$844457626$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$520449243$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 }
 
 public final class io/devconsole/ui/compose/ComposableSingletons$InspectorDetailPreviewsKt {
@@ -78,6 +78,14 @@ public final class io/devconsole/ui/compose/ComposableSingletons$InspectorDetail
 	public final fun getLambda$506757289$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$838729754$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$916258535$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorDetailSearchOptionsSheetKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorDetailSearchOptionsSheetKt;
+	public fun <init> ()V
+	public final fun getLambda$-592466661$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1722714866$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$481453717$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 }
 
 public final class io/devconsole/ui/compose/ComposableSingletons$InspectorFilesSectionKt {

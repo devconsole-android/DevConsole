@@ -261,9 +261,10 @@ internal fun searchInspectorBodyCandidates(
 private fun jsonSearchCandidates(
     sectionKey: String,
     root: JsonValue,
-): List<InspectorSearchCandidate> = buildList {
-    appendJsonSearchCandidates(this, sectionKey, root, path = "$")
-}
+): List<InspectorSearchCandidate> =
+    buildList {
+        appendJsonSearchCandidates(this, sectionKey, root, path = "$")
+    }
 
 private fun appendJsonSearchCandidates(
     candidates: MutableList<InspectorSearchCandidate>,

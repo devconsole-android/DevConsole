@@ -254,4 +254,3 @@ private fun SearchOptionsSheetPreviewScaffold(selectedSectionKeys: Set<String>) 
         }
     }
 }
-

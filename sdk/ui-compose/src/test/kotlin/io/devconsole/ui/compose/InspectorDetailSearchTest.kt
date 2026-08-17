@@ -238,7 +238,12 @@ class InspectorDetailSearchTest {
     @Test
     fun `network search defaults to the two bodies and to keys plus values`() {
         assertEquals(
-            InspectorExchangeSection.keysOf(setOf(InspectorExchangeSection.PRIMARY_BODY, InspectorExchangeSection.SECONDARY_BODY)),
+            InspectorExchangeSection.keysOf(
+                setOf(
+                    InspectorExchangeSection.PRIMARY_BODY,
+                    InspectorExchangeSection.SECONDARY_BODY,
+                ),
+            ),
             NetworkDetailSearchOptions.defaultSectionKeys,
         )
         assertEquals(InspectorSearchMode.KEYS_AND_VALUES, NetworkDetailSearchOptions.defaultMode)

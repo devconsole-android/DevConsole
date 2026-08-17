@@ -372,7 +372,8 @@ internal fun InspectorObserveDetailScreen(
     val colors = DevConsoleTheme.colors
     val selectedKeys = remember(selectedSectionKeys) { selectedSectionKeys.toSet() }
     val rawSectionKeys = remember(rawFormattableSectionKeys) { rawFormattableSectionKeys.toSet() }
-    val searchableSectionKeys = remember(searchOptions) { searchOptions?.sections?.mapTo(mutableSetOf()) { it.key }.orEmpty() }
+    val searchableSectionKeys =
+        remember(searchOptions) { searchOptions?.sections?.mapTo(mutableSetOf()) { it.key }.orEmpty() }
     val searchableSectionBodies = inspectorSearchSectionBodies(sections, searchableSectionKeys)
     val hasNetworkQuery = searchOptions != null && query.isNotBlank()
     val networkSearchCandidates =
@@ -381,17 +382,17 @@ internal fun InspectorObserveDetailScreen(
                 emptyList()
             } else {
                 searchableSectionBodies.flatMap { section ->
-                        searchInspectorBodyCandidates(
-                            sectionKey = section.sectionKey,
-                            body = section.body,
-                            representation =
-                                if (section.sectionKey in rawSectionKeys) {
-                                    InspectorBodySearchRepresentation.RAW
-                                } else {
-                                    InspectorBodySearchRepresentation.FORMATTED
-                                },
-                        )
-                    }
+                    searchInspectorBodyCandidates(
+                        sectionKey = section.sectionKey,
+                        body = section.body,
+                        representation =
+                            if (section.sectionKey in rawSectionKeys) {
+                                InspectorBodySearchRepresentation.RAW
+                            } else {
+                                InspectorBodySearchRepresentation.FORMATTED
+                            },
+                    )
+                }
             }
         }
     val networkMatches =
