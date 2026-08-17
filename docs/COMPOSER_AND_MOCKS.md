@@ -20,22 +20,31 @@ collections never persist secret variable values by default.
 
 ## Mocks
 
-Mocks need one line of host wiring — an OkHttp interceptor that consults the same `MockEngine`
-instance the dashboard controls:
+Mocks need no host wiring beyond the network installer you already have:
 
 ```kotlin
 val client = OkHttpClient.Builder()
-    .installDevConsole(DevConsole.networkRecorder())                          // capture + timing first
-    .addInterceptor(DevConsoleMockInterceptor(DevConsole.mockEngine()))        // then mock
+    .installDevConsole(DevConsole.networkRecorder())   // capture + timing + mocks
     .build()
 ```
 
-`installDevConsole` (see [NETWORK_ADAPTERS.md](NETWORK_ADAPTERS.md)) is the recommended way to add
-the capture interceptor — it also wires the event listener needed for the Network inspector's
-timing bar, which a bare `DevConsoleOkHttpInterceptor(recorder)` does not.
+`installDevConsole` (see [NETWORK_ADAPTERS.md](NETWORK_ADAPTERS.md)) adds the capture interceptor,
+the event listener needed for the Network inspector's timing bar (which a bare
+`DevConsoleOkHttpInterceptor(recorder)` does not), and — from the engine `DevConsole.initialize`
+published to `MockEngineRegistry` — the mock interceptor, in that order. Order matters: the capture
+interceptor goes first, so a mocked response is still captured and tagged like a normal response
+(matching the interception order in the spec).
 
-Order matters: put the capture interceptor before the mock interceptor, so a mocked response is
-still captured and tagged like a normal response (matching the interception order in the spec).
+Two escape hatches. Pass `mockEngine = null` to install no mock interceptor at all, or pass an
+engine of your own to mock against something other than the live one:
+
+```kotlin
+.installDevConsole(DevConsole.networkRecorder(), mockEngine = null)
+```
+
+If you are upgrading and already had `.addInterceptor(DevConsoleMockInterceptor(DevConsole.mockEngine()))`,
+you can delete it. Leaving it in place is safe — the second interceptor sees the first one's tag and
+stands down, so a `Delay` rule is never applied twice — but it no longer does anything.
 
 Rules are created from the dashboard, not from host code — a rule matches on method/scheme/host/
 path (regex) plus optional query/header/body predicates, and resolves to an action: a static
@@ -59,9 +68,12 @@ The same dashboard button turns mocking back on (it reads its label from the eng
 as does the Android inspector's Control screen. The two directions gate differently on purpose:
 turning mocking *off* needs only an authenticated session, since falling back to real traffic is
 always a safe thing to allow, while turning it back *on* also needs the host's `mocks` editing
-capability, because it changes how the app behaves. A host that publishes rules read-only
-(`EditingCapabilities(mocks = false)`) can therefore disable mocking from the browser but not
-re-enable it — the engine is still switchable in-process through `DevConsole.mockEngine()`.
+capability, because it changes how the app behaves. `mocks` is the one editing capability that
+defaults to *on* — a mock rule writes nothing of the host's, it only short-circuits DevConsole's own
+interceptor — so this asymmetry bites only a host that opted back out. One that publishes rules
+read-only (`EditingCapabilities(mocks = false)`, or `EditingCapabilities.readOnly()`) can therefore
+disable mocking from the browser but not re-enable it — the engine is still switchable in-process
+through `DevConsole.mockEngine()`.
 Individual rules toggle independently of this switch; with the engine off, no rule applies
 regardless of its own state.
 

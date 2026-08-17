@@ -38,12 +38,12 @@ links no server code, and the Gradle plugin fails the build if the real runtime 
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.devconsole-android") version "1.2.0"
+    id("io.github.devconsole-android") version "1.2.1"
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:1.2.0")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.2.0")
+    debugImplementation("io.github.devconsole-android:devconsole:1.2.1")
+    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.2.1")
 }
 ```
 
@@ -76,17 +76,16 @@ way your manifest needs `INTERNET`, which most apps already declare:
 
 ```kotlin
 lifecycleScope.launch { // startBrowser is a suspend function; the server never starts on its own
-    val result = DevConsole.startBrowser() // LAN by default
+    val result = DevConsole.startBrowser(StartRequest())
     val connectUrl = (result as? StartResult.Started)?.access?.connectUrl
-    // e.g. http://192.168.1.42:8080/#code=B7KQ2XWZ — surface this in your debug UI
+    // e.g. http://192.168.0.15:8080/#code=B7KQ2XWZ — surface this in your debug UI
 }
 ```
 
-For USB/ADB-only access, choose loopback explicitly:
-
-```kotlin
-val result = DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))
-```
+The default binding is `BindingMode.AUTO`: it binds your device's network address when there is one,
+so the URL opens from any machine on the same Wi-Fi, and falls back to `127.0.0.1` when there isn't.
+If it fell back — or if you passed `BindingMode.LOOPBACK` to keep it off the network on purpose —
+forward the port first:
 
 ```bash
 adb forward tcp:8080 tcp:8080   # use the port from the loopback start's log line
@@ -95,6 +94,11 @@ adb forward tcp:8080 tcp:8080   # use the port from the loopback start's log lin
 Then open the **whole URL**. The `#code=` fragment is the credential, so a bare `http://host:port/`
 gets you nothing.
 
+> **The dashboard speaks plaintext HTTP.** On a network address, everything it shows — headers,
+> tokens, bodies — is readable by anyone who can see your traffic. That is fine on a home or office
+> Wi-Fi and a bad idea on a conference or café network. Pass `BindingMode.LOOPBACK` to rule it out,
+> and read [the threat model](docs/THREAT_MODEL.md).
+
 ## What you get
 
 | Area | What it does |
@@ -102,7 +106,7 @@ gets you nothing.
 | **In-app inspector** | `DevConsole.open(context)` shows every inspector below as an on-device screen (included with `devconsole`), plus a QR code for pairing the browser. Opens by shake (adjustable intensity) or draggable floating button via the opt-in `DevConsoleConfig.openTriggers` flags. Its More screen can also start and stop the dashboard server. |
 | **Network inspector** | Every HTTP call with headers, bodies, and a DNS/TCP/TLS/send/wait/receive timing bar. Live-tails as traffic happens. |
 | **WebSocket & MQTT inspectors** | Connection lifecycles and every frame, inbound and outbound. MQTT rides the Eclipse Paho adapter. |
-| **Mock rules** | Serve canned responses for matching requests (OkHttp), toggled from the dashboard, with deterministic priority matching. |
+| **Mock rules** | Serve canned responses for matching requests (OkHttp), toggled from the dashboard, with deterministic priority matching. Wired by `installDevConsole` and editable out of the box. |
 | **Request composer** | Make the device issue ad-hoc HTTP requests from the dashboard. Off by default, host-allowlist confinable. |
 | **Crash & ANR capture** | Uncaught exceptions and a main-looper watchdog with bounded all-thread dumps and breadcrumbs. Always delegates to any crash reporter you already have. |
 | **Push timeline** | Record FCM (or any) push messages and their lifecycle: received → displayed → opened. The Firebase adapter uses reflection — no compile-time Firebase dependency. |
@@ -171,19 +175,25 @@ scan from another machine.
 
 <p align="center"><img src="docs/images/inspector-more-server.png" width="300" alt="More screen with the server started, showing the connect URL and QR code" /></p>
 
-That button binds **LAN** by default, so its QR code is reachable from another device on the same
-network. For the safer USB/ADB-only mode, configure loopback explicitly; the button issues no
-`StartRequest` of its own:
+That button binds **AUTO** by default, so on a device with a live Wi-Fi or Ethernet connection the
+QR code is scannable from another machine straight away, and on one without it the URL falls back to
+`127.0.0.1` and needs `adb forward`. The button issues no `StartRequest` of its own, so if you want
+to pin it, declare it on the config:
 
 ```kotlin
+// Never touch the network:
+DevConsoleConfig.default().withBrowserConfig(BrowserConfig(binding = BrowserBinding.LOOPBACK))
+
+// Require the network — fails loudly instead of falling back, and surfaces the
+// ACCESS_LOCAL_NETWORK prompt on API 37+ devices:
 DevConsoleConfig.default().withBrowserConfig(
     BrowserConfig(binding = BrowserBinding.LOOPBACK),
 )
 ```
 
-This is independent of the `bindingMode` you pass to `startBrowser` yourself; both existing entry
-points default to LAN, and each can explicitly select loopback. Read [the threat model](docs/THREAT_MODEL.md)
-before using LAN on a network you do not administer.
+This is independent of the `bindingMode` you pass to `startBrowser` yourself; set both if you start
+the server from your own UI too. Read [the threat model](docs/THREAT_MODEL.md) before leaving either
+one on the network.
 
 From code:
 
@@ -192,13 +202,14 @@ From code:
 DevConsole.initialize(application, DevConsoleConfig.default())
 
 // startBrowser and stop are suspend functions — call them from a coroutine:
-val result = DevConsole.startBrowser(StartRequest()) // LAN by default
+val result = DevConsole.startBrowser(StartRequest()) // BindingMode.AUTO
 when (result) {
     is StartResult.Started -> {
-        result.endpoint              // host + port actually bound
+        result.endpoint              // host + port actually bound; bindingMode is LOOPBACK or LAN,
+                                     // never AUTO — it reports the socket, not the request
         result.access.connectUrl     // the full credential URL — treat as a secret
     }
-    is StartResult.PermissionRequired -> { /* LAN only: request result.permission */ }
+    is StartResult.PermissionRequired -> { /* explicit LAN only: request result.permission */ }
     else -> { /* NoEligibleNetwork, ServerUnavailable, ... */ }
 }
 
@@ -223,7 +234,7 @@ DevConsole.startBrowserAsync(request, result -> runOnUiThread(() -> {
 After `startBrowser`, filter Logcat on the `DevConsole` tag:
 
 ```text
-I/DevConsole: Dashboard available at: http://192.168.1.42:8080/ (access link available through the DevConsole API/launcher; binding: LAN)
+I/DevConsole: Dashboard available at: http://192.168.0.15:8080/ (access link available through the DevConsole API/launcher; binding: LAN)
 ```
 
 **The session code is deliberately absent from Logcat.** The full URL, with its `#code=<session
@@ -233,12 +244,20 @@ free one in **8080–8099**, so read it from the log rather than assuming 8080.
 
 ### Connect from your browser
 
-- **LAN (default):** open the URL from another device on the same network. Read
-  [the threat model](docs/THREAT_MODEL.md) first, because the dashboard speaks plaintext HTTP. A
-  LAN start that finds no eligible network interface returns `StartResult.NoEligibleNetwork`. It
-  never quietly falls back to loopback.
-- **Loopback (explicit):** run `adb forward tcp:<port> tcp:<port>`, then open the connect URL. The
-  server never silently changes an explicit loopback request to LAN.
+- **AUTO (default):** binds your device's network address when it has one, so you open the connect
+  URL — or scan its QR code — from any machine on the same network with nothing else to set up. With
+  no usable interface, or without the `ACCESS_LOCAL_NETWORK` grant on an API 37+ device, it binds
+  `127.0.0.1` instead and the log line says so. Read [the threat model](docs/THREAT_MODEL.md),
+  because the dashboard speaks plaintext HTTP wherever it lands.
+- **LOOPBACK:** run `adb forward tcp:<port> tcp:<port>`, then open the connect URL. Choose this to
+  keep the dashboard off the network entirely.
+- **LAN:** like AUTO, except it refuses to settle. No eligible interface returns
+  `StartResult.NoEligibleNetwork` and a missing grant returns `StartResult.PermissionRequired` —
+  neither quietly becomes loopback. Ask for it when a `127.0.0.1` URL would be useless to you, or
+  when you want that `PermissionRequired` so your app can prompt for the permission. AUTO never
+  prompts; it just settles for loopback.
+
+`StartResult.Started.endpoint.bindingMode` always tells you which one you actually got.
 
 Open the **whole URL**. The `#code=` fragment is the credential. It is single-use, expires in five
 minutes, and creates a session immediately with no approval step. A bare `http://host:port/` sits
@@ -247,10 +266,9 @@ unauthenticated forever. If a code lapses, issue a fresh one from the device.
 ### Wire up your network stack
 
 ```kotlin
-// OkHttp / Retrofit — capture + timing in one call:
+// OkHttp / Retrofit — capture, timing, and mock rules in one call:
 val client = OkHttpClient.Builder()
     .installDevConsole(DevConsole.networkRecorder())
-    .addInterceptor(DevConsoleMockInterceptor(DevConsole.mockEngine())) // optional, mocks
     .build()
 
 // Ktor client, any engine (captures request + response bodies, textual, up to 256 KiB each):
@@ -298,8 +316,8 @@ Add the adapter — it is not part of the `devconsole` umbrella, so that Firebas
 classpath of an app that doesn't use it:
 
 ```kotlin
-debugImplementation("io.github.devconsole-android:devconsole-remote-config-firebase:1.2.0")
-releaseImplementation("io.github.devconsole-android:devconsole-remote-config-firebase-noop:1.2.0")
+debugImplementation("io.github.devconsole-android:devconsole-remote-config-firebase:1.2.1")
+releaseImplementation("io.github.devconsole-android:devconsole-remote-config-firebase-noop:1.2.1")
 ```
 
 > These two artifacts first ship in `1.2.0`; earlier versions do not have them.
@@ -390,8 +408,8 @@ dependencyResolutionManagement {
 ```kotlin
 dependencies {
     // Group is com.github.devconsole-android.DevConsole; artifact ids match the tables above.
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.2.0")
-    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.0")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.2.1")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.1")
 }
 ```
 
@@ -435,13 +453,16 @@ resolved runtime classpath, and the final APK/AAB bytes. See
 
 ## Security model
 
-DevConsole deliberately exposes your app's internals to a browser. LAN is the default to make
-cross-device debugging work immediately, while loopback remains the safer explicit choice on
-untrusted or shared networks:
+DevConsole deliberately exposes your app's internals to a browser, and two of its defaults trade
+safety for a working first run. Know where the edges are:
 
-- **The dashboard speaks plaintext HTTP.** There is no TLS. In LAN mode, anyone who can watch your
-  network packets can read everything it shows: headers, tokens, bodies, exports. Use
-  `BindingMode.LOOPBACK` with `adb forward` when the network is not trusted.
+- **The dashboard speaks plaintext HTTP, and the default binding reaches your network.** There is no
+  TLS. `BindingMode.AUTO` binds your device's network address whenever it can, so anyone who can
+  watch your Wi-Fi packets can read everything the dashboard shows: headers, tokens, bodies,
+  exports. This is a debug-build-only surface behind a single-use expiring credential, which is why
+  the default favours reachability — but on an untrusted network (a conference, a café, a shared
+  office VLAN) pass `BindingMode.LOOPBACK`, or set
+  `BrowserConfig(binding = BrowserBinding.LOOPBACK)`, and use `adb forward`.
 - **The connect URL is a credential.** Holding a live `#code=` fragment creates a session, with no
   approval step on the device. Codes are single-use and expire in five minutes; sessions last 30.
   Treat the URL like a password. You can revoke sessions from the More screen.
@@ -450,9 +471,12 @@ untrusted or shared networks:
   [docs/SECURITY_AND_REDACTION.md](docs/SECURITY_AND_REDACTION.md).
 - **Screenshots cannot be redacted.** Pixels don't have field names. Capture is **off by default**
   and everything it produces is marked `UNREDACTED`.
-- **Editing is off by default.** Preferences/database/file writes, mock editing, and capture-rule
-  editing are each gated per surface via `EditingCapabilities`; the composer and state mutation
-  have their own `DevConsoleConfig` flags. Everything defaults to off/read-only.
+- **Editing is off by default, except mocks.** Preferences/database/file writes and capture-rule
+  editing are each gated per surface via `EditingCapabilities`; the composer and state mutation have
+  their own `DevConsoleConfig` flags. All of those default to off/read-only. Mock editing is the one
+  exception: a mock rule writes nothing of yours, it only short-circuits DevConsole's own
+  interceptor, so it ships editable. `EditingCapabilities.readOnly()` still refuses everything
+  including mocks.
 
 For the full analysis, including what a malicious network peer or a co-installed app can and cannot
 do, read [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).

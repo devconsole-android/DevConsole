@@ -6,6 +6,10 @@
 DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LAN, portRange = 8080..8099))
 ```
 
+> The default, `BindingMode.AUTO`, does the same thing when it can and binds loopback when it
+> cannot — see [AUTO binding](#auto-binding) below. Everything in this section describes what both
+> modes do on the successful path; they differ only in how they fail.
+
 `KtorLocalServerEngine` enumerates the device's network interfaces and binds to the first active,
 non-loopback IPv4 address it finds on an interface that is up and not virtual or point-to-point
 (this excludes loopback, VPN/tun interfaces, and cellular PPP-style links; it does not try to
@@ -53,10 +57,41 @@ Requesting it at runtime is still your app's job — use `ActivityResultContract
 with `StartResult.PermissionRequired.permission` when you get that result back, exactly as all three
 samples do.
 
-## Explicit loopback / ADB mode
+## AUTO binding
 
-Use this explicit secondary mode when you don't need cross-device access or the current network is
-not trusted:
+`BindingMode.AUTO` is what a bare `StartRequest()` means, and what an unconfigured
+`BrowserConfig.binding` declares for the in-app Start button. It attempts LAN and falls back to
+loopback rather than failing:
+
+| | LAN available | No eligible interface | `ACCESS_LOCAL_NETWORK` ungranted (API 37+) |
+|---|---|---|---|
+| `AUTO` | binds LAN | binds loopback | binds loopback |
+| `LAN` | binds LAN | `NoEligibleNetwork` | `PermissionRequired` |
+| `LOOPBACK` | binds loopback | binds loopback | binds loopback |
+
+The permission is checked *before* the first bind attempt, not discovered by failing one, so an
+ungranted AUTO start costs nothing extra. When AUTO does fall back, the reason is logged:
+
+```text
+I/DevConsole: LAN is unavailable (NoEligibleNetwork(detail=...)); binding loopback instead
+```
+
+**AUTO never asks for the local-network permission.** It treats a missing grant as a reason to
+settle for loopback, not a reason to prompt, so on an API 37+ device an AUTO start quietly serves
+`127.0.0.1` forever unless something requests `ACCESS_LOCAL_NETWORK`. If you want the prompt, ask
+for `BindingMode.LAN` by name and act on the `StartResult.PermissionRequired` it returns — that is
+what all three samples do.
+
+Read the mode you actually got from `StartResult.Started.endpoint.bindingMode`. It reports the
+socket rather than the request, and is never `AUTO`.
+
+Reusing this name is deliberate but narrow: a pre-1.0 `BindingMode.AUTO` existed alongside
+zero-config auto-start and NSD service discovery and was removed with them. This one is a binding
+preference only — it discovers nothing and starts nothing on its own.
+
+## Loopback / ADB reverse mode
+
+Still the safer default when you don't need cross-device access:
 
 ```kotlin
 DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK, portRange = 8080..8099))
@@ -78,9 +113,16 @@ that same result).
 **`StartResult.PortUnavailable`** — every port in the configured range is already bound. Either
 free one of the ports or pass a wider/different `portRange`.
 
-**`StartResult.NoEligibleNetwork`** — LAN mode was requested but no active, non-loopback interface
-was found. Confirm Wi-Fi (or another LAN connection) is actually connected, not just associated;
-airplane mode, a VPN-only connection, or a cellular-only connection will all trigger this.
+**`StartResult.NoEligibleNetwork`** — `BindingMode.LAN` was requested explicitly but no active,
+non-loopback interface was found. Confirm Wi-Fi (or another LAN connection) is actually connected,
+not just associated; airplane mode, a VPN-only connection, or a cellular-only connection will all
+trigger this. `BindingMode.AUTO` never returns this — it binds loopback instead.
+
+**Connect URL is `127.0.0.1` when you expected a LAN address** — you are on `BindingMode.AUTO` and
+it fell back. Check Logcat for the `LAN is unavailable (...); binding loopback instead` line, which
+names the reason. The two causes are no eligible interface (see above) and, on API 37+ devices, an
+ungranted `ACCESS_LOCAL_NETWORK` — AUTO will not prompt for it, so request it yourself or switch
+that start to `BindingMode.LAN`.
 
 **Connect URL doesn't load** — for LAN mode, confirm the other device is actually on the same
 subnet/network (a guest Wi-Fi network with client isolation enabled will block this even though

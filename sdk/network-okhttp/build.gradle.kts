@@ -11,6 +11,10 @@ android {
 
 dependencies {
     implementation(project(":sdk:network"))
+    // `api`, not `implementation`: MockEngine is named in installDevConsole's own signature (as the
+    // type of its defaulted mockEngine parameter), so a consumer cannot resolve the call without it.
+    api(project(":sdk:mocks"))
+    implementation(project(":sdk:mocks-okhttp"))
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }

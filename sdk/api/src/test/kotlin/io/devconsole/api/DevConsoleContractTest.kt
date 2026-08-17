@@ -49,6 +49,18 @@ class DevConsoleContractTest {
         assertEquals(listOf(ConfigValidationCode.INVALID_PORT_RANGE), errors.map { it.code })
     }
 
+    /**
+     * A host that writes no binding mode gets [BindingMode.AUTO], which prefers LAN and degrades to
+     * loopback rather than failing. [BindingMode.LAN] stays available precisely because it does
+     * *not* degrade -- see the KDoc on [BindingMode].
+     */
+    @Test
+    fun `StartRequest defaults to AUTO binding`() {
+        assertEquals(BindingMode.AUTO, StartRequest().bindingMode)
+        assertEquals(BindingMode.LAN, StartRequest(bindingMode = BindingMode.LAN).bindingMode)
+        assertEquals(BindingMode.LOOPBACK, StartRequest(bindingMode = BindingMode.LOOPBACK).bindingMode)
+    }
+
     @Test
     fun `default start request uses LAN binding`() {
         assertEquals(BindingMode.LAN, StartRequest().bindingMode)

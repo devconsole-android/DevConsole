@@ -1,11 +1,19 @@
 # FAQ / troubleshooting
 
-**Can I connect from another machine on the same network?** Yes. Pass `BindingMode.LAN` to
-`startBrowser(...)`, then open the connect URL or scan the QR code from the other device. Loopback
-plus `adb forward` is still the safer default. Only reach for LAN on a network you trust, because
-the dashboard speaks plaintext HTTP. See
-[LAN_PERMISSION_AND_TROUBLESHOOTING.md](LAN_PERMISSION_AND_TROUBLESHOOTING.md) and
+**Can I connect from another machine on the same network?** Usually with no setup at all — the
+default `BindingMode.AUTO` binds your device's network address whenever there is one, so the connect
+URL and its QR code already work from another device. If you got a `127.0.0.1` URL, AUTO fell back
+(no eligible interface, or an ungranted `ACCESS_LOCAL_NETWORK` on API 37+); Logcat names the reason.
+Pass `BindingMode.LAN` to make that a hard failure instead of a fallback. Because the dashboard
+speaks plaintext HTTP, pass `BindingMode.LOOPBACK` and use `adb forward` on any network you do not
+trust. See [LAN_PERMISSION_AND_TROUBLESHOOTING.md](LAN_PERMISSION_AND_TROUBLESHOOTING.md) and
 [THREAT_MODEL.md](THREAT_MODEL.md).
+
+**Do I need a second interceptor for mock rules?** No. `installDevConsole(...)` wires the mock
+interceptor from the engine DevConsole publishes at `initialize`, so `DevConsoleMockInterceptor` no
+longer needs to be added by hand. Keeping an existing manual line is harmless — the second
+interceptor detects the first and stands down — but you can delete it. Mock editing is also on by
+default now; `EditingCapabilities.readOnly()` turns it back off.
 
 **Why does my release build still contain `sdk:network`/`sdk:state`/... classes?** Those five
 domain modules (network, socket, push, state, mocks) are pure-Kotlin contract types with no

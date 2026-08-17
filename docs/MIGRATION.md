@@ -9,6 +9,59 @@
 
 Validate each debug and release variant with `verifyDevConsoleProtectedArtifacts` before rollout.
 
+## Upgrading from 1.2.0
+
+Three defaults changed. No API was removed and nothing has to be rewritten — but two of these change
+behaviour on a build you do not otherwise touch, so read them before upgrading.
+
+**1. The server now binds your network by default.** `StartRequest.bindingMode` and
+`BrowserConfig.binding` default to a new `AUTO` value instead of `LOOPBACK`. AUTO binds a real
+interface when the device has one and falls back to loopback when it does not, so a start that used
+to hand back `http://127.0.0.1:8080/...` now hands back `http://192.168.x.y:8080/...` — reachable by
+anyone on that network, over plaintext HTTP.
+
+To keep 1.2.0 behaviour exactly, say so at both surfaces:
+
+```kotlin
+DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))
+DevConsoleConfig.default().withBrowserConfig(BrowserConfig(binding = BrowserBinding.LOOPBACK))
+```
+
+Explicit `BindingMode.LAN` is unchanged, including its refusal to fall back. Note that `AUTO` never
+returns `StartResult.PermissionRequired`, so if your app prompts for `ACCESS_LOCAL_NETWORK` off the
+back of that result, keep asking for `LAN` by name on the start that drives the prompt.
+
+`AUTO` is a reused name, not a restored feature: the pre-1.0 `BindingMode.AUTO` came with
+zero-config auto-start and NSD discovery, both still gone. This one only picks a binding.
+
+**If you `when` exhaustively over `BindingMode` or `BrowserBinding`**, the new constant makes that
+`when` non-exhaustive and your build will fail until you add a branch. This is the only source-level
+break in the release.
+
+**2. Mock rules are wired by `installDevConsole`.** Delete the now-redundant line if you have it:
+
+```diff
+ val client = OkHttpClient.Builder()
+     .installDevConsole(DevConsole.networkRecorder())
+-    .addInterceptor(DevConsoleMockInterceptor(DevConsole.mockEngine()))
+     .build()
+```
+
+Leaving it costs nothing — the second interceptor detects the first and stands down, so a `Delay`
+rule is not applied twice. Pass `mockEngine = null` to opt out of the mock interceptor entirely.
+
+Kotlin callers who rely on default arguments should recompile: `installDevConsole` and
+`DevConsoleOkHttp.install` gained a parameter, so their synthetic `$default` signature changed. The
+2- and 3-argument overloads are still emitted, so Java call sites and existing bytecode are
+unaffected.
+
+**3. Mock editing is on by default.** `EditingCapabilities.mocks` now defaults to `true`, and
+`DevConsoleConfig` seeds `EditingCapabilities()` rather than `EditingCapabilities.readOnly()`. A
+mock rule writes nothing of yours — it only short-circuits DevConsole's own interceptor — so the
+read-only posture that protects preferences, databases, and files had nothing to protect here.
+`EditingCapabilities.readOnly()` still grants nothing at all, mocks included, so a host already
+calling it is unaffected.
+
 ## Pre-1.0 breaking changes
 
 The SDK is pre-1.0 (see [CHANGELOG.md](../CHANGELOG.md)), so the API surface above has moved more
@@ -16,5 +69,5 @@ than once during active development — most recently a facade reshape (`start()
 `startBrowser()`/`startBrowserAsync()`, returning `StartResult.Started(endpoint, access)`), the
 removal of `BindingMode.AUTO`/NSD/auto-start, the replacement of pairing/role-based access with the
 single SESSION_CODE flow, and the removal of the generic plugin framework. If you're carrying code
-against an earlier snapshot of this repository, check the **Unreleased** section of
+against an earlier snapshot of this repository, check the pre-1.0 entries in
 [CHANGELOG.md](../CHANGELOG.md) for the full list before updating.

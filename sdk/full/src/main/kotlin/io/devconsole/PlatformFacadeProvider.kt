@@ -30,6 +30,7 @@ import io.devconsole.core.RuntimeGate
 import io.devconsole.logs.LogRecorder
 import io.devconsole.logs.LogSink
 import io.devconsole.mocks.MockEngine
+import io.devconsole.mocks.MockEngineRegistry
 import io.devconsole.mocks.MockOutcome
 import io.devconsole.network.InMemoryNetworkTransactionStore
 import io.devconsole.network.NetworkAttachmentPayload
@@ -694,6 +695,11 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 logcatInfo("DevConsole", "Persistent mock rules are unavailable: ${it.javaClass.simpleName}")
             }
         }
+        // Lets `OkHttpClient.Builder.installDevConsole` wire mock rules without the host naming an
+        // engine -- that module sits below this facade and cannot call mockEngine() itself. Published
+        // through mockEngine() rather than mockEngineInstance so a host with MOCKS off publishes the
+        // permanently disabled engine and mocking stays off everywhere, installer included.
+        MockEngineRegistry.publish(mockEngine())
         // Apply the host's policy at the shared capture engine so every recorder redacts by it.
         redaction.updatePolicy(config.redactionPolicy)
         if (config.capturesCategory(CaptureCategory.STATE)) {
@@ -831,10 +837,11 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
      * what [io.devconsole.api.BrowserConfig.binding] is for, and it is now the field that decides:
      * an on-device start binds what the host asked for, and uses the port range it asked for too.
      *
-     * [io.devconsole.api.BrowserConfig] defaults to [BrowserBinding.LAN], and an explicit
-     * [BrowserBinding.LOOPBACK] still maps to loopback. Every LAN start passes through the same
-     * [rejectUnpermittedLan] gate as any other -- returning [StartResult.PermissionRequired] rather
-     * than binding, which the More screen surfaces through its normal state polling.
+     * The default is now [BrowserBinding.AUTO], so an on-device Start reaches the network whenever
+     * the device has one to reach and falls back to loopback when it does not. An explicit
+     * [BrowserBinding.LAN] still passes through the [rejectUnpermittedLan] gate -- returning
+     * [StartResult.PermissionRequired] rather than binding, which the More screen surfaces through
+     * its normal state polling, and which is the only way this surface prompts for the permission.
      */
     private fun configuredStartRequest(): StartRequest {
         val browser = activeConfig?.browserConfig ?: return StartRequest()
@@ -843,6 +850,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 when (browser.binding) {
                     BrowserBinding.LOOPBACK -> PublicBindingMode.LOOPBACK
                     BrowserBinding.LAN -> PublicBindingMode.LAN
+                    BrowserBinding.AUTO -> PublicBindingMode.AUTO
                 },
             portRange = browser.portRange,
         )
@@ -1003,7 +1011,8 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 runtime.serverFailed("Durable app-run session is unavailable")
                 return@withContext StartResult.Failed("Durable app-run session is unavailable")
             }
-            rejectUnpermittedLan(application, runtime, request)?.let { return@withContext it }
+            val lanPermitted = localNetworkPermitted(application)
+            rejectUnpermittedLan(runtime, request, lanPermitted)?.let { return@withContext it }
             withContext(Dispatchers.IO) {
                 runCatching {
                     val history =
@@ -1024,20 +1033,32 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             val activeEngine = synchronized(this@PlatformFacadeProvider) { serverEngine }
 
             val browserConfig = activeConfig?.browserConfig
-            val serverRequest =
+            val sessionCodeTtlMs =
+                browserConfig?.sessionCodeTtlMs ?: SessionCodeAuthority.DEFAULT_SESSION_CODE_TTL_MS
+
+            fun serverRequest(mode: ServerBindingMode) =
                 ServerStartRequest(
-                    bindingMode =
-                        when (request.bindingMode) {
-                            PublicBindingMode.LOOPBACK -> ServerBindingMode.LOOPBACK
-                            PublicBindingMode.LAN -> ServerBindingMode.LAN
-                        },
+                    bindingMode = mode,
                     portRange = request.portRange,
-                    sessionCodeTtlMs =
-                        browserConfig?.sessionCodeTtlMs ?: SessionCodeAuthority.DEFAULT_SESSION_CODE_TTL_MS,
+                    sessionCodeTtlMs = sessionCodeTtlMs,
                 )
             // The engine's bind loop does blocking socket probes (Thread.sleep per port); keep it off
             // the caller's dispatcher so a host doing `lifecycleScope.launch { startBrowser() }` on Main never ANRs.
-            val result = withContext(Dispatchers.IO) { activeEngine.start(serverRequest) }
+            val attempted = AutoBinding.initialMode(request.bindingMode, lanPermitted)
+            val attempt = withContext(Dispatchers.IO) { activeEngine.start(serverRequest(attempted)) }
+            // Only AUTO retries. The first attempt is left unmapped until the retry is settled so a
+            // rescued start never drags the runtime through serverFailed() on its way to serverStarted().
+            val rescue =
+                request.bindingMode == PublicBindingMode.AUTO &&
+                    attempted == ServerBindingMode.LAN &&
+                    AutoBinding.rescuableByLoopback(attempt)
+            val result =
+                if (rescue) {
+                    logcatInfo("DevConsole", "LAN is unavailable ($attempt); binding loopback instead")
+                    withContext(Dispatchers.IO) { activeEngine.start(serverRequest(ServerBindingMode.LOOPBACK)) }
+                } else {
+                    attempt
+                }
             mapStartResult(result)
         }
     }
@@ -1202,9 +1223,9 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     /**
      * The session code has its own TTL, shorter than the server's lifetime -- if it has expired
      * while the server keeps running, re-issue automatically (reusing the real bind address, not the
-     * initial placeholder endpoint) so both the host app's connect-URL card ([accessInfo]) and the
-     * SDK's own More screen ([browserSupplier] above) keep advertising something connectable instead
-     * of a dead, already-expired code. Null while the server isn't running.
+     * loopback default) so both the host app's connect-URL card ([accessInfo]) and the SDK's own More
+     * screen ([browserSupplier] above) keep advertising something connectable instead of a dead,
+     * already-expired code. Null while the server isn't running.
      */
     private fun liveSessionCodeInfo(): SessionCodeInfo? {
         lastStarted ?: return null
@@ -1438,13 +1459,14 @@ private const val CURSOR_SECRET_BYTES = 16
 
 private fun randomCursorSecret(): ByteArray = ByteArray(CURSOR_SECRET_BYTES).also(SecureRandom()::nextBytes)
 
-/** Null means LAN binding may proceed; a non-null result is the early-return for [PlatformFacadeProvider.start]. */
-private fun rejectUnpermittedLan(
-    application: Application,
-    runtime: DevConsoleRuntime,
-    request: StartRequest,
-): StartResult? {
-    if (request.bindingMode != PublicBindingMode.LAN) return null
+/**
+ * Whether a LAN bind would be allowed to reach the network right now.
+ *
+ * Below API 37 this is always true. At or above it, an ungranted `ACCESS_LOCAL_NETWORK` means the
+ * platform silently drops LAN traffic even though the socket binds and completes handshakes -- see
+ * [LocalNetworkPermissionGate], which deliberately ignores `targetSdk` for that reason.
+ */
+private fun localNetworkPermitted(application: Application): Boolean {
     val isGranted =
         application.checkSelfPermission(LocalNetworkPermissionGate.PERMISSION) == PackageManager.PERMISSION_GRANTED
     val decision =
@@ -1454,10 +1476,26 @@ private fun rejectUnpermittedLan(
             targetSdk = application.applicationInfo.targetSdkVersion,
             isGranted = isGranted,
         )
-    return (decision as? LocalNetworkPermissionDecision.PermissionRequired)?.let {
-        runtime.serverRequiresPermission()
-        StartResult.PermissionRequired(it.permission)
-    }
+    return decision !is LocalNetworkPermissionDecision.PermissionRequired
+}
+
+/**
+ * Null means the start may proceed; a non-null result is the early-return for
+ * [PlatformFacadeProvider.start].
+ *
+ * Only an explicit [PublicBindingMode.LAN] is rejected here. [PublicBindingMode.AUTO] treats a
+ * missing grant as a reason to bind loopback rather than a reason to fail, so it never reaches this
+ * function -- which also means AUTO never surfaces [StartResult.PermissionRequired] and never gives
+ * a host the cue to prompt for the permission. Hosts that want the prompt ask for LAN by name.
+ */
+private fun rejectUnpermittedLan(
+    runtime: DevConsoleRuntime,
+    request: StartRequest,
+    lanPermitted: Boolean,
+): StartResult? {
+    if (request.bindingMode != PublicBindingMode.LAN || lanPermitted) return null
+    runtime.serverRequiresPermission()
+    return StartResult.PermissionRequired(LocalNetworkPermissionGate.PERMISSION)
 }
 
 private fun Application.serverMetadata(): ServerMetadata {

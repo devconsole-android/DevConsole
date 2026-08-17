@@ -2,7 +2,8 @@ public final class io/devconsole/network/okhttp/DevConsoleOkHttp {
 	public static final field INSTANCE Lio/devconsole/network/okhttp/DevConsoleOkHttp;
 	public static final fun install (Lokhttp3/OkHttpClient$Builder;Lio/devconsole/network/NetworkTransactionRecorder;)Lokhttp3/OkHttpClient$Builder;
 	public static final fun install (Lokhttp3/OkHttpClient$Builder;Lio/devconsole/network/NetworkTransactionRecorder;Lokhttp3/EventListener$Factory;)Lokhttp3/OkHttpClient$Builder;
-	public static synthetic fun install$default (Lokhttp3/OkHttpClient$Builder;Lio/devconsole/network/NetworkTransactionRecorder;Lokhttp3/EventListener$Factory;ILjava/lang/Object;)Lokhttp3/OkHttpClient$Builder;
+	public static final fun install (Lokhttp3/OkHttpClient$Builder;Lio/devconsole/network/NetworkTransactionRecorder;Lokhttp3/EventListener$Factory;Lio/devconsole/mocks/MockEngine;)Lokhttp3/OkHttpClient$Builder;
+	public static synthetic fun install$default (Lokhttp3/OkHttpClient$Builder;Lio/devconsole/network/NetworkTransactionRecorder;Lokhttp3/EventListener$Factory;Lio/devconsole/mocks/MockEngine;ILjava/lang/Object;)Lokhttp3/OkHttpClient$Builder;
 }
 
 public final class io/devconsole/network/okhttp/DevConsoleOkHttpEventListenerFactory : okhttp3/EventListener$Factory {
@@ -24,6 +25,7 @@ public final class io/devconsole/network/okhttp/DevConsoleOkHttpInterceptor : ok
 public final class io/devconsole/network/okhttp/DevConsoleOkHttpKt {
 	public static final fun installDevConsole (Lokhttp3/OkHttpClient$Builder;Lio/devconsole/network/NetworkTransactionRecorder;)Lokhttp3/OkHttpClient$Builder;
 	public static final fun installDevConsole (Lokhttp3/OkHttpClient$Builder;Lio/devconsole/network/NetworkTransactionRecorder;Lokhttp3/EventListener$Factory;)Lokhttp3/OkHttpClient$Builder;
-	public static synthetic fun installDevConsole$default (Lokhttp3/OkHttpClient$Builder;Lio/devconsole/network/NetworkTransactionRecorder;Lokhttp3/EventListener$Factory;ILjava/lang/Object;)Lokhttp3/OkHttpClient$Builder;
+	public static final fun installDevConsole (Lokhttp3/OkHttpClient$Builder;Lio/devconsole/network/NetworkTransactionRecorder;Lokhttp3/EventListener$Factory;Lio/devconsole/mocks/MockEngine;)Lokhttp3/OkHttpClient$Builder;
+	public static synthetic fun installDevConsole$default (Lokhttp3/OkHttpClient$Builder;Lio/devconsole/network/NetworkTransactionRecorder;Lokhttp3/EventListener$Factory;Lio/devconsole/mocks/MockEngine;ILjava/lang/Object;)Lokhttp3/OkHttpClient$Builder;
 }
 
