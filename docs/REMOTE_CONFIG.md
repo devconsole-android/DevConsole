@@ -25,8 +25,8 @@ Cloud Messaging. Add the adapter coordinate yourself; it is deliberately not re-
 `devconsole` umbrella.
 
 ```kotlin
-debugImplementation("io.github.devconsole-android:devconsole-remote-config-firebase:<version>")
-releaseImplementation("io.github.devconsole-android:devconsole-remote-config-firebase-noop:<version>")
+debugImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase:<version>")
+releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase-noop:<version>")
 ```
 
 A provider constructed later — through DI, or after a first fetch completes — can register itself:

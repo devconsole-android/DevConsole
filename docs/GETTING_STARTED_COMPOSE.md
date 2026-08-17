@@ -3,7 +3,20 @@
 About five minutes, most of it waiting for Gradle. By the end you'll have the inspector opening on
 your device and the dashboard reachable from a browser.
 
-1. Apply the production-safety plugin and split the dependency by variant.
+1. Add the JitPack repository to `settings.gradle.kts` — that is where the library artifacts live
+   (the Gradle plugin comes from the Gradle Plugin Portal and needs nothing extra).
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+```
+
+2. Apply the production-safety plugin and split the dependency by variant.
 
 ```kotlin
 plugins {
@@ -11,9 +24,9 @@ plugins {
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:<version>")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:<version>")
-    debugImplementation("io.github.devconsole-android:devconsole-ui-compose:<version>") // optional, only for the launcher panel
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:<version>")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:<version>")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole-ui-compose:<version>") // optional, only for the launcher panel
 }
 
 devConsole {
@@ -31,7 +44,7 @@ release no-op counterpart and merges `DevConsoleActivity` into your manifest, so
 into your release build with no build-time warning. The Gradle plugin's variant protection does not
 cover this module today; it is your responsibility to scope it to `debugImplementation` yourself.
 
-2. Add `INTERNET` to your own app's manifest. The SDK's manifests auto-merge
+3. Add `INTERNET` to your own app's manifest. The SDK's manifests auto-merge
    `ACCESS_LOCAL_NETWORK`/`ACCESS_NETWORK_STATE`, but not `INTERNET` — without it, the embedded
    server fails with an opaque socket error instead of a clear permission message:
 
@@ -39,7 +52,7 @@ cover this module today; it is your responsibility to scope it to `debugImplemen
 <uses-permission android:name="android.permission.INTERNET" />
 ```
 
-3. On a debuggable build you can skip explicit `initialize` entirely — the SDK auto-initializes, so
+4. On a debuggable build you can skip explicit `initialize` entirely — the SDK auto-initializes, so
    state/timeline/capture are ready without any `Application.onCreate` boilerplate. The browser
    server itself is never auto-started; call `DevConsole.startBrowser()` yourself (step 4) and read
    the connect URL from the returned `StartResult.Started.access` (or the device's More screen — the
@@ -56,7 +69,7 @@ DevConsole.initialize(
 )
 ```
 
-4. Drop in the optional Compose launcher panel, or build your own with `DevConsole.state()`.
+5. Drop in the optional Compose launcher panel, or build your own with `DevConsole.state()`.
    `DevConsoleState.Running` carries no payload, so capture the endpoint from `onStart`'s own
    `StartResult` and pass it to the panel if you want the running address displayed:
 
@@ -86,7 +99,7 @@ setContent {
 }
 ```
 
-5. Tap Start. The panel shows the bound address, something like `DevConsole server is running at
+6. Tap Start. The panel shows the bound address, something like `DevConsole server is running at
    192.168.0.15:8080`. Open that address in a browser, or use the connect URL from
    `StartResult.Started.access.connectUrl`. If the device isn't local, run
    `adb forward tcp:8080 tcp:8080` first.

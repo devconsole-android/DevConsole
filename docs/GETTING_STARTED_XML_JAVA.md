@@ -4,10 +4,11 @@ DevConsole's public facade is a Kotlin `object`, but every method carries `@JvmS
 variants carry `@JvmOverloads`. From Java it reads like an ordinary utility class, and you never
 touch a coroutine: the `...Async` variants take a callback instead.
 
-1. Apply the production-safety plugin and split the dependency by variant (same `build.gradle.kts`
-   shape as the Kotlin guide — see [GETTING_STARTED_XML_KOTLIN.md](GETTING_STARTED_XML_KOTLIN.md)
-   step 1). The two coordinates are `io.github.devconsole-android:devconsole` for debug and
-   `io.github.devconsole-android:devconsole-noop` for release; there is no BOM.
+1. Add the JitPack repository, then apply the production-safety plugin and split the dependency by
+   variant (same `settings.gradle.kts` / `build.gradle.kts` shape as the Kotlin guide — see
+   [GETTING_STARTED_XML_KOTLIN.md](GETTING_STARTED_XML_KOTLIN.md) steps 1–2).
+   The two coordinates are `com.github.devconsole-android.DevConsole:devconsole` for debug and
+   `com.github.devconsole-android.DevConsole:devconsole-noop` for release; there is no BOM.
 
 2. Add `INTERNET` to your own app's manifest. The SDK's manifests auto-merge
    `ACCESS_LOCAL_NETWORK`/`ACCESS_NETWORK_STATE`, but not `INTERNET` — without it, the embedded

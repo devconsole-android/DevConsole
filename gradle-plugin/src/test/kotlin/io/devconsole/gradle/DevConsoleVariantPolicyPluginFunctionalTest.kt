@@ -40,7 +40,9 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
                 repositories { google(); mavenCentral(); gradlePluginPortal() }
             }
             dependencyResolutionManagement {
-                repositories { google(); mavenCentral() }
+                // jitpack.io serves the auto-wired devconsole coordinates, so any fixture that
+                // resolves a runtime classpath needs it -- same as a real consumer.
+                repositories { google(); mavenCentral(); maven { url = uri("https://jitpack.io") } }
             }
             rootProject.name = "fixture"
             """.trimIndent(),
@@ -683,7 +685,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         assertTrue(result.output, result.output.contains("BUILD SUCCESSFUL"))
         assertTrue(result.output, result.output.contains(":stub-full"))
-        assertTrue(result.output, !result.output.contains("io.github.devconsole-android:devconsole"))
+        assertTrue(result.output, !result.output.contains("com.github.devconsole-android.DevConsole:devconsole"))
     }
 
     @Test
@@ -837,12 +839,12 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         )
 
         // release is PROTECTED by default, so auto-wire adds the noop core coordinate. The published
-        // coordinate is 1.2.1 -- the DEFAULT_SDK_VERSION must not point at a 1.2.1-SNAPSHOT that was
+        // coordinate is 1.2.2 -- the DEFAULT_SDK_VERSION must not point at a 1.2.2-SNAPSHOT that was
         // never published, which would make every zero-config release build fail to resolve.
         val result = runner("dependencies", "--configuration", "releaseImplementation").build()
 
-        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-noop:1.2.1"))
-        assertTrue(result.output, !result.output.contains("1.2.1-SNAPSHOT"))
+        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.2"))
+        assertTrue(result.output, !result.output.contains("1.2.2-SNAPSHOT"))
     }
 
     @Test
@@ -873,8 +875,9 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
                 applicationId = "io.devconsole.fixture"
                 versionCode = 1
                 """.trimIndent(),
-            // An add-on coordinate in the DevConsole group but NOT the core runtime. It must not be
+            // An add-on coordinate in a DevConsole group but NOT the core runtime. It must not be
             // mistaken for "the core runtime is already declared" and suppress core auto-wire.
+            // Deliberately the pre-JitPack group, which also covers that it is still recognised.
             extraBuildScript =
                 """
                 dependencies {
@@ -887,7 +890,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         // debug is ENABLED, so the core runtime ("devconsole") must still be auto-wired alongside the
         // host's add-on declaration -- the add-on alone does not count as declaring the core runtime.
-        assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole:1.2.1"))
+        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole:1.2.2"))
         assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-ui-compose"))
     }
 }

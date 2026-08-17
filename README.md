@@ -6,7 +6,7 @@
 
 **An in-app debugger for Android, with a browser dashboard for when you want a bigger screen.**
 
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.devconsole-android/devconsole)](https://central.sonatype.com/artifact/io.github.devconsole-android/devconsole)
+[![JitPack](https://jitpack.io/v/devconsole-android/DevConsole.svg)](https://jitpack.io/#devconsole-android/DevConsole)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![minSdk 23](https://img.shields.io/badge/minSdk-23-3DDC84?logo=android&logoColor=white)](#compatibility)
 [![CI](https://github.com/devconsole-android/DevConsole/actions/workflows/verify.yml/badge.svg)](https://github.com/devconsole-android/DevConsole/actions/workflows/verify.yml)
@@ -33,21 +33,34 @@ links no server code, and the Gradle plugin fails the build if the real runtime 
 
 ## Quick start
 
-**1. Add the plugin and two dependencies** to your app's `build.gradle.kts`:
+**1. Add the JitPack repository** to your `settings.gradle.kts` — DevConsole is distributed through
+[JitPack](https://jitpack.io/#devconsole-android/DevConsole):
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+```
+
+**2. Add the plugin and two dependencies** to your app's `build.gradle.kts`:
 
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.devconsole-android") version "1.2.1"
+    id("io.github.devconsole-android") version "1.2.2"
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:1.2.1")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.2.1")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.2.2")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.2")
 }
 ```
 
-**2. Open the inspector on the device.** The SDK auto-initializes on debuggable builds, so this
+**3. Open the inspector on the device.** The SDK auto-initializes on debuggable builds, so this
 works right away from any button in your debug UI:
 
 ```kotlin
@@ -70,7 +83,7 @@ SharedPreferences, SQLite, and files. Add one line to your HTTP client
 (see [Wire up your network stack](#wire-up-your-network-stack)) and network, WebSocket, and MQTT
 traffic show up too.
 
-**3. Want a bigger screen? Start the browser dashboard.** Tap **Start server** on the inspector's
+**4. Want a bigger screen? Start the browser dashboard.** Tap **Start server** on the inspector's
 **More** screen and it hands you a connect URL and a QR code. You can also do it from code. Either
 way your manifest needs `INTERNET`, which most apps already declare:
 
@@ -316,8 +329,8 @@ Add the adapter — it is not part of the `devconsole` umbrella, so that Firebas
 classpath of an app that doesn't use it:
 
 ```kotlin
-debugImplementation("io.github.devconsole-android:devconsole-remote-config-firebase:1.2.1")
-releaseImplementation("io.github.devconsole-android:devconsole-remote-config-firebase-noop:1.2.1")
+debugImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase:1.2.2")
+releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase-noop:1.2.2")
 ```
 
 > These two artifacts first ship in `1.2.0`; earlier versions do not have them.
@@ -367,8 +380,8 @@ anything sensitive in Remote Config.
 
 ## Artifacts
 
-Group `io.github.devconsole-android`, one version for everything. There is deliberately no BOM, and
-two coordinates cover a normal integration:
+Group `com.github.devconsole-android.DevConsole`, one version for everything. There is deliberately
+no BOM, and two coordinates cover a normal integration:
 
 | Coordinate | Scope | What it is |
 |---|---|---|
@@ -387,41 +400,20 @@ Opt-in add-ons (each `-noop` twin is the matching `releaseImplementation`):
 | `devconsole-remote-config-firebase` | `devconsole-remote-config-firebase-noop` | Firebase Remote Config adapter (reflection-based; see [Remote Config](docs/REMOTE_CONFIG.md)) |
 
 Everything else (`devconsole-core`, `devconsole-storage-room`, and the rest) arrives transitively.
-You never name those. Every module publishes sources, javadoc, and a signed POM.
+You never name those. Every module publishes sources, javadoc, and a POM.
 
-### JitPack (for unreleased code)
+### Versions and unreleased code
 
-Maven Central is the supported channel: signed, versioned, and what the Gradle plugin resolves.
-[JitPack](https://jitpack.io/#devconsole-android/DevConsole) sits alongside it for one job, which is
-trying a branch or an unreleased fix before it ships. Add the repository to your **settings** file,
-not the module:
+All 34 library artifacts come from [JitPack](https://jitpack.io/#devconsole-android/DevConsole),
+which builds a ref on demand — so the version is a git ref. A release tag works as the bare tag, as
+in the tables above. Any branch works as `<branch>-SNAPSHOT`, with `/` written as `~`, so a
+`feature/x` branch is `feature~x-SNAPSHOT` — that is how you try an unreleased fix before it ships.
+JitPack support starts at **1.1.1**; earlier tags do not build there. Two things to know:
 
-```kotlin
-dependencyResolutionManagement {
-    repositories {
-        mavenCentral()
-        maven { url = uri("https://jitpack.io") }
-    }
-}
-```
-
-```kotlin
-dependencies {
-    // Group is com.github.devconsole-android.DevConsole; artifact ids match the tables above.
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.2.1")
-    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.1")
-}
-```
-
-A release tag works as the bare tag, as above. Any branch works as `<branch>-SNAPSHOT`, with `/`
-written as `~`, so a `feature/x` branch is `feature~x-SNAPSHOT`. JitPack support starts at
-**1.1.1**; earlier tags do not build there. Three things to know before you rely on it:
-
-- **The Gradle plugin is not on JitPack.** Only the 34 library artifacts are, so the
-  `plugins { id("io.github.devconsole-android") … }` block above does not apply. Name the
-  `debugImplementation` and `releaseImplementation` coordinates yourself. You also give up the
-  plugin's variant-policy check, which is the thing that keeps the full SDK out of release builds.
-- **JitPack artifacts are unsigned.** Central's are signed; these are built on demand from a commit.
+- **The Gradle plugin comes from the Gradle Plugin Portal, not JitPack**, because the `plugins { }`
+  DSL cannot resolve a plugin marker from JitPack. That is why the quick start adds JitPack for
+  dependencies only; `plugins { id("io.github.devconsole-android") version "…" }` resolves from the
+  Portal with no extra repository configuration.
 - **Snapshots move.** `-SNAPSHOT` follows the branch, so a build that worked can change under you.
   Pin a tag for anything you keep.
 

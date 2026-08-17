@@ -13,15 +13,10 @@ import org.gradle.kotlin.dsl.configure
 /**
  * Applies to every publishable SDK module. Wires the Vanniktech Maven Publish plugin, which picks
  * the right publication shape (`KotlinJvm` vs `AndroidSingleVariantLibrary`) from the plugins the
- * module already applies, attaches sources plus a Dokka-generated javadoc jar, and targets the
- * Sonatype Central Portal.
+ * module already applies and attaches sources plus a Dokka-generated javadoc jar.
  *
- * `publishToMavenLocal` works with no credentials. A real `publishToMavenCentral` additionally
- * needs the Central Portal user token (`mavenCentralUsername`/`mavenCentralPassword`) and the
- * signing key (`signingInMemoryKey`/`signingInMemoryKeyId`/`signingInMemoryKeyPassword`) — via
- * `ORG_GRADLE_PROJECT_`-prefixed env vars or `~/.gradle/gradle.properties`, never committed.
- * Signing no-ops locally when no key is configured. See docs/MAVEN_PUBLISHING.md for the full
- * release runbook.
+ * Distribution is JitPack, which builds a ref on demand and runs `publishToMavenLocal` — so no
+ * remote repository, credentials, or signing is configured here. See docs/PUBLISHING.md.
  */
 class PublishingConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
@@ -48,10 +43,6 @@ class PublishingConventionPlugin : Plugin<Project> {
                 // AndroidLibraryConventionPlugin on Android ones), so the javadoc jar packs that
                 // module's own generated HTML instead of shipping empty.
                 configureBasedOnAppliedPlugins(JavadocJar.Dokka("dokkaGeneratePublicationHtml"))
-                publishToMavenCentral()
-                // Unconditional signing fails with "no configured signatory" on any build without
-                // the key -- contributors and CI included.
-                if (hasSigningKey()) signAllPublications()
                 pom {
                     name.set("DevConsole ${target.name}")
                     description.set("DevConsole SDK module: ${target.name}")
@@ -79,12 +70,9 @@ class PublishingConventionPlugin : Plugin<Project> {
         }
     }
 
-    /** The key itself, not the id/password a machine may keep between releases. */
-    private fun Project.hasSigningKey(): Boolean = !(findProperty("signingInMemoryKey") as? String).isNullOrBlank()
-
     private companion object {
         const val MAVEN_GROUP = "io.github.devconsole-android"
-        const val SDK_VERSION = "1.2.1"
+        const val SDK_VERSION = "1.2.2"
         const val PROJECT_URL = "https://github.com/devconsole-android/DevConsole"
     }
 }

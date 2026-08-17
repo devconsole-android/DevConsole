@@ -18,6 +18,22 @@ before it can reach a release. (There was briefly a separate `sdk:plugin-api` mo
 third-party plugin framework; it was removed before ever shipping — see Removed, below — so it never
 joined this list.)
 
+## 1.2.2 — 2026-08-17
+
+### Changed
+
+- **JitPack is now the only distribution channel for the library artifacts.** Maven Central
+  publishing is removed: no `publishToMavenCentral`, no GPG signing, and no "Publish to Maven
+  Central" workflow. Consumers add `maven { url = uri("https://jitpack.io") }` to
+  `dependencyResolutionManagement` and switch the group from `io.github.devconsole-android` to
+  **`com.github.devconsole-android.DevConsole`**; artifact IDs and versions are unchanged.
+  Releasing is now just pushing a tag — JitPack builds the ref on first request.
+- **The Gradle plugin still comes from the Gradle Plugin Portal** as `io.github.devconsole-android`,
+  because the `plugins { }` DSL cannot resolve a plugin marker from JitPack. Its variant-policy
+  check now recognises both the JitPack group and the old Central group, so an existing host that
+  still names `io.github.devconsole-android:devconsole` keeps its release-build protection; the
+  coordinate the plugin auto-wires is the JitPack one.
+
 ## 1.2.1 — 2026-08-17
 
 Three default changes, aimed at the same complaint: a fresh integration showed a `127.0.0.1` URL
