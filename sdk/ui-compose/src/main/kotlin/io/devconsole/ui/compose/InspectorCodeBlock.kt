@@ -3,6 +3,7 @@
  * @since 04/08/26
  */
 @file:Suppress("FunctionNaming", "MagicNumber", "MatchingDeclarationName")
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package io.devconsole.ui.compose
 
@@ -14,12 +15,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,11 +66,30 @@ internal val InlineCodeBlockMaxHeight = 420.dp
 internal fun InspectorCodeBlock(
     lines: List<InspectorCodeLine>,
     modifier: Modifier = Modifier,
+    sectionKey: String = "",
+    searchMatches: List<InspectorDetailSearchMatch> = emptyList(),
+    currentMatchOrdinal: Int? = null,
     onExpandFullScreen: (() -> Unit)? = null,
 ) {
     val colors = DevConsoleTheme.colors
-    Box(modifier = modifier.fillMaxWidth()) {
+    val sectionMatches = searchMatches.filter { it.sectionKey == sectionKey || sectionKey.isEmpty() }
+    val listState = rememberLazyListState()
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val activeLineIndex =
+        sectionMatches
+            .firstOrNull { it.ordinal == currentMatchOrdinal }
+            ?.itemId
+            ?.substringAfter("line:", "")
+            ?.toIntOrNull()
+    LaunchedEffect(activeLineIndex, currentMatchOrdinal) {
+        activeLineIndex?.let { index ->
+            if (lines.isNotEmpty()) listState.animateScrollToItem(index.coerceIn(0, lines.lastIndex))
+        }
+        if (activeLineIndex != null) bringIntoViewRequester.bringIntoView()
+    }
+    Box(modifier = modifier.fillMaxWidth().bringIntoViewRequester(bringIntoViewRequester)) {
         LazyColumn(
+            state = listState,
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -84,7 +109,14 @@ internal fun InspectorCodeBlock(
                     .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
-            itemsIndexed(lines, key = { index, _ -> index }) { _, line -> CodeLineRow(line) }
+            itemsIndexed(lines, key = { index, _ -> index }) { index, line ->
+                val itemId = "line:$index"
+                CodeLineRow(
+                    line = line,
+                    keyHighlights = sectionMatches.highlightsFor(itemId, InspectorSearchField.KEY, currentMatchOrdinal),
+                    valueHighlights = sectionMatches.highlightsFor(itemId, InspectorSearchField.VALUE, currentMatchOrdinal),
+                )
+            }
         }
         if (onExpandFullScreen != null) {
             InspectorCodeBlockExpandButton(onExpandFullScreen)
@@ -119,13 +151,15 @@ internal fun CodeLineRow(
     line: InspectorCodeLine,
     fontSize: TextUnit = 13.sp,
     lineHeight: TextUnit = 22.1.sp,
+    keyHighlights: List<InspectorSearchHighlight> = emptyList(),
+    valueHighlights: List<InspectorSearchHighlight> = emptyList(),
 ) {
     val colors = DevConsoleTheme.colors
     val rowBg = if (line.highlighted) colors.signalSoft else Color.Transparent
     Row(modifier = Modifier.background(rowBg)) {
         CodeSpan(line.indent, colors.text3, fontSize, lineHeight)
-        CodeSpan(line.key, colors.jsonKey, fontSize, lineHeight)
-        CodeSpan(line.value, line.valueColor, fontSize, lineHeight)
+        CodeSpan(line.key, colors.jsonKey, fontSize, lineHeight, keyHighlights)
+        CodeSpan(line.value, line.valueColor, fontSize, lineHeight, valueHighlights)
     }
 }
 
@@ -135,6 +169,13 @@ private fun CodeSpan(
     color: Color,
     fontSize: TextUnit,
     lineHeight: TextUnit,
+    highlights: List<InspectorSearchHighlight> = emptyList(),
 ) {
-    Text(text, color = color, fontFamily = FontFamily.Monospace, fontSize = fontSize, lineHeight = lineHeight)
+    Text(
+        inspectorHighlightedText(text, highlights, DevConsoleTheme.colors),
+        color = color,
+        fontFamily = FontFamily.Monospace,
+        fontSize = fontSize,
+        lineHeight = lineHeight,
+    )
 }

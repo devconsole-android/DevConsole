@@ -190,6 +190,8 @@ internal data class JsonTreeRow(
     val content: JsonTreeRowContent,
     val trailingComma: Boolean,
     val highlighted: Boolean = false,
+    val searchKeyHighlights: List<InspectorSearchHighlight> = emptyList(),
+    val searchValueHighlights: List<InspectorSearchHighlight> = emptyList(),
 )
 
 /**

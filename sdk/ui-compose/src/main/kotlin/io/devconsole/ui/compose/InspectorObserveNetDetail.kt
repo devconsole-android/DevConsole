@@ -382,5 +382,6 @@ internal fun netDetailContent(
         // an operator debugging a transaction usually needs to compare both sides at a glance.
         initiallyOpenSectionKeys = setOf("req", "res"),
         footerActions = netFooterActions(transaction, colors, onMockAction, copyText),
+        searchOptions = NetworkDetailSearchOptions,
     )
 }

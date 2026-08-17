@@ -24,6 +24,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
@@ -172,6 +173,7 @@ internal fun InspectorRoundIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 48.dp,
+    enabled: Boolean = true,
     containerColor: Color = Color.Transparent,
     icon: @Composable () -> Unit,
 ) {
@@ -180,9 +182,10 @@ internal fun InspectorRoundIconButton(
             modifier
                 .minimumInteractiveComponentSize()
                 .size(size)
+                .alpha(if (enabled) 1f else 0.45f)
                 .clip(CircleShape)
                 .background(containerColor)
-                .clickable(onClick = onClick, role = Role.Button)
+                .clickable(enabled = enabled, onClick = onClick, role = Role.Button)
                 .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) { icon() }

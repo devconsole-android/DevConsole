@@ -828,6 +828,7 @@ private fun ObserveDetailFromContent(
         footerActions = content.footerActions,
         onBack = onBack,
         searchPlaceholder = content.searchPlaceholder,
+        searchOptions = content.searchOptions,
     )
 }
 

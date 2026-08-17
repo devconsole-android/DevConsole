@@ -49,10 +49,21 @@ internal fun InspectorCodeFullScreenOverlay(
     lines: List<InspectorCodeLine>,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    sectionKey: String = "",
+    searchMatches: List<InspectorDetailSearchMatch> = emptyList(),
+    currentMatchOrdinal: Int? = null,
 ) {
+    val sectionMatches = searchMatches.filter { it.sectionKey == sectionKey || sectionKey.isEmpty() }
     InspectorCodeFullScreenOverlay(title = title, onDismiss = onDismiss, modifier = modifier) {
-        itemsIndexed(lines, key = { index, _ -> index }) { _, line ->
-            CodeLineRow(line, fontSize = 14.sp, lineHeight = 23.8.sp)
+        itemsIndexed(lines, key = { index, _ -> index }) { index, line ->
+            val itemId = "line:$index"
+            CodeLineRow(
+                line = line,
+                fontSize = 14.sp,
+                lineHeight = 23.8.sp,
+                keyHighlights = sectionMatches.highlightsFor(itemId, InspectorSearchField.KEY, currentMatchOrdinal),
+                valueHighlights = sectionMatches.highlightsFor(itemId, InspectorSearchField.VALUE, currentMatchOrdinal),
+            )
         }
     }
 }

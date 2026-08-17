@@ -3,6 +3,7 @@
  * @since 05/08/26
  */
 @file:Suppress("FunctionNaming", "MagicNumber")
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package io.devconsole.ui.compose
 
@@ -18,14 +19,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -54,12 +59,33 @@ import androidx.compose.ui.unit.sp
 internal fun InspectorFormattableBody(
     body: InspectorDetailSectionBody.Formattable,
     modifier: Modifier = Modifier,
+    sectionKey: String = "",
+    searchMatches: List<InspectorDetailSearchMatch> = emptyList(),
+    currentMatchOrdinal: Int? = null,
     onExpandFullScreen: (() -> Unit)? = null,
 ) {
     val colors = DevConsoleTheme.colors
     var showRaw by rememberSaveable(body.rawText) { mutableStateOf(body.formatted == null) }
-    val precomputed = rememberFormattableContent(body, showRaw)
-    Column(modifier = modifier.fillMaxWidth()) {
+    val precomputed =
+        rememberFormattableContent(
+            body = body,
+            showRaw = showRaw,
+            sectionKey = sectionKey,
+            searchMatches = searchMatches,
+            currentMatchOrdinal = currentMatchOrdinal,
+        )
+    val listState = rememberLazyListState()
+    val sectionMatches = searchMatches.filter { it.sectionKey == sectionKey || sectionKey.isEmpty() }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    LaunchedEffect(precomputed.targetIndex, currentMatchOrdinal) {
+        precomputed.targetIndex?.let { index ->
+            listState.animateScrollToItem(index.coerceAtLeast(0))
+        }
+        if (sectionMatches.any { it.ordinal == currentMatchOrdinal }) {
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
+    Column(modifier = modifier.fillMaxWidth().bringIntoViewRequester(bringIntoViewRequester)) {
         if (body.formatted != null) {
             RawFormattedToggle(
                 showRaw = showRaw,
@@ -86,6 +112,7 @@ internal fun InspectorFormattableBody(
         }
         Box(modifier = Modifier.fillMaxWidth()) {
             LazyColumn(
+                state = listState,
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -98,7 +125,7 @@ internal fun InspectorFormattableBody(
                         // only visible for tall bodies with progressively wider lines, not a bug.
                         .horizontalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp, vertical = 12.dp),
-                content = precomputed,
+                content = precomputed.content,
             )
             if (onExpandFullScreen != null) {
                 InspectorCodeBlockExpandButton(onExpandFullScreen)
@@ -114,9 +141,21 @@ internal fun InspectorFormattableFullScreenOverlay(
     body: InspectorDetailSectionBody.Formattable,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    sectionKey: String = "",
+    searchMatches: List<InspectorDetailSearchMatch> = emptyList(),
+    currentMatchOrdinal: Int? = null,
 ) {
     var showRaw by rememberSaveable(body.rawText) { mutableStateOf(body.formatted == null) }
-    val precomputed = rememberFormattableContent(body, showRaw, fontSize = 14.sp, lineHeight = 23.8.sp)
+    val precomputed =
+        rememberFormattableContent(
+            body = body,
+            showRaw = showRaw,
+            fontSize = 14.sp,
+            lineHeight = 23.8.sp,
+            sectionKey = sectionKey,
+            searchMatches = searchMatches,
+            currentMatchOrdinal = currentMatchOrdinal,
+        )
     InspectorCodeFullScreenOverlay(
         title = title,
         onDismiss = onDismiss,
@@ -127,7 +166,7 @@ internal fun InspectorFormattableFullScreenOverlay(
             } else {
                 null
             },
-        content = precomputed,
+        content = precomputed.content,
     )
 }
 
@@ -138,14 +177,23 @@ internal fun InspectorFormattableFullScreenOverlay(
  * `content: LazyListScope.() -> Unit` lambda itself -- that lambda type isn't `@Composable`, so
  * `remember`/[rememberJsonTreeRows] can't be called from inside it directly.
  */
+private data class FormattableRenderContent(
+    val content: LazyListScope.() -> Unit,
+    val targetIndex: Int?,
+)
+
 @Composable
 private fun rememberFormattableContent(
     body: InspectorDetailSectionBody.Formattable,
     showRaw: Boolean,
     fontSize: TextUnit = 13.sp,
     lineHeight: TextUnit = 22.1.sp,
-): LazyListScope.() -> Unit {
+    sectionKey: String = "",
+    searchMatches: List<InspectorDetailSearchMatch> = emptyList(),
+    currentMatchOrdinal: Int? = null,
+): FormattableRenderContent {
     val colors = DevConsoleTheme.colors
+    val sectionMatches = searchMatches.filter { it.sectionKey == sectionKey || sectionKey.isEmpty() }
     val formatted = body.formatted
     val useRaw = showRaw || formatted == null
 
@@ -157,27 +205,71 @@ private fun rememberFormattableContent(
         }
     val jsonTree: Pair<List<JsonTreeRow>, (String) -> Unit>? =
         if (!useRaw && formatted is FormattedBody.Json) {
-            rememberJsonTreeRows(formatted.root, body.jsonHighlightPaths)
+            rememberJsonTreeRows(
+                root = formatted.root,
+                highlightedPaths = body.jsonHighlightPaths,
+                searchMatches = sectionMatches,
+                currentMatchOrdinal = currentMatchOrdinal,
+                forcedExpandedPaths = sectionMatches.flatMap { it.ancestorPaths }.toSet(),
+            )
         } else {
             null
         }
 
-    return {
-        when {
-            xmlLines != null ->
-                itemsIndexed(xmlLines, key = { index, _ -> index }) { _, line ->
-                    CodeLineRow(line, fontSize, lineHeight)
-                }
-            jsonTree != null -> {
-                val (rows, onToggle) = jsonTree
-                items(rows, key = { it.lazyKey() }) { row -> JsonTreeRowView(row, onToggle, fontSize, lineHeight) }
-            }
-            else ->
-                itemsIndexed(body.rawLines, key = { index, _ -> index }) { _, line ->
-                    CodeLineRow(line, fontSize, lineHeight)
-                }
+    val activeMatch = sectionMatches.firstOrNull { it.ordinal == currentMatchOrdinal }
+    val targetIndex =
+        if (jsonTree != null) {
+            val rows = jsonTree.first
+            activeMatch?.path?.let { path -> rows.indexOfFirst { row -> row.path == path }.takeIf { it >= 0 } }
+        } else {
+            activeMatch
+                ?.itemId
+                ?.substringAfter("line:", "")
+                ?.toIntOrNull()
         }
-    }
+    return FormattableRenderContent(
+        content = {
+            when {
+                xmlLines != null ->
+                    itemsIndexed(xmlLines, key = { index, _ -> index }) { index, line ->
+                        val itemId = "line:$index"
+                        CodeLineRow(
+                            line = line,
+                            fontSize = fontSize,
+                            lineHeight = lineHeight,
+                            valueHighlights =
+                                sectionMatches.highlightsFor(
+                                    itemId,
+                                    InspectorSearchField.VALUE,
+                                    currentMatchOrdinal,
+                                ),
+                        )
+                    }
+                jsonTree != null -> {
+                    val (rows, onToggle) = jsonTree
+                    items(rows, key = { it.lazyKey() }) { row ->
+                        JsonTreeRowView(row, onToggle, fontSize, lineHeight)
+                    }
+                }
+                else ->
+                    itemsIndexed(body.rawLines, key = { index, _ -> index }) { index, line ->
+                        val itemId = "line:$index"
+                        CodeLineRow(
+                            line = line,
+                            fontSize = fontSize,
+                            lineHeight = lineHeight,
+                            valueHighlights =
+                                sectionMatches.highlightsFor(
+                                    itemId,
+                                    InspectorSearchField.VALUE,
+                                    currentMatchOrdinal,
+                                ),
+                        )
+                    }
+            }
+        },
+        targetIndex = targetIndex,
+    )
 }
 
 /**
@@ -191,19 +283,29 @@ private fun rememberFormattableContent(
 private fun rememberJsonTreeRows(
     root: JsonValue,
     highlightedPaths: Set<String>,
+    searchMatches: List<InspectorDetailSearchMatch> = emptyList(),
+    currentMatchOrdinal: Int? = null,
+    forcedExpandedPaths: Set<String> = emptySet(),
 ): Pair<List<JsonTreeRow>, (String) -> Unit> {
     val expandedOverrides = remember(root) { mutableStateMapOf<String, Boolean>() }
-    val rows by remember(root, highlightedPaths) {
+    val rows by remember(root, highlightedPaths, forcedExpandedPaths) {
         derivedStateOf {
             flattenJsonTree(
                 root,
-                isExpanded = { path -> expandedOverrides[path] ?: true },
+                isExpanded = { path -> path in forcedExpandedPaths || expandedOverrides[path] ?: true },
                 highlightedPaths = highlightedPaths,
             )
         }
     }
+    val searchRows =
+        rows.map { row ->
+            row.copy(
+                searchKeyHighlights = searchMatches.highlightsFor(row.path, InspectorSearchField.KEY, currentMatchOrdinal),
+                searchValueHighlights = searchMatches.highlightsFor(row.path, InspectorSearchField.VALUE, currentMatchOrdinal),
+            )
+        }
     val onToggle: (String) -> Unit = { path -> expandedOverrides[path] = !(expandedOverrides[path] ?: true) }
-    return rows to onToggle
+    return searchRows to onToggle
 }
 
 /** A two-chip Raw/Formatted switcher, built from the same [FilterChipRow] every other filter row uses. */
@@ -276,8 +378,23 @@ private fun JsonTreeRowView(
         } else {
             Spacer(Modifier.width(JsonTreeChevronSlot))
         }
-        row.keyLabel?.let { key -> JsonTreeMono("${key.jsonQuoted()}: ", colors.jsonKey, fontSize, lineHeight) }
-        JsonTreeValueSpan(row.content, row.depth, colors, fontSize, lineHeight)
+        row.keyLabel?.let { key ->
+            JsonTreeMono(
+                text = "${key.jsonQuoted()}: ",
+                color = colors.jsonKey,
+                fontSize = fontSize,
+                lineHeight = lineHeight,
+                highlights = row.searchKeyHighlights,
+            )
+        }
+        JsonTreeValueSpan(
+            content = row.content,
+            depth = row.depth,
+            colors = colors,
+            fontSize = fontSize,
+            lineHeight = lineHeight,
+            highlights = row.searchValueHighlights,
+        )
         if (row.trailingComma) JsonTreeMono(",", colors.text3, fontSize, lineHeight)
     }
 }
@@ -289,10 +406,11 @@ private fun JsonTreeValueSpan(
     colors: DevConsoleColors,
     fontSize: TextUnit,
     lineHeight: TextUnit,
+    highlights: List<InspectorSearchHighlight> = emptyList(),
 ) {
     when (content) {
         is JsonTreeRowContent.Scalar ->
-            JsonTreeMono(content.text, content.type.color(colors), fontSize, lineHeight)
+            JsonTreeMono(content.text, content.type.color(colors), fontSize, lineHeight, highlights)
         is JsonTreeRowContent.ContainerStart ->
             JsonTreeMono(if (content.isArray) "[" else "{", colors.jsonBraceAt(depth), fontSize, lineHeight)
         is JsonTreeRowContent.ContainerEnd ->
@@ -327,6 +445,13 @@ private fun JsonTreeMono(
     color: Color,
     fontSize: TextUnit,
     lineHeight: TextUnit,
+    highlights: List<InspectorSearchHighlight> = emptyList(),
 ) {
-    Text(text, color = color, fontFamily = FontFamily.Monospace, fontSize = fontSize, lineHeight = lineHeight)
+    Text(
+        inspectorHighlightedText(text, highlights, DevConsoleTheme.colors),
+        color = color,
+        fontFamily = FontFamily.Monospace,
+        fontSize = fontSize,
+        lineHeight = lineHeight,
+    )
 }

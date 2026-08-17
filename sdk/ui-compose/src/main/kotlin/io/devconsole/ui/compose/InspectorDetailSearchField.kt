@@ -9,6 +9,7 @@ package io.devconsole.ui.compose
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,41 +36,91 @@ internal fun InspectorDetailSearchField(
     onQueryChange: (String) -> Unit,
     matchLabel: String,
     modifier: Modifier = Modifier,
+    onPrevious: (() -> Unit)? = null,
+    onNext: (() -> Unit)? = null,
+    navigationEnabled: Boolean = false,
+    onOpenOptions: (() -> Unit)? = null,
+    scopeLabel: String? = null,
     placeholder: String = DEFAULT_DETAIL_SEARCH_PLACEHOLDER,
     matchColor: Color = DevConsoleTheme.colors.muted,
 ) {
-    Row(
+    Column(
         modifier = modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(DevConsoleTheme.colors.surface2)
-                        .padding(start = 40.dp, end = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                InspectorPlainTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    placeholder = placeholder,
-                    textColor = DevConsoleTheme.colors.ink,
-                    placeholderColor = DevConsoleTheme.colors.muted,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(DevConsoleTheme.colors.surface2)
+                            .padding(start = 40.dp, end = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    InspectorPlainTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        placeholder = placeholder,
+                        textColor = DevConsoleTheme.colors.ink,
+                        placeholderColor = DevConsoleTheme.colors.muted,
+                    )
+                }
+                InspectorGlyphIcon(
+                    InspectorGlyph.Search,
+                    contentDescription = null,
+                    tint = DevConsoleTheme.colors.muted,
+                    size = 17.dp,
+                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 14.dp),
                 )
             }
-            InspectorGlyphIcon(
-                InspectorGlyph.Search,
-                contentDescription = null,
-                tint = DevConsoleTheme.colors.muted,
-                size = 17.dp,
-                modifier = Modifier.align(Alignment.CenterStart).padding(start = 14.dp),
+            Text(matchLabel, color = matchColor, fontFamily = FontFamily.Monospace, fontSize = 12.sp, maxLines = 1)
+            if (onPrevious != null) {
+                InspectorRoundIconButton(
+                    contentDescription = "Previous match",
+                    onClick = onPrevious,
+                    enabled = navigationEnabled,
+                    size = 44.dp,
+                    icon = {
+                        InspectorGlyphIcon(
+                            InspectorGlyph.ChevronDown,
+                            contentDescription = null,
+                            tint = if (navigationEnabled) DevConsoleTheme.colors.ink else DevConsoleTheme.colors.text3,
+                            size = 16.dp,
+                            rotationDegrees = 90f,
+                        )
+                    },
+                )
+            }
+            if (onNext != null) {
+                InspectorRoundIconButton(
+                    contentDescription = "Next match",
+                    onClick = onNext,
+                    enabled = navigationEnabled,
+                    size = 44.dp,
+                    icon = {
+                        InspectorGlyphIcon(
+                            InspectorGlyph.ChevronDown,
+                            contentDescription = null,
+                            tint = if (navigationEnabled) DevConsoleTheme.colors.ink else DevConsoleTheme.colors.text3,
+                            size = 16.dp,
+                            rotationDegrees = -90f,
+                        )
+                    },
+                )
+            }
+        }
+        if (onOpenOptions != null && scopeLabel != null) {
+            FilterChipRow(
+                chips = listOf(InspectorFilterChip("search-scope", "Search in: $scopeLabel", selected = true)),
+                onChipClick = { onOpenOptions() },
+                modifier = Modifier.padding(top = 0.dp),
             )
         }
-        Text(matchLabel, color = matchColor, fontFamily = FontFamily.Monospace, fontSize = 12.sp, maxLines = 1)
     }
 }

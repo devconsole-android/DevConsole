@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,6 +94,7 @@ private data class ResolvedDetailSection(
     val metaColor: Color,
     val body: InspectorDetailSectionBody?,
     val emptyMessage: String?,
+    val searchMatches: List<InspectorDetailSearchMatch> = emptyList(),
 )
 
 private fun matchesQuery(
@@ -208,10 +210,72 @@ private fun resolveDetailSection(
     )
 }
 
+/** Network detail resolver: preserves every original body shape and decorates it with match metadata. */
+private fun resolveNetworkDetailSection(
+    spec: InspectorDetailSectionSpec,
+    query: String,
+    openState: Map<String, Boolean>,
+    colors: DevConsoleColors,
+    matches: List<InspectorDetailSearchMatch>,
+    searchable: Boolean,
+): ResolvedDetailSection {
+    val hasQuery = query.trim().isNotEmpty()
+    val total = detailBodyItemCount(spec.body)
+    val expanded = if (hasQuery && matches.isNotEmpty()) true else openState[spec.key] == true
+    val meta =
+        when {
+            hasQuery && searchable ->
+                if (matches.isNotEmpty()) {
+                    "${matches.size} match${if (matches.size == 1) "" else "es"}"
+                } else {
+                    "no match"
+                }
+            expanded -> if (total > 0) total.toString() else ""
+            else -> if (total > 0) "$total line${if (total == 1) "" else "s"}" else ""
+        }
+    val metaColor =
+        if (hasQuery && searchable) {
+            if (matches.isNotEmpty()) colors.signal else colors.text3
+        } else {
+            colors.text3
+        }
+    if (!expanded) {
+        return ResolvedDetailSection(
+            expanded = false,
+            hits = matches.size,
+            meta = meta,
+            metaColor = metaColor,
+            body = null,
+            emptyMessage = null,
+            searchMatches = matches,
+        )
+    }
+    val emptyMessage = (spec.body as? InspectorDetailSectionBody.Empty)?.text
+    return ResolvedDetailSection(
+        expanded = true,
+        hits = matches.size,
+        meta = meta,
+        metaColor = metaColor,
+        body = if (emptyMessage == null) spec.body else null,
+        emptyMessage = emptyMessage,
+        searchMatches = matches,
+    )
+}
+
+private fun detailBodyItemCount(body: InspectorDetailSectionBody): Int =
+    when (body) {
+        is InspectorDetailSectionBody.KeyValues -> body.entries.size
+        is InspectorDetailSectionBody.Code -> body.lines.size
+        is InspectorDetailSectionBody.Formattable -> body.rawLines.size
+        is InspectorDetailSectionBody.Bars -> body.stats.size
+        is InspectorDetailSectionBody.Empty -> 0
+    }
+
 @Composable
 private fun InspectorDetailSectionCard(
     spec: InspectorDetailSectionSpec,
     resolved: ResolvedDetailSection,
+    currentMatchOrdinal: Int?,
     onToggle: () -> Unit,
     onExpandCodeFullScreen: (String) -> Unit,
 ) {
@@ -232,11 +296,29 @@ private fun InspectorDetailSectionCard(
             emptyMessage != null -> InspectorDetailEmptyText(emptyMessage)
             else ->
                 when (val body = resolved.body) {
-                    is InspectorDetailSectionBody.KeyValues -> InspectorKeyValueList(body.entries)
+                    is InspectorDetailSectionBody.KeyValues ->
+                        InspectorKeyValueList(
+                            entries = body.entries,
+                            sectionKey = spec.key,
+                            searchMatches = resolved.searchMatches,
+                            currentMatchOrdinal = currentMatchOrdinal,
+                        )
                     is InspectorDetailSectionBody.Code ->
-                        InspectorCodeBlock(body.lines, onExpandFullScreen = { onExpandCodeFullScreen(spec.key) })
+                        InspectorCodeBlock(
+                            lines = body.lines,
+                            sectionKey = spec.key,
+                            searchMatches = resolved.searchMatches,
+                            currentMatchOrdinal = currentMatchOrdinal,
+                            onExpandFullScreen = { onExpandCodeFullScreen(spec.key) },
+                        )
                     is InspectorDetailSectionBody.Formattable ->
-                        InspectorFormattableBody(body, onExpandFullScreen = { onExpandCodeFullScreen(spec.key) })
+                        InspectorFormattableBody(
+                            body = body,
+                            sectionKey = spec.key,
+                            searchMatches = resolved.searchMatches,
+                            currentMatchOrdinal = currentMatchOrdinal,
+                            onExpandFullScreen = { onExpandCodeFullScreen(spec.key) },
+                        )
                     is InspectorDetailSectionBody.Bars -> InspectorProgressBars(body.stats)
                     is InspectorDetailSectionBody.Empty, null -> InspectorDetailEmptyText("Nothing captured.")
                 }
@@ -264,15 +346,54 @@ internal fun InspectorObserveDetailScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     searchPlaceholder: String = DEFAULT_DETAIL_SEARCH_PLACEHOLDER,
+    searchOptions: InspectorDetailSearchOptions? = null,
 ) {
     var query by rememberSaveable(resetKey) { mutableStateOf("") }
+    var selectedSectionKeys by
+        rememberSaveable(resetKey) {
+            mutableStateOf(searchOptions?.defaultSectionKeys?.toList().orEmpty())
+        }
+    var searchModeName by
+        rememberSaveable(resetKey) {
+            mutableStateOf((searchOptions?.defaultMode ?: InspectorSearchMode.KEYS_AND_VALUES).name)
+        }
+    var currentMatchOrdinal by rememberSaveable(resetKey) { mutableIntStateOf(0) }
+    var searchOptionsVisible by remember(resetKey) { mutableStateOf(false) }
     val openState =
         remember(resetKey) {
             mutableStateMapOf<String, Boolean>().apply { initiallyOpenSectionKeys.forEach { key -> this[key] = true } }
         }
     val colors = DevConsoleTheme.colors
-    val resolved = sections.map { spec -> spec to resolveDetailSection(spec, query, openState, colors) }
-    val totalHits = resolved.sumOf { (_, section) -> section.hits }
+    val selectedKeys = selectedSectionKeys.toSet()
+    val searchMode =
+        InspectorSearchMode.values().firstOrNull { it.name == searchModeName }
+            ?: InspectorSearchMode.KEYS
+    val networkMatches =
+        if (searchOptions != null) {
+            searchInspectorSections(sections, query, selectedKeys, searchMode)
+        } else {
+            emptyList()
+        }
+    val activeMatchOrdinal =
+        if (networkMatches.isEmpty()) 0 else currentMatchOrdinal.coerceIn(0, networkMatches.lastIndex)
+    val resolved =
+        sections.map { spec ->
+            if (searchOptions != null) {
+                val sectionMatches = networkMatches.filter { it.sectionKey == spec.key }
+                spec to
+                    resolveNetworkDetailSection(
+                        spec = spec,
+                        query = query,
+                        openState = openState,
+                        colors = colors,
+                        matches = sectionMatches,
+                        searchable = spec.key in searchOptions.sections.map { it.key },
+                    )
+            } else {
+                spec to resolveDetailSection(spec, query, openState, colors)
+            }
+        }
+    val totalHits = if (searchOptions != null) networkMatches.size else resolved.sumOf { (_, section) -> section.hits }
 
     // Which section's code block (if any) is showing full-screen.
     // Bundle-safe on its own (a String key), and the lines it needs are re-derived from `resolved`
@@ -295,6 +416,9 @@ internal fun InspectorObserveDetailScreen(
                 lines = body.lines,
                 onDismiss = { fullScreenSectionKey = null },
                 modifier = modifier.fillMaxSize(),
+                sectionKey = spec.key,
+                searchMatches = section.searchMatches,
+                currentMatchOrdinal = activeMatchOrdinal,
             )
             return
         }
@@ -304,6 +428,9 @@ internal fun InspectorObserveDetailScreen(
                 body = body,
                 onDismiss = { fullScreenSectionKey = null },
                 modifier = modifier.fillMaxSize(),
+                sectionKey = spec.key,
+                searchMatches = section.searchMatches,
+                currentMatchOrdinal = activeMatchOrdinal,
             )
             return
         }
@@ -326,8 +453,33 @@ internal fun InspectorObserveDetailScreen(
             )
             InspectorDetailSearchField(
                 query = query,
-                onQueryChange = { query = it },
-                matchLabel = if (query.isBlank()) "" else "$totalHits match${if (totalHits == 1) "" else "es"}",
+                onQueryChange = {
+                    query = it
+                    currentMatchOrdinal = 0
+                },
+                matchLabel =
+                    if (query.isBlank()) {
+                        ""
+                    } else if (searchOptions != null) {
+                        "${if (networkMatches.isEmpty()) 0 else activeMatchOrdinal + 1}/$totalHits"
+                    } else {
+                        "$totalHits match${if (totalHits == 1) "" else "es"}"
+                    },
+                onPrevious =
+                    if (searchOptions != null) {
+                        { currentMatchOrdinal = previousInspectorMatchIndex(activeMatchOrdinal, networkMatches.size) }
+                    } else {
+                        null
+                    },
+                onNext =
+                    if (searchOptions != null) {
+                        { currentMatchOrdinal = nextInspectorMatchIndex(activeMatchOrdinal, networkMatches.size) }
+                    } else {
+                        null
+                    },
+                navigationEnabled = networkMatches.isNotEmpty(),
+                onOpenOptions = if (searchOptions != null) ({ searchOptionsVisible = true }) else null,
+                scopeLabel = searchOptions?.let { inspectorSearchScopeSummary(it, selectedKeys) },
                 modifier = Modifier.padding(top = 12.dp),
                 placeholder = searchPlaceholder,
             )
@@ -338,10 +490,25 @@ internal fun InspectorObserveDetailScreen(
             InspectorDetailSectionCard(
                 spec = spec,
                 resolved = section,
+                currentMatchOrdinal = if (searchOptions != null) activeMatchOrdinal else null,
                 onToggle = { openState[spec.key] = !section.expanded },
                 onExpandCodeFullScreen = { key -> fullScreenSectionKey = key },
             )
         }
+    }
+    if (searchOptionsVisible && searchOptions != null) {
+        InspectorDetailSearchOptionsSheet(
+            options = searchOptions,
+            selectedSectionKeys = selectedKeys,
+            mode = searchMode,
+            onDismiss = { searchOptionsVisible = false },
+            onApply = { newKeys, newMode ->
+                selectedSectionKeys = newKeys.toList()
+                searchModeName = newMode.name
+                currentMatchOrdinal = 0
+                searchOptionsVisible = false
+            },
+        )
     }
 }
 
@@ -357,6 +524,7 @@ internal data class ObserveDetailContent(
      * one value, and offering to search its "headers" would be describing a screen that isn't there.
      */
     val searchPlaceholder: String = DEFAULT_DETAIL_SEARCH_PLACEHOLDER,
+    val searchOptions: InspectorDetailSearchOptions? = null,
 )
 
 /** Matches [InspectorDetailSearchField]'s own default; named here so callers can opt out of it. */
