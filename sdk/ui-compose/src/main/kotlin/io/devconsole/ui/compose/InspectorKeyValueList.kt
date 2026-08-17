@@ -47,6 +47,10 @@ internal fun InspectorKeyValueList(
     val colors = DevConsoleTheme.colors
     val lineColor = colors.line
     val sectionMatches = searchMatches.filter { it.sectionKey == sectionKey || sectionKey.isEmpty() }
+    val highlightIndex =
+        remember(sectionMatches, currentMatchOrdinal) {
+            indexInspectorSearchHighlights(sectionMatches, currentMatchOrdinal)
+        }
     // No top inset on this padding, so the first divider sits flush under the section header
     // instead of 8dp below it.
     Column(modifier = modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
@@ -70,7 +74,7 @@ internal fun InspectorKeyValueList(
                 Text(
                     inspectorHighlightedText(
                         text = entry.key,
-                        highlights = sectionMatches.highlightsFor(itemId, InspectorSearchField.KEY, currentMatchOrdinal),
+                        highlights = highlightIndex.highlightsFor(itemId, InspectorSearchField.KEY),
                         colors = colors,
                     ),
                     color = colors.jsonKey,
@@ -80,7 +84,7 @@ internal fun InspectorKeyValueList(
                 Text(
                     inspectorHighlightedText(
                         text = entry.value,
-                        highlights = sectionMatches.highlightsFor(itemId, InspectorSearchField.VALUE, currentMatchOrdinal),
+                        highlights = highlightIndex.highlightsFor(itemId, InspectorSearchField.VALUE),
                         colors = colors,
                     ),
                     color = entry.valueColor ?: colors.ink,

@@ -203,7 +203,7 @@ private fun netBodySections(
         }
     return listOf(
         textPreviewSection(
-            "req",
+            InspectorExchangeSection.PRIMARY_BODY.key,
             "Request payload",
             transaction.requestPreview,
             requestBinary,
@@ -213,7 +213,7 @@ private fun netBodySections(
             "Copy request payload",
         ),
         textPreviewSection(
-            "res",
+            InspectorExchangeSection.SECONDARY_BODY.key,
             "Response body",
             transaction.responsePreview,
             isBinaryPlaceholder = false,
@@ -249,16 +249,16 @@ private fun netSections(
             onCopy = { copyText(generalEntries.toCopyText()) },
         ),
         InspectorDetailSectionSpec(
-            "reqh",
-            "Request headers",
+            InspectorExchangeSection.PRIMARY_HEADERS.key,
+            InspectorExchangeSection.PRIMARY_HEADERS.networkLabel,
             requestHeadersBody,
             copyDescription = "Copy request headers",
             onCopy = keyValuesCopyAction(requestHeadersBody.entries, copyText),
         ),
         requestSection,
         InspectorDetailSectionSpec(
-            "resh",
-            "Response headers",
+            InspectorExchangeSection.SECONDARY_HEADERS.key,
+            InspectorExchangeSection.SECONDARY_HEADERS.networkLabel,
             responseHeadersBody,
             copyDescription = "Copy response headers",
             onCopy = keyValuesCopyAction(responseHeadersBody.entries, copyText),
@@ -380,7 +380,7 @@ internal fun netDetailContent(
         sections = netSections(transaction, colors, statusColor, copyText, mockDiff),
         // Request payload + Response body both open by default --
         // an operator debugging a transaction usually needs to compare both sides at a glance.
-        initiallyOpenSectionKeys = setOf("req", "res"),
+        initiallyOpenSectionKeys = InspectorExchangeSection.keysOf(InspectorExchangeSection.defaultSearchScope),
         footerActions = netFooterActions(transaction, colors, onMockAction, copyText),
         searchOptions = NetworkDetailSearchOptions,
     )

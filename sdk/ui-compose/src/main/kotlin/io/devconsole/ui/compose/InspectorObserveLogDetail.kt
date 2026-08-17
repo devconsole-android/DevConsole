@@ -47,14 +47,14 @@ private fun logSections(
             onCopy = { copyText(generalEntries.toCopyText()) },
         ),
         InspectorDetailSectionSpec(
-            "req",
+            InspectorExchangeSection.PRIMARY_BODY.key,
             "Context",
             contextBody,
             copyDescription = "Copy context",
             onCopy = contextCopy,
         ),
         InspectorDetailSectionSpec(
-            "resh",
+            InspectorExchangeSection.SECONDARY_HEADERS.key,
             "Related transaction",
             InspectorDetailSectionBody.Empty("This event is not linked to a transaction."),
         ),

@@ -10,13 +10,21 @@ internal enum class InspectorSearchField {
     VALUE,
 }
 
+/** Which side of a formattable body's Raw/Formatted toggle is currently rendered. */
+internal enum class InspectorBodySearchRepresentation {
+    RAW,
+    FORMATTED,
+}
+
 /** Search fields enabled by the Network detail search options sheet. */
 internal enum class InspectorSearchMode(
     val label: String,
+    /** What this mode will and won't match, shown under the chips in the search options sheet. */
+    val hint: String,
 ) {
-    KEYS("Keys"),
-    VALUES("Values"),
-    KEYS_AND_VALUES("Keys + values"),
+    KEYS("Keys", "Header names and JSON field names. Raw and XML bodies have none, so they never match."),
+    VALUES("Values", "Header values, JSON values, and raw or XML body text."),
+    KEYS_AND_VALUES("Keys + values", "Names and values together."),
 }
 
 /** One searchable piece of rendered detail content. */
@@ -46,36 +54,86 @@ internal data class InspectorDetailSearchSection(
     val label: String,
 )
 
+/** Callback-free section input suitable for use as a remembered candidate-cache key. */
+internal data class InspectorSearchSectionBody(
+    val sectionKey: String,
+    val body: InspectorDetailSectionBody,
+)
+
 internal data class InspectorDetailSearchOptions(
     val sections: List<InspectorDetailSearchSection>,
     val defaultSectionKeys: Set<String>,
-    val defaultMode: InspectorSearchMode = InspectorSearchMode.KEYS,
+    /**
+     * Keys-only would silently miss raw and XML bodies, which carry no names to match, so a first
+     * search finds everything the query appears in and the sheet narrows from there.
+     */
+    val defaultMode: InspectorSearchMode = InspectorSearchMode.KEYS_AND_VALUES,
 )
+
+/**
+ * The four detail slots every captured-exchange kind lays out, in render order. [key] is the stable
+ * id an [InspectorDetailSectionSpec] carries; the labels here are the network wording, and other
+ * kinds reuse the same slots under their own names (a socket frame's [PRIMARY_BODY] is "Payload").
+ */
+internal enum class InspectorExchangeSection(
+    val key: String,
+    val networkLabel: String,
+) {
+    PRIMARY_HEADERS("reqh", "Request headers"),
+    PRIMARY_BODY("req", "Request body"),
+    SECONDARY_HEADERS("resh", "Response headers"),
+    SECONDARY_BODY("res", "Response body"),
+    ;
+
+    internal companion object {
+        /** The slots a first search covers: bodies carry the payload, headers are the noisy half. */
+        val defaultSearchScope = setOf(PRIMARY_BODY, SECONDARY_BODY)
+
+        fun keysOf(sections: Set<InspectorExchangeSection>): Set<String> = sections.mapTo(mutableSetOf()) { it.key }
+    }
+}
 
 internal val NetworkDetailSearchOptions =
     InspectorDetailSearchOptions(
         sections =
-            listOf(
-                InspectorDetailSearchSection("reqh", "Request headers"),
-                InspectorDetailSearchSection("req", "Request body"),
-                InspectorDetailSearchSection("resh", "Response headers"),
-                InspectorDetailSearchSection("res", "Response body"),
-            ),
-        defaultSectionKeys = setOf("reqh", "req", "resh", "res"),
+            InspectorExchangeSection.entries.map { section ->
+                InspectorDetailSearchSection(section.key, section.networkLabel)
+            },
+        defaultSectionKeys = InspectorExchangeSection.keysOf(InspectorExchangeSection.defaultSearchScope),
     )
+
+internal fun inspectorSearchSectionBodies(
+    sections: List<InspectorDetailSectionSpec>,
+    searchableSectionKeys: Set<String>,
+): List<InspectorSearchSectionBody> =
+    sections.mapNotNull { spec ->
+        if (spec.key in searchableSectionKeys) InspectorSearchSectionBody(spec.key, spec.body) else null
+    }
 
 internal fun searchInspectorSections(
     sections: List<InspectorDetailSectionSpec>,
     query: String,
     selectedSectionKeys: Set<String>,
     mode: InspectorSearchMode,
-): List<InspectorDetailSearchMatch> =
-    searchInspectorCandidates(
-        candidates = sections.flatMap { spec -> searchInspectorBodyCandidates(spec.key, spec.body) },
+    representationForSection: (String) -> InspectorBodySearchRepresentation = {
+        InspectorBodySearchRepresentation.FORMATTED
+    },
+): List<InspectorDetailSearchMatch> {
+    if (query.isBlank()) return emptyList()
+    return searchInspectorCandidates(
+        candidates =
+            sections.flatMap { spec ->
+                searchInspectorBodyCandidates(
+                    sectionKey = spec.key,
+                    body = spec.body,
+                    representation = representationForSection(spec.key),
+                )
+            },
         query = query,
         selectedSectionKeys = selectedSectionKeys,
         mode = mode,
     )
+}
 
 internal fun inspectorSearchScopeSummary(
     options: InspectorDetailSearchOptions,
@@ -83,9 +141,9 @@ internal fun inspectorSearchScopeSummary(
 ): String {
     val selected = options.sections.filter { it.key in selectedSectionKeys }
     return when {
-        selected.size == options.sections.size -> "All request + response"
+        selected.size == options.sections.size -> "All sections"
         selected.size == 1 -> selected.single().label
-        selected.isEmpty() -> "No sections"
+        selected.isEmpty() -> "Nothing selected"
         else -> "${selected.size} sections"
     }
 }
@@ -162,6 +220,7 @@ internal fun previousInspectorMatchIndex(
 internal fun searchInspectorBodyCandidates(
     sectionKey: String,
     body: InspectorDetailSectionBody,
+    representation: InspectorBodySearchRepresentation = InspectorBodySearchRepresentation.FORMATTED,
 ): List<InspectorSearchCandidate> =
     when (body) {
         is InspectorDetailSectionBody.KeyValues ->
@@ -183,16 +242,18 @@ internal fun searchInspectorBodyCandidates(
                 }
             }
         is InspectorDetailSectionBody.Formattable ->
-            when (val formatted = body.formatted) {
-                is FormattedBody.Json -> jsonSearchCandidates(sectionKey, formatted.root)
-                is FormattedBody.Xml ->
-                    formatted.text.lines().mapIndexed { index, line ->
-                        InspectorSearchCandidate(sectionKey, "line:$index", InspectorSearchField.VALUE, line)
-                    }
-                null ->
-                    body.rawLines.mapIndexed { index, line ->
-                        InspectorSearchCandidate(sectionKey, "line:$index", InspectorSearchField.VALUE, line.value)
-                    }
+            if (representation == InspectorBodySearchRepresentation.RAW || body.formatted == null) {
+                body.rawLines.mapIndexed { index, line ->
+                    InspectorSearchCandidate(sectionKey, "line:$index", InspectorSearchField.VALUE, line.value)
+                }
+            } else {
+                when (val formatted = requireNotNull(body.formatted)) {
+                    is FormattedBody.Json -> jsonSearchCandidates(sectionKey, formatted.root)
+                    is FormattedBody.Xml ->
+                        formatted.text.lines().mapIndexed { index, line ->
+                            InspectorSearchCandidate(sectionKey, "line:$index", InspectorSearchField.VALUE, line)
+                        }
+                }
             }
         is InspectorDetailSectionBody.Bars, is InspectorDetailSectionBody.Empty -> emptyList()
     }

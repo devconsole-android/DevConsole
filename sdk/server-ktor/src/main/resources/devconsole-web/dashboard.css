@@ -1430,7 +1430,7 @@ kbd {
    Trims are CSS-first: the underlying control/state is untouched, only its rail/toolbar/detail
    affordance is hidden in Simple mode, so switching back to Advanced never loses anything.
    ============================================================ */
-body.mode-simple .metrics-strip { display: none; }
+body.mode-simple .metric-strip { display: none; }
 body.mode-simple #networkMethodGroup,
 body.mode-simple #networkHostDrop,
 body.mode-simple #networkToggleHost,

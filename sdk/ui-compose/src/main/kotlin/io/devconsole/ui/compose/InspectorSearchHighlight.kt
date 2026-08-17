@@ -14,19 +14,37 @@ internal data class InspectorSearchHighlight(
     val active: Boolean,
 )
 
-internal fun List<InspectorDetailSearchMatch>.highlightsFor(
-    itemId: String,
-    field: InspectorSearchField,
+internal data class InspectorSearchHighlightTarget(
+    val itemId: String,
+    val field: InspectorSearchField,
+)
+
+internal class InspectorSearchHighlightIndex internal constructor(
+    private val highlights: Map<InspectorSearchHighlightTarget, List<InspectorSearchHighlight>>,
+) {
+    fun highlightsFor(
+        itemId: String,
+        field: InspectorSearchField,
+    ): List<InspectorSearchHighlight> = highlights[InspectorSearchHighlightTarget(itemId, field)].orEmpty()
+}
+
+/** Groups matches once so each rendered field can retrieve its spans in constant time. */
+internal fun indexInspectorSearchHighlights(
+    matches: List<InspectorDetailSearchMatch>,
     currentMatchOrdinal: Int?,
-): List<InspectorSearchHighlight> =
-    filter { match -> match.itemId == itemId && match.field == field }
-        .map { match ->
+): InspectorSearchHighlightIndex {
+    val indexed = mutableMapOf<InspectorSearchHighlightTarget, MutableList<InspectorSearchHighlight>>()
+    matches.forEach { match ->
+        val target = InspectorSearchHighlightTarget(match.itemId, match.field)
+        indexed.getOrPut(target, ::mutableListOf) +=
             InspectorSearchHighlight(
                 start = match.start,
                 endExclusive = match.endExclusive,
                 active = match.ordinal == currentMatchOrdinal,
             )
-        }
+    }
+    return InspectorSearchHighlightIndex(indexed)
+}
 
 internal fun inspectorHighlightedText(
     text: String,

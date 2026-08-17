@@ -73,14 +73,13 @@ internal fun InspectorCodeBlock(
 ) {
     val colors = DevConsoleTheme.colors
     val sectionMatches = searchMatches.filter { it.sectionKey == sectionKey || sectionKey.isEmpty() }
+    val highlightIndex =
+        remember(sectionMatches, currentMatchOrdinal) {
+            indexInspectorSearchHighlights(sectionMatches, currentMatchOrdinal)
+        }
     val listState = rememberLazyListState()
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val activeLineIndex =
-        sectionMatches
-            .firstOrNull { it.ordinal == currentMatchOrdinal }
-            ?.itemId
-            ?.substringAfter("line:", "")
-            ?.toIntOrNull()
+    val activeLineIndex = activeInspectorLineIndex(sectionMatches, currentMatchOrdinal)
     LaunchedEffect(activeLineIndex, currentMatchOrdinal) {
         activeLineIndex?.let { index ->
             if (lines.isNotEmpty()) listState.animateScrollToItem(index.coerceIn(0, lines.lastIndex))
@@ -113,8 +112,8 @@ internal fun InspectorCodeBlock(
                 val itemId = "line:$index"
                 CodeLineRow(
                     line = line,
-                    keyHighlights = sectionMatches.highlightsFor(itemId, InspectorSearchField.KEY, currentMatchOrdinal),
-                    valueHighlights = sectionMatches.highlightsFor(itemId, InspectorSearchField.VALUE, currentMatchOrdinal),
+                    keyHighlights = highlightIndex.highlightsFor(itemId, InspectorSearchField.KEY),
+                    valueHighlights = highlightIndex.highlightsFor(itemId, InspectorSearchField.VALUE),
                 )
             }
         }

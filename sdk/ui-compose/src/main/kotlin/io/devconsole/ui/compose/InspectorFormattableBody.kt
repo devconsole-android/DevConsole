@@ -59,17 +59,23 @@ import androidx.compose.ui.unit.sp
 internal fun InspectorFormattableBody(
     body: InspectorDetailSectionBody.Formattable,
     modifier: Modifier = Modifier,
+    showRaw: Boolean? = null,
+    onShowRawChange: ((Boolean) -> Unit)? = null,
     sectionKey: String = "",
     searchMatches: List<InspectorDetailSearchMatch> = emptyList(),
     currentMatchOrdinal: Int? = null,
     onExpandFullScreen: (() -> Unit)? = null,
 ) {
     val colors = DevConsoleTheme.colors
-    var showRaw by rememberSaveable(body.rawText) { mutableStateOf(body.formatted == null) }
+    var localShowRaw by rememberSaveable(body.rawText) { mutableStateOf(body.formatted == null) }
+    val renderedShowRaw = showRaw ?: localShowRaw
+    val updateShowRaw: (Boolean) -> Unit = { value ->
+        if (showRaw == null) localShowRaw = value else onShowRawChange?.invoke(value)
+    }
     val precomputed =
         rememberFormattableContent(
             body = body,
-            showRaw = showRaw,
+            showRaw = renderedShowRaw,
             sectionKey = sectionKey,
             searchMatches = searchMatches,
             currentMatchOrdinal = currentMatchOrdinal,
@@ -88,8 +94,8 @@ internal fun InspectorFormattableBody(
     Column(modifier = modifier.fillMaxWidth().bringIntoViewRequester(bringIntoViewRequester)) {
         if (body.formatted != null) {
             RawFormattedToggle(
-                showRaw = showRaw,
-                onToggle = { showRaw = it },
+                showRaw = renderedShowRaw,
+                onToggle = updateShowRaw,
                 // Matches the 16dp horizontal inset InspectorKeyValueList/InspectorProgressBars/
                 // InspectorDetailEmptyText each apply themselves for a CollapsibleSection's content --
                 // FilterChipRow carries no inset of its own (its other callers sit inside a parent
@@ -141,15 +147,23 @@ internal fun InspectorFormattableFullScreenOverlay(
     body: InspectorDetailSectionBody.Formattable,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    showRaw: Boolean? = null,
+    onShowRawChange: ((Boolean) -> Unit)? = null,
     sectionKey: String = "",
     searchMatches: List<InspectorDetailSearchMatch> = emptyList(),
     currentMatchOrdinal: Int? = null,
+    onCopy: (() -> Unit)? = null,
+    copyContentDescription: String = "Copy $title",
 ) {
-    var showRaw by rememberSaveable(body.rawText) { mutableStateOf(body.formatted == null) }
+    var localShowRaw by rememberSaveable(body.rawText) { mutableStateOf(body.formatted == null) }
+    val renderedShowRaw = showRaw ?: localShowRaw
+    val updateShowRaw: (Boolean) -> Unit = { value ->
+        if (showRaw == null) localShowRaw = value else onShowRawChange?.invoke(value)
+    }
     val precomputed =
         rememberFormattableContent(
             body = body,
-            showRaw = showRaw,
+            showRaw = renderedShowRaw,
             fontSize = 14.sp,
             lineHeight = 23.8.sp,
             sectionKey = sectionKey,
@@ -162,10 +176,14 @@ internal fun InspectorFormattableFullScreenOverlay(
         modifier = modifier,
         headerTrailing =
             if (body.formatted != null) {
-                { RawFormattedToggle(showRaw = showRaw, onToggle = { showRaw = it }, compact = true) }
+                { RawFormattedToggle(showRaw = renderedShowRaw, onToggle = updateShowRaw, compact = true) }
             } else {
                 null
             },
+        targetIndex = precomputed.targetIndex,
+        onCopy = onCopy,
+        copyContentDescription = copyContentDescription,
+        meta = inspectorLineCountMeta(body.rawLines.size),
         content = precomputed.content,
     )
 }
@@ -194,6 +212,10 @@ private fun rememberFormattableContent(
 ): FormattableRenderContent {
     val colors = DevConsoleTheme.colors
     val sectionMatches = searchMatches.filter { it.sectionKey == sectionKey || sectionKey.isEmpty() }
+    val highlightIndex =
+        remember(sectionMatches, currentMatchOrdinal) {
+            indexInspectorSearchHighlights(sectionMatches, currentMatchOrdinal)
+        }
     val formatted = body.formatted
     val useRaw = showRaw || formatted == null
 
@@ -238,10 +260,9 @@ private fun rememberFormattableContent(
                             fontSize = fontSize,
                             lineHeight = lineHeight,
                             valueHighlights =
-                                sectionMatches.highlightsFor(
+                                highlightIndex.highlightsFor(
                                     itemId,
                                     InspectorSearchField.VALUE,
-                                    currentMatchOrdinal,
                                 ),
                         )
                     }
@@ -259,10 +280,9 @@ private fun rememberFormattableContent(
                             fontSize = fontSize,
                             lineHeight = lineHeight,
                             valueHighlights =
-                                sectionMatches.highlightsFor(
+                                highlightIndex.highlightsFor(
                                     itemId,
                                     InspectorSearchField.VALUE,
-                                    currentMatchOrdinal,
                                 ),
                         )
                     }
@@ -297,12 +317,18 @@ private fun rememberJsonTreeRows(
             )
         }
     }
+    val highlightIndex =
+        remember(searchMatches, currentMatchOrdinal) {
+            indexInspectorSearchHighlights(searchMatches, currentMatchOrdinal)
+        }
     val searchRows =
-        rows.map { row ->
-            row.copy(
-                searchKeyHighlights = searchMatches.highlightsFor(row.path, InspectorSearchField.KEY, currentMatchOrdinal),
-                searchValueHighlights = searchMatches.highlightsFor(row.path, InspectorSearchField.VALUE, currentMatchOrdinal),
-            )
+        remember(rows, highlightIndex) {
+            rows.map { row ->
+                row.copy(
+                    searchKeyHighlights = highlightIndex.highlightsFor(row.path, InspectorSearchField.KEY),
+                    searchValueHighlights = highlightIndex.highlightsFor(row.path, InspectorSearchField.VALUE),
+                )
+            }
         }
     val onToggle: (String) -> Unit = { path -> expandedOverrides[path] = !(expandedOverrides[path] ?: true) }
     return searchRows to onToggle
@@ -316,14 +342,13 @@ private fun RawFormattedToggle(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
-    FilterChipRow(
-        chips =
-            listOf(
-                InspectorFilterChip("formatted", "Formatted", !showRaw),
-                InspectorFilterChip("raw", "Raw", showRaw),
-            ),
-        onChipClick = { chip -> onToggle(chip.id == "raw") },
-        modifier = if (compact) modifier.padding(end = 4.dp) else modifier,
+    // A segmented control, not chips: Formatted/Raw are two views of one body, not two filters over
+    // a set. See DESIGN.md's Components section.
+    InspectorSegmentedControl(
+        options = listOf("Formatted", "Raw"),
+        selectedIndex = if (showRaw) 1 else 0,
+        onSelect = { index -> onToggle(index == 1) },
+        modifier = if (compact) modifier else modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     )
 }
 

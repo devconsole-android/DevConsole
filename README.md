@@ -118,6 +118,7 @@ gets you nothing.
 |---|---|
 | **In-app inspector** | `DevConsole.open(context)` shows every inspector below as an on-device screen (included with `devconsole`), plus a QR code for pairing the browser. Opens by shake (adjustable intensity) or draggable floating button via the opt-in `DevConsoleConfig.openTriggers` flags. Its More screen can also start and stop the dashboard server. |
 | **Network inspector** | Every HTTP call with headers, bodies, and a DNS/TCP/TLS/send/wait/receive timing bar. Live-tails as traffic happens. |
+| **Find in a capture** | Every detail screen has a find field that filters and highlights as you type. Network captures go further: step through hits with a counter and arrows, scope the search to the sections you choose, and match field names, values, or both. Any body can be expanded full-screen to read or copy. |
 | **WebSocket & MQTT inspectors** | Connection lifecycles and every frame, inbound and outbound. MQTT rides the Eclipse Paho adapter. |
 | **Mock rules** | Serve canned responses for matching requests (OkHttp), toggled from the dashboard, with deterministic priority matching. Wired by `installDevConsole` and editable out of the box. |
 | **Request composer** | Make the device issue ad-hoc HTTP requests from the dashboard. Off by default, host-allowlist confinable. |
@@ -200,7 +201,7 @@ DevConsoleConfig.default().withBrowserConfig(BrowserConfig(binding = BrowserBind
 // Require the network — fails loudly instead of falling back, and surfaces the
 // ACCESS_LOCAL_NETWORK prompt on API 37+ devices:
 DevConsoleConfig.default().withBrowserConfig(
-    BrowserConfig(binding = BrowserBinding.LOOPBACK),
+    BrowserConfig(binding = BrowserBinding.LAN),
 )
 ```
 
@@ -322,6 +323,29 @@ Once traffic is flowing, every call shows up with its headers, payload, and body
 you can replay it, clone it into the composer, or flag it into a bug report:
 
 <p align="center"><img src="docs/images/dashboard-network.png" width="820" alt="Network inspector in the browser dashboard, showing a captured request and response side by side" /></p>
+
+### Search inside a capture
+
+Every detail screen — a call, a frame, a push, a log line, a crash — has a find field at the top.
+Type, and it filters the sections down to what matched and highlights the hits in place, with a
+count so you know whether the thing you're looking for is here at all.
+
+On **network captures** it goes further, because that's where you usually arrive with a specific
+token in hand. Arrows step you through the hits one at a time with a running `3/17` counter, the
+same motion as find-in-page, so you can hold an ID in your head and walk every place it appears.
+
+Those captures also let you aim the search. Tap the **Search in** chip and you can pick which
+sections to look at — it starts on the request and response bodies, since that's where most real
+questions live — and choose whether to match field names, values, or both.
+
+One thing worth knowing, because it's the kind of thing that costs an afternoon: matching *names*
+only works where the body has names to match. JSON has them. A raw or XML body doesn't — it's
+text all the way down — so a names-only search skips it entirely and quietly reports nothing.
+That's why the default matches both, and why the sheet spells out what each mode will and won't
+find.
+
+Body too dense to read in a card? Expand it full-screen. You get the whole viewport, a
+Formatted/Raw switch, a line count, and a copy button that puts the body on the clipboard.
 
 ### Set up Remote Config
 

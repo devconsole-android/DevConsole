@@ -276,6 +276,8 @@ private fun InspectorDetailSectionCard(
     spec: InspectorDetailSectionSpec,
     resolved: ResolvedDetailSection,
     currentMatchOrdinal: Int?,
+    formattableShowRaw: Boolean?,
+    onFormattableShowRawChange: ((Boolean) -> Unit)?,
     onToggle: () -> Unit,
     onExpandCodeFullScreen: (String) -> Unit,
 ) {
@@ -314,6 +316,8 @@ private fun InspectorDetailSectionCard(
                     is InspectorDetailSectionBody.Formattable ->
                         InspectorFormattableBody(
                             body = body,
+                            showRaw = formattableShowRaw,
+                            onShowRawChange = onFormattableShowRawChange,
                             sectionKey = spec.key,
                             searchMatches = resolved.searchMatches,
                             currentMatchOrdinal = currentMatchOrdinal,
@@ -353,26 +357,50 @@ internal fun InspectorObserveDetailScreen(
         rememberSaveable(resetKey) {
             mutableStateOf(searchOptions?.defaultSectionKeys?.toList().orEmpty())
         }
-    var searchModeName by
+    // Enums are Serializable, so the mode survives process death without a name round-trip.
+    var searchMode by
         rememberSaveable(resetKey) {
-            mutableStateOf((searchOptions?.defaultMode ?: InspectorSearchMode.KEYS_AND_VALUES).name)
+            mutableStateOf(searchOptions?.defaultMode ?: InspectorSearchMode.KEYS_AND_VALUES)
         }
     var currentMatchOrdinal by rememberSaveable(resetKey) { mutableIntStateOf(0) }
+    var rawFormattableSectionKeys by rememberSaveable(resetKey) { mutableStateOf(emptyList<String>()) }
     var searchOptionsVisible by remember(resetKey) { mutableStateOf(false) }
     val openState =
         remember(resetKey) {
             mutableStateMapOf<String, Boolean>().apply { initiallyOpenSectionKeys.forEach { key -> this[key] = true } }
         }
     val colors = DevConsoleTheme.colors
-    val selectedKeys = selectedSectionKeys.toSet()
-    val searchMode =
-        InspectorSearchMode.values().firstOrNull { it.name == searchModeName }
-            ?: InspectorSearchMode.KEYS
+    val selectedKeys = remember(selectedSectionKeys) { selectedSectionKeys.toSet() }
+    val rawSectionKeys = remember(rawFormattableSectionKeys) { rawFormattableSectionKeys.toSet() }
+    val searchableSectionKeys = remember(searchOptions) { searchOptions?.sections?.mapTo(mutableSetOf()) { it.key }.orEmpty() }
+    val searchableSectionBodies = inspectorSearchSectionBodies(sections, searchableSectionKeys)
+    val hasNetworkQuery = searchOptions != null && query.isNotBlank()
+    val networkSearchCandidates =
+        remember(searchableSectionBodies, rawSectionKeys, hasNetworkQuery) {
+            if (!hasNetworkQuery) {
+                emptyList()
+            } else {
+                searchableSectionBodies.flatMap { section ->
+                        searchInspectorBodyCandidates(
+                            sectionKey = section.sectionKey,
+                            body = section.body,
+                            representation =
+                                if (section.sectionKey in rawSectionKeys) {
+                                    InspectorBodySearchRepresentation.RAW
+                                } else {
+                                    InspectorBodySearchRepresentation.FORMATTED
+                                },
+                        )
+                    }
+            }
+        }
     val networkMatches =
-        if (searchOptions != null) {
-            searchInspectorSections(sections, query, selectedKeys, searchMode)
-        } else {
-            emptyList()
+        remember(networkSearchCandidates, query, selectedKeys, searchMode, hasNetworkQuery) {
+            if (hasNetworkQuery) {
+                searchInspectorCandidates(networkSearchCandidates, query, selectedKeys, searchMode)
+            } else {
+                emptyList()
+            }
         }
     val activeMatchOrdinal =
         if (networkMatches.isEmpty()) 0 else currentMatchOrdinal.coerceIn(0, networkMatches.lastIndex)
@@ -387,7 +415,7 @@ internal fun InspectorObserveDetailScreen(
                         openState = openState,
                         colors = colors,
                         matches = sectionMatches,
-                        searchable = spec.key in searchOptions.sections.map { it.key },
+                        searchable = spec.key in searchableSectionKeys,
                     )
             } else {
                 spec to resolveDetailSection(spec, query, openState, colors)
@@ -419,6 +447,8 @@ internal fun InspectorObserveDetailScreen(
                 sectionKey = spec.key,
                 searchMatches = section.searchMatches,
                 currentMatchOrdinal = activeMatchOrdinal,
+                onCopy = spec.onCopy,
+                copyContentDescription = spec.copyDescription ?: "Copy ${spec.label}",
             )
             return
         }
@@ -427,10 +457,32 @@ internal fun InspectorObserveDetailScreen(
                 title = spec.label,
                 body = body,
                 onDismiss = { fullScreenSectionKey = null },
+                showRaw =
+                    if (searchOptions != null) {
+                        body.formatted == null || spec.key in rawSectionKeys
+                    } else {
+                        null
+                    },
+                onShowRawChange =
+                    if (searchOptions != null) {
+                        { showRaw ->
+                            rawFormattableSectionKeys =
+                                if (showRaw) {
+                                    (rawFormattableSectionKeys + spec.key).distinct()
+                                } else {
+                                    rawFormattableSectionKeys.filterNot { it == spec.key }
+                                }
+                            currentMatchOrdinal = 0
+                        }
+                    } else {
+                        null
+                    },
                 modifier = modifier.fillMaxSize(),
                 sectionKey = spec.key,
                 searchMatches = section.searchMatches,
                 currentMatchOrdinal = activeMatchOrdinal,
+                onCopy = spec.onCopy,
+                copyContentDescription = spec.copyDescription ?: "Copy ${spec.label}",
             )
             return
         }
@@ -491,6 +543,28 @@ internal fun InspectorObserveDetailScreen(
                 spec = spec,
                 resolved = section,
                 currentMatchOrdinal = if (searchOptions != null) activeMatchOrdinal else null,
+                formattableShowRaw =
+                    if (searchOptions != null) {
+                        (spec.body as? InspectorDetailSectionBody.Formattable)?.let { body ->
+                            body.formatted == null || spec.key in rawSectionKeys
+                        }
+                    } else {
+                        null
+                    },
+                onFormattableShowRawChange =
+                    if (searchOptions != null) {
+                        { showRaw ->
+                            rawFormattableSectionKeys =
+                                if (showRaw) {
+                                    (rawFormattableSectionKeys + spec.key).distinct()
+                                } else {
+                                    rawFormattableSectionKeys.filterNot { it == spec.key }
+                                }
+                            currentMatchOrdinal = 0
+                        }
+                    } else {
+                        null
+                    },
                 onToggle = { openState[spec.key] = !section.expanded },
                 onExpandCodeFullScreen = { key -> fullScreenSectionKey = key },
             )
@@ -504,7 +578,7 @@ internal fun InspectorObserveDetailScreen(
             onDismiss = { searchOptionsVisible = false },
             onApply = { newKeys, newMode ->
                 selectedSectionKeys = newKeys.toList()
-                searchModeName = newMode.name
+                searchMode = newMode
                 currentMatchOrdinal = 0
                 searchOptionsVisible = false
             },

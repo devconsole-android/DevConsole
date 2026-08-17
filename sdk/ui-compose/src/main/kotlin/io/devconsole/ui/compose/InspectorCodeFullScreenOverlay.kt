@@ -11,12 +11,14 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,7 +34,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 
 /**
  * Full-screen overlay for a single [InspectorCodeBlock]'s content:
@@ -43,6 +47,7 @@ import androidx.compose.ui.unit.sp
  * Convenience overload of the [content]-taking overload below, for the common case of one flat
  * [InspectorCodeLine] list; [InspectorFormattableBody] uses the general one to add a JSON tree.
  */
+@Suppress("LongParameterList") // Search/highlight inputs plus the section's own copy action.
 @Composable
 internal fun InspectorCodeFullScreenOverlay(
     title: String,
@@ -52,21 +57,48 @@ internal fun InspectorCodeFullScreenOverlay(
     sectionKey: String = "",
     searchMatches: List<InspectorDetailSearchMatch> = emptyList(),
     currentMatchOrdinal: Int? = null,
+    onCopy: (() -> Unit)? = null,
+    copyContentDescription: String = "Copy $title",
 ) {
     val sectionMatches = searchMatches.filter { it.sectionKey == sectionKey || sectionKey.isEmpty() }
-    InspectorCodeFullScreenOverlay(title = title, onDismiss = onDismiss, modifier = modifier) {
+    val highlightIndex = remember(sectionMatches, currentMatchOrdinal) {
+        indexInspectorSearchHighlights(sectionMatches, currentMatchOrdinal)
+    }
+    InspectorCodeFullScreenOverlay(
+        title = title,
+        onDismiss = onDismiss,
+        modifier = modifier,
+        targetIndex = activeInspectorLineIndex(sectionMatches, currentMatchOrdinal),
+        onCopy = onCopy,
+        copyContentDescription = copyContentDescription,
+        meta = inspectorLineCountMeta(lines.size),
+    ) {
         itemsIndexed(lines, key = { index, _ -> index }) { index, line ->
             val itemId = "line:$index"
             CodeLineRow(
                 line = line,
                 fontSize = 14.sp,
                 lineHeight = 23.8.sp,
-                keyHighlights = sectionMatches.highlightsFor(itemId, InspectorSearchField.KEY, currentMatchOrdinal),
-                valueHighlights = sectionMatches.highlightsFor(itemId, InspectorSearchField.VALUE, currentMatchOrdinal),
+                keyHighlights = highlightIndex.highlightsFor(itemId, InspectorSearchField.KEY),
+                valueHighlights = highlightIndex.highlightsFor(itemId, InspectorSearchField.VALUE),
             )
         }
     }
 }
+
+/** "1 line" / "N lines" -- the same count the collapsed section card shows in its meta slot. */
+internal fun inspectorLineCountMeta(count: Int): String? =
+    if (count <= 0) null else "$count line${if (count == 1) "" else "s"}"
+
+internal fun activeInspectorLineIndex(
+    matches: List<InspectorDetailSearchMatch>,
+    currentMatchOrdinal: Int?,
+): Int? =
+    matches
+        .firstOrNull { it.ordinal == currentMatchOrdinal }
+        ?.itemId
+        ?.substringAfter("line:", "")
+        ?.toIntOrNull()
 
 /**
  * General form: header + a both-axes-scrollable [LazyColumn] body. Unlike the inline
@@ -75,12 +107,18 @@ internal fun InspectorCodeFullScreenOverlay(
  * thousands-of-lines body only composes the rows actually scrolled into view. [headerTrailing] is an
  * optional control (the Raw/Formatted toggle) rendered at the header's trailing edge.
  */
+@Suppress("LongParameterList") // Header slots (trailing control, copy action) plus scroll target.
 @Composable
 internal fun InspectorCodeFullScreenOverlay(
     title: String,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     headerTrailing: (@Composable () -> Unit)? = null,
+    targetIndex: Int? = null,
+    onCopy: (() -> Unit)? = null,
+    copyContentDescription: String = "Copy $title",
+    /** Right-aligned readout under the title -- what is on screen, e.g. "6 lines". */
+    meta: String? = null,
     content: LazyListScope.() -> Unit,
 ) {
     BackHandler(onBack = onDismiss)
@@ -90,7 +128,11 @@ internal fun InspectorCodeFullScreenOverlay(
     // same way, and driven from one Animatable so the whole entrance runs in the draw phase.
     val entranceSpec = feedbackSpec<Float>(InspectorMotion.OVERLAY_MS)
     val entrance = remember { Animatable(0f) }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = targetIndex ?: 0)
     LaunchedEffect(Unit) { entrance.animateTo(1f, entranceSpec) }
+    LaunchedEffect(targetIndex) {
+        targetIndex?.let { index -> listState.scrollToItem(index.coerceAtLeast(0)) }
+    }
     Surface(
         modifier =
             modifier.fillMaxSize().graphicsLayer {
@@ -103,8 +145,9 @@ internal fun InspectorCodeFullScreenOverlay(
         color = colors.ground,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            CodeFullScreenHeader(title, onDismiss, headerTrailing)
+            CodeFullScreenHeader(title, onDismiss, onCopy, copyContentDescription, meta, headerTrailing)
             LazyColumn(
+                state = listState,
                 modifier =
                     Modifier
                         .weight(1f)
@@ -117,14 +160,23 @@ internal fun InspectorCodeFullScreenOverlay(
     }
 }
 
+/**
+ * Two bands, mirroring [InspectorDetailHeader]'s own structure so the overlay reads as a sibling of
+ * the detail screen rather than a bolted-on modal: the identity row (back, section name, copy) owns
+ * the full width so a long name is never truncated by a control sitting beside it, and the controls
+ * row underneath carries the view switch against a right-aligned mono readout of what is on screen.
+ */
 @Composable
 private fun CodeFullScreenHeader(
     title: String,
     onDismiss: () -> Unit,
+    onCopy: (() -> Unit)?,
+    copyContentDescription: String,
+    meta: String?,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val colors = DevConsoleTheme.colors
-    Row(
+    Column(
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -134,33 +186,70 @@ private fun CodeFullScreenHeader(
                     val strokeWidth = 1.dp.toPx()
                     val y = size.height - strokeWidth / 2
                     drawLine(colors.line, Offset(0f, y), Offset(size.width, y), strokeWidth)
-                }.padding(vertical = 8.dp, horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+                },
     ) {
-        InspectorRoundIconButton(
-            contentDescription = "Close full screen",
-            onClick = onDismiss,
-            icon = {
-                InspectorGlyphIcon(
-                    InspectorGlyph.ChevronDown,
-                    contentDescription = null,
-                    tint = colors.ink,
-                    size = 20.dp,
-                    rotationDegrees = 90f,
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            InspectorRoundIconButton(
+                contentDescription = "Close full screen",
+                onClick = onDismiss,
+                icon = {
+                    InspectorGlyphIcon(
+                        InspectorGlyph.ChevronDown,
+                        contentDescription = null,
+                        tint = colors.ink,
+                        size = 20.dp,
+                        rotationDegrees = 90f,
+                    )
+                },
+            )
+            // UI stack, not mono: this is the section's name, not captured data. Mono here would
+            // claim "Response body" came off the wire.
+            Text(
+                title,
+                modifier = Modifier.weight(1f).padding(start = 4.dp),
+                color = colors.ink,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp,
+                letterSpacing = (-0.01).em,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (onCopy != null) {
+                InspectorRoundIconButton(
+                    contentDescription = copyContentDescription,
+                    onClick = onCopy,
+                    size = 44.dp,
+                    icon = {
+                        InspectorGlyphIcon(
+                            InspectorGlyph.Copy,
+                            contentDescription = null,
+                            tint = colors.muted,
+                            size = 17.dp,
+                        )
+                    },
                 )
-            },
-        )
-        Text(
-            title,
-            modifier = Modifier.weight(1f).padding(start = 4.dp),
-            color = colors.ink,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 14.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        trailing?.invoke()
+            }
+        }
+        if (trailing != null || meta != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                trailing?.invoke()
+                Spacer(Modifier.weight(1f))
+                if (meta != null) {
+                    Text(
+                        meta.uppercase(Locale.US),
+                        color = colors.text3,
+                        fontFamily = FontFamily.Monospace,
+                        style = DevConsoleType.groupLabel,
+                    )
+                }
+            }
+        }
     }
 }
 
