@@ -16,9 +16,10 @@ private const val DEFAULT_PORT_RANGE_END = 8099
  * binds what this field says. Configure this when you want an on-device start to reach the browser
  * over the network; pass [StartRequest.bindingMode] when your own code is doing the starting.
  *
- * [LOOPBACK] is the default here for the same reason it is on [BindingMode]: the dashboard speaks
- * plaintext HTTP, so [LAN] is an explicit decision to expose captured headers, tokens, and bodies to
- * anyone who can see the traffic. See the KDoc on [BindingMode] and `docs/THREAT_MODEL.md`.
+ * [LAN] is the default here so the dashboard can be reached from another device during debugging.
+ * The dashboard speaks plaintext HTTP, so choose [LOOPBACK] explicitly when the device is on an
+ * untrusted network and use ADB forwarding instead. See the KDoc on [BindingMode] and
+ * `docs/THREAT_MODEL.md`.
  */
 enum class BrowserBinding { LOOPBACK, LAN }
 
@@ -49,7 +50,7 @@ data class RetentionPolicy(
 
 /** SESSION_CODE is the only browser-access flow; there is no longer an access-mode field to set. */
 data class BrowserConfig(
-    val binding: BrowserBinding = BrowserBinding.LOOPBACK,
+    val binding: BrowserBinding = BrowserBinding.LAN,
     val portRange: IntRange = DEFAULT_PORT_RANGE_START..DEFAULT_PORT_RANGE_END,
     val sessionCodeTtlMs: Long = DEFAULT_SESSION_CODE_TTL_MS,
 ) {

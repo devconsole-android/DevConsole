@@ -831,11 +831,10 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
      * what [io.devconsole.api.BrowserConfig.binding] is for, and it is now the field that decides:
      * an on-device start binds what the host asked for, and uses the port range it asked for too.
      *
-     * Nothing here loosens the default. [BrowserBinding.LOOPBACK] remains the default on
-     * [io.devconsole.api.BrowserConfig], so LAN is still reached only by a host that explicitly asks
-     * for it, and a LAN start still passes through the same [rejectUnpermittedLan] gate as any
-     * other -- returning [StartResult.PermissionRequired] rather than binding, which the More screen
-     * surfaces through its normal state polling.
+     * [io.devconsole.api.BrowserConfig] defaults to [BrowserBinding.LAN], and an explicit
+     * [BrowserBinding.LOOPBACK] still maps to loopback. Every LAN start passes through the same
+     * [rejectUnpermittedLan] gate as any other -- returning [StartResult.PermissionRequired] rather
+     * than binding, which the More screen surfaces through its normal state polling.
      */
     private fun configuredStartRequest(): StartRequest {
         val browser = activeConfig?.browserConfig ?: return StartRequest()
@@ -1203,9 +1202,9 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     /**
      * The session code has its own TTL, shorter than the server's lifetime -- if it has expired
      * while the server keeps running, re-issue automatically (reusing the real bind address, not the
-     * loopback default) so both the host app's connect-URL card ([accessInfo]) and the SDK's own More
-     * screen ([browserSupplier] above) keep advertising something connectable instead of a dead,
-     * already-expired code. Null while the server isn't running.
+     * initial placeholder endpoint) so both the host app's connect-URL card ([accessInfo]) and the
+     * SDK's own More screen ([browserSupplier] above) keep advertising something connectable instead
+     * of a dead, already-expired code. Null while the server isn't running.
      */
     private fun liveSessionCodeInfo(): SessionCodeInfo? {
         lastStarted ?: return null
