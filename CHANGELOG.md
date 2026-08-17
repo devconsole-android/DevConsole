@@ -18,17 +18,20 @@ before it can reach a release. (There was briefly a separate `sdk:plugin-api` mo
 third-party plugin framework; it was removed before ever shipping — see Removed, below — so it never
 joined this list.)
 
-## Unreleased
+## 1.2.1 — 2026-08-17
 
 Three default changes, aimed at the same complaint: a fresh integration showed a `127.0.0.1` URL
 that needed `adb forward` before it displayed anything, and a Mocks screen that could not add a
 mock. See [docs/MIGRATION.md](docs/MIGRATION.md#upgrading-from-120) for the upgrade path.
 
-**Version note, deliberately unresolved here:** under this file's own
-[policy](#versioning-and-stability-policy), adding a constant to a public enum is source-breaking
-for any host that `when`s exhaustively over `BindingMode`/`BrowserBinding`, and flipping a security
-default is a behavioural break. That reads as a major, not a minor. The number is left for the
-release decision rather than assumed.
+**Version note:** shipped as a patch, and that number is generous to itself. Under this file's own
+[policy](#versioning-and-stability-policy) this reads as a major — adding a constant to a public
+enum is source-breaking for any host that `when`s exhaustively over `BindingMode`/`BrowserBinding`,
+and flipping a security default is a behavioural break. Nothing was removed and no signature
+changed, so a host that does neither of those things upgrades without touching anything; the two
+cases that do not are spelled out in
+[docs/MIGRATION.md](docs/MIGRATION.md#upgrading-from-120). Read it before treating the version
+number as permission to skip the diff.
 
 ### Added
 

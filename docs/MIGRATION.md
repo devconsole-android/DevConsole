@@ -69,5 +69,5 @@ than once during active development — most recently a facade reshape (`start()
 `startBrowser()`/`startBrowserAsync()`, returning `StartResult.Started(endpoint, access)`), the
 removal of `BindingMode.AUTO`/NSD/auto-start, the replacement of pairing/role-based access with the
 single SESSION_CODE flow, and the removal of the generic plugin framework. If you're carrying code
-against an earlier snapshot of this repository, check the **Unreleased** section of
+against an earlier snapshot of this repository, check the pre-1.0 entries in
 [CHANGELOG.md](../CHANGELOG.md) for the full list before updating.
