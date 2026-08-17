@@ -38,12 +38,12 @@ links no server code, and the Gradle plugin fails the build if the real runtime 
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.devconsole-android") version "1.2.0"
+    id("io.github.devconsole-android") version "1.2.1"
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:1.2.0")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.2.0")
+    debugImplementation("io.github.devconsole-android:devconsole:1.2.1")
+    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.2.1")
 }
 ```
 
@@ -314,8 +314,8 @@ Add the adapter — it is not part of the `devconsole` umbrella, so that Firebas
 classpath of an app that doesn't use it:
 
 ```kotlin
-debugImplementation("io.github.devconsole-android:devconsole-remote-config-firebase:1.2.0")
-releaseImplementation("io.github.devconsole-android:devconsole-remote-config-firebase-noop:1.2.0")
+debugImplementation("io.github.devconsole-android:devconsole-remote-config-firebase:1.2.1")
+releaseImplementation("io.github.devconsole-android:devconsole-remote-config-firebase-noop:1.2.1")
 ```
 
 > These two artifacts first ship in `1.2.0`; earlier versions do not have them.
@@ -406,8 +406,8 @@ dependencyResolutionManagement {
 ```kotlin
 dependencies {
     // Group is com.github.devconsole-android.DevConsole; artifact ids match the tables above.
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.2.0")
-    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.0")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.2.1")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.1")
 }
 ```
 
