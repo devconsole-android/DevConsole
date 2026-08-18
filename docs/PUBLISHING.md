@@ -90,17 +90,18 @@ plugins {
     id("io.github.devconsole-android") version "<version>"
 }
 dependencies {
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:v<version>")
-    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:v<version>")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:<version>")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:<version>")
 }
 ```
 
-`<version>` is the git ref verbatim, so for a release it is the **`v`-prefixed tag** (`v1.2.2`) —
-JitPack does not strip the prefix, and the bare form 404s. Any branch works as
-`<branch>-SNAPSHOT`, with `/` written as `~`, so a `feature/x` branch is `feature~x-SNAPSHOT`.
-Note the Gradle plugin is the exception: it comes from the Portal, where its version is the bare
-`1.2.2`. JitPack support starts at **v1.1.1**; earlier
-tags do not build there.
+`<version>` is a git ref. JitPack looks it up as a tag and falls back to the `v`-prefixed spelling
+when no bare tag exists, so a release resolves either way — `1.2.3` and `v1.2.3` both serve the
+`v1.2.3` build. Prefer the bare form: it is what the docs show, and it matches the version the
+Gradle plugin carries on the Portal. Any branch works as `<branch>-SNAPSHOT`, with `/` written as
+`~`, so a `feature/x` branch is `feature~x-SNAPSHOT`. JitPack support starts at **1.1.1**; earlier
+tags do not build there, and bare `1.2.1` is a cached failed build — that one release resolves only
+as `v1.2.1`.
 
 See [BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md](BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md) for what the
 plugin enforces about the debug/release split.
