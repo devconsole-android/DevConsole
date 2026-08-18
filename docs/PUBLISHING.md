@@ -95,8 +95,11 @@ dependencies {
 }
 ```
 
-A release tag works as the bare tag. Any branch works as `<branch>-SNAPSHOT`, with `/` written as
-`~`, so a `feature/x` branch is `feature~x-SNAPSHOT`. JitPack support starts at **1.1.1**; earlier
+`<version>` is the git ref verbatim, so for a release it is the **`v`-prefixed tag** (`v1.2.2`) —
+JitPack does not strip the prefix, and the bare form 404s. Any branch works as
+`<branch>-SNAPSHOT`, with `/` written as `~`, so a `feature/x` branch is `feature~x-SNAPSHOT`.
+Note the Gradle plugin is the exception: it comes from the Portal, where its version is the bare
+`1.2.2`. JitPack support starts at **v1.1.1**; earlier
 tags do not build there.
 
 See [BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md](BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md) for what the

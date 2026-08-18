@@ -874,7 +874,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         // never published, which would make every zero-config release build fail to resolve.
         val result = runner("dependencies", "--configuration", "releaseImplementation").build()
 
-        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.2"))
+        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole-noop:v1.2.2"))
         assertTrue(result.output, !result.output.contains("1.2.2-SNAPSHOT"))
     }
 
@@ -925,13 +925,13 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
     @Test
     fun `the JitPack coordinate trips the declared-dependency check`() {
-        addStubCoordinate("com.github.devconsole-android.DevConsole", "devconsole", "1.2.2")
+        addStubCoordinate("com.github.devconsole-android.DevConsole", "devconsole", "v1.2.2")
         writeFixture(
             devConsoleBlock = "autoWireDependencies.set(false)",
             extraBuildScript =
                 """
                 dependencies {
-                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole:1.2.2")
+                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole:v1.2.2")
                 }
                 """.trimIndent(),
         )
@@ -971,7 +971,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         // debug is ENABLED, so the core runtime ("devconsole") must still be auto-wired alongside the
         // host's add-on declaration -- the add-on alone does not count as declaring the core runtime.
-        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole:1.2.2"))
+        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole:v1.2.2"))
         assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-ui-compose"))
     }
 

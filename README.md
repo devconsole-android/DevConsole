@@ -55,8 +55,8 @@ plugins {
 }
 
 dependencies {
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.2.2")
-    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.2")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:v1.2.2")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:v1.2.2")
 }
 ```
 
@@ -353,8 +353,8 @@ Add the adapter — it is not part of the `devconsole` umbrella, so that Firebas
 classpath of an app that doesn't use it:
 
 ```kotlin
-debugImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase:1.2.2")
-releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase-noop:1.2.2")
+debugImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase:v1.2.2")
+releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase-noop:v1.2.2")
 ```
 
 > These two artifacts first ship in `1.2.0`; earlier versions do not have them.
@@ -429,10 +429,12 @@ You never name those. Every module publishes sources, javadoc, and a POM.
 ### Versions and unreleased code
 
 All 34 library artifacts come from [JitPack](https://jitpack.io/#devconsole-android/DevConsole),
-which builds a ref on demand — so the version is a git ref. A release tag works as the bare tag, as
-in the tables above. Any branch works as `<branch>-SNAPSHOT`, with `/` written as `~`, so a
-`feature/x` branch is `feature~x-SNAPSHOT` — that is how you try an unreleased fix before it ships.
-JitPack support starts at **1.1.1**; earlier tags do not build there. Two things to know:
+which builds a ref on demand — so **the version is a git ref, spelled exactly as the ref is**.
+Releases are tagged `v*`, which is why the coordinates above read `v1.2.2` and not `1.2.2`; the
+bare form is a different ref and does not resolve. Any branch works as `<branch>-SNAPSHOT`, with
+`/` written as `~`, so a `feature/x` branch is `feature~x-SNAPSHOT` — that is how you try an
+unreleased fix before it ships. JitPack support starts at **v1.1.1**; earlier tags do not build
+there. Two things to know:
 
 - **The Gradle plugin comes from the Gradle Plugin Portal, not JitPack**, because the `plugins { }`
   DSL cannot resolve a plugin marker from JitPack. That is why the quick start adds JitPack for
