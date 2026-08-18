@@ -26,12 +26,13 @@ dependencyResolutionManagement {
 ```
 
 2. Change the group on every DevConsole dependency from `io.github.devconsole-android` to
-   `com.github.devconsole-android.DevConsole`, and prefix the version with `v` — JitPack serves a
-   build under its git ref name, and releases are tagged `v*`. Artifact IDs are unchanged:
+   `com.github.devconsole-android.DevConsole`. Artifact IDs and the version spelling are unchanged —
+   JitPack serves a build under its git ref name, and resolves a bare version against the matching
+   `v*` release tag:
 
 ```kotlin
-debugImplementation("com.github.devconsole-android.DevConsole:devconsole:v1.2.2")
-releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:v1.2.2")
+debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.2.3")
+releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.3")
 ```
 
 If you rely on the plugin's `autoWireDependencies` (the default), step 2 is done for you — you only

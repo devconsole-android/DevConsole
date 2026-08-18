@@ -18,6 +18,20 @@ before it can reach a release. (There was briefly a separate `sdk:plugin-api` mo
 third-party plugin framework; it was removed before ever shipping — see Removed, below — so it never
 joined this list.)
 
+## 1.2.3 — 2026-08-18
+
+### Changed
+
+- **JitPack coordinates are spelled without the `v` prefix.** JitPack looks a requested version up
+  as a git tag and falls back to the `v`-prefixed spelling when no bare tag exists, so
+  `com.github.devconsole-android.DevConsole:devconsole:1.2.3` serves the `v1.2.3` build exactly as
+  `v1.2.3` does. The docs and the Gradle plugin's `sdkVersion` default now use the bare form, which
+  reads the same as the version the plugin carries on the Gradle Plugin Portal. Nothing breaks:
+  `v`-prefixed coordinates keep resolving, and an existing 1.2.2 host needs no change. This
+  supersedes the note under 1.2.2 below, which said the bare version does not resolve — that was
+  generalised from `1.2.1`, whose bare build failed on JitPack for unrelated reasons and stays
+  cached as a failure, so 1.2.1 alone must be named `v1.2.1`.
+
 ## 1.2.2 — 2026-08-17
 
 ### Added

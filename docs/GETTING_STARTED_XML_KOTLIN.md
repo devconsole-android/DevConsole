@@ -24,9 +24,9 @@ plugins {
 }
 
 dependencies {
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:v<version>")
-    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:v<version>")
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole-ui-views:v<version>") // optional, only for the launcher panel
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:<version>")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:<version>")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole-ui-views:<version>") // optional, only for the launcher panel
 }
 
 devConsole {
@@ -35,9 +35,9 @@ devConsole {
 }
 ```
 
-`v<version>` is a JitPack version, which is the git tag verbatim — releases are tagged `v*`, so
-`v1.2.2`, not `1.2.2`. The plugin is the exception: it comes from the Gradle Plugin Portal, where
-its version is bare.
+`<version>` is a JitPack version — `1.2.3` for the current release. Releases are tagged `v1.2.3`,
+and JitPack resolves a bare version against the `v`-prefixed tag, so the `v` is optional; the bare
+form is used here because it also matches the plugin's version on the Gradle Plugin Portal.
 
 There is no BOM. `devconsole` (the debug runtime) and `devconsole-noop` are the only two coordinates
 a normal integration names; everything else is `devconsole-<module>`.
