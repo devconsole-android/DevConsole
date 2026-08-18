@@ -1,7 +1,7 @@
 name: Publish Gradle plugin
 
-# Tag-triggered but not automatic: the `plugin-portal` environment gates the publish behind a
-# human approval, because a published Portal version can never be replaced or deleted.
+# A pushed `v*` tag is the release decision, so publishing follows it automatically. The guards
+# below cover what a tag does not assert: that the version is the intended one and the suite passes.
 on:
   workflow_dispatch:
   push:
@@ -13,14 +13,15 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: plugin-portal
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v6
+      # Pinned: this workflow holds the Portal credentials, so a moved tag upstream would run
+      # unreviewed code next to them. Bump deliberately.
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
       # A tag that disagrees with the plugin's own version would publish the wrong coordinate,
       # and the Portal will not let it be corrected afterwards.

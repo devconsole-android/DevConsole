@@ -51,16 +51,16 @@ One-time: create an account at [plugins.gradle.org](https://plugins.gradle.org) 
 key. Then either publish from CI (preferred) or locally.
 
 **From CI.** The **Publish Gradle plugin** workflow runs on a `v*` tag and on `workflow_dispatch`.
-It checks the tag agrees with `gradle-plugin`'s declared `version`, runs the plugin's test suite,
-and only then publishes. Two prerequisites, both one-time:
+Pushing the tag *is* the release decision, so it publishes without further confirmation. Before it
+does, it checks the tag agrees with `gradle-plugin`'s declared `version` and runs the plugin's test
+suite — a tag asserts the intent to release, not that the version string is right.
 
-1. Repo secrets `GRADLE_PUBLISH_KEY` and `GRADLE_PUBLISH_SECRET` (Settings → Secrets and variables
-   → Actions).
-2. An environment named `plugin-portal` (Settings → Environments) **with a required reviewer**.
-   The workflow is tag-triggered, so this approval gate is the only thing standing between a tag
-   push and an irreversible publish — a Portal version can never be replaced or deleted. Without a
-   protection rule on that environment the job runs unattended, which is exactly what the gate
-   exists to prevent.
+One-time setup: add the repo secrets `GRADLE_PUBLISH_KEY` and `GRADLE_PUBLISH_SECRET` (Settings →
+Secrets and variables → Actions).
+
+Because the publish is irreversible, two things are worth knowing: the version guard fails the run
+rather than publishing a mismatched coordinate, and re-pushing an already-published version is
+rejected by the Portal, so a deleted-and-recreated tag will fail rather than overwrite.
 
 **Locally.** Put `gradle.publish.key` / `gradle.publish.secret` in `~/.gradle/gradle.properties`:
 
