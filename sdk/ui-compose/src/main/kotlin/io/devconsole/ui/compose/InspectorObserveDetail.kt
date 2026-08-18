@@ -211,7 +211,7 @@ private fun resolveDetailSection(
 }
 
 /** The per-section slice of the screen's search state that [resolveNetworkDetailSection] reads. */
-private data class NetworkSectionSearch(
+internal data class NetworkSectionSearch(
     val query: String,
     val matches: List<InspectorDetailSearchMatch>,
     val searchable: Boolean,
@@ -221,7 +221,7 @@ private data class NetworkSectionSearch(
     val showsMatchCount: Boolean get() = hasQuery && searchable
 }
 
-private fun networkSectionMeta(
+internal fun networkSectionMeta(
     search: NetworkSectionSearch,
     expanded: Boolean,
     total: Int,
@@ -390,7 +390,7 @@ private fun toggledRawSectionKeys(
 private fun InspectorDetailSectionBody?.isFullScreenCapable(): Boolean =
     this is InspectorDetailSectionBody.Code || this is InspectorDetailSectionBody.Formattable
 
-private fun detailSearchMatchLabel(
+internal fun detailSearchMatchLabel(
     query: String,
     searching: Boolean,
     matchCount: Int,

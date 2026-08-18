@@ -28,7 +28,13 @@ To verify the whole pipeline locally before tagging:
 ./gradlew publishToMavenLocal
 ```
 
-That produces exactly what JitPack produces. Check a real JitPack build at
+That produces the same artifacts JitPack does, with one difference that matters for a smoke test:
+the POM group stays `io.github.devconsole-android`, because JitPack rewrites the group to
+`com.github.devconsole-android.DevConsole` when it serves a build. So a local consumer test against
+`mavenLocal()` must name `io.github.devconsole-android:devconsole:<version>` — the
+`com.github.…` coordinates in this document only resolve from jitpack.io.
+
+Check a real JitPack build at
 `https://jitpack.io/api/builds/com.github.devconsole-android/DevConsole`.
 
 ### Bumping the version

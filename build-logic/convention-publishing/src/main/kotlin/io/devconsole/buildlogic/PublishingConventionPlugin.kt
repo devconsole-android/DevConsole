@@ -71,6 +71,8 @@ class PublishingConventionPlugin : Plugin<Project> {
     }
 
     private companion object {
+        // The POM group. JitPack rewrites it to com.github.devconsole-android.DevConsole when it
+        // serves a build, so consumers name that group, not this one.
         const val MAVEN_GROUP = "io.github.devconsole-android"
         const val SDK_VERSION = "1.2.2"
         const val PROJECT_URL = "https://github.com/devconsole-android/DevConsole"

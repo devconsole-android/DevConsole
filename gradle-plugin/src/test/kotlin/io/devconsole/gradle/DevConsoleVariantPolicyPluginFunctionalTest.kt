@@ -19,6 +19,31 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
             ?: error("Set ANDROID_HOME or ANDROID_SDK_ROOT to run this functional test.")
 
+    /**
+     * Plants an empty jar + POM for [group]:[artifact]:[version] in a local repo the fixture reads,
+     * so a coordinate-matching test never depends on the real artifact existing remotely.
+     */
+    private fun addStubCoordinate(
+        group: String,
+        artifact: String,
+        version: String,
+    ) {
+        val dir = File(projectDir.root, "stub-repo/${group.replace('.', '/')}/$artifact/$version")
+        dir.mkdirs()
+        File(dir, "$artifact-$version.jar").writeBytes(EMPTY_JAR_BYTES)
+        File(dir, "$artifact-$version.pom").writeText(
+            """
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>$group</groupId>
+              <artifactId>$artifact</artifactId>
+              <version>$version</version>
+              <packaging>jar</packaging>
+            </project>
+            """.trimIndent(),
+        )
+    }
+
     private fun writeFixture(
         devConsoleBlock: String,
         extraBuildScript: String = "",
@@ -34,6 +59,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
     ) {
         File(projectDir.root, "local.properties")
             .writeText("sdk.dir=${androidSdkDir().replace("\\", "\\\\")}\n")
+        File(projectDir.root, "gradle.properties").writeText("android.useAndroidX=true\n")
         File(projectDir.root, "settings.gradle.kts").writeText(
             """
             pluginManagement {
@@ -42,7 +68,12 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
             dependencyResolutionManagement {
                 // jitpack.io serves the auto-wired devconsole coordinates, so any fixture that
                 // resolves a runtime classpath needs it -- same as a real consumer.
-                repositories { google(); mavenCentral(); maven { url = uri("https://jitpack.io") } }
+                repositories {
+                    maven { url = uri("${'$'}{rootDir}/stub-repo") }
+                    google()
+                    mavenCentral()
+                    maven { url = uri("https://jitpack.io") }
+                }
             }
             rootProject.name = "fixture"
             """.trimIndent(),
@@ -866,6 +897,56 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
     }
 
     @Test
+    fun `a legacy Maven Central coordinate still trips the declared-dependency check`() {
+        addStubCoordinate("io.github.devconsole-android", "devconsole", "1.2.1")
+        writeFixture(
+            devConsoleBlock = "autoWireDependencies.set(false)",
+            extraBuildScript =
+                """
+                dependencies {
+                    add("releaseImplementation", "io.github.devconsole-android:devconsole:1.2.1")
+                }
+                """.trimIndent(),
+        )
+
+        val result = runner("verifyDevConsoleProtectedArtifacts").buildAndFail()
+
+        // The pre-JitPack group must keep failing a protected variant: hosts that have not migrated
+        // their coordinates still depend on this check to keep the full runtime out of release.
+        assertTrue(result.output, result.output.contains("Protected variants contain the full DevConsole runtime"))
+        // The declared-dependency entry carries no version and no "(resolved)" suffix -- asserting it
+        // specifically keeps the transitive-regex path from satisfying this test on its own.
+        assertTrue(
+            result.output,
+            Regex("release -> io\\.github\\.devconsole-android:devconsole(,|\\s*$)", RegexOption.MULTILINE)
+                .containsMatchIn(result.output),
+        )
+    }
+
+    @Test
+    fun `the JitPack coordinate trips the declared-dependency check`() {
+        addStubCoordinate("com.github.devconsole-android.DevConsole", "devconsole", "1.2.2")
+        writeFixture(
+            devConsoleBlock = "autoWireDependencies.set(false)",
+            extraBuildScript =
+                """
+                dependencies {
+                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole:1.2.2")
+                }
+                """.trimIndent(),
+        )
+
+        val result = runner("verifyDevConsoleProtectedArtifacts").buildAndFail()
+
+        assertTrue(result.output, result.output.contains("Protected variants contain the full DevConsole runtime"))
+        assertTrue(
+            result.output,
+            Regex("release -> com\\.github\\.devconsole-android\\.DevConsole:devconsole(,|\\s*$)", RegexOption.MULTILINE)
+                .containsMatchIn(result.output),
+        )
+    }
+
+    @Test
     fun `declaring only an add-on coordinate still auto-wires the core runtime`() {
         writeFixture(
             devConsoleBlock = "",
@@ -893,4 +974,11 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole:1.2.2"))
         assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-ui-compose"))
     }
+
+    private companion object {
+        /** A valid, empty zip -- enough for Gradle to accept the stub as a jar artifact. */
+        val EMPTY_JAR_BYTES =
+            byteArrayOf(0x50, 0x4B, 0x05, 0x06) + ByteArray(18)
+    }
+
 }

@@ -20,6 +20,23 @@ joined this list.)
 
 ## 1.2.2 — 2026-08-17
 
+### Added
+
+- **Search inside a capture got scoping, stepping, and a full-screen reader.** Every detail screen
+  already filtered and highlighted as you typed; network captures now add arrows that step through
+  hits one at a time with a running `3/17` counter, a **Search in** chip that picks which sections
+  to match (defaulting to the request and response bodies), and a choice of matching field names,
+  values, or both. Any body can be expanded full-screen with a Formatted/Raw switch, a line count,
+  and a copy button. Note that matching *names* only works where the body has names — JSON does, a
+  raw or XML body does not — which is why the default matches both. All of this is `internal`; no
+  public API was added.
+
+### Fixed
+
+- **Simple mode never actually hid the dashboard's metric strips.** The rule was written against
+  `.metrics-strip` while the markup has always emitted `.metric-strip`, so the selector matched
+  nothing and Simple mode showed the full metric row regardless.
+
 ### Changed
 
 - **JitPack is now the only distribution channel for the library artifacts.** Maven Central
