@@ -5,6 +5,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MockEngineTest {
+    @Test
+    fun `mock engine is enabled by default`() {
+        assertTrue(MockEngine(emptyList()).isEnabled())
+    }
+
     @Test fun `chooses exact-path rule over wildcard at equal priority`() {
         val engine = MockEngine(listOf(MockRule("wild", 1, path = "/.*"), MockRule("exact", 1, path = "/orders")))
         assertEquals(

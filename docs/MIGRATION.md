@@ -9,6 +9,39 @@
 
 Validate each debug and release variant with `verifyDevConsoleProtectedArtifacts` before rollout.
 
+## Upgrading from 1.2.1
+
+**The library artifacts moved from Maven Central to JitPack.** No API changed; the coordinates did.
+
+1. Add JitPack to `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+```
+
+2. Change the group on every DevConsole dependency from `io.github.devconsole-android` to
+   `com.github.devconsole-android.DevConsole`, and prefix the version with `v` — JitPack serves a
+   build under its git ref name, and releases are tagged `v*`. Artifact IDs are unchanged:
+
+```kotlin
+debugImplementation("com.github.devconsole-android.DevConsole:devconsole:v1.2.2")
+releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:v1.2.2")
+```
+
+If you rely on the plugin's `autoWireDependencies` (the default), step 2 is done for you — you only
+need step 1, because the coordinate the plugin declares now resolves from JitPack.
+
+The Gradle plugin itself is unaffected: it still comes from the Gradle Plugin Portal as
+`io.github.devconsole-android`, and its variant-policy check still recognises the old
+`io.github.devconsole-android` library group, so a module you have not migrated yet keeps its
+release-build protection.
+
 ## Upgrading from 1.2.0
 
 Three defaults changed. No API was removed and nothing has to be rewritten — but two of these change

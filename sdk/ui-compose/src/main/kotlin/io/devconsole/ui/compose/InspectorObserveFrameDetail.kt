@@ -83,7 +83,7 @@ private fun frameSections(
             onCopy = { copyText(generalEntries.toCopyText()) },
         ),
         textPreviewSection(
-            key = "req",
+            key = InspectorExchangeSection.PRIMARY_BODY.key,
             label = "Payload",
             preview = frame.preview,
             isBinaryPlaceholder = false,
@@ -93,7 +93,7 @@ private fun frameSections(
             copyDescription = "Copy payload",
         ),
         InspectorDetailSectionSpec(
-            "resh",
+            InspectorExchangeSection.SECONDARY_HEADERS.key,
             "Connection",
             InspectorDetailSectionBody.KeyValues(connectionEntries),
             copyDescription = "Copy connection info",
@@ -177,7 +177,7 @@ internal fun frameDetailContent(
                     ),
             ),
         sections = frameSections(socket, frame, colors, sizeLabel, copyText),
-        initiallyOpenSectionKeys = setOf("req"),
+        initiallyOpenSectionKeys = setOf(InspectorExchangeSection.PRIMARY_BODY.key),
         footerActions = frameFooterActions(socket, frame, colors, copyText, shareText),
     )
 }

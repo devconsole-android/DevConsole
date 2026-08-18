@@ -26,6 +26,9 @@ class QualityConventionPlugin : Plugin<Project> {
             extensions.configure<DetektExtension> {
                 buildUponDefaultConfig = true
                 autoCorrect = false
+                // Supplements the defaults: exempts @Composable from the two size rules that
+                // Compose cannot satisfy without hurting the code. See the file for the reasoning.
+                config.setFrom(rootProject.file("config/detekt/detekt.yml"))
                 // Modules had ~3000 pre-existing findings from before detekt was turned on.
                 // The baseline freezes those as accepted debt so detekt only fails builds on
                 // NEW findings introduced from here on; regenerate a module's baseline via

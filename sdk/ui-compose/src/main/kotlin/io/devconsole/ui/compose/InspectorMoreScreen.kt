@@ -399,13 +399,13 @@ private fun ServerControlCard(
             fontWeight = FontWeight.SemiBold,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // No per-state color swaps: InspectorPillButton owns the disabled treatment now, and
+            // dimming an already-muted color twice pushed these below the contrast floor.
             InspectorPillButton(
                 label = "Start server",
                 onClick = { onSetServerRunning(true) },
                 modifier = Modifier.weight(1f),
                 enabled = !running,
-                containerColor = if (running) colors.panel else colors.signal,
-                contentColor = if (running) colors.muted else colors.signalInk,
             )
             InspectorPillButton(
                 label = "Stop",
@@ -413,7 +413,7 @@ private fun ServerControlCard(
                 modifier = Modifier.weight(1f),
                 enabled = running,
                 outlined = true,
-                contentColor = if (running) colors.ink else colors.muted,
+                contentColor = colors.ink,
             )
         }
     }

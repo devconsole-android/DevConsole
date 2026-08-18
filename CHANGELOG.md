@@ -18,6 +18,41 @@ before it can reach a release. (There was briefly a separate `sdk:plugin-api` mo
 third-party plugin framework; it was removed before ever shipping — see Removed, below — so it never
 joined this list.)
 
+## 1.2.2 — 2026-08-17
+
+### Added
+
+- **Search inside a capture got scoping, stepping, and a full-screen reader.** Every detail screen
+  already filtered and highlighted as you typed; network captures now add arrows that step through
+  hits one at a time with a running `3/17` counter, a **Search in** chip that picks which sections
+  to match (defaulting to the request and response bodies), and a choice of matching field names,
+  values, or both. Any body can be expanded full-screen with a Formatted/Raw switch, a line count,
+  and a copy button. Note that matching *names* only works where the body has names — JSON does, a
+  raw or XML body does not — which is why the default matches both. All of this is `internal`; no
+  public API was added.
+
+### Fixed
+
+- **Simple mode never actually hid the dashboard's metric strips.** The rule was written against
+  `.metrics-strip` while the markup has always emitted `.metric-strip`, so the selector matched
+  nothing and Simple mode showed the full metric row regardless.
+
+### Changed
+
+- **JitPack is now the only distribution channel for the library artifacts.** Maven Central
+  publishing is removed: no `publishToMavenCentral`, no GPG signing, and no "Publish to Maven
+  Central" workflow. Consumers add `maven { url = uri("https://jitpack.io") }` to
+  `dependencyResolutionManagement` and switch the group from `io.github.devconsole-android` to
+  **`com.github.devconsole-android.DevConsole`**, and prefix the version with `v` (`v1.2.2`) —
+  JitPack serves a build under its git ref name and releases are tagged `v*`, so the bare version
+  does not resolve. Artifact IDs are unchanged.
+  Releasing is now just pushing a tag — JitPack builds the ref on first request.
+- **The Gradle plugin still comes from the Gradle Plugin Portal** as `io.github.devconsole-android`,
+  because the `plugins { }` DSL cannot resolve a plugin marker from JitPack. Its variant-policy
+  check now recognises both the JitPack group and the old Central group, so an existing host that
+  still names `io.github.devconsole-android:devconsole` keeps its release-build protection; the
+  coordinate the plugin auto-wires is the JitPack one.
+
 ## 1.2.1 — 2026-08-17
 
 Three default changes, aimed at the same complaint: a fresh integration showed a `127.0.0.1` URL
@@ -171,7 +206,7 @@ signing key — including JitPack, which this release adds as a channel.
 - **JitPack as a secondary channel, for unreleased code.** Maven Central remains the supported
   one; JitPack covers trying a branch or an unmerged fix. Artifacts resolve under the group
   `com.github.devconsole-android.DevConsole` with the same artifact ids
-  (`com.github.devconsole-android.DevConsole:devconsole:1.1.1`), and any branch resolves as
+  (`com.github.devconsole-android.DevConsole:devconsole:v1.1.1` — the version is the git ref, so the `v` is part of it), and any branch resolves as
   `<branch>-SNAPSHOT` (a `/` in the branch name is written `~`). Two limits worth knowing: the
   Gradle plugin is **not** served there — it lives in an `includeBuild` and JitPack lists only the
   31 library modules, so JitPack consumers name coordinates directly and give up the plugin's

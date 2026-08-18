@@ -37,7 +37,7 @@ devConsole {
     protectedDependencyPaths.set(setOf(":sdk:full"))        // default; override for a differently-pathed module
     failBuildOnUnsafeVariant.set(true)                      // default; false downgrades to a warning
     autoWireDependencies.set(true)                          // default; false to declare coordinates yourself
-    sdkVersion.set("1.2.1")                                 // default; the plugin's own version
+    sdkVersion.set("v1.2.2")                                // default; the JitPack tag to resolve
 }
 ```
 
@@ -48,7 +48,7 @@ patterns with `.*` (as `(?i).*release` above does) so they match regardless of w
 prefixes onto the build type.
 
 **A variant that already names a DevConsole dependency is left alone.** Auto-wiring only fills a
-gap, so an explicit `debugImplementation("io.github.devconsole-android:devconsole:...")` — or a
+gap, so an explicit `debugImplementation("com.github.devconsole-android.DevConsole:devconsole:...")` — or a
 `project(":sdk:full")` dependency inside this repository — wins over anything the plugin would have
 added.
 
@@ -140,11 +140,10 @@ only `INTERNET` (the sample's own) and the auto-generated dynamic-receiver permi
 
 ## Publication status
 
-The artifacts are `io.github.devconsole-android:devconsole` (the full runtime, from `:sdk:full`) and
-`io.github.devconsole-android:devconsole-noop` (from `:sdk:noop`); there is no BOM and never was a
-`-full` coordinate. The publishing pipeline is wired — every publishable module produces a POM with
-license/developer/SCM metadata, a sources jar, a javadoc jar, and a signature when a key is provided
-— but nothing is on Maven Central yet: the version is a pre-1.0 `-SNAPSHOT`, and a release still
-needs a signing key and a Central account (see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)). Within
-this repository the samples depend on the SDK from source via `project(":sdk:full")` /
+The artifacts are `com.github.devconsole-android.DevConsole:devconsole` (the full runtime, from `:sdk:full`) and
+`com.github.devconsole-android.DevConsole:devconsole-noop` (from `:sdk:noop`); there is no BOM and
+never was a `-full` coordinate. They are served by [JitPack](https://jitpack.io/#devconsole-android/DevConsole),
+which builds a ref on demand — every publishable module produces a POM with license/developer/SCM
+metadata, a sources jar, and a javadoc jar (see [PUBLISHING.md](PUBLISHING.md)). Within this
+repository the samples depend on the SDK from source via `project(":sdk:full")` /
 `project(":sdk:noop")`.

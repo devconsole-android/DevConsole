@@ -55,4 +55,4 @@ read one page here, make it the threat model, especially before you put the dash
 **Contributing / releasing**
 - [Migration guide](MIGRATION.md)
 - [Release checklist](RELEASE_CHECKLIST.md)
-- [Publishing to Maven Central](MAVEN_PUBLISHING.md)
+- [Publishing](PUBLISHING.md)

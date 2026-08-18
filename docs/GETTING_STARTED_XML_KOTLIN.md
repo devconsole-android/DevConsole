@@ -3,7 +3,20 @@
 No Compose required. The inspector ships as an Activity, and the launcher panel is a plain `View`,
 so a Views-based host gets exactly what a Compose one does.
 
-1. Apply the production-safety plugin and split the dependency by variant.
+1. Add the JitPack repository to `settings.gradle.kts` — that is where the library artifacts live
+   (the Gradle plugin comes from the Gradle Plugin Portal and needs nothing extra).
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+```
+
+2. Apply the production-safety plugin and split the dependency by variant.
 
 ```kotlin
 plugins {
@@ -11,9 +24,9 @@ plugins {
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:<version>")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:<version>")
-    debugImplementation("io.github.devconsole-android:devconsole-ui-views:<version>") // optional, only for the launcher panel
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:v<version>")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:v<version>")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole-ui-views:v<version>") // optional, only for the launcher panel
 }
 
 devConsole {
@@ -21,6 +34,10 @@ devConsole {
     protectedVariantPatterns.set(listOf("release"))
 }
 ```
+
+`v<version>` is a JitPack version, which is the git tag verbatim — releases are tagged `v*`, so
+`v1.2.2`, not `1.2.2`. The plugin is the exception: it comes from the Gradle Plugin Portal, where
+its version is bare.
 
 There is no BOM. `devconsole` (the debug runtime) and `devconsole-noop` are the only two coordinates
 a normal integration names; everything else is `devconsole-<module>`.
@@ -30,7 +47,7 @@ release no-op counterpart, so a plain `implementation` dependency ships the laun
 release build with no build-time warning. The Gradle plugin's variant protection does not cover this
 module today; it is your responsibility to scope it to `debugImplementation` yourself.
 
-2. Add `INTERNET` to your own app's manifest. The SDK's manifests auto-merge
+3. Add `INTERNET` to your own app's manifest. The SDK's manifests auto-merge
    `ACCESS_LOCAL_NETWORK`/`ACCESS_NETWORK_STATE`, but not `INTERNET` — without it, the embedded
    server fails with an opaque socket error instead of a clear permission message:
 
@@ -38,7 +55,7 @@ module today; it is your responsibility to scope it to `debugImplementation` you
 <uses-permission android:name="android.permission.INTERNET" />
 ```
 
-3. Add the optional launcher view to a debug-only layout:
+4. Add the optional launcher view to a debug-only layout:
 
 ```xml
 <io.devconsole.ui.views.DevConsolePanelView
@@ -47,7 +64,7 @@ module today; it is your responsibility to scope it to `debugImplementation` you
     android:layout_height="wrap_content" />
 ```
 
-4. Initialize and bind the panel. On a debuggable build the SDK has already auto-initialized by
+5. Initialize and bind the panel. On a debuggable build the SDK has already auto-initialized by
    this point, so `initialize` is only needed when you have configuration to pass (state providers,
    flags, open triggers). The panel starts out showing "not running" either way -- the browser
    server is never auto-started, so `onStart` below is what actually opens it. `DevConsoleState.Running` carries no
@@ -78,7 +95,7 @@ panel.bind(
 )
 ```
 
-5. Tap Start — the panel now shows the bound address (e.g. `DevConsole server is running at 192.168.0.15:8080`)
+6. Tap Start — the panel now shows the bound address (e.g. `DevConsole server is running at 192.168.0.15:8080`)
    — then open that address (or the connect URL with its `#code=` fragment) in a browser on the same machine (or
    `adb forward tcp:8080 tcp:8080` first if the device isn't local).
 

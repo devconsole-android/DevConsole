@@ -24,6 +24,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
@@ -52,6 +53,8 @@ import androidx.compose.ui.unit.sp
  */
 internal enum class InspectorGlyph { Search, ChevronDown, Check, Alert, Flag, Copy, Expand }
 
+/** DESIGN.md's disabled treatment: the whole control at half opacity, container and content alike. */
+private const val DISABLED_PILL_ALPHA = 0.5f
 private const val GLYPH_VIEWBOX = 16f
 private const val GLYPH_STROKE_WIDTH = 1.4f
 
@@ -172,6 +175,7 @@ internal fun InspectorRoundIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 48.dp,
+    enabled: Boolean = true,
     containerColor: Color = Color.Transparent,
     icon: @Composable () -> Unit,
 ) {
@@ -180,9 +184,10 @@ internal fun InspectorRoundIconButton(
             modifier
                 .minimumInteractiveComponentSize()
                 .size(size)
+                .alpha(if (enabled) 1f else DISABLED_PILL_ALPHA)
                 .clip(CircleShape)
                 .background(containerColor)
-                .clickable(onClick = onClick, role = Role.Button)
+                .clickable(enabled = enabled, onClick = onClick, role = Role.Button)
                 .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) { icon() }
@@ -193,9 +198,8 @@ internal fun InspectorRoundIconButton(
  * [outlined] swaps the filled [containerColor] for a hairline border on transparent -- the "demoted,
  * can never succeed" affordance (e.g. the push detail's Replay button) that
  * still reads as a button but no longer competes visually with a real primary action. [enabled]
- * disables the click target too; a caller that passes `enabled = false` is expected to also dim
- * [contentColor]/the icon's own tint itself, since this composable never overrides a caller-chosen
- * color.
+ * disables the click target and dims the whole pill to the design system's 0.5 disabled opacity, so
+ * a gated action never looks like it will still work.
  */
 @Suppress("LongParameterList") // Colors/icon vary per call site (hero CTA vs. footer actions).
 @Composable
@@ -218,6 +222,7 @@ internal fun InspectorPillButton(
         modifier =
             modifier
                 .heightIn(min = 48.dp)
+                .alpha(if (enabled) 1f else DISABLED_PILL_ALPHA)
                 .clip(RoundedCornerShape(50))
                 .then(outlineModifier)
                 .background(resolvedContainer)

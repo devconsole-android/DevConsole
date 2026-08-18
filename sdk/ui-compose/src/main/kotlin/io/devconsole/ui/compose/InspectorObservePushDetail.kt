@@ -54,14 +54,14 @@ private fun pushSections(
             onCopy = { copyText(generalEntries.toCopyText()) },
         ),
         InspectorDetailSectionSpec(
-            "req",
+            InspectorExchangeSection.PRIMARY_BODY.key,
             "Payload",
             payloadBody,
             copyDescription = "Copy payload",
             onCopy = keyValuesCopyAction(payloadEntries.orEmpty(), copyText),
         ),
         InspectorDetailSectionSpec(
-            "resh",
+            InspectorExchangeSection.SECONDARY_HEADERS.key,
             "Lifecycle",
             InspectorDetailSectionBody.KeyValues(lifecycleEntries),
             copyDescription = "Copy lifecycle info",
@@ -143,7 +143,7 @@ internal fun pushDetailContent(
                     ),
             ),
         sections = pushSections(push, colors, copyText),
-        initiallyOpenSectionKeys = setOf("req"),
+        initiallyOpenSectionKeys = setOf(InspectorExchangeSection.PRIMARY_BODY.key),
         footerActions = pushFooterActions(colors, payloadText, copyText),
     )
 }

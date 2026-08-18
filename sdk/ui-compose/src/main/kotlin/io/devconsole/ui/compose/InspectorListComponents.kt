@@ -9,19 +9,27 @@ package io.devconsole.ui.compose
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -250,13 +259,17 @@ internal fun FilterChipRow(
     chips: List<InspectorFilterChip>,
     onChipClick: (InspectorFilterChip) -> Unit,
     modifier: Modifier = Modifier,
+    /** Overridable so a caller that already pads its column can align chips to its own margin. */
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+    /** False for a caller that places the chips beside other controls and must not have the row eat the width. */
+    fillWidth: Boolean = true,
 ) {
     Row(
         modifier =
             modifier
-                .fillMaxWidth()
+                .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(contentPadding),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         chips.forEach { chip -> InspectorChip(chip, onClick = { onChipClick(chip) }) }
@@ -298,4 +311,56 @@ private fun InspectorChip(
                 selectedBorderColor = DevConsoleTheme.colors.signal,
             ),
     )
+}
+
+/**
+ * The design system's segmented control (DESIGN.md §Components): one joined 32dp group, 8dp on the
+ * outer corners and square inside, mono labels, active segment filled with signal. Use it for a
+ * view switch over 2-3 mutually exclusive representations of the *same* content -- a filter chip
+ * row says "narrow this set", a segment says "show me this side of it".
+ */
+@Composable
+internal fun InspectorSegmentedControl(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = DevConsoleTheme.colors
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        modifier =
+            modifier
+                .height(32.dp)
+                .clip(shape)
+                .border(1.dp, colors.line, shape)
+                .semantics { role = Role.RadioButton },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        options.forEachIndexed { index, option ->
+            val selected = index == selectedIndex
+            if (index > 0) {
+                Box(Modifier.fillMaxHeight().width(1.dp).background(colors.line))
+            }
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxHeight()
+                        .widthIn(min = 42.dp)
+                        .background(if (selected) colors.signal else Color.Transparent)
+                        .selectable(selected = selected, role = Role.RadioButton) { onSelect(index) }
+                        .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    option,
+                    color = if (selected) colors.signalInk else colors.muted,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.5.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
 }

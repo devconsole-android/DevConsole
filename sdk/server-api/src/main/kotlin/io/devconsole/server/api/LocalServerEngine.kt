@@ -23,7 +23,7 @@ data class SessionPolicy(
 }
 
 data class StartRequest(
-    val bindingMode: BindingMode = BindingMode.LOOPBACK,
+    val bindingMode: BindingMode = BindingMode.LAN,
     val portRange: IntRange = 8080..8099,
     val sessionCodeTtlMs: Long = SessionCodeAuthority.DEFAULT_SESSION_CODE_TTL_MS,
 )
@@ -383,7 +383,7 @@ class SessionCodeAuthority(
     /**
      * The endpoint/TTL from the most recent [issueCode] call -- reused by a caller that re-issues
      * with no arguments (e.g. [currentInfo]'s auto re-mint) so a fresh code still points at the
-     * real bind address instead of falling back to the loopback default.
+     * real bind address instead of falling back to the initial placeholder endpoint.
      */
     private var lastEndpoint: Endpoint = Endpoint(DEFAULT_LOOPBACK_HOST, DEFAULT_LOOPBACK_PORT, BindingMode.LOOPBACK)
     private var lastTtlMs: Long = codeTtlMs

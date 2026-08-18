@@ -151,7 +151,7 @@ abstract class VerifyDevConsoleProtectedArtifactsTask : DefaultTask() {
         /** Enabled runtime/adapters that must never reach a protected variant. */
         val FULL_RUNTIME_COORDINATE =
             Regex(
-                "^io\\.github\\.devconsole-android:" +
+                "^(?:com\\.github\\.devconsole-android\\.DevConsole|io\\.github\\.devconsole-android):" +
                     "(?:devconsole|devconsole-network-okhttp|devconsole-mocks-okhttp|" +
                     "devconsole-socket-okhttp|devconsole-socket-paho|devconsole-push-firebase|" +
                     "devconsole-remote-config-firebase):.+",
@@ -397,8 +397,15 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
     }
 }
 
-private const val DEFAULT_SDK_VERSION = "1.2.1"
-private const val DEVCONSOLE_GROUP = "io.github.devconsole-android"
+// JitPack serves a build under its git ref name, and this repo tags `v*` -- a bare "1.2.2"
+// does not resolve. Keep the `v`.
+private const val DEFAULT_SDK_VERSION = "v1.2.2"
+
+/** JitPack's group for this repo — what auto-wiring declares. */
+private const val DEVCONSOLE_GROUP = "com.github.devconsole-android.DevConsole"
+
+/** Recognised on a host's classpath: the JitPack group, plus the Maven Central group used up to 1.2.1. */
+private val DEVCONSOLE_GROUPS = setOf(DEVCONSOLE_GROUP, "io.github.devconsole-android")
 
 /**
  * Core runtime coordinate names whose presence means a host already declared the DevConsole runtime,
@@ -661,7 +668,7 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
             // Only the core runtime coordinates count as "already declared" for the purpose of skipping
             // core auto-wire. Declaring only an add-on (devconsole-ui-compose / devconsole-ui-views /
             // devconsole-network-ktor) in the same group must NOT suppress wiring the core runtime.
-            else -> group == DEVCONSOLE_GROUP && name in CORE_RUNTIME_COORDINATE_NAMES
+            else -> group in DEVCONSOLE_GROUPS && name in CORE_RUNTIME_COORDINATE_NAMES
         }
 
     private fun Project.registerProtectedVerifier(
@@ -682,7 +689,7 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
                         val path = dep.projectPathCompat()
                         if (path in protectedPaths) "$variant -> $path" else null
                     }
-                    dep is org.gradle.api.artifacts.ExternalModuleDependency && dep.group == DEVCONSOLE_GROUP && dep.name == "devconsole" -> "$variant -> ${dep.group}:${dep.name}"
+                    dep is org.gradle.api.artifacts.ExternalModuleDependency && dep.group in DEVCONSOLE_GROUPS && dep.name == "devconsole" -> "$variant -> ${dep.group}:${dep.name}"
                     else -> null
                 }
             }

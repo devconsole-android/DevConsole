@@ -109,12 +109,13 @@ object DevConsole {
      * [StartRequest.bindingMode] decides loopback-vs-LAN for *this call*, and no [DevConsoleConfig]
      * value provides a default for it: `DevConsoleConfig.browserConfig.binding` governs only the
      * starts this method is not making -- the in-app inspector's More-screen Start button -- so a
-     * host that wants LAN from both surfaces sets both. See the KDoc on
-     * [io.devconsole.api.BindingMode] and [io.devconsole.api.BrowserBinding]. The default
-     * `StartRequest()` binds loopback, which is the safe choice -- see `docs/THREAT_MODEL.md` at
-     * the repository root before ever passing `bindingMode = BindingMode.LAN`.
+     * host can configure each surface independently. See the KDoc on [io.devconsole.api.BindingMode]
+     * and [io.devconsole.api.BrowserBinding]. The default `StartRequest()` binds
+     * [io.devconsole.api.BindingMode.AUTO], which prefers the device's network address and degrades
+     * to loopback rather than failing; pass `bindingMode = BindingMode.LOOPBACK` explicitly for the
+     * safer ADB-only choice on an untrusted network. See `docs/THREAT_MODEL.md` at the repository root.
      *
-     * @param request binding mode and port range for this start attempt. Defaults to loopback on
+     * @param request binding mode and port range for this start attempt. Defaults to AUTO on
      *   `8080..8099`.
      * @return a [StartResult] -- [StartResult.Started] carries the bound [io.devconsole.api.BrowserEndpoint]
      *   and the session [io.devconsole.api.AccessInfo] (the connect URL/code); every other variant is a

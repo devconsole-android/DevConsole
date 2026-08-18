@@ -31,7 +31,7 @@ Ideally as a diff against one of the sample apps (`samples/compose-app`, `sample
 
 - DevConsole module(s) and version(s) affected (e.g. `devconsole:0.1.0-SNAPSHOT`,
   `devconsole-network-okhttp:0.1.0-SNAPSHOT`):
-- Integration path: Maven Central coordinates, or built from source
+- Integration path: JitPack coordinates, or built from source
   (`./gradlew publishToMavenLocal`)?
 - Android Gradle Plugin / Kotlin versions in the consuming project:
 - Device/emulator API level and manufacturer:

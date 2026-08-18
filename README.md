@@ -6,7 +6,7 @@
 
 **An in-app debugger for Android, with a browser dashboard for when you want a bigger screen.**
 
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.devconsole-android/devconsole)](https://central.sonatype.com/artifact/io.github.devconsole-android/devconsole)
+[![JitPack](https://jitpack.io/v/devconsole-android/DevConsole.svg)](https://jitpack.io/#devconsole-android/DevConsole)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![minSdk 23](https://img.shields.io/badge/minSdk-23-3DDC84?logo=android&logoColor=white)](#compatibility)
 [![CI](https://github.com/devconsole-android/DevConsole/actions/workflows/verify.yml/badge.svg)](https://github.com/devconsole-android/DevConsole/actions/workflows/verify.yml)
@@ -33,21 +33,34 @@ links no server code, and the Gradle plugin fails the build if the real runtime 
 
 ## Quick start
 
-**1. Add the plugin and two dependencies** to your app's `build.gradle.kts`:
+**1. Add the JitPack repository** to your `settings.gradle.kts` — DevConsole is distributed through
+[JitPack](https://jitpack.io/#devconsole-android/DevConsole):
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+```
+
+**2. Add the plugin and two dependencies** to your app's `build.gradle.kts`:
 
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.devconsole-android") version "1.2.1"
+    id("io.github.devconsole-android") version "1.2.2"
 }
 
 dependencies {
-    debugImplementation("io.github.devconsole-android:devconsole:1.2.1")
-    releaseImplementation("io.github.devconsole-android:devconsole-noop:1.2.1")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:v1.2.2")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:v1.2.2")
 }
 ```
 
-**2. Open the inspector on the device.** The SDK auto-initializes on debuggable builds, so this
+**3. Open the inspector on the device.** The SDK auto-initializes on debuggable builds, so this
 works right away from any button in your debug UI:
 
 ```kotlin
@@ -70,7 +83,7 @@ SharedPreferences, SQLite, and files. Add one line to your HTTP client
 (see [Wire up your network stack](#wire-up-your-network-stack)) and network, WebSocket, and MQTT
 traffic show up too.
 
-**3. Want a bigger screen? Start the browser dashboard.** Tap **Start server** on the inspector's
+**4. Want a bigger screen? Start the browser dashboard.** Tap **Start server** on the inspector's
 **More** screen and it hands you a connect URL and a QR code. You can also do it from code. Either
 way your manifest needs `INTERNET`, which most apps already declare:
 
@@ -88,7 +101,7 @@ If it fell back — or if you passed `BindingMode.LOOPBACK` to keep it off the n
 forward the port first:
 
 ```bash
-adb forward tcp:8080 tcp:8080   # use the port from the DevConsole log line
+adb forward tcp:8080 tcp:8080   # use the port from the loopback start's log line
 ```
 
 Then open the **whole URL**. The `#code=` fragment is the credential, so a bare `http://host:port/`
@@ -105,6 +118,7 @@ gets you nothing.
 |---|---|
 | **In-app inspector** | `DevConsole.open(context)` shows every inspector below as an on-device screen (included with `devconsole`), plus a QR code for pairing the browser. Opens by shake (adjustable intensity) or draggable floating button via the opt-in `DevConsoleConfig.openTriggers` flags. Its More screen can also start and stop the dashboard server. |
 | **Network inspector** | Every HTTP call with headers, bodies, and a DNS/TCP/TLS/send/wait/receive timing bar. Live-tails as traffic happens. |
+| **Find in a capture** | Every detail screen has a find field that filters and highlights as you type. Network captures go further: step through hits with a counter and arrows, scope the search to the sections you choose, and match field names, values, or both. Any body can be expanded full-screen to read or copy. |
 | **WebSocket & MQTT inspectors** | Connection lifecycles and every frame, inbound and outbound. MQTT rides the Eclipse Paho adapter. |
 | **Mock rules** | Serve canned responses for matching requests (OkHttp), toggled from the dashboard, with deterministic priority matching. Wired by `installDevConsole` and editable out of the box. |
 | **Request composer** | Make the device issue ad-hoc HTTP requests from the dashboard. Off by default, host-allowlist confinable. |
@@ -186,7 +200,9 @@ DevConsoleConfig.default().withBrowserConfig(BrowserConfig(binding = BrowserBind
 
 // Require the network — fails loudly instead of falling back, and surfaces the
 // ACCESS_LOCAL_NETWORK prompt on API 37+ devices:
-DevConsoleConfig.default().withBrowserConfig(BrowserConfig(binding = BrowserBinding.LAN))
+DevConsoleConfig.default().withBrowserConfig(
+    BrowserConfig(binding = BrowserBinding.LAN),
+)
 ```
 
 This is independent of the `bindingMode` you pass to `startBrowser` yourself; set both if you start
@@ -308,14 +324,37 @@ you can replay it, clone it into the composer, or flag it into a bug report:
 
 <p align="center"><img src="docs/images/dashboard-network.png" width="820" alt="Network inspector in the browser dashboard, showing a captured request and response side by side" /></p>
 
+### Search inside a capture
+
+Every detail screen — a call, a frame, a push, a log line, a crash — has a find field at the top.
+Type, and it filters the sections down to what matched and highlights the hits in place, with a
+count so you know whether the thing you're looking for is here at all.
+
+On **network captures** it goes further, because that's where you usually arrive with a specific
+token in hand. Arrows step you through the hits one at a time with a running `3/17` counter, the
+same motion as find-in-page, so you can hold an ID in your head and walk every place it appears.
+
+Those captures also let you aim the search. Tap the **Search in** chip and you can pick which
+sections to look at — it starts on the request and response bodies, since that's where most real
+questions live — and choose whether to match field names, values, or both.
+
+One thing worth knowing, because it's the kind of thing that costs an afternoon: matching *names*
+only works where the body has names to match. JSON has them. A raw or XML body doesn't — it's
+text all the way down — so a names-only search skips it entirely and quietly reports nothing.
+That's why the default matches both, and why the sheet spells out what each mode will and won't
+find.
+
+Body too dense to read in a card? Expand it full-screen. You get the whole viewport, a
+Formatted/Raw switch, a line count, and a copy button that puts the body on the clipboard.
+
 ### Set up Remote Config
 
 Add the adapter — it is not part of the `devconsole` umbrella, so that Firebase never lands on the
 classpath of an app that doesn't use it:
 
 ```kotlin
-debugImplementation("io.github.devconsole-android:devconsole-remote-config-firebase:1.2.1")
-releaseImplementation("io.github.devconsole-android:devconsole-remote-config-firebase-noop:1.2.1")
+debugImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase:v1.2.2")
+releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase-noop:v1.2.2")
 ```
 
 > These two artifacts first ship in `1.2.0`; earlier versions do not have them.
@@ -365,8 +404,8 @@ anything sensitive in Remote Config.
 
 ## Artifacts
 
-Group `io.github.devconsole-android`, one version for everything. There is deliberately no BOM, and
-two coordinates cover a normal integration:
+Group `com.github.devconsole-android.DevConsole`, one version for everything. There is deliberately
+no BOM, and two coordinates cover a normal integration:
 
 | Coordinate | Scope | What it is |
 |---|---|---|
@@ -385,41 +424,22 @@ Opt-in add-ons (each `-noop` twin is the matching `releaseImplementation`):
 | `devconsole-remote-config-firebase` | `devconsole-remote-config-firebase-noop` | Firebase Remote Config adapter (reflection-based; see [Remote Config](docs/REMOTE_CONFIG.md)) |
 
 Everything else (`devconsole-core`, `devconsole-storage-room`, and the rest) arrives transitively.
-You never name those. Every module publishes sources, javadoc, and a signed POM.
+You never name those. Every module publishes sources, javadoc, and a POM.
 
-### JitPack (for unreleased code)
+### Versions and unreleased code
 
-Maven Central is the supported channel: signed, versioned, and what the Gradle plugin resolves.
-[JitPack](https://jitpack.io/#devconsole-android/DevConsole) sits alongside it for one job, which is
-trying a branch or an unreleased fix before it ships. Add the repository to your **settings** file,
-not the module:
+All 34 library artifacts come from [JitPack](https://jitpack.io/#devconsole-android/DevConsole),
+which builds a ref on demand — so **the version is a git ref, spelled exactly as the ref is**.
+Releases are tagged `v*`, which is why the coordinates above read `v1.2.2` and not `1.2.2`; the
+bare form is a different ref and does not resolve. Any branch works as `<branch>-SNAPSHOT`, with
+`/` written as `~`, so a `feature/x` branch is `feature~x-SNAPSHOT` — that is how you try an
+unreleased fix before it ships. JitPack support starts at **v1.1.1**; earlier tags do not build
+there. Two things to know:
 
-```kotlin
-dependencyResolutionManagement {
-    repositories {
-        mavenCentral()
-        maven { url = uri("https://jitpack.io") }
-    }
-}
-```
-
-```kotlin
-dependencies {
-    // Group is com.github.devconsole-android.DevConsole; artifact ids match the tables above.
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.2.1")
-    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.1")
-}
-```
-
-A release tag works as the bare tag, as above. Any branch works as `<branch>-SNAPSHOT`, with `/`
-written as `~`, so a `feature/x` branch is `feature~x-SNAPSHOT`. JitPack support starts at
-**1.1.1**; earlier tags do not build there. Three things to know before you rely on it:
-
-- **The Gradle plugin is not on JitPack.** Only the 34 library artifacts are, so the
-  `plugins { id("io.github.devconsole-android") … }` block above does not apply. Name the
-  `debugImplementation` and `releaseImplementation` coordinates yourself. You also give up the
-  plugin's variant-policy check, which is the thing that keeps the full SDK out of release builds.
-- **JitPack artifacts are unsigned.** Central's are signed; these are built on demand from a commit.
+- **The Gradle plugin comes from the Gradle Plugin Portal, not JitPack**, because the `plugins { }`
+  DSL cannot resolve a plugin marker from JitPack. That is why the quick start adds JitPack for
+  dependencies only; `plugins { id("io.github.devconsole-android") version "…" }` resolves from the
+  Portal with no extra repository configuration.
 - **Snapshots move.** `-SNAPSHOT` follows the branch, so a build that worked can change under you.
   Pin a tag for anything you keep.
 
