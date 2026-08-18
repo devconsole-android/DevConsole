@@ -24,9 +24,9 @@ plugins {
 }
 
 dependencies {
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:<version>")
-    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:<version>")
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole-ui-compose:<version>") // optional, only for the launcher panel
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:v<version>")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:v<version>")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole-ui-compose:v<version>") // optional, only for the launcher panel
 }
 
 devConsole {
@@ -34,6 +34,10 @@ devConsole {
     protectedVariantPatterns.set(listOf("release"))
 }
 ```
+
+`v<version>` is a JitPack version, which is the git tag verbatim — releases are tagged `v*`, so
+`v1.2.2`, not `1.2.2`. The plugin is the exception: it comes from the Gradle Plugin Portal, where
+its version is bare.
 
 There is no BOM. `devconsole` (the debug runtime) and `devconsole-noop` are the only two coordinates
 a normal integration names; everything else is `devconsole-<module>`.

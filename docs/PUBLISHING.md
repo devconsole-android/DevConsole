@@ -90,8 +90,8 @@ plugins {
     id("io.github.devconsole-android") version "<version>"
 }
 dependencies {
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:<version>")
-    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:<version>")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:v<version>")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:v<version>")
 }
 ```
 

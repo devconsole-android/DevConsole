@@ -25,9 +25,13 @@ Cloud Messaging. Add the adapter coordinate yourself; it is deliberately not re-
 `devconsole` umbrella.
 
 ```kotlin
-debugImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase:<version>")
-releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase-noop:<version>")
+debugImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase:v<version>")
+releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase-noop:v<version>")
 ```
+
+`v<version>` is a JitPack version, which is the git tag verbatim — releases are tagged `v*`, so
+`v1.2.2`, not `1.2.2`. The plugin is the exception: it comes from the Gradle Plugin Portal, where
+its version is bare.
 
 A provider constructed later — through DI, or after a first fetch completes — can register itself:
 
