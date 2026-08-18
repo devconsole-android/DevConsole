@@ -47,8 +47,22 @@ facing version from the tag or branch rather than from `SDK_VERSION`, but the tw
 
 ## The Gradle plugin → Gradle Plugin Portal
 
-One-time: create an account at [plugins.gradle.org](https://plugins.gradle.org), generate an API
-key, and put `gradle.publish.key` / `gradle.publish.secret` in `~/.gradle/gradle.properties`. Then:
+One-time: create an account at [plugins.gradle.org](https://plugins.gradle.org) and generate an API
+key. Then either publish from CI (preferred) or locally.
+
+**From CI.** The **Publish Gradle plugin** workflow runs on a `v*` tag and on `workflow_dispatch`.
+It checks the tag agrees with `gradle-plugin`'s declared `version`, runs the plugin's test suite,
+and only then publishes. Two prerequisites, both one-time:
+
+1. Repo secrets `GRADLE_PUBLISH_KEY` and `GRADLE_PUBLISH_SECRET` (Settings → Secrets and variables
+   → Actions).
+2. An environment named `plugin-portal` (Settings → Environments) **with a required reviewer**.
+   The workflow is tag-triggered, so this approval gate is the only thing standing between a tag
+   push and an irreversible publish — a Portal version can never be replaced or deleted. Without a
+   protection rule on that environment the job runs unattended, which is exactly what the gate
+   exists to prevent.
+
+**Locally.** Put `gradle.publish.key` / `gradle.publish.secret` in `~/.gradle/gradle.properties`:
 
 ```bash
 ./gradlew -p gradle-plugin publishPlugins
