@@ -161,19 +161,16 @@ class InspectorDetailSearchTest {
             )
         var representationRequests = 0
 
-        val matches =
-            searchInspectorSections(
-                sections = listOf(InspectorDetailSectionSpec("res", "Response body", body)),
-                query = "   ",
-                selectedSectionKeys = setOf("res"),
-                mode = InspectorSearchMode.VALUES,
-                representationForSection = {
-                    representationRequests++
-                    InspectorBodySearchRepresentation.FORMATTED
-                },
-            )
+        val candidates =
+            inspectorSearchCandidatesFor(
+                sections = listOf(InspectorSearchSectionBody("res", body)),
+                hasQuery = "   ".isNotBlank(),
+            ) {
+                representationRequests++
+                InspectorBodySearchRepresentation.FORMATTED
+            }
 
-        assertTrue(matches.isEmpty())
+        assertTrue(candidates.isEmpty())
         assertEquals(0, representationRequests)
     }
 

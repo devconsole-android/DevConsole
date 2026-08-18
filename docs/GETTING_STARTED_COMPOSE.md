@@ -54,7 +54,7 @@ cover this module today; it is your responsibility to scope it to `debugImplemen
 
 4. On a debuggable build you can skip explicit `initialize` entirely — the SDK auto-initializes, so
    state/timeline/capture are ready without any `Application.onCreate` boilerplate. The browser
-   server itself is never auto-started; call `DevConsole.startBrowser()` yourself (step 4) and read
+   server itself is never auto-started; call `DevConsole.startBrowser()` yourself (step 5) and read
    the connect URL from the returned `StartResult.Started.access` (or the device's More screen — the
    logged URL deliberately omits the credential fragment). Initialize explicitly when you need to pass
    configuration (state providers, flags, open triggers):

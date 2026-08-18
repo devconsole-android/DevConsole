@@ -2,7 +2,7 @@
  * @author Shakib
  * @since 17/08/26
  */
-@file:Suppress("FunctionNaming", "MagicNumber", "UnusedPrivateMember")
+@file:Suppress("FunctionNaming", "MagicNumber")
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package io.devconsole.ui.compose

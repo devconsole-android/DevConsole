@@ -7,3 +7,9 @@ complexity:
     # A composable body is a layout tree. Splitting one purely to hit a line count
     # fragments the UI description without making it clearer.
     ignoreAnnotated: ['Composable']
+
+style:
+  UnusedPrivateMember:
+    # @Preview functions are entry points for the IDE preview renderer; nothing in the source
+    # calls them, so the rule reports every one as dead.
+    ignoreAnnotated: ['Preview']

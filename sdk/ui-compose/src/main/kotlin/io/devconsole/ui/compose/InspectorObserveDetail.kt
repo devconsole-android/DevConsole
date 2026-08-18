@@ -279,16 +279,8 @@ private fun rememberObserveDetailSearch(
     val hasQuery = searching && query.isNotBlank()
     val candidates =
         remember(searchableSectionBodies, rawSectionKeys, hasQuery) {
-            if (!hasQuery) {
-                emptyList()
-            } else {
-                searchableSectionBodies.flatMap { section ->
-                    searchInspectorBodyCandidates(
-                        sectionKey = section.sectionKey,
-                        body = section.body,
-                        representation = bodySearchRepresentation(section.sectionKey in rawSectionKeys),
-                    )
-                }
+            inspectorSearchCandidatesFor(searchableSectionBodies, hasQuery) { sectionKey ->
+                bodySearchRepresentation(sectionKey in rawSectionKeys)
             }
         }
     val matches =
@@ -322,6 +314,25 @@ private fun rememberObserveDetailSearch(
         resolved = resolved,
         totalHits = if (searching) matches.size else resolved.sumOf { (_, section) -> section.hits },
     )
+}
+
+/**
+ * Collects the searchable bodies' candidates, short-circuiting before any body is walked when there
+ * is no query to match.
+ */
+internal fun inspectorSearchCandidatesFor(
+    sections: List<InspectorSearchSectionBody>,
+    hasQuery: Boolean,
+    representationForSection: (String) -> InspectorBodySearchRepresentation,
+): List<InspectorSearchCandidate> {
+    if (!hasQuery) return emptyList()
+    return sections.flatMap { section ->
+        searchInspectorBodyCandidates(
+            sectionKey = section.sectionKey,
+            body = section.body,
+            representation = representationForSection(section.sectionKey),
+        )
+    }
 }
 
 private fun bodySearchRepresentation(raw: Boolean): InspectorBodySearchRepresentation =

@@ -110,31 +110,6 @@ internal fun inspectorSearchSectionBodies(
         if (spec.key in searchableSectionKeys) InspectorSearchSectionBody(spec.key, spec.body) else null
     }
 
-internal fun searchInspectorSections(
-    sections: List<InspectorDetailSectionSpec>,
-    query: String,
-    selectedSectionKeys: Set<String>,
-    mode: InspectorSearchMode,
-    representationForSection: (String) -> InspectorBodySearchRepresentation = {
-        InspectorBodySearchRepresentation.FORMATTED
-    },
-): List<InspectorDetailSearchMatch> {
-    if (query.isBlank()) return emptyList()
-    return searchInspectorCandidates(
-        candidates =
-            sections.flatMap { spec ->
-                searchInspectorBodyCandidates(
-                    sectionKey = spec.key,
-                    body = spec.body,
-                    representation = representationForSection(spec.key),
-                )
-            },
-        query = query,
-        selectedSectionKeys = selectedSectionKeys,
-        mode = mode,
-    )
-}
-
 internal fun inspectorSearchScopeSummary(
     options: InspectorDetailSearchOptions,
     selectedSectionKeys: Set<String>,
@@ -157,11 +132,8 @@ private fun findInspectorQueryRanges(
     val ranges = mutableListOf<IntRange>()
     var start = 0
     while (start <= text.length - query.length) {
-        val matchAt =
-            (start..text.length - query.length).firstOrNull { index ->
-                text.regionMatches(index, query, 0, query.length, ignoreCase = true)
-            }
-                ?: break
+        val matchAt = text.indexOf(query, start, ignoreCase = true)
+        if (matchAt < 0) break
         ranges += matchAt until (matchAt + query.length)
         start = matchAt + query.length
     }

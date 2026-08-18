@@ -184,7 +184,7 @@ internal fun InspectorRoundIconButton(
             modifier
                 .minimumInteractiveComponentSize()
                 .size(size)
-                .alpha(if (enabled) 1f else 0.45f)
+                .alpha(if (enabled) 1f else DISABLED_PILL_ALPHA)
                 .clip(CircleShape)
                 .background(containerColor)
                 .clickable(enabled = enabled, onClick = onClick, role = Role.Button)
