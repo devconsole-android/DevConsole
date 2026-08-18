@@ -1,0 +1,9 @@
+complexity:
+  LongParameterList:
+    # A composable receives its state and callbacks as parameters; bundling them into a
+    # parameter object costs recomposition stability, so this threshold does not fit Compose.
+    ignoreAnnotated: ['Composable']
+  LongMethod:
+    # A composable body is a layout tree. Splitting one purely to hit a line count
+    # fragments the UI description without making it clearer.
+    ignoreAnnotated: ['Composable']

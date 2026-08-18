@@ -210,56 +210,240 @@ private fun resolveDetailSection(
     )
 }
 
+/** The per-section slice of the screen's search state that [resolveNetworkDetailSection] reads. */
+private data class NetworkSectionSearch(
+    val query: String,
+    val matches: List<InspectorDetailSearchMatch>,
+    val searchable: Boolean,
+) {
+    val hasQuery: Boolean get() = query.trim().isNotEmpty()
+
+    val showsMatchCount: Boolean get() = hasQuery && searchable
+}
+
+private fun networkSectionMeta(
+    search: NetworkSectionSearch,
+    expanded: Boolean,
+    total: Int,
+): String =
+    when {
+        search.showsMatchCount && search.matches.isEmpty() -> "no match"
+        search.showsMatchCount -> "${search.matches.size} match${if (search.matches.size == 1) "" else "es"}"
+        total == 0 -> ""
+        expanded -> total.toString()
+        else -> "$total line${if (total == 1) "" else "s"}"
+    }
+
 /** Network detail resolver: preserves every original body shape and decorates it with match metadata. */
 private fun resolveNetworkDetailSection(
     spec: InspectorDetailSectionSpec,
-    query: String,
+    search: NetworkSectionSearch,
     openState: Map<String, Boolean>,
     colors: DevConsoleColors,
-    matches: List<InspectorDetailSearchMatch>,
-    searchable: Boolean,
 ): ResolvedDetailSection {
-    val hasQuery = query.trim().isNotEmpty()
-    val total = detailBodyItemCount(spec.body)
-    val expanded = if (hasQuery && matches.isNotEmpty()) true else openState[spec.key] == true
-    val meta =
-        when {
-            hasQuery && searchable ->
-                if (matches.isNotEmpty()) {
-                    "${matches.size} match${if (matches.size == 1) "" else "es"}"
-                } else {
-                    "no match"
-                }
-            expanded -> if (total > 0) total.toString() else ""
-            else -> if (total > 0) "$total line${if (total == 1) "" else "s"}" else ""
-        }
-    val metaColor =
-        if (hasQuery && searchable) {
-            if (matches.isNotEmpty()) colors.signal else colors.text3
-        } else {
-            colors.text3
-        }
-    if (!expanded) {
-        return ResolvedDetailSection(
-            expanded = false,
-            hits = matches.size,
-            meta = meta,
-            metaColor = metaColor,
-            body = null,
-            emptyMessage = null,
-            searchMatches = matches,
-        )
-    }
-    val emptyMessage = (spec.body as? InspectorDetailSectionBody.Empty)?.text
+    val expanded = if (search.hasQuery && search.matches.isNotEmpty()) true else openState[spec.key] == true
+    val emptyMessage = if (expanded) (spec.body as? InspectorDetailSectionBody.Empty)?.text else null
     return ResolvedDetailSection(
-        expanded = true,
-        hits = matches.size,
-        meta = meta,
-        metaColor = metaColor,
-        body = if (emptyMessage == null) spec.body else null,
+        expanded = expanded,
+        hits = search.matches.size,
+        meta = networkSectionMeta(search, expanded, detailBodyItemCount(spec.body)),
+        metaColor = if (search.showsMatchCount && search.matches.isNotEmpty()) colors.signal else colors.text3,
+        body = if (expanded && emptyMessage == null) spec.body else null,
         emptyMessage = emptyMessage,
-        searchMatches = matches,
+        searchMatches = search.matches,
     )
+}
+
+/** Everything the detail screen derives from the active query, resolved once per recomposition. */
+private data class ObserveDetailSearch(
+    val matches: List<InspectorDetailSearchMatch>,
+    val activeMatchOrdinal: Int,
+    val resolved: List<Pair<InspectorDetailSectionSpec, ResolvedDetailSection>>,
+    val totalHits: Int,
+)
+
+@Composable
+private fun rememberObserveDetailSearch(
+    sections: List<InspectorDetailSectionSpec>,
+    searchableSectionBodies: List<InspectorSearchSectionBody>,
+    searchableSectionKeys: Set<String>,
+    rawSectionKeys: Set<String>,
+    selectedKeys: Set<String>,
+    searchMode: InspectorSearchMode,
+    query: String,
+    searching: Boolean,
+    currentMatchOrdinal: Int,
+    openState: Map<String, Boolean>,
+    colors: DevConsoleColors,
+): ObserveDetailSearch {
+    val hasQuery = searching && query.isNotBlank()
+    val candidates =
+        remember(searchableSectionBodies, rawSectionKeys, hasQuery) {
+            if (!hasQuery) {
+                emptyList()
+            } else {
+                searchableSectionBodies.flatMap { section ->
+                    searchInspectorBodyCandidates(
+                        sectionKey = section.sectionKey,
+                        body = section.body,
+                        representation = bodySearchRepresentation(section.sectionKey in rawSectionKeys),
+                    )
+                }
+            }
+        }
+    val matches =
+        remember(candidates, query, selectedKeys, searchMode, hasQuery) {
+            if (hasQuery) searchInspectorCandidates(candidates, query, selectedKeys, searchMode) else emptyList()
+        }
+    val activeMatchOrdinal = if (matches.isEmpty()) 0 else currentMatchOrdinal.coerceIn(0, matches.lastIndex)
+    val resolved =
+        sections.map { spec ->
+            val resolvedSection =
+                if (searching) {
+                    resolveNetworkDetailSection(
+                        spec = spec,
+                        search =
+                            NetworkSectionSearch(
+                                query = query,
+                                matches = matches.filter { it.sectionKey == spec.key },
+                                searchable = spec.key in searchableSectionKeys,
+                            ),
+                        openState = openState,
+                        colors = colors,
+                    )
+                } else {
+                    resolveDetailSection(spec, query, openState, colors)
+                }
+            spec to resolvedSection
+        }
+    return ObserveDetailSearch(
+        matches = matches,
+        activeMatchOrdinal = activeMatchOrdinal,
+        resolved = resolved,
+        totalHits = if (searching) matches.size else resolved.sumOf { (_, section) -> section.hits },
+    )
+}
+
+private fun bodySearchRepresentation(raw: Boolean): InspectorBodySearchRepresentation =
+    if (raw) InspectorBodySearchRepresentation.RAW else InspectorBodySearchRepresentation.FORMATTED
+
+/** The find field plus its match counter, stepping arrows, and scope chip. */
+@Composable
+private fun ObserveDetailSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    searching: Boolean,
+    matchCount: Int,
+    activeMatchOrdinal: Int,
+    totalHits: Int,
+    onOrdinalChange: (Int) -> Unit,
+    onOpenOptions: () -> Unit,
+    scopeLabel: String?,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+) {
+    InspectorDetailSearchField(
+        query = query,
+        onQueryChange = onQueryChange,
+        matchLabel = detailSearchMatchLabel(query, searching, matchCount, activeMatchOrdinal, totalHits),
+        onPrevious =
+            if (searching) {
+                { onOrdinalChange(previousInspectorMatchIndex(activeMatchOrdinal, matchCount)) }
+            } else {
+                null
+            },
+        onNext =
+            if (searching) {
+                { onOrdinalChange(nextInspectorMatchIndex(activeMatchOrdinal, matchCount)) }
+            } else {
+                null
+            },
+        navigationEnabled = matchCount > 0,
+        onOpenOptions = if (searching) onOpenOptions else null,
+        scopeLabel = scopeLabel,
+        modifier = modifier,
+        placeholder = placeholder,
+    )
+}
+
+/** The Raw/Formatted toggle only exists on kinds that carry search options. */
+private fun formattableShowRaw(
+    spec: InspectorDetailSectionSpec,
+    searching: Boolean,
+    rawSectionKeys: Set<String>,
+): Boolean? =
+    (spec.body as? InspectorDetailSectionBody.Formattable)
+        ?.takeIf { searching }
+        ?.let { body -> body.formatted == null || spec.key in rawSectionKeys }
+
+/** The section keys a kind declares as searchable; empty for kinds with no search options. */
+private fun InspectorDetailSearchOptions?.searchableSectionKeys(): Set<String> =
+    this?.sections?.mapTo(mutableSetOf()) { it.key }.orEmpty()
+
+private fun toggledRawSectionKeys(
+    current: List<String>,
+    key: String,
+    showRaw: Boolean,
+): List<String> = if (showRaw) (current + key).distinct() else current.filterNot { it == key }
+
+/** Only these two body shapes have a full-screen reader. */
+private fun InspectorDetailSectionBody?.isFullScreenCapable(): Boolean =
+    this is InspectorDetailSectionBody.Code || this is InspectorDetailSectionBody.Formattable
+
+private fun detailSearchMatchLabel(
+    query: String,
+    searching: Boolean,
+    matchCount: Int,
+    activeMatchOrdinal: Int,
+    totalHits: Int,
+): String =
+    when {
+        query.isBlank() -> ""
+        searching -> "${if (matchCount == 0) 0 else activeMatchOrdinal + 1}/$totalHits"
+        else -> "$totalHits match${if (totalHits == 1) "" else "es"}"
+    }
+
+/** The full-screen reader for whichever section the user expanded, per its body shape. */
+@Composable
+private fun ObserveDetailFullScreenOverlay(
+    spec: InspectorDetailSectionSpec,
+    section: ResolvedDetailSection,
+    showRaw: Boolean?,
+    onShowRawChange: ((Boolean) -> Unit)?,
+    activeMatchOrdinal: Int,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val copyDescription = spec.copyDescription ?: "Copy ${spec.label}"
+    when (val body = section.body) {
+        is InspectorDetailSectionBody.Code ->
+            InspectorCodeFullScreenOverlay(
+                title = spec.label,
+                lines = body.lines,
+                onDismiss = onDismiss,
+                modifier = modifier,
+                sectionKey = spec.key,
+                searchMatches = section.searchMatches,
+                currentMatchOrdinal = activeMatchOrdinal,
+                onCopy = spec.onCopy,
+                copyContentDescription = copyDescription,
+            )
+        is InspectorDetailSectionBody.Formattable ->
+            InspectorFormattableFullScreenOverlay(
+                title = spec.label,
+                body = body,
+                onDismiss = onDismiss,
+                showRaw = showRaw,
+                onShowRawChange = onShowRawChange,
+                modifier = modifier,
+                sectionKey = spec.key,
+                searchMatches = section.searchMatches,
+                currentMatchOrdinal = activeMatchOrdinal,
+                onCopy = spec.onCopy,
+                copyContentDescription = copyDescription,
+            )
+        else -> Unit
+    }
 }
 
 private fun detailBodyItemCount(body: InspectorDetailSectionBody): Int =
@@ -336,10 +520,7 @@ private fun InspectorDetailSectionCard(
  * action bar. [resetKey] identifies which capture is open (e.g. a transaction id) so the find query
  * and each section's manual open/closed state reset when a different capture is opened. Both the
  * header's back button and the system back gesture close it via [onBack].
- *
- * LongMethod: the full-screen code overlay branch pushed this a couple lines past the default budget.
  */
-@Suppress("LongParameterList", "LongMethod")
 @Composable
 internal fun InspectorObserveDetailScreen(
     resetKey: Any,
@@ -372,57 +553,37 @@ internal fun InspectorObserveDetailScreen(
     val colors = DevConsoleTheme.colors
     val selectedKeys = remember(selectedSectionKeys) { selectedSectionKeys.toSet() }
     val rawSectionKeys = remember(rawFormattableSectionKeys) { rawFormattableSectionKeys.toSet() }
-    val searchableSectionKeys =
-        remember(searchOptions) { searchOptions?.sections?.mapTo(mutableSetOf()) { it.key }.orEmpty() }
+    val searchableSectionKeys = remember(searchOptions) { searchOptions.searchableSectionKeys() }
     val searchableSectionBodies = inspectorSearchSectionBodies(sections, searchableSectionKeys)
-    val hasNetworkQuery = searchOptions != null && query.isNotBlank()
-    val networkSearchCandidates =
-        remember(searchableSectionBodies, rawSectionKeys, hasNetworkQuery) {
-            if (!hasNetworkQuery) {
-                emptyList()
-            } else {
-                searchableSectionBodies.flatMap { section ->
-                    searchInspectorBodyCandidates(
-                        sectionKey = section.sectionKey,
-                        body = section.body,
-                        representation =
-                            if (section.sectionKey in rawSectionKeys) {
-                                InspectorBodySearchRepresentation.RAW
-                            } else {
-                                InspectorBodySearchRepresentation.FORMATTED
-                            },
-                    )
-                }
+    val searching = searchOptions != null
+    // Formattable bodies only offer the raw/formatted toggle on the kinds that carry search options.
+    val onShowRawChange: ((String, Boolean) -> Unit)? =
+        if (searching) {
+            { key, showRaw ->
+                rawFormattableSectionKeys = toggledRawSectionKeys(rawFormattableSectionKeys, key, showRaw)
+                currentMatchOrdinal = 0
             }
+        } else {
+            null
         }
-    val networkMatches =
-        remember(networkSearchCandidates, query, selectedKeys, searchMode, hasNetworkQuery) {
-            if (hasNetworkQuery) {
-                searchInspectorCandidates(networkSearchCandidates, query, selectedKeys, searchMode)
-            } else {
-                emptyList()
-            }
-        }
-    val activeMatchOrdinal =
-        if (networkMatches.isEmpty()) 0 else currentMatchOrdinal.coerceIn(0, networkMatches.lastIndex)
-    val resolved =
-        sections.map { spec ->
-            if (searchOptions != null) {
-                val sectionMatches = networkMatches.filter { it.sectionKey == spec.key }
-                spec to
-                    resolveNetworkDetailSection(
-                        spec = spec,
-                        query = query,
-                        openState = openState,
-                        colors = colors,
-                        matches = sectionMatches,
-                        searchable = spec.key in searchableSectionKeys,
-                    )
-            } else {
-                spec to resolveDetailSection(spec, query, openState, colors)
-            }
-        }
-    val totalHits = if (searchOptions != null) networkMatches.size else resolved.sumOf { (_, section) -> section.hits }
+    val search =
+        rememberObserveDetailSearch(
+            sections = sections,
+            searchableSectionBodies = searchableSectionBodies,
+            searchableSectionKeys = searchableSectionKeys,
+            rawSectionKeys = rawSectionKeys,
+            selectedKeys = selectedKeys,
+            searchMode = searchMode,
+            query = query,
+            searching = searching,
+            currentMatchOrdinal = currentMatchOrdinal,
+            openState = openState,
+            colors = colors,
+        )
+    val networkMatches = search.matches
+    val activeMatchOrdinal = search.activeMatchOrdinal
+    val resolved = search.resolved
+    val totalHits = search.totalHits
 
     // Which section's code block (if any) is showing full-screen.
     // Bundle-safe on its own (a String key), and the lines it needs are re-derived from `resolved`
@@ -436,57 +597,18 @@ internal fun InspectorObserveDetailScreen(
 
     BackHandler(onBack = onBack)
 
-    if (fullScreenSection != null) {
+    if (fullScreenSection != null && fullScreenSection.second.body.isFullScreenCapable()) {
         val (spec, section) = fullScreenSection
-        val body = section.body
-        if (body is InspectorDetailSectionBody.Code) {
-            InspectorCodeFullScreenOverlay(
-                title = spec.label,
-                lines = body.lines,
-                onDismiss = { fullScreenSectionKey = null },
-                modifier = modifier.fillMaxSize(),
-                sectionKey = spec.key,
-                searchMatches = section.searchMatches,
-                currentMatchOrdinal = activeMatchOrdinal,
-                onCopy = spec.onCopy,
-                copyContentDescription = spec.copyDescription ?: "Copy ${spec.label}",
-            )
-            return
-        }
-        if (body is InspectorDetailSectionBody.Formattable) {
-            InspectorFormattableFullScreenOverlay(
-                title = spec.label,
-                body = body,
-                onDismiss = { fullScreenSectionKey = null },
-                showRaw =
-                    if (searchOptions != null) {
-                        body.formatted == null || spec.key in rawSectionKeys
-                    } else {
-                        null
-                    },
-                onShowRawChange =
-                    if (searchOptions != null) {
-                        { showRaw ->
-                            rawFormattableSectionKeys =
-                                if (showRaw) {
-                                    (rawFormattableSectionKeys + spec.key).distinct()
-                                } else {
-                                    rawFormattableSectionKeys.filterNot { it == spec.key }
-                                }
-                            currentMatchOrdinal = 0
-                        }
-                    } else {
-                        null
-                    },
-                modifier = modifier.fillMaxSize(),
-                sectionKey = spec.key,
-                searchMatches = section.searchMatches,
-                currentMatchOrdinal = activeMatchOrdinal,
-                onCopy = spec.onCopy,
-                copyContentDescription = spec.copyDescription ?: "Copy ${spec.label}",
-            )
-            return
-        }
+        ObserveDetailFullScreenOverlay(
+            spec = spec,
+            section = section,
+            showRaw = formattableShowRaw(spec, searching, rawSectionKeys),
+            onShowRawChange = onShowRawChange?.let { change -> { showRaw -> change(spec.key, showRaw) } },
+            activeMatchOrdinal = activeMatchOrdinal,
+            onDismiss = { fullScreenSectionKey = null },
+            modifier = modifier.fillMaxSize(),
+        )
+        return
     }
 
     InspectorDetailScaffold(
@@ -504,37 +626,21 @@ internal fun InspectorObserveDetailScreen(
                 onBack = onBack,
                 actions = header.actions,
             )
-            InspectorDetailSearchField(
+            ObserveDetailSearchBar(
                 query = query,
                 onQueryChange = {
                     query = it
                     currentMatchOrdinal = 0
                 },
-                matchLabel =
-                    if (query.isBlank()) {
-                        ""
-                    } else if (searchOptions != null) {
-                        "${if (networkMatches.isEmpty()) 0 else activeMatchOrdinal + 1}/$totalHits"
-                    } else {
-                        "$totalHits match${if (totalHits == 1) "" else "es"}"
-                    },
-                onPrevious =
-                    if (searchOptions != null) {
-                        { currentMatchOrdinal = previousInspectorMatchIndex(activeMatchOrdinal, networkMatches.size) }
-                    } else {
-                        null
-                    },
-                onNext =
-                    if (searchOptions != null) {
-                        { currentMatchOrdinal = nextInspectorMatchIndex(activeMatchOrdinal, networkMatches.size) }
-                    } else {
-                        null
-                    },
-                navigationEnabled = networkMatches.isNotEmpty(),
-                onOpenOptions = if (searchOptions != null) ({ searchOptionsVisible = true }) else null,
+                searching = searching,
+                matchCount = networkMatches.size,
+                activeMatchOrdinal = activeMatchOrdinal,
+                totalHits = totalHits,
+                onOrdinalChange = { currentMatchOrdinal = it },
+                onOpenOptions = { searchOptionsVisible = true },
                 scopeLabel = searchOptions?.let { inspectorSearchScopeSummary(it, selectedKeys) },
-                modifier = Modifier.padding(top = 12.dp),
                 placeholder = searchPlaceholder,
+                modifier = Modifier.padding(top = 12.dp),
             )
         },
         footer = { InspectorDetailFooterBar(footerActions) },
@@ -543,48 +649,46 @@ internal fun InspectorObserveDetailScreen(
             InspectorDetailSectionCard(
                 spec = spec,
                 resolved = section,
-                currentMatchOrdinal = if (searchOptions != null) activeMatchOrdinal else null,
-                formattableShowRaw =
-                    if (searchOptions != null) {
-                        (spec.body as? InspectorDetailSectionBody.Formattable)?.let { body ->
-                            body.formatted == null || spec.key in rawSectionKeys
-                        }
-                    } else {
-                        null
-                    },
+                currentMatchOrdinal = if (searching) activeMatchOrdinal else null,
+                formattableShowRaw = formattableShowRaw(spec, searching, rawSectionKeys),
                 onFormattableShowRawChange =
-                    if (searchOptions != null) {
-                        { showRaw ->
-                            rawFormattableSectionKeys =
-                                if (showRaw) {
-                                    (rawFormattableSectionKeys + spec.key).distinct()
-                                } else {
-                                    rawFormattableSectionKeys.filterNot { it == spec.key }
-                                }
-                            currentMatchOrdinal = 0
-                        }
-                    } else {
-                        null
-                    },
+                    onShowRawChange?.let { change -> { showRaw -> change(spec.key, showRaw) } },
                 onToggle = { openState[spec.key] = !section.expanded },
                 onExpandCodeFullScreen = { key -> fullScreenSectionKey = key },
             )
         }
     }
-    if (searchOptionsVisible && searchOptions != null) {
-        InspectorDetailSearchOptionsSheet(
-            options = searchOptions,
-            selectedSectionKeys = selectedKeys,
-            mode = searchMode,
-            onDismiss = { searchOptionsVisible = false },
-            onApply = { newKeys, newMode ->
-                selectedSectionKeys = newKeys.toList()
-                searchMode = newMode
-                currentMatchOrdinal = 0
-                searchOptionsVisible = false
-            },
-        )
-    }
+    ObserveDetailSearchOptionsSheet(
+        options = searchOptions.takeIf { searchOptionsVisible },
+        selectedSectionKeys = selectedKeys,
+        mode = searchMode,
+        onDismiss = { searchOptionsVisible = false },
+        onApply = { newKeys, newMode ->
+            selectedSectionKeys = newKeys.toList()
+            searchMode = newMode
+            currentMatchOrdinal = 0
+            searchOptionsVisible = false
+        },
+    )
+}
+
+/** Renders the scope/mode sheet only while [options] is non-null, i.e. while the chip has it open. */
+@Composable
+private fun ObserveDetailSearchOptionsSheet(
+    options: InspectorDetailSearchOptions?,
+    selectedSectionKeys: Set<String>,
+    mode: InspectorSearchMode,
+    onDismiss: () -> Unit,
+    onApply: (Set<String>, InspectorSearchMode) -> Unit,
+) {
+    if (options == null) return
+    InspectorDetailSearchOptionsSheet(
+        options = options,
+        selectedSectionKeys = selectedSectionKeys,
+        mode = mode,
+        onDismiss = onDismiss,
+        onApply = onApply,
+    )
 }
 
 /** Everything [InspectorObserveDetailScreen] needs for one capture, built by the per-kind `*DetailContent` builders. */
