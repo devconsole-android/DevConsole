@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Paths for this sample's own FileProvider, declared in AndroidManifest.xml. Nothing in the sample
+  shares a file: the provider exists purely to reproduce the shape of a real host app, so see that
+  manifest declaration for why it is here at all.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="shared" path="shared/" />
+</paths>

@@ -51,12 +51,12 @@ dependencyResolutionManagement {
 ```kotlin
 plugins {
     id("com.android.application")
-    id("io.github.devconsole-android") version "1.2.3"
+    id("io.github.devconsole-android") version "1.2.4"
 }
 
 dependencies {
-    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.2.3")
-    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.3")
+    debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.2.4")
+    releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.4")
 }
 ```
 
@@ -353,8 +353,8 @@ Add the adapter — it is not part of the `devconsole` umbrella, so that Firebas
 classpath of an app that doesn't use it:
 
 ```kotlin
-debugImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase:1.2.3")
-releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase-noop:1.2.3")
+debugImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase:1.2.4")
+releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-remote-config-firebase-noop:1.2.4")
 ```
 
 > These two artifacts first ship in `1.2.0`; earlier versions do not have them.
@@ -429,8 +429,8 @@ You never name those. Every module publishes sources, javadoc, and a POM.
 ### Versions and unreleased code
 
 All 34 library artifacts come from [JitPack](https://jitpack.io/#devconsole-android/DevConsole),
-which builds a ref on demand. Releases are tagged `v1.2.3`, and JitPack resolves a bare version
-against the `v`-prefixed tag, which is why the coordinates above read `1.2.3` — the same spelling
+which builds a ref on demand. Releases are tagged `v1.2.4`, and JitPack resolves a bare version
+against the `v`-prefixed tag, which is why the coordinates above read `1.2.4` — the same spelling
 the Gradle plugin uses on the Portal. Any branch works as `<branch>-SNAPSHOT`, with `/` written as
 `~`, so a `feature/x` branch is `feature~x-SNAPSHOT` — that is how you try an unreleased fix before
 it ships. JitPack support starts at **1.1.1**; earlier tags do not build there. Two things to

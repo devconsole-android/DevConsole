@@ -870,12 +870,12 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         )
 
         // release is PROTECTED by default, so auto-wire adds the noop core coordinate. The published
-        // coordinate is 1.2.3 -- the DEFAULT_SDK_VERSION must not point at a 1.2.3-SNAPSHOT that was
+        // coordinate is 1.2.4 -- the DEFAULT_SDK_VERSION must not point at a 1.2.4-SNAPSHOT that was
         // never published, which would make every zero-config release build fail to resolve.
         val result = runner("dependencies", "--configuration", "releaseImplementation").build()
 
-        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.3"))
-        assertTrue(result.output, !result.output.contains("1.2.3-SNAPSHOT"))
+        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole-noop:1.2.4"))
+        assertTrue(result.output, !result.output.contains("1.2.4-SNAPSHOT"))
     }
 
     @Test
@@ -925,13 +925,13 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
     @Test
     fun `the JitPack coordinate trips the declared-dependency check`() {
-        addStubCoordinate("com.github.devconsole-android.DevConsole", "devconsole", "1.2.3")
+        addStubCoordinate("com.github.devconsole-android.DevConsole", "devconsole", "1.2.4")
         writeFixture(
             devConsoleBlock = "autoWireDependencies.set(false)",
             extraBuildScript =
                 """
                 dependencies {
-                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole:1.2.3")
+                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole:1.2.4")
                 }
                 """.trimIndent(),
         )
@@ -971,7 +971,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         // debug is ENABLED, so the core runtime ("devconsole") must still be auto-wired alongside the
         // host's add-on declaration -- the add-on alone does not count as declaring the core runtime.
-        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole:1.2.3"))
+        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole:1.2.4"))
         assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-ui-compose"))
     }
 

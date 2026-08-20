@@ -5,6 +5,23 @@
          confined to src/debug/AndroidManifest.xml. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <application android:theme="@style/AppTheme" android:label="DevConsole Compose">
+        <!-- Regression guard, not a feature: a real host that shares files (camera capture, image
+             picking) declares exactly this, and the manifest merger keys <provider> nodes by
+             android:name. When sdk:full declared androidx.core.content.FileProvider under that raw
+             AndroidX name too, the two nodes merged into one and failed every such host's debug
+             build on the differing authorities. Keep the raw class name here; a
+             subclass would make this sample stop catching the regression (sdk:full's own provider
+             is io.devconsole.DevConsoleFileProvider). :samples:compose-app:assembleDebug runs in
+             CI, so a reintroduced collision fails there instead of at a consumer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/sample_file_provider_paths" />
+        </provider>
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

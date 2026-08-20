@@ -54,6 +54,18 @@ only one is live at a time, and each lasts five minutes. There's no approval ste
 no automatic regeneration, so issue a fresh code from the More screen for each new browser. See
 [LAN_PERMISSION_AND_TROUBLESHOOTING.md](LAN_PERMISSION_AND_TROUBLESHOOTING.md#session-codes-session_code_expired--session_code_invalid).
 
+**My debug build fails with a manifest merger conflict on `androidx.core.content.FileProvider`.**
+Upgrade to 1.2.4, where the SDK declares its provider as `io.devconsole.DevConsoleFileProvider`
+instead. The merger keys `<provider>` nodes by `android:name` rather than by authority, so through
+1.2.3 the SDK's provider and the one your app already declares — for camera capture, image picking,
+or any share sheet — were the same node, and the merge failed on the differing `android:authorities`
+and paths resource. Do not apply the `tools:replace="android:authorities"` the merger suggests: it
+resolves the conflict by dropping `<applicationId>.devconsole.files`, so the Files screen's Share
+action throws the first time someone taps it. If you cannot upgrade yet, give *your* provider a
+unique class name instead — `class AppFileProvider : FileProvider()`, with `android:name` pointing
+at it — which keeps your authority, your paths file, and every `getUriForFile` call exactly as they
+are.
+
 **Where do I report a security issue?** Privately, never in a public issue.
 [SECURITY.md](../SECURITY.md) has the details.
 
