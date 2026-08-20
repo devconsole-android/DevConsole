@@ -1,11 +1,11 @@
 [versions]
-agp = "8.13.0"
-kotlin = "2.2.20"
+agp = "9.3.1"
+kotlin = "2.4.10"
 ktor = "3.0.3"
-compose-bom = "2024.10.01"
-activity = "1.9.3"
+compose-bom = "2026.08.00"
+activity = "1.13.0"
 lifecycle = "2.8.7"
-coroutines = "1.9.0"
+coroutines = "1.11.0"
 re2j = "1.8"
 # okhttp itself is still declared inline per-module (e.g. sdk/socket-okhttp/build.gradle.kts) --
 # migrating it into this catalog is out of scope for this change.

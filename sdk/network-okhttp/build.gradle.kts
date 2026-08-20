@@ -15,6 +15,6 @@ dependencies {
     // type of its defaulted mockEngine parameter), so a consumer cannot resolve the call without it.
     api(project(":sdk:mocks"))
     implementation(project(":sdk:mocks-okhttp"))
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:5.5.0")
 }
