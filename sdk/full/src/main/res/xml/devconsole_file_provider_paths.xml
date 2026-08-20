@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Backs the `${applicationId}.devconsole.files` FileProvider declared in AndroidManifest.xml.
+  Backs the `${applicationId}.devconsole.files` FileProvider declared in AndroidManifest.xml,
+  which reaches this file through DevConsoleFileProvider's resource-id constructor rather than
+  through an `android.support.FILE_PROVIDER_PATHS` meta-data element.
   Each entry mirrors one of AndroidFileInspector's `rootDirs` exactly (see its doc comment: "files",
   "cache", "external-files", "no-backup") so a file the Files screen can browse is always a file
   FileProvider is willing to hand out a content:// URI for, and nothing outside those roots ever is.

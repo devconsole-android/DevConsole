@@ -37,7 +37,7 @@ devConsole {
     protectedDependencyPaths.set(setOf(":sdk:full"))        // default; override for a differently-pathed module
     failBuildOnUnsafeVariant.set(true)                      // default; false downgrades to a warning
     autoWireDependencies.set(true)                          // default; false to declare coordinates yourself
-    sdkVersion.set("1.2.3")                                 // default; the JitPack version to resolve
+    sdkVersion.set("1.2.4")                                 // default; the JitPack version to resolve
 }
 ```
 

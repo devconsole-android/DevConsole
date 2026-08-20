@@ -12,16 +12,16 @@
             android:initOrder="100" />
         <!-- Backs the Files screen's Share action (ACTION_SEND). Paths mirror AndroidFileInspector's
              sandbox roots exactly, see res/xml/devconsole_file_provider_paths.xml, so a shared
-             file is always inside a root that inspector already permits browsing. -->
+             file is always inside a root that inspector already permits browsing. The name is an
+             SDK-specific subclass on purpose: the merger keys providers by android:name, so naming
+             androidx.core.content.FileProvider here collided with every host that declares its own
+             (see DevConsoleFileProvider). That subclass hands FileProvider the paths resource
+             itself, so this declaration needs no meta-data child to collide over either. -->
         <provider
-            android:name="androidx.core.content.FileProvider"
+            android:name="io.devconsole.DevConsoleFileProvider"
             android:authorities="${applicationId}.devconsole.files"
             android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/devconsole_file_provider_paths" />
-        </provider>
+            android:grantUriPermissions="true" />
         <!-- Keep-alive shell for the embedded dashboard server (docs/BACKGROUND_KEEPALIVE.md).
              The SDK deliberately declares NO permissions for it: the host opts in by declaring
              FOREGROUND_SERVICE (+ FOREGROUND_SERVICE_SPECIAL_USE on API 34+) in its own debug

@@ -96,8 +96,8 @@ dependencies {
 ```
 
 `<version>` is a git ref. JitPack looks it up as a tag and falls back to the `v`-prefixed spelling
-when no bare tag exists, so a release resolves either way — `1.2.3` and `v1.2.3` both serve the
-`v1.2.3` build. Prefer the bare form: it is what the docs show, and it matches the version the
+when no bare tag exists, so a release resolves either way — `1.2.4` and `v1.2.4` both serve the
+`v1.2.4` build. Prefer the bare form: it is what the docs show, and it matches the version the
 Gradle plugin carries on the Portal. Any branch works as `<branch>-SNAPSHOT`, with `/` written as
 `~`, so a `feature/x` branch is `feature~x-SNAPSHOT`. JitPack support starts at **1.1.1**; earlier
 tags do not build there, and bare `1.2.1` is a cached failed build — that one release resolves only

@@ -18,6 +18,27 @@ before it can reach a release. (There was briefly a separate `sdk:plugin-api` mo
 third-party plugin framework; it was removed before ever shipping — see Removed, below — so it never
 joined this list.)
 
+## 1.2.4 — 2026-08-20
+
+### Fixed
+
+- **The SDK's `FileProvider` no longer collides with the host's, which broke integration outright.**
+  `sdk:full` declared its Share-sheet provider as `androidx.core.content.FileProvider`, and the
+  manifest merger keys `<provider>` nodes by `android:name` rather than by authority — so in any app
+  that already declares a FileProvider of its own (camera capture, image picking, an attachment
+  picker), the two collapsed into one node and the host's debug build failed on the differing
+  `android:authorities` and `android.support.FILE_PROVIDER_PATHS` resource. The provider is now
+  `io.devconsole.DevConsoleFileProvider`, a name no host would pick, and it reaches its paths through
+  `FileProvider`'s resource-id constructor so the declaration carries no meta-data child to collide
+  over either. The authority is unchanged (`<applicationId>.devconsole.files`), so nothing in a host
+  app moves and no host that already built keeps working differently. Anyone still on 1.2.3 should
+  not apply the `tools:replace="android:authorities"` the merger suggests — it settles the conflict
+  by dropping the SDK's authority, and the Files screen's Share action then throws the first time it
+  is used; [docs/FAQ_TROUBLESHOOTING.md](docs/FAQ_TROUBLESHOOTING.md) has the one-line workaround
+  that keeps both providers. `samples:compose-app` now declares a FileProvider of its own for no
+  reason other than to reproduce a host of that shape, so CI fails on a reintroduction instead of a
+  consumer's build doing it.
+
 ## 1.2.3 — 2026-08-18
 
 ### Changed
