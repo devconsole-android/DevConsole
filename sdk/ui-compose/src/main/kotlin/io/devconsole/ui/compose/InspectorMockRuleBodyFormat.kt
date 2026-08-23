@@ -22,6 +22,7 @@ internal sealed interface JsonFormatResult {
 
     data class Error(
         val message: String,
+        val offset: Int = 0,
     ) : JsonFormatResult
 }
 
@@ -37,5 +38,29 @@ internal fun formatMockRuleBodyJson(input: String): JsonFormatResult =
         val value = MinimalJsonParser(input).parseDocument()
         JsonFormatResult.Formatted(value.prettyPrint())
     } catch (error: JsonSyntaxException) {
-        JsonFormatResult.Error(error.message ?: "Invalid JSON")
+        JsonFormatResult.Error(error.message ?: "Invalid JSON", error.offset)
+    }
+
+/**
+ * Ceiling for the *automatic* niceties -- opening pretty-printed and syntax colouring. Both are
+ * per-keystroke work in a `BasicTextField`, which lays out its whole string in one un-virtualized
+ * text node: a 512KB capture preview (the default `responseBodyPreviewBytes`) pretty-prints to well
+ * over a megabyte and tens of thousands of spans, which janks the field for a body nobody hand-edits
+ * anyway. Above this the body opens exactly as captured, uncoloured. The FORMAT button is
+ * deliberately *not* capped -- that one the user asked for.
+ */
+internal const val MAX_AUTO_FORMAT_BODY_CHARS = 32 * 1024
+
+/**
+ * [formatMockRuleBodyJson] for display: pretty JSON when it parses, the input untouched when it
+ * doesn't -- or when it is past [MAX_AUTO_FORMAT_BODY_CHARS].
+ */
+internal fun prettyOrRaw(input: String): String =
+    when {
+        input.length > MAX_AUTO_FORMAT_BODY_CHARS -> input
+        else ->
+            when (val result = formatMockRuleBodyJson(input)) {
+                is JsonFormatResult.Formatted -> result.text
+                is JsonFormatResult.Error -> input
+            }
     }
