@@ -30,6 +30,17 @@ dashboard assets, and storage layer live only in `sdk:full`, and `verifyDevConso
 checks specifically for a dependency on that module, not for the absence of every DevConsole class.
 See [BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md](BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md).
 
+**Why is my release build downloading another flavor's dependencies?** Up to 1.2.4 the plugin
+registered a single `verifyDevConsoleProtectedArtifacts` task holding *every* protected variant's
+runtime classpath and packaged artifact as its own inputs, and wired it onto each protected variant's
+`assemble`/`bundle` — so `assembleProductionRelease` dragged `dexBuilderStagingRelease`,
+`bundlePartnerRelease` and every other flavor's dependency download into the graph. Since then there
+is one verifier per variant (`verifyProductionReleaseDevConsoleProtectedArtifacts`), each wired only
+onto its own variant's tasks, and `verifyDevConsoleProtectedArtifacts` is an aggregate you invoke
+deliberately.
+Upgrade, and drop any `-x verifyDevConsoleProtectedArtifacts` workaround. See the flavored-projects
+section in the [README](../README.md#flavored-projects-verify-the-variant-you-ship).
+
 **I toggled a feature flag in the dashboard but my app didn't change.** Flags are pulled, not
 pushed. Call `DevConsole.featureFlagValue(key)` wherever you'd otherwise check a local flag. There
 is no change notification, so re-check after whatever user action would plausibly follow a QA

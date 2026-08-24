@@ -517,7 +517,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         val result = runner("bundleRelease").buildAndFail()
 
-        assertTrue(result.output, result.output.contains(":verifyDevConsoleProtectedArtifacts"))
+        assertTrue(result.output, result.output.contains(":verifyReleaseDevConsoleProtectedArtifacts"))
         assertTrue(result.output, result.output.contains("release -> :stub-full"))
     }
 
@@ -973,6 +973,36 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         // host's add-on declaration -- the add-on alone does not count as declaring the core runtime.
         assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole:1.3.0"))
         assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-ui-compose"))
+    }
+
+    @Test
+    fun `assembling one flavor's release keeps another flavor's release out of the task graph`() {
+        writeFixture(
+            devConsoleBlock = "",
+            androidPlugin = "com.android.application",
+            applicationIdLine =
+                """
+                applicationId = "io.devconsole.fixture"
+                versionCode = 1
+                """.trimIndent(),
+            androidBlock =
+                """
+                flavorDimensions += "environment"
+                productFlavors {
+                    create("production") { dimension = "environment" }
+                    create("partner") { dimension = "environment" }
+                }
+                """.trimIndent(),
+        )
+
+        val result = runner("assembleProductionRelease", "--dry-run").build()
+
+        assertTrue(result.output, result.output.contains(":verifyProductionReleaseDevConsoleProtectedArtifacts"))
+        assertTrue(result.output, result.output.contains(":verifyProductionReleaseDevConsolePackagedArtifact"))
+        // A single shared verifier task holding every protected variant's runtime classpath and
+        // packaged artifact as inputs made assembling one flavor resolve -- and build -- every other
+        // flavor's release variant too.
+        assertTrue(result.output, !result.output.contains("PartnerRelease"))
     }
 
     private companion object {
