@@ -18,18 +18,18 @@ before it can reach a release. (There was briefly a separate `sdk:plugin-api` mo
 third-party plugin framework; it was removed before ever shipping — see Removed, below — so it never
 joined this list.)
 
-## Unreleased
+## 1.3.0 — 2026-08-24
 
 Captured requests could only ever be discarded by restarting the session, so a long debugging run
 turned the Traffic list into a haystack ([#23](https://github.com/devconsole-android/DevConsole/issues/23)).
 Both operator surfaces can now clear them.
 
-**Version note, deliberately unresolved here:** `NetworkTransactionStore` gains an abstract
-`clear()`. That interface is not documented as a host extension point and nothing outside this repo
-is known to implement it, but under this file's own [policy](#versioning-and-stability-policy) a new
-abstract member is source-breaking for anyone who does. It is in `sdk:network`, not `sdk:api`, so it
-does not automatically read as a major. The number is left for the release decision rather than
-assumed.
+**Why a minor, not a major:** `NetworkTransactionStore` gains an abstract `clear()`, which is
+source-breaking for anyone who implements that interface. It lives in `sdk:network`, not `sdk:api`,
+and this file's [policy](#versioning-and-stability-policy) reserves a major for breaks to `sdk:api`,
+so what sets the number here is the new API this release adds. The interface is not documented as a
+host extension point and nothing outside this repo is known to implement it — but a custom store
+does have to add one method to compile against 1.3.0.
 
 ### Added
 

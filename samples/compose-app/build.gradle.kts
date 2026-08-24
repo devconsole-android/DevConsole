@@ -12,7 +12,7 @@ android {
     defaultConfig {
         applicationId = "io.devconsole.sample.compose"
         versionCode = 1
-        versionName = "1.2.4-SNAPSHOT"
+        versionName = "1.3.0-SNAPSHOT"
     }
 }
 
