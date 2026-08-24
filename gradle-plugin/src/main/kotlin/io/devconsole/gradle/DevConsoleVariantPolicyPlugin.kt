@@ -398,10 +398,10 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
 }
 
 // JitPack serves a build under its git ref name. This repo tags `v*`, and JitPack resolves a
-// requested version against the `v`-prefixed tag when no bare tag exists, so "1.3.0" reaches the
-// v1.3.0 build -- and reads the same as the version this plugin carries on the Plugin Portal.
+// requested version against the `v`-prefixed tag when no bare tag exists, so "1.3.1" reaches the
+// v1.3.1 build -- and reads the same as the version this plugin carries on the Plugin Portal.
 // Bump in step with SDK_VERSION in convention-publishing; the tag must exist before this resolves.
-private const val DEFAULT_SDK_VERSION = "1.3.0"
+private const val DEFAULT_SDK_VERSION = "1.3.1"
 
 /** JitPack's group for this repo — what auto-wiring declares. */
 private const val DEVCONSOLE_GROUP = "com.github.devconsole-android.DevConsole"
