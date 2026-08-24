@@ -42,8 +42,10 @@ class AutoBindingTest {
     }
 
     /**
-     * Everything else is a genuine failure that loopback would hit too, so retrying would turn one
-     * honest error into two. A port clash is the sharp case: the range is the same either way.
+     * Everything else is a genuine failure that retrying would turn from one honest error into two.
+     * A port clash is the sharp case: loopback binds a different address, so it is not strictly
+     * doomed -- but exhausting all 20 ports is an environment problem, and quietly downgrading to a
+     * `127.0.0.1` URL the caller asked not to get is worse than saying so.
      */
     @Test
     fun `failures loopback cannot rescue are left alone`() {

@@ -71,7 +71,9 @@ import java.util.Locale
 private const val EXPORT_ALL_SUBTITLE = "Redacted · all captured traffic (capped at the 500 most recent)"
 
 private const val LAN_BINDING = "LAN"
+private const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
 private const val SERVER_STATE_RUNNING = "Running"
+private const val SERVER_STATE_PERMISSION_REQUIRED = "PermissionRequired"
 private const val ACTIVE_SESSION_STATUS = "ACTIVE"
 // Byte-size and MS_PER_* constants live in InspectorObserveFormat.kt (formatByteSize/MS_PER_SECOND
 // etc.) -- this file used to duplicate both; see that file's own doc.
@@ -87,6 +89,7 @@ internal fun MoreRoute(
     viewModel: InspectorViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val pendingServerStartPermission by viewModel.serverStartPermission.collectAsStateWithLifecycle()
     val clipboard = LocalClipboardManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -125,6 +128,24 @@ internal fun MoreRoute(
         promptNeeded = state.keepAlivePromptNeeded,
         snackbarHostState = snackbarHostState,
         onPermissionResult = { viewModel.dispatch(InspectorAction.NotificationPermissionGranted) },
+    )
+    val legacyPermissionRequired = state.health?.state == SERVER_STATE_PERMISSION_REQUIRED
+    val serverStartPermission =
+        pendingServerStartPermission ?: LOCAL_NETWORK_PERMISSION.takeIf { legacyPermissionRequired }
+    ServerPermissionPromptEffect(
+        permission = serverStartPermission,
+        snackbarHostState = snackbarHostState,
+        onPermissionResult = { granted ->
+            if (pendingServerStartPermission != null) {
+                viewModel.dispatch(InspectorAction.ServerStartPermissionResult(granted))
+            } else if (granted) {
+                // Compatibility path for a host/API start that reached PermissionRequired before
+                // this SDK-owned preflight was installed.
+                viewModel.dispatch(InspectorAction.SetServerRunning(true))
+            } else {
+                viewModel.dispatch(InspectorAction.Refresh)
+            }
+        },
     )
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -434,13 +455,17 @@ private fun MoreUrlCard(
         running && browser?.bindAddressChanged == true ->
             StaleAddressUrlCard(state.serverControlSupported, actions, colors)
         running && browser?.sessionCodeUrl != null && browser.sessionCode != null ->
-            RunningUrlCard(
-                browser.sessionCodeUrl,
-                browser.sessionCode,
-                browser.sessionCodeRemainingTtlMs,
-                actions,
-                colors,
-            )
+            if (browser.sessionCode.isBlank()) {
+                RunningOpenUrlCard(browser.sessionCodeUrl, actions, colors)
+            } else {
+                RunningUrlCard(
+                    browser.sessionCodeUrl,
+                    browser.sessionCode,
+                    browser.sessionCodeRemainingTtlMs,
+                    actions,
+                    colors,
+                )
+            }
         else -> StoppedUrlCard(state.serverControlSupported, actions, colors)
     }
 }
@@ -491,6 +516,39 @@ private fun RunningUrlCard(
         url = url,
         subtitle = "Session code $code$rotation. Plaintext on your LAN — debug builds only.",
         actions = runningUrlCardActions(url, code, actions, colors),
+    )
+}
+
+@Composable
+private fun RunningOpenUrlCard(
+    url: String,
+    actions: MoreActions,
+    colors: DevConsoleColors,
+) {
+    InspectorUrlCard(
+        dotColor = colors.signal,
+        dotPulsing = true,
+        label = "Open in a browser",
+        url = url,
+        subtitle = "No session code required. Plaintext on your LAN — use SESSION_CODE on shared networks.",
+        actions =
+            listOf(
+                InspectorUrlAction(
+                    "Copy URL",
+                    { actions.onCopyUrl(url) },
+                    colors.signal,
+                    colors.signalInk,
+                    flex = 1.5f,
+                    icon = { UrlActionCopyIcon(colors.signalInk) },
+                ),
+                InspectorUrlAction(
+                    "QR",
+                    { actions.onShowQr(url) },
+                    colors.surface3,
+                    colors.ink,
+                    icon = { UrlActionEyeIcon(colors.ink) },
+                ),
+            ),
     )
 }
 

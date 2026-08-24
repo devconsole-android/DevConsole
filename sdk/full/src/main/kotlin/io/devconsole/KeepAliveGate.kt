@@ -10,12 +10,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 
 /**
- * Decides whether the keep-alive foreground service may run, from the host's merged manifest.
+ * Decides whether the keep-alive foreground service may run, from the app's merged manifest.
  *
- * The SDK ships zero `uses-permission` entries for this feature: the host opts in by declaring
- * `FOREGROUND_SERVICE` (plus `FOREGROUND_SERVICE_SPECIAL_USE` on API 34+) in its own debug
- * manifest. A host that declares nothing gets exactly the pre-feature behavior -- these checks
- * are what prevent `startForegroundService` from throwing `SecurityException` in that case.
+ * The `sdk:full` manifest declares `FOREGROUND_SERVICE` and
+ * `FOREGROUND_SERVICE_SPECIAL_USE`, so the service is enabled by default for the full debug
+ * runtime. The check remains defensive: a host can remove a merged permission, use an unusual
+ * manifest setup, or run an older platform where the type-specific permission is not needed.
+ * In those cases the server continues without keep-alive instead of receiving a permission
+ * exception from the service start.
  */
 internal class KeepAliveGate(
     private val context: Context,
@@ -45,14 +47,19 @@ internal class KeepAliveGate(
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
+    /** Same manifest/foreground-service guard as the snackbar, evaluated before a new server start. */
+    fun shouldRequestNotificationBeforeStart(): Boolean =
+        canRunForegroundService() &&
+            hostDeclaresPostNotifications() &&
+            !notificationsGranted()
+
     /**
      * The inspector-UI snackbar predicate: offer the grant only when it would change something
-     * (server up, service opted in, permission declared by the host, not yet granted). Granting
-     * an undeclared permission is a silent no-op on Android, so offering it would mislead.
+     * (server up, the full runtime's service permissions are present, notification permission is
+     * declared, and the grant is missing). Granting an undeclared permission is a silent no-op on
+     * Android, so offering it would mislead when a host has removed the merged declaration.
      */
     fun shouldOfferNotificationPrompt(serverRunning: Boolean): Boolean =
         serverRunning &&
-            canRunForegroundService() &&
-            hostDeclaresPostNotifications() &&
-            !notificationsGranted()
+            shouldRequestNotificationBeforeStart()
 }

@@ -15,6 +15,11 @@ sealed interface InspectorAction {
      */
     data object NotificationPermissionGranted : InspectorAction
 
+    /** Result of the permission request made before the SDK-owned More-screen Start action. */
+    data class ServerStartPermissionResult(
+        val granted: Boolean,
+    ) : InspectorAction
+
     data class SelectObserveTab(
         val tab: ObserveTab,
     ) : InspectorAction

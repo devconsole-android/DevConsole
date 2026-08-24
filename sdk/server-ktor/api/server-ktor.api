@@ -10,6 +10,7 @@ public final class io/devconsole/server/ktor/DevConsoleModuleConfig {
 	public final fun getAttachmentMetadataReader ()Lkotlin/jvm/functions/Function2;
 	public final fun getAttachmentReader ()Lkotlin/jvm/functions/Function2;
 	public final fun getBoundEndpoint ()Lkotlin/jvm/functions/Function0;
+	public final fun getBrowserSecurity ()Lio/devconsole/api/BrowserSecurity;
 	public final fun getCaptureRules ()Lio/devconsole/api/CaptureRuleEngine;
 	public final fun getCaptureRulesEditable ()Z
 	public final fun getCommandAuditLog ()Lio/devconsole/server/api/CommandAuditLog;
@@ -51,6 +52,7 @@ public final class io/devconsole/server/ktor/DevConsoleModuleConfig {
 	public final fun setAttachmentMetadataReader (Lkotlin/jvm/functions/Function2;)V
 	public final fun setAttachmentReader (Lkotlin/jvm/functions/Function2;)V
 	public final fun setBoundEndpoint (Lkotlin/jvm/functions/Function0;)V
+	public final fun setBrowserSecurity (Lio/devconsole/api/BrowserSecurity;)V
 	public final fun setCaptureRules (Lio/devconsole/api/CaptureRuleEngine;)V
 	public final fun setCaptureRulesEditable (Z)V
 	public final fun setCommandAuditLog (Lio/devconsole/server/api/CommandAuditLog;)V
@@ -115,6 +117,7 @@ public final class io/devconsole/server/ktor/KtorLocalServerEngine : io/devconso
 	public fun stop (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun withAttachmentMetadataReader (Lkotlin/jvm/functions/Function2;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
 	public final fun withAttachmentReader (Lkotlin/jvm/functions/Function2;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
+	public final fun withBrowserSecurity (Lio/devconsole/api/BrowserSecurity;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
 	public final fun withRetainedCaptures (Lio/devconsole/storage/api/RetainedCaptureQuery;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
 }
 

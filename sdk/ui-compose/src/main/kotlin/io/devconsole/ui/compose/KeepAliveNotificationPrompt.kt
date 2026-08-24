@@ -25,6 +25,14 @@ import androidx.compose.runtime.LaunchedEffect
 private var keepAlivePromptDismissedThisProcess: Boolean = false
 
 /**
+ * The SDK-owned server-start flow already offered a notification decision. Do not immediately
+ * repeat the generic keep-alive prompt once that same Start succeeds without the permission.
+ */
+internal fun suppressKeepAliveNotificationPromptForThisProcess() {
+    keepAlivePromptDismissedThisProcess = true
+}
+
+/**
  * Offers the POST_NOTIFICATIONS grant that makes the keep-alive foreground service's notification
  * visible. Only ever shown when the full adapter's KeepAliveGate said so ([promptNeeded]) -- which
  * implies API 33+, host opt-in, and a manifest-declared permission -- so the launcher below never
@@ -57,7 +65,7 @@ internal fun KeepAliveNotificationPromptEffect(
             )
         when (result) {
             SnackbarResult.ActionPerformed -> permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            SnackbarResult.Dismissed -> keepAlivePromptDismissedThisProcess = true
+            SnackbarResult.Dismissed -> suppressKeepAliveNotificationPromptForThisProcess()
         }
     }
 }

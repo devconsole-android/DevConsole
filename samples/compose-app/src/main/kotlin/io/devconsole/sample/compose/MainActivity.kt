@@ -401,9 +401,8 @@ class MainActivity : ComponentActivity() {
                 // Re-seed on every Running transition (first start AND every restart) -- see the
                 // comment in onCreate for why a one-shot install at init isn't enough.
                 installMockRule()
-                // Poll while running: a browser exchange consumes the displayed code and the SDK
-                // immediately mints a fresh one -- a one-shot read here would keep advertising the
-                // dead URL.
+                // Poll while running so either access mode updates the displayed URL after a restart;
+                // SESSION_CODE also re-issues the code after a browser consumes it.
                 while (true) {
                     connectUrl = DevConsole.accessInfo()?.connectUrl
                     kotlinx.coroutines.delay(CONNECT_URL_POLL_MS)
@@ -931,6 +930,7 @@ private fun ConnectUrlPanel(
 ) {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
+    val usesSessionCode = "#code=" in connectUrl
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = MaterialTheme.shapes.medium,
@@ -938,7 +938,7 @@ private fun ConnectUrlPanel(
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "CONNECT URL -- FULL SESSION CREDENTIAL",
+                if (usesSessionCode) "CONNECT URL -- SESSION CODE" else "CONNECT URL -- OPEN ACCESS",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -950,19 +950,24 @@ private fun ConnectUrlPanel(
             )
             Text(
                 text =
-                    "The #code= fragment is a live, single-use session code; the same code renders as a " +
-                        "QR on the More screen inside the full inspector below. Treat both like a password.",
+                    if (usesSessionCode) {
+                        "The #code= fragment is a live, single-use session code; the same code renders as a " +
+                            "QR on the More screen inside the full inspector below. Treat both like a password."
+                    } else {
+                        "No session code is required in the default open mode. Use SESSION_CODE before sharing " +
+                            "a LAN-bound dashboard on an untrusted network."
+                    },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             TextButton(
                 onClick = {
                     clipboard.setText(AnnotatedString(connectUrl))
-                    val message = "Session credential copied -- keep it private"
+                    val message = if (usesSessionCode) "Session code copied -- keep it private" else "Dashboard URL copied"
                     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.align(Alignment.End),
-            ) { Text("Copy session credential") }
+            ) { Text(if (usesSessionCode) "Copy session code URL" else "Copy dashboard URL") }
             if (showLanWarning) {
                 Text(
                     text = LOCAL_NETWORK_HTTP_WARNING,

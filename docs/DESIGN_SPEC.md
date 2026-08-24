@@ -425,8 +425,8 @@ The final web visual contract relies on a rigid separation of concerns. `dashboa
   rather than pushing the page wide.
 - **Empty/first-run states were thin (E2)** — every list view's empty state now names the concrete
   next step: the device's More screen, the `adb forward tcp:8080 tcp:8080` command (with its caveat
-  that 8080 is only the first port tried), and that the `#code=` fragment is the credential without
-  which the page sits unauthenticated forever.
+  that 8080 is only the first port tried), and the two browser access modes: a bare URL by default or
+  the `#code=` credential when SESSION_CODE is selected.
 - **Cross-surface parity was undecided** — resolved and documented in §4c, with a full 16-row table
   of which web views the Android inspector mirrors, which it deliberately doesn't (Composer, capture
   rules, Overview), and one open naming mismatch (Timeline / Logs) left as a documented gap rather

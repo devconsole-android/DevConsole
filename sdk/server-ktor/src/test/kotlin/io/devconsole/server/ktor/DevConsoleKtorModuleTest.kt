@@ -1,5 +1,6 @@
 package io.devconsole.server.ktor
 
+import io.devconsole.api.BrowserSecurity
 import io.devconsole.api.EventEnvelope
 import io.devconsole.api.EventSeverity
 import io.devconsole.composer.ComposerExecutor
@@ -105,6 +106,53 @@ import kotlin.time.Duration.Companion.seconds
 import io.ktor.server.websocket.WebSockets as ServerWebSockets
 
 class DevConsoleKtorModuleTest {
+    @Test
+    fun `open browser mode exposes data and mutations without credentials`() =
+        testApplication {
+            application {
+                devConsoleModule(SessionAuthority()) {
+                    browserSecurity = BrowserSecurity.NONE
+                }
+            }
+
+            val health = client.get("/health") { header(HttpHeaders.Host, "localhost") }
+            val meta = client.get("/api/v1/meta") { header(HttpHeaders.Host, "localhost") }
+            val mutation =
+                client.post("/api/v1/mocks/disable-all") {
+                    header(HttpHeaders.Host, "localhost")
+                }
+
+            assertEquals(HttpStatusCode.OK, health.status)
+            assertTrue(health.bodyAsText().contains("\"status\":\"open\""))
+            assertEquals(HttpStatusCode.OK, meta.status)
+            assertEquals(HttpStatusCode.OK, mutation.status)
+        }
+
+    @Test
+    fun `open browser mode rejects cross-site mutations without requiring credentials`() =
+        testApplication {
+            application {
+                devConsoleModule(SessionAuthority()) {
+                    browserSecurity = BrowserSecurity.NONE
+                }
+            }
+
+            val mutation =
+                client.post("/api/v1/mocks/disable-all") {
+                    header(HttpHeaders.Host, "localhost")
+                    header(HttpHeaders.Origin, "https://attacker.example")
+                }
+            val stop =
+                client.post("/api/v1/session/stop") {
+                    header(HttpHeaders.Host, "localhost")
+                    header(HttpHeaders.Origin, "https://attacker.example")
+                }
+
+            assertEquals(HttpStatusCode.Forbidden, mutation.status)
+            assertEquals(HttpStatusCode.Forbidden, stop.status)
+            assertTrue(stop.bodyAsText().contains("ORIGIN_REJECTED"))
+        }
+
     @Test
     fun `unauthenticated health exposes only auth status protocol and display name`() =
         testApplication {
@@ -2519,7 +2567,7 @@ class DevConsoleKtorModuleTest {
         }
 
     @Test
-    fun `KtorLocalServerEngine prevents double start and handles lifecycle safely`() {
+    fun `KtorLocalServerEngine replaces its own listener and reclaims the preferred port`() {
         val authority = SessionAuthority()
         val engine =
             KtorLocalServerEngine(
@@ -2531,9 +2579,12 @@ class DevConsoleKtorModuleTest {
         kotlinx.coroutines.runBlocking {
             val startResult = engine.start(StartRequest(BindingMode.LOOPBACK, 8400..8419))
             assertTrue(startResult is ServerStartResult.Started)
+            startResult as ServerStartResult.Started
 
-            val doubleStartResult = engine.start(StartRequest(BindingMode.LOOPBACK, 8400..8419))
-            assertTrue(doubleStartResult is ServerStartResult.Failed)
+            val replacement = engine.start(StartRequest(BindingMode.LOOPBACK, 8400..8419))
+            assertTrue(replacement is ServerStartResult.Started)
+            replacement as ServerStartResult.Started
+            assertEquals(startResult.endpoint.port, replacement.endpoint.port)
 
             engine.stop()
 

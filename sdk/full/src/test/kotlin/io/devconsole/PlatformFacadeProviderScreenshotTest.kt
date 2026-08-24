@@ -8,6 +8,7 @@ import android.app.Activity
 import android.view.View.MeasureSpec
 import androidx.test.core.app.ApplicationProvider
 import io.devconsole.api.BindingMode
+import io.devconsole.api.BrowserSecurity
 import io.devconsole.api.DevConsoleConfig
 import io.devconsole.api.InitResult
 import io.devconsole.api.ScreenshotPolicy
@@ -81,7 +82,11 @@ class PlatformFacadeProviderScreenshotTest {
         runTest {
             val provider = PlatformFacadeProvider()
             val application = ApplicationProvider.getApplicationContext<android.app.Application>()
-            val config = DevConsoleConfig.default().withScreenshotPolicy(ScreenshotPolicy(enabled = true))
+            val config =
+                DevConsoleConfig
+                    .default()
+                    .withBrowserSecurity(BrowserSecurity.SESSION_CODE)
+                    .withScreenshotPolicy(ScreenshotPolicy(enabled = true))
             assertEquals(InitResult.Initialized, provider.initialize(application, config))
             val started =
                 provider.startBrowser(StartRequest(BindingMode.LOOPBACK, 8640..8659)) as StartResult.Started

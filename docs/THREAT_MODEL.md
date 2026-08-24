@@ -7,10 +7,12 @@ is the honest version of that trade-off. Read it before turning on LAN mode.
 ## The one-paragraph summary
 
 The dashboard is served over **plaintext HTTP**. There is no TLS anywhere in this SDK. Whenever the
-server is bound to a network address, the bearer token, every captured request and response header,
-every WebSocket frame, every push payload, and every HAR export cross the network unencrypted.
-Anyone in a position to observe that traffic — another device on the same Wi-Fi, a compromised
-router, a guest network operator, someone running a packet capture in a café — reads all of it.
+server is bound to a network address, every captured request and response header, every WebSocket
+frame, every push payload, and every HAR export cross the network unencrypted. Anyone in a position
+to observe that traffic — another device on the same Wi-Fi, a compromised router, a guest network
+operator, someone running a packet capture in a café — reads all of it. The public full SDK defaults
+to `BrowserSecurity.NONE` for local development: a reachable browser does not need a bearer token or
+per-build session code. `BrowserSecurity.SESSION_CODE` restores the single-use credential flow.
 
 **The default binding reaches the network.** `BindingMode.AUTO` — what a bare
 `StartRequest()` and an unconfigured `BrowserConfig` both mean — binds a real interface whenever the
@@ -116,14 +118,16 @@ the same recommendation this document makes for every other sensitive artifact t
 
 | Control | Stops | Does not stop |
 |---|---|---|
+| `BrowserSecurity.SESSION_CODE` | Uncredentialed browsers reaching the dashboard | A code holder, traffic observation, or attacks after a session is created |
+| `BrowserSecurity.NONE` | Nothing at the browser-authentication boundary | Any reachable client; use only on a trusted network or with loopback |
 | Bearer token + CSRF token | Cross-site requests from another origin | Reading the tokens off the wire |
 | Origin allowlist | Requests claiming a foreign `Host` | An attacker on the allowed network |
 | Redaction | Known-sensitive field *names* | Every field name not on the list |
 | 5-minute session-code TTL, 30-minute session TTL | Indefinite reuse of a stale credential | Use inside the window |
 
-**There is no on-device approval gate.** SESSION_CODE (see
+**There is no on-device approval gate.** When enabled, SESSION_CODE (see
 [PROTOCOL_REFERENCE.md](PROTOCOL_REFERENCE.md#2-auth-handshake-session_code)) is the only
-browser-access flow: whoever presents the current, unexpired, not-yet-used 8-character code to
+credentialed browser-access flow: whoever presents the current, unexpired, not-yet-used 8-character code to
 `POST /api/v1/auth/session-code/exchange` gets a session immediately -- no human decision in the
 loop, no notification to tap. The trust model collapses to a single fact -- **possession of the code
 within its 5-minute TTL is the entire authorization decision** -- which makes the fragment-URL
@@ -139,6 +143,13 @@ channel as the entire security boundary -- SESSION_CODE only belongs where that 
 trusted (typically loopback + `adb forward`, where the code never crosses a network at all). Also
 count the clipboard among the places the code lands: copying the connect URL to paste it somewhere
 hands a complete credential to every app with clipboard access.
+
+In `BrowserSecurity.NONE`, there is no code or authenticated principal. The dashboard still honors
+the host's `EditingCapabilities`, Composer allowlist, state-mutation flag, and capture-category
+gates, but those are feature boundaries rather than browser identity. Mutation routes also reject a
+foreign browser `Origin` (while allowing an absent `Origin` for command-line clients), which blocks
+cross-site browser requests but does not authenticate a client. Anyone who can reach the server can
+use the enabled surfaces, so do not use open mode on a shared or untrusted LAN.
 
 **There is no read-only tier.** Every authenticated session is equivalent and has full control of
 everything the dashboard exposes; the only remaining gates are the host's per-feature
@@ -229,8 +240,9 @@ screen**, which issues no `StartRequest` and instead binds whatever
 The two settings are independent and neither overrides the other -- a host that wants to pin one
 surface to loopback has to say so on that surface.
 
-**Stop the server when you are done.** `DevConsole.stop(...)` revokes browser sessions immediately
-and unbinds the port. A dashboard left running on a desk overnight is an open dashboard.
+**Stop the server when you are done.** `DevConsole.stop(...)` revokes any authenticated browser
+sessions immediately and unbinds the port. A dashboard left running on a desk overnight is an open
+dashboard, especially when `BrowserSecurity.NONE` is active.
 
 ## Things teams get surprised by
 

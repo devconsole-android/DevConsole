@@ -13,9 +13,9 @@ read one page here, make it the threat model, especially before you put the dash
 
 **Operating the SDK**
 - [Build variants and production safety](BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md)
-- [LAN permission and troubleshooting](LAN_PERMISSION_AND_TROUBLESHOOTING.md) — includes the
-  session-code connect flow
-- [Background keep-alive](BACKGROUND_KEEPALIVE.md) — the opt-in foreground service that keeps the
+- [LAN permission and troubleshooting](LAN_PERMISSION_AND_TROUBLESHOOTING.md) — includes open access
+  and the opt-in session-code connect flow
+- [Background keep-alive](BACKGROUND_KEEPALIVE.md) — the default foreground service that keeps the
   server alive while the host app is backgrounded
 - [FAQ / troubleshooting](FAQ_TROUBLESHOOTING.md)
 - [Event storage and retention](STORAGE.md)

@@ -64,7 +64,7 @@ interface DevConsoleFacadeProvider {
      */
     fun endpoint(): BrowserEndpoint?
 
-    /** Session-code credentials for the running server, or null when it is not running. */
+    /** Browser access information for the running server, or null when it is not running. */
     fun accessInfo(): AccessInfo?
 
     /** Wrap in a `DevConsoleOkHttpInterceptor` and add it to the host's own `OkHttpClient`. */

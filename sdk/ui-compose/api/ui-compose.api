@@ -218,7 +218,9 @@ public final class io/devconsole/ui/compose/DevConsoleInspectorBridge {
 	public static final field $stable I
 	public static final field INSTANCE Lio/devconsole/ui/compose/DevConsoleInspectorBridge;
 	public final fun install (Lio/devconsole/ui/compose/InspectorDataSource;)V
+	public final fun notifyServerStateChanged ()V
 	public final fun reset ()V
+	public final fun serverStateChanges ()Lkotlinx/coroutines/flow/Flow;
 	public final fun source ()Lio/devconsole/ui/compose/InspectorDataSource;
 }
 
@@ -527,6 +529,18 @@ public final class io/devconsole/ui/compose/InspectorAction$SelectTransactions :
 	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$SelectTransactions;Ljava/util/Set;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$SelectTransactions;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getIds ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ServerStartPermissionResult : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public fun <init> (Z)V
+	public final fun component1 ()Z
+	public final fun copy (Z)Lio/devconsole/ui/compose/InspectorAction$ServerStartPermissionResult;
+	public static synthetic fun copy$default (Lio/devconsole/ui/compose/InspectorAction$ServerStartPermissionResult;ZILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorAction$ServerStartPermissionResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getGranted ()Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -1342,6 +1356,10 @@ public final class io/devconsole/ui/compose/InspectorRetentionUi {
 	public final fun getMaxSessions ()I
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/ui/compose/InspectorServerStartPermissionProvider {
+	public abstract fun serverStartPermission ()Ljava/lang/String;
 }
 
 public final class io/devconsole/ui/compose/InspectorSessionUi {

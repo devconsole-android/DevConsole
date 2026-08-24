@@ -16,6 +16,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -27,6 +28,7 @@ private const val CAPABILITY_FEATURE_FLAGS = "featureFlags"
 private const val CAPABILITY_PREFERENCES = "preferences"
 private const val CAPABILITY_FILES = "files"
 private const val CAPABILITY_CAPTURE_RULES = "captureRules"
+private const val NOTIFICATION_PERMISSION = "android.permission.POST_NOTIFICATIONS"
 
 /**
  * Presentation-layer MVI store for the Observe and Control surfaces. Reads go through
@@ -49,6 +51,14 @@ class InspectorViewModel
         val state: StateFlow<InspectorState> = mutableState.asStateFlow()
 
         /**
+         * A transient, route-only permission preflight. This intentionally lives outside
+         * [InspectorState]: it is not persisted snapshot data and adding it to that public data
+         * class changes its constructor and `copy` JVM ABI for every SDK consumer.
+         */
+        private val mutableServerStartPermission = MutableStateFlow<String?>(null)
+        internal val serverStartPermission: StateFlow<String?> = mutableServerStartPermission.asStateFlow()
+
+        /**
          * Tracks the in-flight snapshot fetch so a newer refresh (filter change, mutation,
          * explicit [InspectorAction.Refresh]) always requests cancellation of an older one still
          * in flight. [InspectorDataSource.snapshot] is a plain blocking call with no suspension
@@ -61,6 +71,9 @@ class InspectorViewModel
         private var snapshotJob: Job? = null
 
         init {
+            viewModelScope.launch(dispatcher) {
+                DevConsoleInspectorBridge.serverStateChanges().collect { refreshSnapshot() }
+            }
             refreshSnapshot()
         }
 
@@ -74,6 +87,8 @@ class InspectorViewModel
                     dataSource.onNotificationPermissionGranted()
                     refreshSnapshot()
                 }
+                is InspectorAction.ServerStartPermissionResult ->
+                    serverStartPermissionResult(action.granted)
                 is InspectorAction.SelectObserveTab -> selectObserveTab(action.tab)
                 is InspectorAction.ToggleTransactionSelection -> toggleTransactionSelection(action.id)
                 is InspectorAction.SelectTransactions -> selectTransactions(action.ids)
@@ -597,9 +612,46 @@ class InspectorViewModel
         /** Ungated, like the exports above: starting/stopping is a device-owner action, not a data capability. */
         private fun setServerRunning(running: Boolean) {
             viewModelScope.launch(dispatcher) {
-                showComposerResult(dataSource.setServerRunning(running))
-                loadSnapshot()
+                if (running) {
+                    // A fast double-tap while the snackbar/dialog is visible must leave one
+                    // preflight in flight rather than queue duplicate permission requests.
+                    if (mutableServerStartPermission.value != null) return@launch
+                    val permission =
+                        (dataSource as? InspectorServerStartPermissionProvider)?.serverStartPermission()
+                    if (permission != null) {
+                        mutableServerStartPermission.value = permission
+                        return@launch
+                    }
+                } else {
+                    mutableServerStartPermission.value = null
+                }
+                runServerCommand(running)
             }
+        }
+
+        /**
+         * Continues a preflighted start. Local-network access is required for the requested LAN
+         * bind, whereas notification permission only affects foreground-notification visibility;
+         * declining the latter must not make the Start button a dead end.
+         */
+        private fun serverStartPermissionResult(granted: Boolean) {
+            val permission = mutableServerStartPermission.value ?: return
+            mutableServerStartPermission.value = null
+            if (!granted && permission != NOTIFICATION_PERMISSION) {
+                // Keep the runtime stopped and refresh the explanatory health/browser state. The
+                // permission prompt owns the separate Settings snackbar for a blocked denial.
+                refreshSnapshot()
+                return
+            }
+            // Do not ask the adapter to preflight again: the permission result is authoritative
+            // for this Start attempt, and a notification denial is explicitly allowed through.
+            viewModelScope.launch(dispatcher) { runServerCommand(running = true) }
+        }
+
+        /** Performs the adapter call after any required permission preflight has completed. */
+        private suspend fun runServerCommand(running: Boolean) {
+            showComposerResult(dataSource.setServerRunning(running))
+            loadSnapshot()
         }
 
         /**

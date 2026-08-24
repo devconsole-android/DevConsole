@@ -48,9 +48,10 @@ release no-op counterpart and merges `DevConsoleActivity` into your manifest, so
 into your release build with no build-time warning. The Gradle plugin's variant protection does not
 cover this module today; it is your responsibility to scope it to `debugImplementation` yourself.
 
-3. Add `INTERNET` to your own app's manifest. The SDK's manifests auto-merge
-   `ACCESS_LOCAL_NETWORK`/`ACCESS_NETWORK_STATE`, but not `INTERNET` — without it, the embedded
-   server fails with an opaque socket error instead of a clear permission message:
+3. Add `INTERNET` to your own app's manifest. The full debug runtime auto-merges
+   `ACCESS_LOCAL_NETWORK`, `NEARBY_WIFI_DEVICES`, `ACCESS_NETWORK_STATE`, and the default
+   foreground-service permissions; it does not merge `INTERNET` — without it, the embedded server
+   fails with an opaque socket error instead of a clear permission message:
 
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
@@ -58,10 +59,12 @@ cover this module today; it is your responsibility to scope it to `debugImplemen
 
 4. On a debuggable build you can skip explicit `initialize` entirely — the SDK auto-initializes, so
    state/timeline/capture are ready without any `Application.onCreate` boilerplate. The browser
-   server itself is never auto-started; call `DevConsole.startBrowser()` yourself (step 5) and read
-   the connect URL from the returned `StartResult.Started.access` (or the device's More screen — the
-   logged URL deliberately omits the credential fragment). Initialize explicitly when you need to pass
-   configuration (state providers, flags, open triggers):
+   server itself is never auto-started; call `DevConsole.startBrowser()` yourself (step 5). Once it
+   starts, the full debug runtime automatically starts its foreground keep-alive service. Read
+   the connect URL from the returned `StartResult.Started.access` (or the device's More screen). The
+   default URL is open; initialize explicitly with `BrowserSecurity.SESSION_CODE` when a shared LAN
+   needs the single-use credential flow, or when you need other configuration (state providers, flags,
+   open triggers):
 
 ```kotlin
 DevConsole.initialize(
@@ -104,9 +107,10 @@ setContent {
 ```
 
 6. Tap Start. The panel shows the bound address, something like `DevConsole server is running at
-   192.168.0.15:8080`. Open that address in a browser, or use the connect URL from
-   `StartResult.Started.access.connectUrl`. If the device isn't local, run
-   `adb forward tcp:8080 tcp:8080` first.
+   192.168.0.15:8080`. Open that address in the default open mode, or use the connect URL from
+   `StartResult.Started.access.connectUrl` when `SESSION_CODE` is enabled. If the device isn't local, run
+   `adb forward tcp:8080 tcp:8080` first — 8080 is only the first port tried, so use whatever port the
+   panel actually shows.
 
 For a full working example, [`samples/compose-app`](../samples/compose-app/src/main/kotlin/io/devconsole/sample/compose/MainActivity.kt)
 has one button per capability: network and WebSocket capture, mocks, push simulation, a feature

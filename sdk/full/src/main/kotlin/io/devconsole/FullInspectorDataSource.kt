@@ -91,6 +91,7 @@ import io.devconsole.ui.compose.InspectorQueryResultUi
 import io.devconsole.ui.compose.InspectorRemoteConfigEntryUi
 import io.devconsole.ui.compose.InspectorRemoteConfigUi
 import io.devconsole.ui.compose.InspectorRetentionUi
+import io.devconsole.ui.compose.InspectorServerStartPermissionProvider
 import io.devconsole.ui.compose.InspectorSessionUi
 import io.devconsole.ui.compose.InspectorSnapshot
 import io.devconsole.ui.compose.InspectorSocketFrameUi
@@ -173,6 +174,8 @@ internal class FullInspectorDataSource(
      * live runtime state; defaults to false for tests and partial wirings.
      */
     private val keepAlivePromptSupplier: () -> Boolean = { false },
+    /** Permission preflight for the SDK-owned More-screen Start action; host starts bypass this. */
+    private val serverStartPermissionSupplier: () -> String? = { null },
     /**
      * More screen Start/Stop: suspend hooks into the facade's `startBrowser`/`stop`, launched on
      * [serverControlScope]. All three null on builds/tests that don't wire server control, which
@@ -186,11 +189,14 @@ internal class FullInspectorDataSource(
      * [InspectorDataSource.onNotificationPermissionGranted] for why a grant alone shows nothing.
      */
     private val republishKeepAliveNotification: () -> Unit = {},
-) : InspectorDataSource {
+) : InspectorDataSource,
+    InspectorServerStartPermissionProvider {
     override fun onNotificationPermissionGranted() = republishKeepAliveNotification()
 
     override fun supportsServerControl(): Boolean =
         serverControlScope != null && startServer != null && stopServer != null
+
+    override fun serverStartPermission(): String? = serverStartPermissionSupplier()
 
     @Suppress("ReturnCount") // Guard-clause early returns (no scope, no hook) are the clearest form here.
     override fun setServerRunning(running: Boolean): InspectorCommandResult {

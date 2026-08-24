@@ -1,5 +1,6 @@
 package io.devconsole.server.ktor
 
+import io.devconsole.api.BrowserSecurity
 import io.devconsole.api.CaptureRule
 import io.devconsole.api.CaptureRuleEngine
 import io.devconsole.api.ScreenshotResult
@@ -184,6 +185,13 @@ import kotlin.time.Duration.Companion.seconds
  */
 class DevConsoleModuleConfig {
     var allowedHosts: Set<String> = setOf("localhost", "127.0.0.1")
+
+    /**
+     * Browser authentication policy. The standalone Ktor module keeps its historical secure
+     * default; the public full SDK explicitly supplies [BrowserSecurity.NONE] by default.
+     */
+    var browserSecurity: BrowserSecurity = BrowserSecurity.SESSION_CODE
+
     var streamHub: EventStreamHub = EventStreamHub()
     var timeline: Timeline = InMemoryTimeline(emptyList(), CursorCodec(ByteArray(16).also(SecureRandom()::nextBytes)))
     var annotations: TimelineAnnotations = InMemoryTimelineAnnotations()
@@ -312,6 +320,7 @@ fun Application.devConsoleModule(
     configure: DevConsoleModuleConfig.() -> Unit = {},
 ) {
     val config = DevConsoleModuleConfig().apply(configure)
+    sessionAuthority.configureBrowserAuthentication(config.browserSecurity == BrowserSecurity.SESSION_CODE)
     val allowedHosts = config.allowedHosts
     val streamHub = config.streamHub
     val timeline = config.timeline
@@ -463,11 +472,7 @@ fun Application.devConsoleModule(
             val path = call.request.uri.substringBefore('?')
             val method = call.request.httpMethod.value
             val browserSession =
-                call.request.headers[HttpHeaders.Authorization]
-                    .orEmpty()
-                    .removePrefix("Bearer ")
-                    .takeIf { it.isNotBlank() }
-                    ?.let { token -> sessionAuthority.sessionForToken(token) }
+                sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization])
             if (!composerEnabled && path.startsWith("/api/v1/composer")) {
                 browserSession
                     ?.let { session ->
@@ -608,8 +613,10 @@ fun Application.devConsoleModule(
             call.respondBytes(DashboardAssets.favicon(), contentType = io.ktor.http.ContentType("image", "webp"))
         }
         get("/health") {
+            val status = if (sessionAuthority.isBrowserAuthenticationRequired()) "auth_required" else "open"
             call.respondText(
-                "{\"status\":\"auth_required\",\"protocolVersion\":${metadata.protocolVersion}," +
+                "{\"status\":\"$status\"," +
+                    "\"protocolVersion\":${metadata.protocolVersion}," +
                     "\"appDisplayName\":\"${metadata.appDisplayName.escapeJson()}\"}",
                 contentType = io.ktor.http.ContentType.Application.Json,
             )
@@ -710,9 +717,7 @@ fun Application.devConsoleModule(
                 return@post
             }
             val expectedOrigin = "http://${call.request.headers[HttpHeaders.Host].orEmpty()}"
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 commandAuditLog.recordControlFailure(session.id, "session.code.rotate", "session-code")
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
@@ -730,9 +735,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@post
             }
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
             }
@@ -759,9 +762,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@post
             }
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
             }
@@ -790,9 +791,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@delete
             }
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 commandAuditLog.recordControlFailure(session.id, "session.revoke", principalId.ifBlank { "principal" })
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@delete
@@ -885,9 +884,7 @@ fun Application.devConsoleModule(
                 return@post
             }
             val expectedOrigin = "http://${call.request.headers[HttpHeaders.Host].orEmpty()}"
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 commandAuditLog.recordExport(session.id, CommandAuditResult.REJECTED, "csrf")
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
@@ -1320,9 +1317,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@post
             }
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 commandAuditLog.recordControlFailure(session.id, "mock.disable_all", "mocks")
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
@@ -1589,9 +1584,7 @@ fun Application.devConsoleModule(
                 return@post
             }
             val key = call.parameters["key"].orEmpty()
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 commandAuditLog.recordControlFailure(session.id, "flag.override", key.ifBlank { "flag" })
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
@@ -2187,9 +2180,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@post
             }
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 commandAuditLog.recordControlFailure(session.id, "database.sql.execute", database)
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
@@ -2672,9 +2663,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@post
             }
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 commandAuditLog.recordControlFailure(session.id, "composer.import", "curl")
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
@@ -2706,9 +2695,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@post
             }
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 commandAuditLog.recordControlFailure(session.id, "composer.collection.save", "collection")
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
@@ -2749,9 +2736,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@delete
             }
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 commandAuditLog.recordControlFailure(
                     session.id,
                     "composer.collection.delete",
@@ -2807,9 +2792,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@post
             }
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 commandAuditLog.recordControlFailure(session.id, "push.simulate", "push")
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
@@ -2912,9 +2895,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@post
             }
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin ||
-                call.request.headers[CSRF_HEADER] != session.csrfToken
-            ) {
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
                 commandAuditLog.recordControlFailure(
                     session.id,
                     "state.mutation",
@@ -3379,17 +3360,24 @@ fun Application.devConsoleModule(
         post("/api/v1/session/stop") {
             val session = sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization])
             val expectedOrigin = "http://${call.request.headers[HttpHeaders.Host].orEmpty()}"
+            val origin = call.request.headers[HttpHeaders.Origin]
             val csrf = call.request.headers[CSRF_HEADER]
             if (session == null) {
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@post
             }
-            if (call.request.headers[HttpHeaders.Origin] != expectedOrigin) {
+            val originRejected =
+                if (sessionAuthority.isBrowserAuthenticationRequired()) {
+                    origin != expectedOrigin
+                } else {
+                    origin != null && origin != expectedOrigin
+                }
+            if (originRejected) {
                 commandAuditLog.recordControlFailure(session.id, "session.stop", "server")
                 call.respondText("{\"code\":\"ORIGIN_REJECTED\"}", status = HttpStatusCode.Forbidden)
                 return@post
             }
-            if (csrf != session.csrfToken) {
+            if (sessionAuthority.isBrowserAuthenticationRequired() && csrf != session.csrfToken) {
                 commandAuditLog.recordControlFailure(session.id, "session.stop", "server")
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
@@ -3417,7 +3405,9 @@ fun Application.devConsoleModule(
                     .removePrefix("Bearer ")
                     .takeIf(String::isNotBlank)
                     ?: call.streamSessionCookie()
-            if (authorization.isBlank() || !sessionAuthority.isAuthorized(authorization)) {
+            if (sessionAuthority.isBrowserAuthenticationRequired() &&
+                (authorization.isBlank() || !sessionAuthority.isAuthorized(authorization))
+            ) {
                 close(CloseReason(CloseReason.Codes.VIOLATED_POLICY.code, "AUTH_REQUIRED"))
                 return@webSocket
             }
@@ -3438,7 +3428,9 @@ fun Application.devConsoleModule(
             try {
                 while (isActive) {
                     delay(STREAM_AUTH_RECHECK_MS)
-                    if (!sessionAuthority.isAuthorized(authorization)) {
+                    if (sessionAuthority.isBrowserAuthenticationRequired() &&
+                        !sessionAuthority.isAuthorized(authorization)
+                    ) {
                         close(CloseReason(CloseReason.Codes.VIOLATED_POLICY.code, "AUTH_REVOKED"))
                         break
                     }
@@ -3528,6 +3520,10 @@ class KtorLocalServerEngine(
     @Volatile
     private var currentEndpoint: Endpoint? = null
 
+    /** Applied before the next server start; a running Ktor application captures its mode. */
+    @Volatile
+    private var browserSecurity: BrowserSecurity = BrowserSecurity.SESSION_CODE
+
     @Volatile
     private var attachmentReader: suspend (String) -> ByteArray? = { null }
 
@@ -3540,6 +3536,12 @@ class KtorLocalServerEngine(
     fun withRetainedCaptures(query: RetainedCaptureQuery): KtorLocalServerEngine =
         apply {
             retainedCaptures = query
+        }
+
+    /** Sets the browser authentication policy used by the next server start. */
+    fun withBrowserSecurity(value: BrowserSecurity): KtorLocalServerEngine =
+        apply {
+            browserSecurity = value
         }
 
     @Volatile
@@ -3602,7 +3604,11 @@ class KtorLocalServerEngine(
 
     override suspend fun start(request: StartRequest): ServerStartResult =
         synchronized(this) {
-            if (engine != null) return@synchronized ServerStartResult.Failed("Server already running")
+            // A repeated start from this SDK instance is a restart request. Tear down our own
+            // listener before probing the preferred port so a stale/running DevConsole server does
+            // not force its replacement onto a fallback port. An unrelated process that owns 8080
+            // is left alone and the normal range scan falls forward to the next available port.
+            if (engine != null) runCatching { stopLocked() }
             if (
                 request.portRange.isEmpty() ||
                 request.portRange.first !in 1..65_535 ||
@@ -3637,6 +3643,7 @@ class KtorLocalServerEngine(
                 if (!isPortAvailable(bindHost, port)) return@forEach
                 val endpoint = Endpoint(bindHost, port, effectiveBinding)
                 val configuration = runtimeConfiguration
+                val security = browserSecurity
                 val candidate =
                     runCatching {
                         serverScope
@@ -3648,6 +3655,7 @@ class KtorLocalServerEngine(
                             ) {
                                 devConsoleModule(sessionAuthority, sessionCodeAuthority) {
                                     allowedHosts = setOf("localhost", endpoint.host)
+                                    browserSecurity = security
                                     this.networkTransactions = this@KtorLocalServerEngine.networkTransactions
                                     this.socketStore = this@KtorLocalServerEngine.socketStore
                                     this.pushStore = this@KtorLocalServerEngine.pushStore
@@ -3706,22 +3714,23 @@ class KtorLocalServerEngine(
             return@synchronized ServerStartResult.PortUnavailable(request.portRange)
         }
 
-    override suspend fun stop() =
-        synchronized(this) {
-            // A throwing engine.stop() (e.g. the CIO engine's own shutdown machinery blowing up)
-            // must not skip the state reset below -- otherwise `engine` is left non-null forever,
-            // and every subsequent start() permanently answers "Server already running" until the
-            // process dies. The finally block guarantees the reset runs whether or not stop() threw.
-            try {
-                engine?.stop(gracePeriodMillis = 500, timeoutMillis = 1_000)
-                Unit
-            } finally {
-                engine = null
-                currentEndpoint = null
-                sessionAuthority.reset()
-                sessionCodeAuthority.reset()
-            }
+    override suspend fun stop() = synchronized(this) { stopLocked() }
+
+    /** Caller must hold this engine's monitor. */
+    private fun stopLocked() {
+        // A throwing engine.stop() (e.g. the CIO engine's own shutdown machinery blowing up)
+        // must not skip the state reset below -- otherwise `engine` is left non-null forever,
+        // and every subsequent start() permanently answers "Server already running" until the
+        // process dies. The finally block guarantees the reset runs whether or not stop() threw.
+        try {
+            engine?.stop(gracePeriodMillis = 0, timeoutMillis = 1_000)
+        } finally {
+            engine = null
+            currentEndpoint = null
+            sessionAuthority.reset()
+            sessionCodeAuthority.reset()
         }
+    }
 
     override fun bindAddressChanged(): Boolean = bindAddressChanged(currentEndpoint, selectLanAddress(lanInterfaces()))
 
@@ -4192,11 +4201,32 @@ private const val MAX_TIMELINE_SCAN_PAGES = 200
 private val MAX_EVIDENCE_ITEMS_PER_RESPONSE = EvidenceStore.MAX_ITEMS_PER_SESSION
 
 private fun SessionAuthority.bearerSession(authorization: String?) =
-    authorization
-        .orEmpty()
-        .removePrefix("Bearer ")
-        .takeIf { it.isNotBlank() }
-        ?.let { sessionForToken(it) }
+    if (!isBrowserAuthenticationRequired()) {
+        openAccessSession()
+    } else {
+        authorization
+            .orEmpty()
+            .removePrefix("Bearer ")
+            .takeIf { it.isNotBlank() }
+            ?.let { token -> sessionForToken(token) }
+    }
+
+private fun io.ktor.server.application.ApplicationCall.isOriginAndCsrfAuthorized(
+    authority: SessionAuthority,
+): Boolean {
+    val expectedOrigin = "http://${request.headers[HttpHeaders.Host].orEmpty()}"
+    val origin = request.headers[HttpHeaders.Origin]
+    return if (!authority.isBrowserAuthenticationRequired()) {
+        // Open mode removes credentials, not the browser's same-origin boundary. Browsers send an
+        // Origin on cross-site mutations, so reject a foreign value while keeping curl/CLI clients
+        // (which normally omit Origin) usable without inventing a replacement secret.
+        origin == null || origin == expectedOrigin
+    } else {
+        authority.bearerSession(request.headers[HttpHeaders.Authorization])?.let { session ->
+            origin == expectedOrigin && request.headers[CSRF_HEADER] == session.csrfToken
+        } ?: false
+    }
+}
 
 /**
  * Shared entry gate for every capture-rule mutation route: authenticated bearer session, then origin
@@ -4218,7 +4248,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.captureRuleContro
         return null
     }
     val expectedOrigin = "http://${request.headers[HttpHeaders.Host].orEmpty()}"
-    if (request.headers[HttpHeaders.Origin] != expectedOrigin || request.headers[CSRF_HEADER] != session.csrfToken) {
+    if (!isOriginAndCsrfAuthorized(sessionAuthority)) {
         commandAuditLog.recordControlFailure(session.id, commandType, target)
         respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
         return null
@@ -4250,7 +4280,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.mockRuleControlSe
         return null
     }
     val expectedOrigin = "http://${request.headers[HttpHeaders.Host].orEmpty()}"
-    if (request.headers[HttpHeaders.Origin] != expectedOrigin || request.headers[CSRF_HEADER] != session.csrfToken) {
+    if (!isOriginAndCsrfAuthorized(sessionAuthority)) {
         commandAuditLog.recordControlFailure(session.id, commandType, target)
         respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
         return null
@@ -4282,7 +4312,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.preferencesContro
         return null
     }
     val expectedOrigin = "http://${request.headers[HttpHeaders.Host].orEmpty()}"
-    if (request.headers[HttpHeaders.Origin] != expectedOrigin || request.headers[CSRF_HEADER] != session.csrfToken) {
+    if (!isOriginAndCsrfAuthorized(sessionAuthority)) {
         commandAuditLog.recordControlFailure(session.id, commandType, target)
         respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
         return null
@@ -4315,7 +4345,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.filesControlSessi
         return null
     }
     val expectedOrigin = "http://${request.headers[HttpHeaders.Host].orEmpty()}"
-    if (request.headers[HttpHeaders.Origin] != expectedOrigin || request.headers[CSRF_HEADER] != session.csrfToken) {
+    if (!isOriginAndCsrfAuthorized(sessionAuthority)) {
         commandAuditLog.recordControlFailure(session.id, commandType, target)
         respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
         return null
@@ -4349,7 +4379,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.composerExecution
         return null
     }
     val expectedOrigin = "http://${request.headers[HttpHeaders.Host].orEmpty()}"
-    if (request.headers[HttpHeaders.Origin] != expectedOrigin || request.headers[CSRF_HEADER] != session.csrfToken) {
+    if (!isOriginAndCsrfAuthorized(sessionAuthority)) {
         commandAuditLog.recordControlFailure(session.id, commandType, target)
         respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
         return null
@@ -4384,7 +4414,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.captureControlSes
         return null
     }
     val expectedOrigin = "http://${request.headers[HttpHeaders.Host].orEmpty()}"
-    if (request.headers[HttpHeaders.Origin] != expectedOrigin || request.headers[CSRF_HEADER] != session.csrfToken) {
+    if (!isOriginAndCsrfAuthorized(sessionAuthority)) {
         commandAuditLog.recordControlFailure(session.id, commandType, target)
         respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
         return null
@@ -5125,7 +5155,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.authorizeNetworkE
         return null
     }
     val expectedOrigin = "http://${request.headers[HttpHeaders.Host].orEmpty()}"
-    if (request.headers[HttpHeaders.Origin] != expectedOrigin || request.headers[CSRF_HEADER] != session.csrfToken) {
+    if (!isOriginAndCsrfAuthorized(sessionAuthority)) {
         commandAuditLog.recordExport(session.id, CommandAuditResult.REJECTED, "csrf")
         respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
         return null
@@ -5514,9 +5544,15 @@ private fun StateValue.json(): String =
     }
 
 private fun io.ktor.server.application.ApplicationCall.isReadMutationAuthorized(authority: SessionAuthority): Boolean {
-    val session = authority.bearerSession(request.headers[HttpHeaders.Authorization]) ?: return false
     val expectedOrigin = "http://${request.headers[HttpHeaders.Host].orEmpty()}"
-    return request.headers[HttpHeaders.Origin] == expectedOrigin && request.headers[CSRF_HEADER] == session.csrfToken
+    val origin = request.headers[HttpHeaders.Origin]
+    return if (!authority.isBrowserAuthenticationRequired()) {
+        origin == null || origin == expectedOrigin
+    } else {
+        authority.bearerSession(request.headers[HttpHeaders.Authorization])?.let { session ->
+            origin == expectedOrigin && request.headers[CSRF_HEADER] == session.csrfToken
+        } ?: false
+    }
 }
 
 // ============================================================================================

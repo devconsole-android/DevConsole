@@ -161,8 +161,8 @@ class MainActivity : Activity() {
             DevConsole.state().collect { state ->
                 if (state is DevConsoleState.Running) {
                     installMockRule()
-                    // Poll while running: an exchange consumes the shown code and the SDK
-                    // mints a fresh one; a one-shot read would keep advertising the dead URL.
+                    // Poll while running so either access mode updates the displayed URL after a
+                    // restart; SESSION_CODE also re-issues the code after a browser consumes it.
                     while (DevConsole.state().value is DevConsoleState.Running) {
                         DevConsole.accessInfo()?.connectUrl?.let { url -> runOnUiThread { showConnectUrl(url) } }
                         kotlinx.coroutines.delay(CONNECT_URL_POLL_MS)
@@ -331,8 +331,8 @@ class MainActivity : Activity() {
             setOnClickListener {
                 val url = connectUrl ?: return@setOnClickListener
                 val clipboard = getSystemService(ClipboardManager::class.java)
-                clipboard.setPrimaryClip(ClipData.newPlainText("DevConsole session credential", url))
-                val message = "Session credential copied -- keep it private"
+                clipboard.setPrimaryClip(ClipData.newPlainText("DevConsole dashboard URL", url))
+                val message = if (url.contains("#code=")) "Session code copied -- keep it private" else "Dashboard URL copied"
                 Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
             }
         }
@@ -490,16 +490,23 @@ class MainActivity : Activity() {
 
     private fun showConnectUrl(url: String) {
         connectUrl = url
+        val usesSessionCode = url.contains("#code=")
         val message =
-            "Tap to copy the session credential: $url\n\n" +
-                "This is a full, single-use session credential -- the same code also renders as a QR on " +
-                "the dashboard's More screen once you're connected. Treat it like a password.\n\n" +
-                "This debugging session uses local-network HTTP. Other participants on an untrusted network " +
+            if (usesSessionCode) {
+                "Tap to copy the session-code URL: $url\n\n" +
+                    "This is a full, single-use session credential -- the same code also renders as a QR on " +
+                    "the dashboard's More screen once you're connected. Treat it like a password.\n\n"
+            } else {
+                "Tap to copy the dashboard URL: $url\n\n" +
+                    "No session code is required in the default open mode. Use SESSION_CODE before sharing " +
+                    "a LAN-bound dashboard on an untrusted network.\n\n"
+            } +
+            "This debugging session uses local-network HTTP. Other participants on an untrusted network " +
                 "may observe or modify traffic. Use ADB localhost mode or a trusted isolated network " +
                 "for sensitive testing."
         statusView.text = message
         statusView.isClickable = true
-        statusView.contentDescription = "$message Double tap to copy the session credential."
+        statusView.contentDescription = "$message Double tap to copy the dashboard URL."
     }
 }
 

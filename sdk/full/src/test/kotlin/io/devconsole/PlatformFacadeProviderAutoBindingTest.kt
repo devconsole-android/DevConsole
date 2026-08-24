@@ -1,5 +1,6 @@
 package io.devconsole
 
+import android.Manifest
 import androidx.test.core.app.ApplicationProvider
 import io.devconsole.api.BindingMode
 import io.devconsole.api.DevConsoleConfig
@@ -9,9 +10,11 @@ import io.devconsole.api.StopReason
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -26,6 +29,12 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class PlatformFacadeProviderAutoBindingTest {
+    @Before
+    fun grantNearbyWifiForLanAssertions() {
+        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>())
+            .grantPermissions(Manifest.permission.NEARBY_WIFI_DEVICES)
+    }
+
     @Test
     fun `a default start request binds LAN when the device has a network`() =
         runTest {

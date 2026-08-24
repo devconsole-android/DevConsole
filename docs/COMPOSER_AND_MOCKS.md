@@ -5,9 +5,10 @@
 The request composer runs entirely inside the SDK's own isolated HTTP client
 (`UrlConnectionComposerTransport`) — it never reuses your application's authenticated OkHttp
 client, so composer traffic can't accidentally carry your app's auth tokens or interceptors. There
-is nothing to wire from host code: connect with a session code (any authenticated session can open
-the Composer page — see [PROTOCOL_REFERENCE.md](PROTOCOL_REFERENCE.md#2-auth-handshake-session_code)),
-and either build a request by hand or use "Copy redacted cURL to composer" from a captured Network
+is nothing to wire from host code: connect to the dashboard (open mode is the default; any
+authenticated session can open the Composer page in `SESSION_CODE` mode — see
+[PROTOCOL_REFERENCE.md](PROTOCOL_REFERENCE.md#2-auth-handshake-session_code)), and either build a
+request by hand or use "Copy redacted cURL to composer" from a captured Network
 transaction (see [NETWORK_INSPECTOR.md](NETWORK_INSPECTOR.md)). The browser route
 (`POST /api/v1/composer/execute`) is off by default — the host must set
 `DevConsoleConfig.composerEnabled = true`, optionally with a `composerAllowedHosts` allowlist —

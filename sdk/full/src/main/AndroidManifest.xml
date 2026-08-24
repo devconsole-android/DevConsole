@@ -1,8 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Declared only in the internal full runtime; host code requests it only after user action. -->
+    <!-- The full runtime is the debug-only server artifact, so local-network access is part of its
+         default debug footprint. The no-op runtime has no manifest permissions and therefore does
+         not carry these entries into release variants. ACCESS_LOCAL_NETWORK is enforced on Android
+         17+; NEARBY_WIFI_DEVICES covers the Android 13-16 local-network compatibility path. -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
     <!-- Normal permission used only to record coarse connectivity-change timeline markers. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- The embedded server is kept alive by default whenever it is running. These permissions are
+         deliberately declared only by sdk:full; sdk:noop has no server or foreground service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Declared so the full runtime can offer the runtime grant when Android hides the ongoing
+         foreground-service notification. The service itself remains functional if it is denied. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application>
         <provider
@@ -23,10 +36,10 @@
             android:exported="false"
             android:grantUriPermissions="true" />
         <!-- Keep-alive shell for the embedded dashboard server (docs/BACKGROUND_KEEPALIVE.md).
-             The SDK deliberately declares NO permissions for it: the host opts in by declaring
-             FOREGROUND_SERVICE (+ FOREGROUND_SERVICE_SPECIAL_USE on API 34+) in its own debug
-             manifest; KeepAliveGate checks the merged manifest before this service is ever
-             started. Never reaches release builds; sdk:full is a debugImplementation artifact. -->
+             sdk:full declares the required permissions above, so the service starts by default
+             whenever the server starts. sdk:full is a debugImplementation artifact; sdk:noop has
+             neither this service nor any of these permissions. KeepAliveGate still checks the
+             merged manifest defensively before starting the service. -->
         <service
             android:name="io.devconsole.DevConsoleForegroundService"
             android:exported="false"

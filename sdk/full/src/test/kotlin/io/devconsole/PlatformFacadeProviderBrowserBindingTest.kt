@@ -4,6 +4,7 @@
  */
 package io.devconsole
 
+import android.Manifest
 import androidx.test.core.app.ApplicationProvider
 import io.devconsole.api.BindingMode
 import io.devconsole.api.DevConsoleConfig
@@ -13,9 +14,11 @@ import io.devconsole.api.StopReason
 import io.devconsole.ui.compose.DevConsoleInspectorBridge
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -29,6 +32,12 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class PlatformFacadeProviderBrowserBindingTest {
+    @Before
+    fun grantNearbyWifiForLanAssertions() {
+        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>())
+            .grantPermissions(Manifest.permission.NEARBY_WIFI_DEVICES)
+    }
+
     @Test
     fun `More surface browser binding reflects the mode the server actually bound to`() =
         runTest {

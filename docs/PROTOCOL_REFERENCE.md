@@ -13,18 +13,22 @@ protocol change.
 ## Conventions
 
 - **CSRF header:** `X-DevConsole-CSRF`.
-- **CSRF/Origin check** (used by most mutating routes):
+- **CSRF/Origin check** (used by most mutating routes in `SESSION_CODE` mode):
   ```
   expectedOrigin = "http://" + Host header
   reject (403 CSRF_INVALID) unless Origin header == expectedOrigin AND X-DevConsole-CSRF == session.csrfToken
   ```
   The expected origin is hardcoded to the `http://` scheme regardless of how the client actually
   connected.
-- **Bearer auth:** `Authorization: Bearer <token>`. Missing, invalid, or expired all collapse to the
-  same `{"code":"AUTH_REQUIRED"}` 401 — the server never distinguishes these cases at the HTTP layer.
+- **Bearer auth:** In `SESSION_CODE` mode, requests use `Authorization: Bearer <token>`. Missing,
+  invalid, or expired values all collapse to the same `{"code":"AUTH_REQUIRED"}` 401. In
+  `NONE` mode, bearer and CSRF headers are not required. Mutations in `NONE` mode still reject a
+  present `Origin` header unless it exactly matches `http://<Host>`; an absent `Origin` remains
+  valid for non-browser clients such as curl.
 - **Access levels:** none. Every authenticated session is equivalent (`auth` in the tables below
-  means "any live session"); mutating routes additionally gate on the host's `EditingCapabilities`
-  flags (`mocks`, `captureRules`, `preferences`, `database`, `files`), not on a session-level role.
+  means "any live session" in `SESSION_CODE` mode, or any request in `NONE` mode); mutating routes
+  additionally gate on the host's `EditingCapabilities` flags (`mocks`, `captureRules`,
+  `preferences`, `database`, `files`), not on a session-level role.
 - **Request-body content types.** Routes that read a form body (`POST /api/v1/push/simulate`, the
   `POST` halves of `/api/v1/network/har` and `/api/v1/network/postman`, `POST /api/v1/exports`,
   `POST /api/v1/preferences/{file}`, …) need
@@ -65,10 +69,22 @@ One rate limiter is wired into the dispatcher's `when` for
 build. (`POST /api/v1/exports` and `GET /api/v1/report` do have routes — checked inline rather
 than through the table above — sharing one 5-per-10-minute export limiter; see §3.)
 
+## Browser access modes
+
+The public full SDK defaults to `BrowserSecurity.NONE`, so the dashboard can be opened directly at
+the server URL after each build. The server still applies its host allowlist and feature/capture
+gates, but it does not mint or require a browser credential. `/health` reports
+`{"status":"open",...}` in this mode.
+
+Set `DevConsoleConfig.default().withBrowserSecurity(BrowserSecurity.SESSION_CODE)` (or the Java
+builder's `.browserSecurity(BrowserSecurity.SESSION_CODE)`) before starting the server to enable the
+credentialed flow below. `/health` then reports `auth_required`, the dashboard uses the session-code
+fragment, and bearer/CSRF checks apply as described here.
+
 ## 2. Auth handshake (SESSION_CODE)
 
-SESSION_CODE is the only browser-access flow. There is no approval step: possessing the code within
-its TTL *is* the authorization decision.
+This section applies only when `BrowserSecurity.SESSION_CODE` is selected. There is no approval step:
+possessing the code within its TTL *is* the authorization decision.
 
 1. **Issue.** `SessionCodeAuthority.issueCode()` generates an 8-character code from an unambiguous
    alphabet (`23456789ABCDEFGHJKMNPQRSTWXYZ` — excludes `0`/`O`, `1`/`I`/`L`, `U`/`V`), 5-minute TTL
@@ -104,15 +120,16 @@ caller's own), `GET /api/v1/session` (auth — "who am I").
 
 ## 3. REST routes
 
-`auth` = any authenticated session, `none` = unauthenticated.
+`auth` = any authenticated session in `SESSION_CODE` mode, or any request in `NONE` mode;
+`none` = no browser credential is needed in either mode.
 
 ### Root, meta, overview
 
 | Route | Auth | Notes |
 |---|---|---|
 | `GET /` | none | Dashboard HTML, `Cache-Control: no-store` |
-| `GET /health` | none | `{"status":"auth_required","protocolVersion":...,"appDisplayName":"..."}` (static status field) |
-| `GET /api/v1/meta` | auth | App/build/capabilities/bound-endpoint/redaction policy |
+| `GET /health` | none | `{"status":"auth_required"|"open","protocolVersion":...,"appDisplayName":"..."}` |
+| `GET /api/v1/meta` | auth/open | App/build/capabilities/bound-endpoint/redaction policy |
 | `GET /api/v1/sdk-health` | auth | `SdkHealthSnapshot`, `activePrincipalCount` recomputed live |
 | `GET /api/v1/overview` | auth | App info + mock engine state + SDK health + network status histogram |
 

@@ -1,5 +1,11 @@
 # FAQ / troubleshooting
 
+**Why does my team no longer need a new key after every build?** The public full SDK defaults to
+`BrowserSecurity.NONE`, so the dashboard opens directly at the URL shown by `startBrowser` or the
+More screen. This is intended for trusted local development. If the server is reachable by other
+people or devices, opt into `BrowserSecurity.SESSION_CODE` with
+`DevConsoleConfig.default().withBrowserSecurity(BrowserSecurity.SESSION_CODE)`.
+
 **Can I connect from another machine on the same network?** Usually with no setup at all — the
 default `BindingMode.AUTO` binds your device's network address whenever there is one, so the connect
 URL and its QR code already work from another device. If you got a `127.0.0.1` URL, AUTO fell back
@@ -49,9 +55,10 @@ It's still wired into your `OkHttpClient.Builder`, but every recorder and engine
 `enabled = false` in `devconsole-noop`. It becomes a fast no-op, so you never have to strip it out
 conditionally.
 
-**My session code says expired or invalid, and a second browser can't join.** Codes are single-use,
-only one is live at a time, and each lasts five minutes. There's no approval step on the device and
-no automatic regeneration, so issue a fresh code from the More screen for each new browser. See
+**I opted into SESSION_CODE and the code says expired or invalid, or a second browser can't join.**
+Codes are single-use, only one is live at a time, and each lasts five minutes. There's no approval
+step on the device and no automatic regeneration, so issue a fresh code from the More screen for each
+new browser. See
 [LAN_PERMISSION_AND_TROUBLESHOOTING.md](LAN_PERMISSION_AND_TROUBLESHOOTING.md#session-codes-session_code_expired--session_code_invalid).
 
 **My debug build fails with a manifest merger conflict on `androidx.core.content.FileProvider`.**

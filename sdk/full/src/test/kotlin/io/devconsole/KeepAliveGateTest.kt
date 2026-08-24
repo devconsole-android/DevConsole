@@ -89,10 +89,12 @@ class KeepAliveGateTest {
         declarePermissions(Manifest.permission.FOREGROUND_SERVICE, Manifest.permission.POST_NOTIFICATIONS)
         val gate = KeepAliveGate(application)
 
+        assertTrue(gate.shouldRequestNotificationBeforeStart())
         assertTrue(gate.shouldOfferNotificationPrompt(serverRunning = true))
         assertFalse(gate.shouldOfferNotificationPrompt(serverRunning = false))
 
         shadowOf(application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        assertFalse(gate.shouldRequestNotificationBeforeStart())
         assertFalse(gate.shouldOfferNotificationPrompt(serverRunning = true))
     }
 
