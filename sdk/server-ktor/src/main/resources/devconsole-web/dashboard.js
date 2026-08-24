@@ -5970,6 +5970,9 @@
     // Note: the timeline note textarea/save button are rendered inside the event detail pane
     // (renderEventDetail) with their disabled state set directly from `token` at render time,
     // since they only exist in the DOM once an event is selected.
+    // Clearing is a CSRF-gated mutation, so it needs a full session, not just a read token.
+    $('networkClear').disabled = !enabled;
+    $('networkClear').title = enabled ? 'Discard every captured request on the device' : 'Connect this browser first';
     $('quickExport').disabled = !token;
     // Capture is off by default on the host (ScreenshotPolicy.enabled = false) and no route
     // reports that ahead of time — this button is only
@@ -7075,6 +7078,30 @@
   async function downloadPostman() {
     await downloadNetworkExport('/api/v1/network/postman', 'devconsole-network.postman_collection.json');
   }
+  /**
+   * DELETE /api/v1/network/transactions — discards every captured transaction on the device, then
+   * reloads so the list renders from the real post-clear server state rather than an assumed-empty
+   * local one (same reasoning as clearEvidenceTray). Confirmed first: captures live in memory only,
+   * so there is nothing to undo it with. The local selection is dropped too, since its ids no longer
+   * resolve to anything.
+   */
+  async function clearNetworkCaptures() {
+    if (!hasSession()) return;
+    const ok = await openConfirm('Clear captured requests?', 'Every captured request is discarded on the device. Captures are held in memory only, so this cannot be undone. Anything flagged as evidence is kept.', 'Clear captures');
+    if (!ok) return;
+    const r = await fetch('/api/v1/network/transactions', { method: 'DELETE', headers: controlHeaders() });
+    if (r.ok) {
+      clearNetworkSelection();
+      toast('Captured requests cleared.');
+    } else {
+      // One read only — the body stream cannot be consumed twice. CATEGORY_DISABLED arrives nested
+      // under `error` (respondCategoryDisabled), every other code at the top level.
+      let code;
+      try { const body = await r.json(); code = body.code || body.error?.code; } catch { code = undefined; }
+      toast(code === 'CATEGORY_DISABLED' ? 'Network capture is disabled for this app run.' : 'Could not clear captures: ' + r.status, 'error');
+    }
+    loadNetwork();
+  }
   /** Backs the 'related' tab in renderNetworkDetail. Guarded against duplicate in-flight fetches
    * for the same id (a re-render can happen — e.g. focus restore — while the request is still
    * out) and only re-renders if that tab/transaction is still what's on screen when it resolves. */
@@ -7339,6 +7366,7 @@
     $('networkOlder').onclick = () => networkCursor && loadNetwork(networkCursor);
     $('networkHarDownload').onclick = downloadHar;
     $('networkPostmanDownload').onclick = downloadPostman;
+    $('networkClear').onclick = clearNetworkCaptures;
     $('networkSelectAllVisible').onclick = () => toggleSelectAllVisibleNetwork();
     $('networkSelectionBar').addEventListener('click', (e) => {
       const btn = e.target.closest('[data-sel-action]');

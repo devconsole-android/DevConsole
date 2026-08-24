@@ -503,6 +503,48 @@ class FullInspectorDataSourceTest {
         }
 
     @Test
+    fun `clearTransactions empties the capture store and the snapshot it feeds`() {
+        val store = networkStore()
+        recordTransaction(store, "tx-1", startedAtEpochMs = 0, completedAtEpochMs = 5)
+        recordTransaction(store, "tx-2", startedAtEpochMs = 10, completedAtEpochMs = 15)
+        val source = FullInspectorDataSource(store, MockEngine(emptyList()), configSupplier = { null })
+        assertEquals(2, source.snapshot().transactions.size)
+
+        val result = source.clearTransactions()
+
+        assertTrue(result is InspectorCommandResult.Success)
+        assertTrue(source.snapshot().transactions.isEmpty())
+        assertNull(store.find("tx-1"))
+    }
+
+    /**
+     * Evidence is durable and materialized at flag time -- clearing the live capture buffer must not
+     * take collected bug evidence with it.
+     */
+    @Test
+    fun `clearTransactions leaves flagged evidence intact`() =
+        runTest {
+            val store = networkStore()
+            recordTransaction(store, "tx-1", startedAtEpochMs = 0, completedAtEpochMs = 5)
+            val evidence = FakeEvidenceStore()
+            val source =
+                FullInspectorDataSource(
+                    store,
+                    MockEngine(emptyList()),
+                    configSupplier = { null },
+                    evidenceStore = evidence,
+                    evidenceSessionId = { "session-1" },
+                )
+            source.flagTransaction("tx-1")
+
+            source.clearTransactions()
+
+            assertTrue(source.snapshot().transactions.isEmpty())
+            assertEquals(setOf("tx-1"), source.flaggedTransactionIds())
+            assertEquals(1, evidence.items("session-1").size)
+        }
+
+    @Test
     fun `flagTransaction surfaces AlreadyFlagged with a human-readable message instead of throwing or no-opping`() =
         runTest {
             val store = networkStore()

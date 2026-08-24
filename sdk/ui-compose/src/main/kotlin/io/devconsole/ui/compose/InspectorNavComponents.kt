@@ -114,6 +114,20 @@ internal fun InspectorTopArea(
  * kind of thing [InspectorTopAction] already models.
  */
 @Composable
+/**
+ * The Traffic tab's "clear captures" action. Tinted [DevConsoleColors.error] rather than muted like
+ * [themeToggleTopAction]: it is the only destructive control in the top area, and the colour is what
+ * separates it from its neighbour at a glance.
+ */
+internal fun clearCapturesTopAction(onClear: () -> Unit): InspectorTopAction =
+    InspectorTopAction(
+        contentDescription = "Clear captured requests",
+        onClick = onClear,
+        icon = {
+            ObserveGlyphIcon(ObserveGlyph.Trash, contentDescription = null, tint = DevConsoleTheme.colors.error)
+        },
+    )
+
 internal fun themeToggleTopAction(onToggleTheme: () -> Unit): InspectorTopAction =
     InspectorTopAction(
         contentDescription = "Toggle theme",

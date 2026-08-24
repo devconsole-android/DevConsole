@@ -820,6 +820,17 @@ internal class FullInspectorDataSource(
     }
 
     /**
+     * Ungated by capability for the same reason the exports below are: this empties the SDK's own
+     * capture buffer and never reaches host application state. Evidence is untouched -- `EvidenceStore`
+     * holds materialized copies of flagged captures (see [flagTransaction]) and outlives the buffer
+     * by design.
+     */
+    override fun clearTransactions(): InspectorCommandResult {
+        networkTransactionStore.clear()
+        return InspectorCommandResult.Success(summary = "Captured requests cleared")
+    }
+
+    /**
      * Ungated by capability: exports read already-captured, already-redacted data, the same as
      * [listFiles]/[previewFile]/[listTables] above.
      */

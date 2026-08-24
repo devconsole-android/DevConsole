@@ -626,6 +626,21 @@ interface InspectorDataSource {
     ): InspectorSqlResultUi
 
     /**
+     * Discards every captured network transaction, backing the Traffic tab's "clear captures"
+     * action. Ungated by capability for the same reason the exports below are: it touches only this
+     * SDK's own capture buffer, never host application state.
+     *
+     * Evidence flags are deliberately left alone -- `EvidenceStore` holds materialized copies of
+     * flagged captures and the tray is durable across sessions, so clearing the live buffer must not
+     * quietly destroy collected bug evidence.
+     *
+     * Defaults to [InspectorCommandResult.Unavailable] so every existing adapter and fake keeps
+     * compiling, matching this interface's other "only override if you actually implement it"
+     * defaults.
+     */
+    fun clearTransactions(): InspectorCommandResult = InspectorCommandResult.Unavailable
+
+    /**
      * Exports captured network traffic as a HAR file, sharing the result via the same
      * `FileProvider`/Share-sheet flow as [shareableFilePath]. [transactionIds] mirrors whatever the
      * Traffic screen's multi-select ([InspectorAction.ToggleTransactionSelection]) currently holds;
