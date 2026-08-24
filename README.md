@@ -488,10 +488,80 @@ Don't take the table's word for it. Check any build yourself:
 aapt2 dump permissions app/build/outputs/apk/release/app-release.apk
 ```
 
-The Gradle plugin enforces the same split mechanically. `verifyDevConsoleProtectedArtifacts` fails
-the build if the full runtime reaches a protected variant, checking declared dependencies, the
+The Gradle plugin enforces the same split mechanically. `verify<Variant>DevConsoleProtectedArtifacts`
+fails the build if the full runtime reaches a protected variant, checking declared dependencies, the
 resolved runtime classpath, and the final APK/AAB bytes. See
 [Build variants and production safety](docs/BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md).
+
+## Flavored projects: verify the variant you ship
+
+**If your app has product flavors, read this before wiring the plugin into a release pipeline.**
+
+By default every non-debug variant is `PROTECTED`, so a project with `production`, `staging`, and
+`partner` flavors gets three protected release variants and three verifiers:
+
+```
+verifyProductionReleaseDevConsoleProtectedArtifacts
+verifyStagingReleaseDevConsoleProtectedArtifacts
+verifyPartnerReleaseDevConsoleProtectedArtifacts
+```
+
+Each one is wired onto **its own** `assemble<Variant>` / `bundle<Variant>` and nothing else, so
+`./gradlew :app:assembleProductionRelease` verifies `productionRelease` and resolves
+`productionRelease`'s classpath — no other flavor is touched. That matters most when your flavors
+carry environment-specific coordinates:
+
+```groovy
+productionImplementation "com.example.sdk:analytics-production-release:1.8.0"
+stagingImplementation    "com.example.sdk:analytics-staging-release:1.8.0"
+partnerImplementation    "com.example.sdk:analytics-partner-release:1.8.0"
+```
+
+A production build must never reach for another environment's artifacts — especially when those live
+in a repository only reachable from an internal network. It doesn't.
+
+The aggregate `verifyDevConsoleProtectedArtifacts` still exists and still verifies **every** protected
+variant — that is its job, and `check` depends on it. On the project above it therefore resolves and
+builds all three release variants. Use it in a CI job that is meant to cover everything; don't put it
+on the critical path of a single-flavor release build:
+
+```bash
+./gradlew :app:assembleProductionRelease                            # ships production, verifies production
+./gradlew :app:verifyProductionReleaseDevConsoleProtectedArtifacts  # the same check on its own
+./gradlew :app:verifyDevConsoleProtectedArtifacts                   # full sweep, all flavors, CI
+```
+
+### Upgrading from 1.2.4 or earlier
+
+Up to and including 1.2.4 there was one shared verifier task carrying every protected variant's
+inputs, wired onto every protected variant's `assemble`/`bundle`. Building one flavor's release
+therefore built all of them. If you recognise any of these, that was the cause and this release fixes
+it:
+
+- a single-flavor release build downloading another flavor's dependencies
+- `assembleProductionRelease` running `dexBuilderStagingRelease`, `bundlePartnerRelease`, or similar
+- a release build failing or hanging on a repository only one flavor's artifacts live in
+- release builds several times slower than the flavor being shipped could explain
+
+No migration is needed — the task name your scripts and CI already call still works, it is now the
+aggregate. If you worked around this by excluding the verifier (`-x verifyDevConsoleProtectedArtifacts`)
+or by narrowing `protectedVariantPatterns` to one flavor, undo it: those workarounds bought speed by
+dropping enforcement, and you no longer have to pay for one with the other.
+
+### Narrowing what gets protected
+
+If you genuinely want fewer protected variants — a flavor whose release build is never distributed,
+say — lower the default and name what you protect. Understand that a variant left out is a variant
+nobody checks:
+
+```kotlin
+devConsole {
+    defaultPolicy.set(DevConsoleVariantPolicy.DISABLED)
+    protectedVariantPatterns.set(listOf("(?i)production.*release"))
+}
+```
+
+`DISABLED` variants still get `devconsole-noop` auto-wired — they simply are not verified.
 
 ## Security model
 

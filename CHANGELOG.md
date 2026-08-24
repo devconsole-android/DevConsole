@@ -63,6 +63,26 @@ does have to add one method to compile against 1.3.0.
   new route could not otherwise reach it. Left abstract rather than given a no-op default: a custom
   store that silently declined to clear would fail invisibly, which is worse than failing to compile.
 
+- **The protected-artifact verifier is now one task per protected variant**, named
+  `verify<Variant>DevConsoleProtectedArtifacts`. `verifyDevConsoleProtectedArtifacts` survives as an
+  aggregate that depends on all of them, so `check`, the sample apps' CI invocations, and any host
+  release script that names it keep working unchanged. A host that wants to verify one variant on its
+  own can now ask for that variant's task by name.
+
+### Fixed
+
+- **Building one flavor's release no longer builds every other flavor's release.** The verifier used
+  to be a single task holding *every* protected variant's runtime classpath and packaged APK/AAB as
+  its own task inputs, and it was wired onto each protected variant's `assemble`/`bundle`. On a
+  flavored project that meant `assembleProductionRelease` pulled
+  `verifyStagingReleaseDevConsolePackagedArtifact` into the graph, which in turn pulled
+  `dexBuilderStagingRelease`, `bundleStagingRelease` and the rest — so the build resolved and
+  downloaded every other flavor's dependencies, and produced artifacts nobody asked for. A host whose
+  flavors carry environment-specific SDK coordinates saw its production build reach for
+  internal-only artifacts and stall or fail when that repository was unreachable. Splitting the
+  verifier per variant keeps each variant's inputs to itself: building `productionRelease` now
+  touches `productionRelease` only, with no loss of enforcement.
+
 ## 1.2.4 — 2026-08-20
 
 ### Fixed
