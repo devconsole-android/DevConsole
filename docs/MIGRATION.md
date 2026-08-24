@@ -31,8 +31,8 @@ dependencyResolutionManagement {
    `v*` release tag:
 
 ```kotlin
-debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.3.0")
-releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.3.0")
+debugImplementation("com.github.devconsole-android.DevConsole:devconsole:1.3.1")
+releaseImplementation("com.github.devconsole-android.DevConsole:devconsole-noop:1.3.1")
 ```
 
 If you rely on the plugin's `autoWireDependencies` (the default), step 2 is done for you — you only

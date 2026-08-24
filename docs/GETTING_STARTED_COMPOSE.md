@@ -35,7 +35,7 @@ devConsole {
 }
 ```
 
-`<version>` is a JitPack version — `1.3.0` for the current release. Releases are tagged `v1.3.0`,
+`<version>` is a JitPack version — `1.3.1` for the current release. Releases are tagged `v1.3.1`,
 and JitPack resolves a bare version against the `v`-prefixed tag, so the `v` is optional; the bare
 form is used here because it also matches the plugin's version on the Gradle Plugin Portal.
 
