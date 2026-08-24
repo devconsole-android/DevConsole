@@ -1230,13 +1230,39 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
    without the path/headers/body rows wrapping too tightly. */
 .modal.modal-wide { max-width: 640px; }
 .mock-body-toolbar { display: flex; align-items: center; gap: 12px; margin-top: -4px; }
-/* The status text is the flexible middle so the full-window toggle always parks on the right edge,
-   and can shrink/ellipse rather than shoving the toggle out of the row on a long parse error. */
+/* The JSON status is the one thing on its row that can run long (a parse error carries the
+   engine's own message), so it takes the slack and ellipses rather than widening the dialog.
+   The full-window toggle lives on the find bar below and parks on that row's right edge. */
 #mockRuleBodyStatus { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#mockRuleBodyExpand { flex: 0 0 auto; }
+#mockRuleBodyExpand { margin-left: auto; }
 /* A mock body is JSON far more often than it is one line, so the editor opens tall enough to read
    a formatted payload without scrolling; `rows` only sets the floor before this applies. */
 #mockRuleBody { min-height: 232px; line-height: 1.6; resize: vertical; }
+
+/* Find-in-body. A textarea can only ever show ONE hit -- its selection, and only while focused --
+   so every match is painted by a mirrored, non-interactive layer sitting underneath a
+   now-transparent textarea. The mirror only ever renders color: transparent text; the glyphs the
+   user reads are still the textarea's own, drawn on top. That means every property affecting glyph
+   position (font, size, line-height, padding, wrapping) MUST stay identical between the two rules
+   below, or the marks slide off the words they belong to. The scrollbar gutter is the one that
+   can't be written here -- its width is measured and applied in syncMockBodyHighlightMetrics. */
+.mock-body-editor { position: relative; display: block; }
+.mock-body-editor > textarea { position: relative; z-index: 1; display: block; width: 100%; background: transparent; }
+.mock-body-highlight {
+  position: absolute; inset: 1px; z-index: 0; overflow: hidden; pointer-events: none;
+  padding: 9px 11px; border-radius: 6px; background: var(--code-bg);
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6;
+  white-space: pre-wrap; overflow-wrap: break-word; color: transparent;
+}
+/* Same --signal-soft the .code-line/.kv-grid search hits use. The current match is stronger but
+   still translucent: the readable glyphs belong to the textarea above and stay --ink either way,
+   so a solid --signal fill would bury them. */
+.mock-body-highlight mark { background: var(--signal-soft); color: transparent; border-radius: 2px; }
+.mock-body-highlight mark.current { background: color-mix(in srgb, var(--signal) 45%, transparent); }
+.mock-body-findbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mock-body-find-wrap { flex: 1 1 200px; min-width: 160px; max-width: 320px; }
+.mock-body-findbar .xs { flex: 0 0 auto; }
+#mockRuleBodyFindCount { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
 /* Full window mode: same near-viewport box as .modal-fullscreen, with the extra height handed to
    the body editor. The grid's own rows stay content-sized, so the editor is sized in vh directly
    rather than flexed -- a grid item can't stretch into a row it doesn't define. */
