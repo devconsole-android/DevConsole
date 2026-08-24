@@ -5956,6 +5956,34 @@
 
   // Shared control helpers
   // ================================================================
+
+  /**
+   * Wires a search box whose filtering happens on the *server* (Network, Sockets) — as opposed to
+   * Timeline/Push/Crashes, which filter an already-loaded page in the browser and so can listen
+   * straight to `input` and re-render.
+   *
+   * Those two shipped with no listener at all: `loadNetwork`/`loadSocketMessages` read the box at
+   * request time, so the query did reach the server, but only when some unrelated control happened
+   * to trigger a reload — and the one button that always does ("Apply") sits inside the collapsed
+   * "More filters" block. Typing and pressing Enter did nothing, which is what #22 reported.
+   *
+   * Debounced because each reload is a request against the shared 120/min read budget
+   * (`readQueryLimiter`), and a 12-character query typed at speed would otherwise be 12 of them.
+   * Enter and blur flush immediately, so an operator who wants the result now never waits on the
+   * timer. Clearing the box via the native ✕ fires `input` like any other edit, so it reloads too.
+   */
+  const SEARCH_DEBOUNCE_MS = 300;
+  function wireServerSearch(id, reload) {
+    const input = $(id);
+    if (!input) return;
+    let timer = null;
+    const flush = () => { clearTimeout(timer); timer = null; reload(); };
+    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(flush, SEARCH_DEBOUNCE_MS); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); flush(); } });
+    // Only flush on blur if an edit is still pending — otherwise every focus change reloads.
+    input.addEventListener('blur', () => { if (timer) flush(); });
+  }
+
   const controlHeaders = () => ({ ...auth(), 'X-DevConsole-CSRF': csrf });
   const updateControlUi = () => {
     const enabled = hasSession();
@@ -7361,6 +7389,7 @@
     // ---- Network -----------------------------------------------------------------
     wireSeg($('networkStatusSeg'), (value) => { networkStatusFilter = value; applyNetworkFilters(); });
     wireSeg($('networkMethodSeg'), (value) => { networkMethodFilter = value; applyNetworkFilters(); });
+    wireServerSearch('networkSearch', () => loadNetwork());
     $('networkRefresh').onclick = () => loadNetwork();
     $('networkNewest').onclick = () => loadNetwork();
     $('networkOlder').onclick = () => networkCursor && loadNetwork(networkCursor);
@@ -7382,6 +7411,7 @@
     $('timelineOlder').onclick = () => timelineCursor && load(timelineCursor);
 
     // ---- WebSockets ----------------------------------------------------------------
+    wireServerSearch('socketSearch', () => loadSocketMessages());
     wireSeg($('socketFrameTypeSeg'), (value) => { socketFrameTypeFilter = value; loadSocketMessages(); });
     wireSeg($('socketDirectionSeg'), (value) => { socketDirectionFilter = value; loadSocketMessages(); });
     // Protocol changes which connections are in scope too, not just which messages, so it re-runs
