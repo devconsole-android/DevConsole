@@ -205,4 +205,70 @@ class DashboardAssetsTest {
         assertTrue(dashboard.contains("<main id=\"mainContent\""))
         assertTrue(dashboard.contains("aria-label=\"Inspector views\""))
     }
+
+    @Test
+    fun `mock rule dialog ships the find-in-body controls and its highlight layer`() {
+        val dashboard = DashboardAssets.index()
+
+        listOf(
+            "mockRuleBodyFind",
+            "mockRuleBodyFindPrev",
+            "mockRuleBodyFindNext",
+            "mockRuleBodyFindCount",
+            // The mirrored layer the marks are painted on; without it every match is invisible,
+            // because a textarea can only ever show one hit (its own selection).
+            "mockRuleBodyHighlight",
+            "mock-body-editor",
+        ).forEach { id -> assertTrue("missing find-in-body hook \"$id\"", dashboard.contains(id)) }
+    }
+
+    @Test
+    fun `find-in-body is wired to the body editor and steps through matches`() {
+        val script = DashboardAssets.js()
+
+        assertTrue(script.contains("function mockBodyFindRanges("))
+        assertTrue(script.contains("function stepMockBodyFind("))
+        assertTrue(script.contains("$('mockRuleBodyFind').addEventListener('input'"))
+        // The mirror only lines up with the textarea while their scroll offsets agree.
+        assertTrue(script.contains("$('mockRuleBody').addEventListener('scroll', syncMockBodyHighlightMetrics)"))
+    }
+
+    /**
+     * Regression: `refreshMockBodyEditor` used to `return` early on a blank body, which skipped the
+     * find rescan at its end. Opening a rule with a body, searching it, then opening a *blank* rule
+     * left the previous rule's marks painted over an empty editor with a stale match count. The
+     * blank case has to fall through to the shared tail instead, so the guard is now an if/else.
+     */
+    @Test
+    fun `an empty response body still rescans find state instead of returning early`() {
+        val script = DashboardAssets.js()
+        val body =
+            script
+                .substringAfter(
+                    "function refreshMockBodyEditor()",
+                ).substringBefore("function formatMockRuleBody()")
+
+        assertFalse(
+            "blank-body guard must not return before the find rescan",
+            body.contains("previewEl.innerHTML = ''; return; }"),
+        )
+        assertTrue("refreshMockBodyEditor must end by rescanning find offsets", body.contains("refreshMockBodyFind();"))
+    }
+
+    /**
+     * A mock body is JSON, so `"`, `[` and `{` are ordinary things to search for. Building a
+     * RegExp from the query would throw on the single `[` a user types on the way to `["id"]`.
+     */
+    @Test
+    fun `find-in-body treats the query as literal text rather than a pattern`() {
+        val script = DashboardAssets.js()
+        val fn =
+            script
+                .substringAfter(
+                    "function mockBodyFindRanges(",
+                ).substringBefore("function syncMockBodyHighlightMetrics(")
+
+        assertTrue(fn.contains("indexOf(needle"))
+        assertFalse("query must never reach RegExp", fn.contains("RegExp"))
+    }
 }

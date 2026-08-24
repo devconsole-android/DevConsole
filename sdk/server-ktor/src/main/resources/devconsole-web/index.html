@@ -683,11 +683,21 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <label class="field field-full"><span>Response headers (Name: value, one per line)</span><textarea id="mockRuleHeaders" rows="3"></textarea></label>
         <label class="field field-full">
           <span>Response body</span>
-          <textarea id="mockRuleBody" rows="7" placeholder="{}"></textarea>
+          <span class="mock-body-editor">
+            <span id="mockRuleBodyHighlight" class="mock-body-highlight" aria-hidden="true"></span>
+            <textarea id="mockRuleBody" rows="14" placeholder="{}"></textarea>
+          </span>
         </label>
         <div class="field-full mock-body-toolbar">
           <button type="button" id="mockRuleBodyFormat" class="xs">Format</button>
           <span id="mockRuleBodyStatus" class="card-field-help"></span>
+        </div>
+        <div class="field-full mock-body-findbar">
+          <span class="search-wrap mock-body-find-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="mockRuleBodyFind" placeholder="Find in response body…" aria-describedby="mockRuleBodyFindCount"></span>
+          <button type="button" id="mockRuleBodyFindPrev" class="xs" aria-label="Previous match" title="Previous match (Shift+Enter)" disabled><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-arrow-up"/></svg></button>
+          <button type="button" id="mockRuleBodyFindNext" class="xs" aria-label="Next match" title="Next match (Enter)" disabled><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-arrow-down"/></svg></button>
+          <span id="mockRuleBodyFindCount" class="card-field-help" role="status" aria-live="polite" aria-atomic="true"></span>
+          <button type="button" id="mockRuleBodyExpand" class="xs" aria-pressed="false" aria-controls="mockRuleBody" title="Expand the dialog to fill the window (the body editor takes the extra room)"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-expand"/></svg><span id="mockRuleBodyExpandLabel">Full window</span></button>
         </div>
         <div id="mockRuleBodyPreview" class="field-full"></div>
         <label class="field"><span>Priority</span><input id="mockRulePriority" type="number" value="0"></label>
