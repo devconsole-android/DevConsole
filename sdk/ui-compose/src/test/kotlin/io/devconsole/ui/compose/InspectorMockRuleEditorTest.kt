@@ -40,12 +40,14 @@ class InspectorMockRuleEditorTest {
         assertEquals(mapOf("Content-Type" to "application/json", "X-Trace" to "1"), target.draft.headers)
     }
 
+    // A prefilled body is editable in the sheet, so an ordinary capture carries no note at all --
+    // only the binary case, which genuinely can't be prefilled, still explains itself.
     @Test
-    fun `a normal text preview prefills the body and carries the redaction caveat note`() {
+    fun `a normal text preview prefills the body with no note`() {
         val target = mockRuleDraftFromTransaction(transaction("""{"ok":true}"""))
 
         assertEquals("""{"ok":true}""", target.draft.body)
-        assertTrue(target.prefillNote.orEmpty().contains("redacted"))
+        assertNull(target.prefillNote)
     }
 
     @Test

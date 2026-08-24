@@ -37,6 +37,10 @@
   // draft came from "Mock this response" (or an edit of a rule that already had one), reset on
   // every dialog open, and included in the save payload as-is (never re-derived from edited fields).
   let mockRuleDraftSourceBodySnapshot = null;
+  // Full-window mode for the mock rule dialog. Deliberately outside openMockRuleDialog so it
+  // sticks for the rest of the page session: someone hand-writing JSON bodies wants the big
+  // editor on every rule, not one dialog at a time.
+  let mockBodyExpanded = false;
   let preferencesEditable = false;
   let databaseEditable = false;
   let filesEditable = false;
@@ -1472,6 +1476,29 @@
     }
     refreshMockBodyEditor();
   }
+  /** Applies full-window mode to the dialog shell and syncs the toggle's label, icon, and pressed
+   * state. Only the box grows -- no field is hidden, so a validation error can never land on
+   * something the user can't see. */
+  function setMockBodyExpanded(expanded) {
+    mockBodyExpanded = expanded;
+    const modal = $('mockRuleModal')?.querySelector('.modal');
+    const btn = $('mockRuleBodyExpand');
+    if (!modal || !btn) return;
+    modal.classList.toggle('mock-modal-expanded', expanded);
+    btn.setAttribute('aria-pressed', String(expanded));
+    btn.title = expanded ? 'Shrink the dialog back to its normal size' : 'Expand the dialog to fill the window (the body editor takes the extra room)';
+    $('mockRuleBodyExpandLabel').textContent = expanded ? 'Exit full window' : 'Full window';
+    btn.querySelector('use')?.setAttribute('href', expanded ? '#dc-collapse' : '#dc-expand');
+  }
+  function toggleMockBodyExpanded() {
+    setMockBodyExpanded(!mockBodyExpanded);
+    const el = $('mockRuleBody');
+    // A plain focus() scrolls the *end* of a now-tall textarea into view, hiding the start of the
+    // body; park the field at the top of the scrolling .modal-body instead so the toggle lands on
+    // line 1 either way.
+    el.focus({ preventScroll: true });
+    el.closest('.field')?.scrollIntoView({ block: 'start' });
+  }
   /** Only a plain (optionally delayed) static response with an untruncated body survives a round
    * trip through this dialog -- richer actions (ConnectionFailure/Timeout/TemplateResponse/etc.)
    * and truncated bodies have no representation in the form, so saving one back would silently
@@ -1502,6 +1529,7 @@
     setFieldError(f.headers, false);
     setMockDialogError('');
     $('mockRuleModalTitleText').textContent = editing ? 'Edit mock rule' : 'New mock rule';
+    setMockBodyExpanded(mockBodyExpanded);
     refreshMockBodyEditor();
     syncMockRuleDialogGate();
     mockDialogOpenerEl = document.activeElement;
@@ -7516,6 +7544,7 @@
     $('mockRuleCancel').onclick = closeMockRuleDialog;
     $('mockRuleSave').onclick = saveMockRuleDialog;
     $('mockRuleBodyFormat').onclick = formatMockRuleBody;
+    $('mockRuleBodyExpand').onclick = toggleMockBodyExpanded;
     $('mockRuleBody').addEventListener('input', refreshMockBodyEditor);
     $('mockRuleBody').addEventListener('blur', formatMockRuleBody);
     wireCardGrid('mockRuleList', {

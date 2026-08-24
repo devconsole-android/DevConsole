@@ -56,9 +56,8 @@ import java.util.Locale
  * Which rule the create/edit sheet is showing; [InspectorMockRuleUi.id] is disabled for [Edit].
  * [New.draft] lets a caller prefill a brand-new rule (e.g. mock-from-capture's
  * [mockRuleDraftFromTransaction]) while keeping the id field editable, unlike [Edit].
- * [New.prefillNote], when set, renders under the body field -- honesty about *where* a prefilled
- * body/headers came from (a redacted, possibly-truncated capture preview) rather than presenting it
- * as the real payload.
+ * [New.prefillNote], when set, renders under the body field -- reserved for a prefill the form
+ * genuinely could not carry (a binary response body), not for narrating an ordinary one.
  */
 internal sealed interface MockRuleEditorTarget {
     /**
@@ -900,9 +899,6 @@ private val MOCK_DRAFT_STRIPPED_HEADERS =
 /** The exact placeholder [FullInspectorDataSource]'s `previewText()` returns for a non-textual response. */
 private val BINARY_PREVIEW_PLACEHOLDER = Regex("""\[binary, \d+ bytes]""")
 
-private const val CAPTURE_PREFILL_NOTE =
-    "Prefilled from a captured response — the body and headers are the redacted preview and may " +
-        "be truncated. Review before saving."
 private const val CAPTURE_PREFILL_BINARY_NOTE =
     "The captured response body is binary and can't be prefilled here — enter one manually."
 
@@ -910,9 +906,9 @@ private const val CAPTURE_PREFILL_BINARY_NOTE =
  * Prefills a brand-new rule from a captured transaction -- the net detail's "Mock this response"
  * action. [existingIds] lets [suggestMockRuleId] avoid suggesting an id that already names a rule.
  * [InspectorTransactionUi.responsePreview] is a *redacted, possibly-truncated* capture preview, not
- * the real payload -- [MockRuleEditorTarget.New.prefillNote] carries that caveat
- * to the sheet; a binary response's literal `"[binary, N bytes]"` placeholder is never usable as a
- * body, so it prefills empty with a more specific note instead.
+ * the real payload -- the prefilled body is editable, so that needs no on-screen caveat. A binary
+ * response's literal `"[binary, N bytes]"` placeholder, though, is never usable as a body, so it
+ * prefills empty and carries a [MockRuleEditorTarget.New.prefillNote] saying to enter one by hand.
  */
 internal fun mockRuleDraftFromTransaction(
     transaction: InspectorTransactionUi,
@@ -936,7 +932,7 @@ internal fun mockRuleDraftFromTransaction(
         )
     return MockRuleEditorTarget.New(
         draft = draft,
-        prefillNote = if (isBinary) CAPTURE_PREFILL_BINARY_NOTE else CAPTURE_PREFILL_NOTE,
+        prefillNote = if (isBinary) CAPTURE_PREFILL_BINARY_NOTE else null,
         sourceKey = transaction.id,
     )
 }

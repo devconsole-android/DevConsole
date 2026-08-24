@@ -683,11 +683,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <label class="field field-full"><span>Response headers (Name: value, one per line)</span><textarea id="mockRuleHeaders" rows="3"></textarea></label>
         <label class="field field-full">
           <span>Response body</span>
-          <textarea id="mockRuleBody" rows="7" placeholder="{}"></textarea>
+          <textarea id="mockRuleBody" rows="14" placeholder="{}"></textarea>
         </label>
         <div class="field-full mock-body-toolbar">
           <button type="button" id="mockRuleBodyFormat" class="xs">Format</button>
           <span id="mockRuleBodyStatus" class="card-field-help"></span>
+          <button type="button" id="mockRuleBodyExpand" class="xs" aria-pressed="false" aria-controls="mockRuleBody" title="Expand the dialog to fill the window (the body editor takes the extra room)"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-expand"/></svg><span id="mockRuleBodyExpandLabel">Full window</span></button>
         </div>
         <div id="mockRuleBodyPreview" class="field-full"></div>
         <label class="field"><span>Priority</span><input id="mockRulePriority" type="number" value="0"></label>

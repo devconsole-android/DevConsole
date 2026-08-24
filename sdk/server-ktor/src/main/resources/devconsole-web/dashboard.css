@@ -1230,6 +1230,20 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
    without the path/headers/body rows wrapping too tightly. */
 .modal.modal-wide { max-width: 640px; }
 .mock-body-toolbar { display: flex; align-items: center; gap: 12px; margin-top: -4px; }
+/* The status text is the flexible middle so the full-window toggle always parks on the right edge,
+   and can shrink/ellipse rather than shoving the toggle out of the row on a long parse error. */
+#mockRuleBodyStatus { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#mockRuleBodyExpand { flex: 0 0 auto; }
+/* A mock body is JSON far more often than it is one line, so the editor opens tall enough to read
+   a formatted payload without scrolling; `rows` only sets the floor before this applies. */
+#mockRuleBody { min-height: 232px; line-height: 1.6; resize: vertical; }
+/* Full window mode: same near-viewport box as .modal-fullscreen, with the extra height handed to
+   the body editor. The grid's own rows stay content-sized, so the editor is sized in vh directly
+   rather than flexed -- a grid item can't stretch into a row it doesn't define. */
+.modal.mock-modal-expanded { max-width: 96vw; width: 96vw; height: 92vh; max-height: 92vh; }
+.mock-modal-expanded #mockRuleBody { min-height: clamp(232px, 62vh, 78vh); }
+/* Capped so the live preview can't push the editor itself off-screen in the scrolling body. */
+.mock-modal-expanded #mockRuleBodyPreview .code-block { max-height: 34vh; overflow-y: auto; }
 
 /* Code block fullscreen overlay: near-viewport-size instead of the generic 480px modal so a long
    JSON/code body gets real room. Its .code-block-lg content scrolls inside .modal-body-code. */
