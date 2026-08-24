@@ -10,12 +10,15 @@ import android.content.res.Configuration
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
@@ -118,14 +121,83 @@ private fun TonalListRowPreview() {
         Column(modifier = Modifier.padding(12.dp)) {
             TonalListRow(
                 leadText = "GET",
+                titleMaxLines = 2,
                 leadColor = DevConsoleTheme.colors.signal,
                 leadContainerColor = DevConsoleTheme.colors.signalSoft,
-                title = "/v1/menu/store/8821",
+                title = "/v1/menu/store/8821db vdvbdv",
                 subtitle = "api.acmeship.com · 210 ms",
                 trailValue = "200",
                 trailValueColor = DevConsoleTheme.colors.signal,
                 trailSubtitle = "210 ms",
                 onClick = {},
+            )
+        }
+    }
+}
+
+/**
+ * The slot-bearing [TonalListRow] shapes the plain [TonalListRowPreview] never reaches: the traffic
+ * tab's selection row (leading checkbox, selected `containerColor`, long-press), the Control tab's
+ * mock-rule row (trailing [Switch]) -- both `mergeDescendants = false`, so TalkBack keeps the row's
+ * own tap apart from the control's toggle -- the More tab's expandable row, and a purely
+ * informational row that takes no click at all.
+ */
+@Preview(name = "Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, backgroundColor = 0xFF0B0E0D)
+@Preview(name = "Light", uiMode = Configuration.UI_MODE_NIGHT_NO, showBackground = true, backgroundColor = 0xFFF3F6EE)
+@Composable
+private fun TonalListRowVariantsPreview() {
+    var selected by remember { mutableStateOf(true) }
+    var mockEnabled by remember { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(false) }
+    DevConsoleTheme(darkTheme = isSystemInDarkTheme()) {
+        val colors = DevConsoleTheme.colors
+        Column {
+            TonalListRow(
+                leadText = "POST",
+                leadColor = colors.put,
+                leadContainerColor = colors.putSoft,
+                title = "/v1/orders",
+                subtitle = "api.acmeship.com · 12:04:31",
+                trailValue = "201",
+                trailValueColor = colors.put,
+                trailSubtitle = "88 ms",
+                containerColor = if (selected) colors.surface2 else Color.Transparent,
+                leading = { Checkbox(checked = selected, onCheckedChange = { selected = it }) },
+                onClick = { selected = !selected },
+                onLongClick = { selected = !selected },
+                mergeDescendants = false,
+            )
+            TonalListRow(
+                leadText = if (mockEnabled) "ON" else "OFF",
+                leadColor = if (mockEnabled) colors.signal else colors.muted,
+                leadContainerColor = if (mockEnabled) colors.signalSoft else colors.surface2,
+                title = "checkout-503",
+                subtitle = "POST /v1/checkout → 503 · 12 hits · 4m ago",
+                trailValue = "session",
+                trailValueColor = colors.muted,
+                trailContent = { Switch(checked = mockEnabled, onCheckedChange = { mockEnabled = it }) },
+                onClick = {},
+                mergeDescendants = false,
+            )
+            TonalListRow(
+                leadText = "DB",
+                leadColor = colors.warn,
+                leadContainerColor = colors.warnSoft,
+                title = "orders.db",
+                subtitle = "4 tables · 1.2 MB",
+                trailValue = "3",
+                trailSubtitle = "indexes",
+                trailContent = { TonalRowExpandChevron(expanded) },
+                onClick = { expanded = !expanded },
+            )
+            TonalListRow(
+                leadText = "SDK",
+                leadColor = colors.muted,
+                leadContainerColor = colors.surface2,
+                title = "io.devconsole",
+                subtitle = "Informational row -- no onClick, so the row grows no click semantics.",
+                trailValue = "1.2.3",
+                trailValueColor = colors.muted,
             )
         }
     }
