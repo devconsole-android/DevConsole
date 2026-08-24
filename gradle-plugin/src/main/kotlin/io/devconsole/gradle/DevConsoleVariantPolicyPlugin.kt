@@ -418,7 +418,7 @@ private val CORE_RUNTIME_COORDINATE_NAMES = setOf("devconsole", "devconsole-noop
 
 class DevConsoleVariantPolicyPlugin : Plugin<Project> {
     override fun apply(target: Project) = with(target) {
-        val packagedVerificationTasks = mutableListOf<TaskProvider<VerifyDevConsolePackagedArtifactTask>>()
+        val packagedVerificationTasks = linkedMapOf<String, TaskProvider<VerifyDevConsolePackagedArtifactTask>>()
         // variant name -> AGP build type name (e.g. "productionDebug" -> "debug"). Populated by the
         // AndroidComponentsExtension#onVariants callbacks in registerPackagedArtifactScans below. The
         // build type is what lets a flavored variant like "productionDebug" resolve against
@@ -514,7 +514,7 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
 
     private fun Project.registerPackagedArtifactScans(
         extension: DevConsoleExtension,
-        scans: MutableList<TaskProvider<VerifyDevConsolePackagedArtifactTask>>,
+        scans: MutableMap<String, TaskProvider<VerifyDevConsolePackagedArtifactTask>>,
         actualVariantBuildTypes: MutableMap<String, String?>,
     ) {
         plugins.withId("com.android.application") {
@@ -525,7 +525,7 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
                     if (variantPolicy(variant.name, variant.buildType, extension) != DevConsoleVariantPolicy.PROTECTED) {
                         return@onVariants
                     }
-                    scans +=
+                    scans[variant.name] =
                         tasks.register<VerifyDevConsolePackagedArtifactTask>(
                             "verify${variant.name.capitalized()}DevConsolePackagedArtifact",
                         ) {
@@ -551,7 +551,7 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
                     if (variantPolicy(variant.name, variant.buildType, extension) != DevConsoleVariantPolicy.PROTECTED) {
                         return@onVariants
                     }
-                    scans +=
+                    scans[variant.name] =
                         tasks.register<VerifyDevConsolePackagedArtifactTask>(
                             "verify${variant.name.capitalized()}DevConsolePackagedArtifact",
                         ) {
@@ -677,81 +677,106 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
         policies: Map<String, DevConsoleVariantPolicy>,
         report: TaskProvider<DevConsoleVariantReportTask>,
         extension: DevConsoleExtension,
-        packagedVerificationTasks: List<TaskProvider<VerifyDevConsolePackagedArtifactTask>>,
+        packagedVerificationTasks: Map<String, TaskProvider<VerifyDevConsolePackagedArtifactTask>>,
     ) {
         val protectedPaths = extension.protectedDependencyPaths.get()
         val protectedVariants = policies.filterValues { it == DevConsoleVariantPolicy.PROTECTED }.keys
-        val violations = protectedVariants.flatMap { variant ->
-            val variantConfig = configurations.findByName("${variant}Implementation")
-            val implConfig = configurations.findByName("implementation")
-            val allDeps = (variantConfig?.dependencies.orEmpty() + implConfig?.dependencies.orEmpty())
-            allDeps.mapNotNull { dep ->
-                when {
-                    dep is ProjectDependency -> {
-                        val path = dep.projectPathCompat()
-                        if (path in protectedPaths) "$variant -> $path" else null
-                    }
-                    dep is org.gradle.api.artifacts.ExternalModuleDependency && dep.group in DEVCONSOLE_GROUPS && dep.name == "devconsole" -> "$variant -> ${dep.group}:${dep.name}"
-                    else -> null
-                }
+        // One verifier task per protected variant, never a single shared one. A shared task carries
+        // every protected variant's runtime classpath and packaged artifact as its own inputs, so
+        // wiring it onto assemble<Variant> made building one variant resolve -- and on a flavored
+        // project fully build -- every other protected variant too: `assembleProductionRelease`
+        // dragged `dexBuilderStagingRelease`, `bundleStagingRelease` and every other flavor's
+        // dependency download into the graph. Per-variant tasks keep each variant's inputs to itself.
+        val verifiers = protectedVariants.map { variant ->
+            val verifier = tasks.register<VerifyDevConsoleProtectedArtifactsTask>(
+                "verify${variant.capitalized()}DevConsoleProtectedArtifacts",
+            ) {
+                group = "verification"
+                dependsOn(report)
+                packagedVerificationTasks[variant]?.let { packaged -> dependsOn(packaged) }
+                violations.set(declaredViolations(variant, protectedPaths))
+                resolvedRuntimeComponents.put(variant, resolvedRuntimeComponents(variant))
+                protectedProjectPaths.set(protectedPaths)
+                failOnUnsafeVariant.set(extension.failBuildOnUnsafeVariant)
             }
-        }
-        // Walk each protected variant's runtime dependency *graph* lazily (at task execution) so
-        // transitive inclusion of the full runtime is caught too. The graph (resolutionResult) yields
-        // component identities without resolving artifact files, which for an Android classpath is
-        // ambiguous across artifact types.
-        val resolvedComponents = protectedVariants.map { variant ->
-            val classpath = configurations.findByName("${variant}RuntimeClasspath")
-                ?: error(
-                    "DevConsole: protected variant '$variant' has no '${variant}RuntimeClasspath' " +
-                        "configuration, so its transitive dependency graph cannot be verified. This " +
-                        "usually means io.github.devconsole-android was applied before " +
-                        "com.android.application (or com.android.library) in the `plugins {}` block, " +
-                        "or '$variant' is a build-type name that does not correspond to a real " +
-                        "variant on a flavored project (e.g. 'release' instead of " +
-                        "'productionRelease'). Apply com.android.application (or com.android.library) " +
-                        "before io.github.devconsole-android, or ensure enabledVariants / " +
-                        "protectedVariantPatterns reference actual variant names.",
-                )
-            variant to classpath.incoming.resolutionResult.rootComponent.map { root ->
-                val seen = linkedSetOf<String>()
-                val queue = ArrayDeque(root.dependencies)
-                while (queue.isNotEmpty()) {
-                    val dependency = queue.removeFirst() as? ResolvedDependencyResult ?: continue
-                    val selected = dependency.selected
-                    val identity =
-                        when (val componentId = selected.id) {
-                            is ProjectComponentIdentifier -> "project ${componentId.projectPath}"
-                            else -> componentId.displayName
-                        }
-                    if (seen.add(identity)) queue.addAll(selected.dependencies)
-                }
-                seen.toList()
-            }
-        }
-        val verifier = tasks.register<VerifyDevConsoleProtectedArtifactsTask>("verifyDevConsoleProtectedArtifacts") {
-            group = "verification"
-            dependsOn(report)
-            dependsOn(packagedVerificationTasks)
-            this.violations.set(violations)
-            resolvedComponents.forEach { (variant, provider) -> resolvedRuntimeComponents.put(variant, provider) }
-            protectedProjectPaths.set(protectedPaths)
-            this.failOnUnsafeVariant.set(extension.failBuildOnUnsafeVariant)
-        }
-        tasks.findByName("check")?.let { checkTask ->
-            checkTask.dependsOn(verifier)
-        }
-        // `check` alone is not enough: `./gradlew bundleRelease && upload` (or `assembleRelease`)
-        // never runs `check` and previously got zero enforcement. Wire the verifier as a dependency of
-        // every protected variant's assemble<Variant>/bundle<Variant> task too, so building the
-        // protected artifact itself always runs the checks. tasks.matching { }.configureEach { } is
-        // lazy and safe even when a task name does not exist for this project type (e.g.
-        // bundle<Variant> on a library module, which has no bundle task) -- it never forces the task
-        // to be created, it just configures it if and when it is.
-        protectedVariants.forEach { variant ->
+            // `check` alone is not enough: `./gradlew bundleRelease && upload` (or `assembleRelease`)
+            // never runs `check` and previously got zero enforcement. Wire the verifier as a dependency
+            // of this variant's own assemble<Variant>/bundle<Variant> task too, so building the
+            // protected artifact itself always runs the checks. tasks.matching { }.configureEach { } is
+            // lazy and safe even when a task name does not exist for this project type (e.g.
+            // bundle<Variant> on a library module, which has no bundle task) -- it never forces the task
+            // to be created, it just configures it if and when it is.
             val capitalized = variant.capitalized()
             tasks.matching { it.name == "assemble$capitalized" }.configureEach { it.dependsOn(verifier) }
             tasks.matching { it.name == "bundle$capitalized" }.configureEach { it.dependsOn(verifier) }
+            verifier
+        }
+        // Aggregate lifecycle task: the name hosts and CI already invoke, and what `check` hangs off.
+        // Asking for it explicitly still verifies every protected variant -- it just is no longer on
+        // any single variant's build path.
+        val aggregate = tasks.register("verifyDevConsoleProtectedArtifacts") { task ->
+            task.group = "verification"
+            task.description = "Verifies every protected variant excludes the full DevConsole runtime."
+            task.dependsOn(verifiers)
+        }
+        tasks.findByName("check")?.let { checkTask ->
+            checkTask.dependsOn(aggregate)
+        }
+    }
+
+    /** Violations found among a protected variant's *declared* dependencies. */
+    private fun Project.declaredViolations(
+        variant: String,
+        protectedPaths: Set<String>,
+    ): List<String> {
+        val variantConfig = configurations.findByName("${variant}Implementation")
+        val implConfig = configurations.findByName("implementation")
+        val allDeps = (variantConfig?.dependencies.orEmpty() + implConfig?.dependencies.orEmpty())
+        return allDeps.mapNotNull { dep ->
+            when {
+                dep is ProjectDependency -> {
+                    val path = dep.projectPathCompat()
+                    if (path in protectedPaths) "$variant -> $path" else null
+                }
+                dep is org.gradle.api.artifacts.ExternalModuleDependency && dep.group in DEVCONSOLE_GROUPS && dep.name == "devconsole" -> "$variant -> ${dep.group}:${dep.name}"
+                else -> null
+            }
+        }
+    }
+
+    /**
+     * Walks a protected variant's runtime dependency *graph* lazily (at task execution) so transitive
+     * inclusion of the full runtime is caught too. The graph (resolutionResult) yields component
+     * identities without resolving artifact files, which for an Android classpath is ambiguous across
+     * artifact types.
+     */
+    private fun Project.resolvedRuntimeComponents(variant: String): org.gradle.api.provider.Provider<List<String>> {
+        val classpath = configurations.findByName("${variant}RuntimeClasspath")
+            ?: error(
+                "DevConsole: protected variant '$variant' has no '${variant}RuntimeClasspath' " +
+                    "configuration, so its transitive dependency graph cannot be verified. This " +
+                    "usually means io.github.devconsole-android was applied before " +
+                    "com.android.application (or com.android.library) in the `plugins {}` block, " +
+                    "or '$variant' is a build-type name that does not correspond to a real " +
+                    "variant on a flavored project (e.g. 'release' instead of " +
+                    "'productionRelease'). Apply com.android.application (or com.android.library) " +
+                    "before io.github.devconsole-android, or ensure enabledVariants / " +
+                    "protectedVariantPatterns reference actual variant names.",
+            )
+        return classpath.incoming.resolutionResult.rootComponent.map { root ->
+            val seen = linkedSetOf<String>()
+            val queue = ArrayDeque(root.dependencies)
+            while (queue.isNotEmpty()) {
+                val dependency = queue.removeFirst() as? ResolvedDependencyResult ?: continue
+                val selected = dependency.selected
+                val identity =
+                    when (val componentId = selected.id) {
+                        is ProjectComponentIdentifier -> "project ${componentId.projectPath}"
+                        else -> componentId.displayName
+                    }
+                if (seen.add(identity)) queue.addAll(selected.dependencies)
+            }
+            seen.toList()
         }
     }
 }

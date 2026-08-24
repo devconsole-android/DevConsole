@@ -65,17 +65,30 @@ artifact, but only `PROTECTED` variants fail the build if the full runtime shows
 
 ## `devConsoleVariantReport` and `verifyDevConsoleProtectedArtifacts`
 
-Two tasks come with the plugin:
+The plugin registers:
 
 - `devConsoleVariantReport` writes `build/reports/devconsole/variants.json` listing the effective
   policy (`ENABLED`/`DISABLED`/`PROTECTED`) for every variant.
-- `verifyDevConsoleProtectedArtifacts` inspects each protected variant's dependency graph for a
-  direct `ProjectDependency` on any path in `protectedDependencyPaths`, and fails the build if one
-  is found. Run it as part of your release checklist — the three sample apps run it in CI on every
-  push (see [`.github/workflows/verify.yml`](../.github/workflows/verify.yml)).
+- `verify<Variant>DevConsoleProtectedArtifacts` — one task per protected variant — inspects that
+  variant's dependency graph for a direct `ProjectDependency` on any path in
+  `protectedDependencyPaths`, and fails the build if one is found. Each variant's
+  `assemble<Variant>` and `bundle<Variant>` depends on its own verifier, so building a protected
+  artifact always runs its checks.
+- `verifyDevConsoleProtectedArtifacts` is the aggregate: it depends on every per-variant verifier,
+  and `check` hangs off it. Run it as part of your release checklist — the three sample apps run it
+  in CI on every push (see [`.github/workflows/verify.yml`](../.github/workflows/verify.yml)).
 
 ```bash
 ./gradlew :app:assembleRelease :app:verifyDevConsoleProtectedArtifacts
+```
+
+On a flavored project, ask for the variant you are actually shipping. The aggregate verifies *every*
+protected variant, so on a project with `production`/`staging`/`partner` flavors it resolves — and
+builds — all three release variants:
+
+```bash
+./gradlew :app:assembleProductionRelease                              # verifies productionRelease only
+./gradlew :app:verifyProductionReleaseDevConsoleProtectedArtifacts    # the same check, on its own
 ```
 
 ## Full/no-op parity
