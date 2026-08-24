@@ -131,8 +131,8 @@ public final class MainActivity extends Activity {
                 if (DevConsole.accessInfo() != null) {
                     showConnectUrl(DevConsole.accessInfo().getConnectUrl());
                 }
-                // Poll while running: a browser exchange consumes the displayed code and
-                // the SDK mints a fresh one; a one-shot read would keep advertising the dead URL.
+                // Poll while running so either access mode updates the displayed URL after a
+                // restart; SESSION_CODE also re-issues the code after a browser consumes it.
                 mainHandler.postDelayed(this, CONNECT_URL_POLL_MS);
             } else if (state == DevConsoleState.Starting.INSTANCE) {
                 mainHandler.postDelayed(this, 50L);
@@ -319,8 +319,8 @@ public final class MainActivity extends Activity {
     private void copyConnectUrlIfAvailable() {
         if (connectUrl == null) return;
         ClipboardManager clipboard = getSystemService(ClipboardManager.class);
-        clipboard.setPrimaryClip(ClipData.newPlainText("DevConsole session credential", connectUrl));
-        Toast.makeText(this, "Session credential copied -- keep it private", Toast.LENGTH_SHORT).show();
+        clipboard.setPrimaryClip(ClipData.newPlainText("DevConsole dashboard URL", connectUrl));
+        Toast.makeText(this, connectUrl.contains("#code=") ? "Session code copied -- keep it private" : "Dashboard URL copied", Toast.LENGTH_SHORT).show();
     }
 
     private void sendRequest(String url, String successLabel) {
@@ -469,14 +469,19 @@ public final class MainActivity extends Activity {
 
     private void showConnectUrl(String url) {
         connectUrl = url;
-        String message = "Tap to copy the session credential: " + url + "\n\n"
+        boolean usesSessionCode = url.contains("#code=");
+        String message = (usesSessionCode
+                ? "Tap to copy the session-code URL: " + url + "\n\n"
                 + "This is a full, single-use session credential -- the same code also renders as a QR on "
                 + "the dashboard's More screen once you're connected. Treat it like a password.\n\n"
+                : "Tap to copy the dashboard URL: " + url + "\n\n"
+                + "No session code is required in the default open mode. Use SESSION_CODE before sharing "
+                + "a LAN-bound dashboard on an untrusted network.\n\n")
                 + "This debugging session uses local-network HTTP. Other participants on an untrusted network "
                 + "may observe or modify traffic. Use ADB localhost mode or a trusted isolated network for sensitive testing.";
         lastResponse.setText(message);
         lastResponse.setClickable(true);
-        lastResponse.setContentDescription(message + " Double tap to copy the session credential.");
+        lastResponse.setContentDescription(message + " Double tap to copy the dashboard URL.");
     }
 
     /**

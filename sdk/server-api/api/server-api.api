@@ -488,8 +488,11 @@ public final class io/devconsole/server/api/SessionAuthority {
 	public fun <init> ()V
 	public fun <init> (Lkotlin/jvm/functions/Function0;JILjava/security/SecureRandom;)V
 	public synthetic fun <init> (Lkotlin/jvm/functions/Function0;JILjava/security/SecureRandom;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun configureBrowserAuthentication (Z)V
 	public final fun configurePolicy (Lio/devconsole/server/api/SessionPolicy;)Z
 	public final fun isAuthorized (Ljava/lang/String;)Z
+	public final fun isBrowserAuthenticationRequired ()Z
+	public final fun openAccessSession ()Lio/devconsole/server/api/BrowserSession;
 	public final fun principals ()Ljava/util/List;
 	public final fun purgeExpired ()V
 	public final fun refresh (Ljava/lang/String;)Lio/devconsole/server/api/BrowserSession;

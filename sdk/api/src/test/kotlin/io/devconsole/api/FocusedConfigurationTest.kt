@@ -112,6 +112,23 @@ class FocusedConfigurationTest {
         assertEquals(100L * 1024L * 1024L, retention.maxBytes)
         assertEquals(BrowserBinding.AUTO, browser.binding)
         assertEquals(8080..8099, browser.portRange)
+        assertEquals(BrowserSecurity.NONE, DevConsoleConfig.default().browserSecurity)
+    }
+
+    @Test
+    fun `browser security is opt in and participates in config copies`() {
+        val secured = DevConsoleConfig.default().withBrowserSecurity(BrowserSecurity.SESSION_CODE)
+
+        assertEquals(BrowserSecurity.SESSION_CODE, secured.browserSecurity)
+        assertFalse(secured.runtimeEquivalentTo(DevConsoleConfig.default()))
+        assertEquals(
+            BrowserSecurity.SESSION_CODE,
+            DevConsoleConfig
+                .builder()
+                .browserSecurity(BrowserSecurity.SESSION_CODE)
+                .build()
+                .browserSecurity,
+        )
     }
 
     @Test

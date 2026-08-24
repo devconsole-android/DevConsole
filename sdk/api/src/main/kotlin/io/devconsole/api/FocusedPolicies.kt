@@ -23,9 +23,10 @@ private const val DEFAULT_PORT_RANGE_END = 8099
  * [LOOPBACK] to rule that out, or [LAN] to fail loudly instead of settling. See the KDoc on
  * [BindingMode] and `docs/THREAT_MODEL.md`.
  *
- * Choosing [LAN] here has one practical edge over [AUTO] on this surface: an unpermitted LAN start
- * surfaces [StartResult.PermissionRequired] through the More screen's own state polling, which is
- * how the inspector prompts for `ACCESS_LOCAL_NETWORK`. [AUTO] binds loopback instead of prompting.
+ * The SDK-owned More screen preflights the platform's LAN permission for both [AUTO] and [LAN], so
+ * its preferred network URL is not silently replaced by loopback merely because the grant has not
+ * been requested yet. A host-issued [StartRequest] keeps its explicit API contract: [BindingMode.AUTO]
+ * may still fall back to loopback, while [BindingMode.LAN] returns [StartResult.PermissionRequired].
  */
 enum class BrowserBinding { LOOPBACK, LAN, AUTO }
 
@@ -54,9 +55,24 @@ data class RetentionPolicy(
     }
 }
 
-/** SESSION_CODE is the only browser-access flow; there is no longer an access-mode field to set. */
+/**
+ * Browser authentication policy.
+ *
+ * [NONE] is the developer-friendly default: the dashboard opens directly at the server URL and
+ * does not require a per-start credential. It is appropriate for a trusted local development
+ * workflow, especially with [BrowserBinding.LOOPBACK]. [SESSION_CODE] restores the single-use,
+ * expiring URL credential for hosts that expose the dashboard over a shared network.
+ */
+enum class BrowserSecurity { NONE, SESSION_CODE }
+
+/** Network binding and session-code timing for the browser server. */
 data class BrowserConfig(
     val binding: BrowserBinding = BrowserBinding.AUTO,
+    /**
+     * Ports tried in order, so 8080 stays the preferred address while the range leaves room for a
+     * second app (or a second start before the first server stopped) to land on the next free port
+     * instead of failing with [StartResult.PortUnavailable].
+     */
     val portRange: IntRange = DEFAULT_PORT_RANGE_START..DEFAULT_PORT_RANGE_END,
     val sessionCodeTtlMs: Long = DEFAULT_SESSION_CODE_TTL_MS,
 ) {

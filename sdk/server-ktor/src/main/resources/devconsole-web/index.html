@@ -70,7 +70,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <span class="brand-logo"><svg class="ic brand-mark" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" stroke="currentColor" stroke-opacity=".35"/><circle cx="11" cy="11" r="6" stroke="currentColor" stroke-opacity=".6"/><circle cx="11" cy="11" r="2.4" fill="currentColor" stroke="none"/></svg></span>
     <span class="brand-name">DevConsole</span>
   </div>
-  <span class="host-line" id="hostLine" title="The device's More screen shows the connect QR and an 8-character, single-use code">Not connected — see the device's More screen for the connect QR</span>
+  <span class="host-line" id="hostLine" title="The device's More screen shows the dashboard URL; SESSION_CODE also shows a single-use code">Not connected — see the device's More screen for the dashboard URL</span>
   <div class="session-pill">
     <span class="dot" id="lamp"></span>
     <span class="label" id="status" title="Open DevConsole on the device, tap More, then scan the QR or copy the link — it shows on screen, never in logcat">Open DevConsole on device → More → scan the QR</span>
@@ -151,7 +151,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       </div>
       <div id="overviewCrashBanner" hidden></div>
       <div class="metric-strip" id="overviewMetrics"></div>
-      <div id="overviewCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-lock"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR, or paste the session code below to inspect this session.</div></div></div>
+      <div id="overviewCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-lock"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open the dashboard URL from DevConsole → More. Open mode loads directly; SESSION_CODE mode uses the QR or code shown there.</div></div></div>
     </section>
 
     <!-- TIMELINE -->
@@ -189,11 +189,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <div class="list-body" id="events" aria-label="Events"><div class="empty-state empty-connect">
             <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-activity"/></svg>
             <div class="empty-title">Not connected yet</div>
-            <div class="empty-sub">The unified event tail appears here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code.</div>
+            <div class="empty-sub">The unified event tail appears here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</div>
             <ul class="connect-steps">
-              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential — a bare <code class="inline-code">http://host:port/</code> address alone stays unauthenticated forever.</li>
+              <li>Open mode accepts the bare <code class="inline-code">http://host:port/</code> address. In SESSION_CODE mode, the <code class="inline-code">#code=</code> fragment is the credential.</li>
               <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
-              <li>Scan the QR, or paste the code into <strong>Overview</strong> — either connects this browser.</li>
+              <li>Open the URL directly, or scan the QR/paste the code when SESSION_CODE is enabled.</li>
             </ul>
           </div></div>
           <div class="list-foot"><span id="timelineFootLeft"></span><span id="timelineFootRight"></span></div>
@@ -272,11 +272,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <div class="list-body" id="transactions" aria-label="Transactions"><div class="empty-state empty-connect">
             <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-network"/></svg>
             <div class="empty-title">Not connected yet</div>
-            <div class="empty-sub">Captured HTTP transactions appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code.</div>
+            <div class="empty-sub">Captured HTTP transactions appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</div>
             <ul class="connect-steps">
-              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential — a bare <code class="inline-code">http://host:port/</code> address alone stays unauthenticated forever.</li>
+              <li>Open mode accepts the bare <code class="inline-code">http://host:port/</code> address. In SESSION_CODE mode, the <code class="inline-code">#code=</code> fragment is the credential.</li>
               <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
-              <li>Scan the QR, or paste the code into <strong>Overview</strong> — either connects this browser.</li>
+              <li>Open the URL directly, or scan the QR/paste the code when SESSION_CODE is enabled.</li>
             </ul>
           </div></div>
           <div class="list-foot"><span id="networkFootLeft"></span><span id="networkFootRight"></span></div>
@@ -351,11 +351,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <div class="list-body" id="sockets" aria-label="Socket connections"><div class="empty-state empty-connect">
             <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-sockets"/></svg>
             <div class="empty-title">Not connected yet</div>
-            <div class="empty-sub">WebSocket connections and frames appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code.</div>
+            <div class="empty-sub">WebSocket connections and frames appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</div>
             <ul class="connect-steps">
-              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential — a bare <code class="inline-code">http://host:port/</code> address alone stays unauthenticated forever.</li>
+              <li>Open mode accepts the bare <code class="inline-code">http://host:port/</code> address. In SESSION_CODE mode, the <code class="inline-code">#code=</code> fragment is the credential.</li>
               <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
-              <li>Scan the QR, or paste the code into <strong>Overview</strong> — either connects this browser.</li>
+              <li>Open the URL directly, or scan the QR/paste the code when SESSION_CODE is enabled.</li>
             </ul>
           </div></div>
           <div class="list-foot"><span id="socketFootLeft"></span><span id="socketFootRight"></span></div>
@@ -398,11 +398,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <div class="list-body" id="pushEvents" aria-label="Push events"><div class="empty-state empty-connect">
             <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-push"/></svg>
             <div class="empty-title">Not connected yet</div>
-            <div class="empty-sub">Captured push lifecycle events appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code.</div>
+            <div class="empty-sub">Captured push lifecycle events appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</div>
             <ul class="connect-steps">
-              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential — a bare <code class="inline-code">http://host:port/</code> address alone stays unauthenticated forever.</li>
+              <li>Open mode accepts the bare <code class="inline-code">http://host:port/</code> address. In SESSION_CODE mode, the <code class="inline-code">#code=</code> fragment is the credential.</li>
               <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
-              <li>Scan the QR, or paste the code into <strong>Overview</strong> — either connects this browser.</li>
+              <li>Open the URL directly, or scan the QR/paste the code when SESSION_CODE is enabled.</li>
             </ul>
           </div></div>
           <div class="list-foot"><span id="pushFootLeft"></span><span id="pushFootRight"></span></div>
@@ -442,11 +442,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <div class="list-body" id="crashesList" aria-label="Crashes"><div class="empty-state empty-connect">
             <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-bug"/></svg>
             <div class="empty-title">Not connected yet</div>
-            <div class="empty-sub">Crashes and ANRs appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code.</div>
+            <div class="empty-sub">Crashes and ANRs appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</div>
             <ul class="connect-steps">
-              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential — a bare <code class="inline-code">http://host:port/</code> address alone stays unauthenticated forever.</li>
+              <li>Open mode accepts the bare <code class="inline-code">http://host:port/</code> address. In SESSION_CODE mode, the <code class="inline-code">#code=</code> fragment is the credential.</li>
               <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
-              <li>Scan the QR, or paste the code into <strong>Overview</strong> — either connects this browser.</li>
+              <li>Open the URL directly, or scan the QR/paste the code when SESSION_CODE is enabled.</li>
             </ul>
           </div></div>
           <div class="list-foot"><span id="crashesFootLeft"></span><span id="crashesFootRight"></span></div>

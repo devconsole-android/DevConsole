@@ -24,6 +24,10 @@ data class SessionPolicy(
 
 data class StartRequest(
     val bindingMode: BindingMode = BindingMode.LAN,
+    /**
+     * Ports tried in ascending order, so 8080 is preferred and the rest of the range absorbs a
+     * second app on the device (or a restart before the previous server released the port).
+     */
     val portRange: IntRange = 8080..8099,
     val sessionCodeTtlMs: Long = SessionCodeAuthority.DEFAULT_SESSION_CODE_TTL_MS,
 )
@@ -208,6 +212,14 @@ class SessionAuthority(
     private val sessionMetadata = mutableMapOf<String, SessionIdentity>()
     private var policy = SessionPolicy(maxAuthenticatedSessions = maxAuthenticatedSessions)
 
+    /**
+     * The low-level Ktor module historically defaulted to authenticated browser sessions. The
+     * full SDK can switch this off for its developer-friendly [openAccessSession] mode without
+     * changing the session store or the explicit SESSION_CODE flow.
+     */
+    @Volatile
+    private var browserAuthenticationRequired = true
+
     init {
         require(sessionTtlMs > 0) { "sessionTtlMs must be positive" }
         require(maxAuthenticatedSessions > 0) { "maxAuthenticatedSessions must be positive" }
@@ -229,6 +241,26 @@ class SessionAuthority(
         sessions.clear()
         sessionMetadata.clear()
     }
+
+    /** Configures whether browser requests must present a session credential. */
+    fun configureBrowserAuthentication(required: Boolean) {
+        browserAuthenticationRequired = required
+    }
+
+    /** True when the browser server must authenticate each request with a minted session. */
+    fun isBrowserAuthenticationRequired(): Boolean = browserAuthenticationRequired
+
+    /**
+     * Stable synthetic identity used only while browser authentication is disabled. It is never
+     * stored, never counted as an authenticated principal, and carries no usable credential.
+     */
+    fun openAccessSession(): BrowserSession =
+        BrowserSession(
+            id = OPEN_ACCESS_SESSION_ID,
+            token = "",
+            csrfToken = "",
+            expiresAtEpochMs = Long.MAX_VALUE,
+        )
 
     @Synchronized
     fun purgeExpired() {
@@ -307,14 +339,22 @@ class SessionAuthority(
 
     @Synchronized
     fun isAuthorized(token: String): Boolean =
-        sessions.values.any { session ->
-            constantTimeEquals(token, session.token) && session.expiresAtEpochMs > nowEpochMs()
+        if (!browserAuthenticationRequired) {
+            true
+        } else {
+            sessions.values.any { session ->
+                constantTimeEquals(token, session.token) && session.expiresAtEpochMs > nowEpochMs()
+            }
         }
 
     @Synchronized
     fun sessionForToken(token: String): BrowserSession? =
-        sessions.values.firstOrNull { session ->
-            constantTimeEquals(token, session.token) && session.expiresAtEpochMs > nowEpochMs()
+        if (!browserAuthenticationRequired) {
+            openAccessSession()
+        } else {
+            sessions.values.firstOrNull { session ->
+                constantTimeEquals(token, session.token) && session.expiresAtEpochMs > nowEpochMs()
+            }
         }
 
     @OptIn(ExperimentalEncodingApi::class)
@@ -331,6 +371,7 @@ class SessionAuthority(
     companion object {
         const val DEFAULT_SESSION_TTL_MS: Long = 30 * 60 * 1000L
         const val DEFAULT_MAX_AUTHENTICATED_SESSIONS: Int = 10
+        private const val OPEN_ACCESS_SESSION_ID = "open-browser"
         private const val TOKEN_BYTE_LENGTH = 32
         private const val MAX_BROWSER_LABEL_LENGTH = 128
     }

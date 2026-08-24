@@ -116,7 +116,8 @@ object DevConsole {
      * safer ADB-only choice on an untrusted network. See `docs/THREAT_MODEL.md` at the repository root.
      *
      * @param request binding mode and port range for this start attempt. Defaults to AUTO on
-     *   `8080..8099`.
+     *   `8080..8099` -- 8080 is preferred, and the rest of the range absorbs a second app on the
+     *   device or a restart before the previous server released the port.
      * @return a [StartResult] -- [StartResult.Started] carries the bound [io.devconsole.api.BrowserEndpoint]
      *   and the session [io.devconsole.api.AccessInfo] (the connect URL/code); every other variant is a
      *   reason it didn't start (see [StartResult]'s KDoc for what each one means and whether it's

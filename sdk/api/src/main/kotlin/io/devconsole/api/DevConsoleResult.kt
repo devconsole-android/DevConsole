@@ -39,7 +39,7 @@ sealed interface InitResult {
 
 /** Outcome of [io.devconsole.DevConsole.startBrowser] / `startBrowserAsync`. */
 sealed interface StartResult {
-    /** The server bound successfully. [endpoint] is where it's listening; [access] is the session credential. */
+    /** The server bound successfully. [endpoint] is where it listens; [access] describes browser access. */
     data class Started(
         val endpoint: BrowserEndpoint,
         val access: AccessInfo,
@@ -63,7 +63,7 @@ sealed interface StartResult {
         val permission: String,
     ) : StartResult
 
-    /** Every port in [attempted] was already in use. Retry with a different [StartRequest.portRange]. */
+    /** Every port in [attempted] was already in use. Free one or provide a wider port range. */
     data class PortUnavailable(
         val attempted: IntRange,
     ) : StartResult

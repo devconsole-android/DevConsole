@@ -2,6 +2,9 @@ package io.devconsole.ui.compose
 
 import io.devconsole.api.CaptureCategory
 import io.devconsole.api.ScreenshotResult
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 data class InspectorEditingUi(
     val requestExecution: Boolean = false,
@@ -344,12 +347,13 @@ data class InspectorHealthUi(
 data class InspectorBrowserUi(
     val binding: String,
     val endpoint: String?,
-    /** Authenticated browsers, mirroring the dashboard's Session view; see [InspectorAction.RevokePrincipal]. */
+    /** Authenticated browsers, mirroring the dashboard's Session view; open mode has none. */
     val principals: List<InspectorBrowserPrincipalUi> = emptyList(),
     /**
-     * Populated while a session code is live (unexpired). [sessionCodeUrl] is the fragment URL a
-     * browser would open; [sessionCode] is the same 8-character code shown standalone for manual
-     * entry. Null once the server stops or the code expires with no fallback.
+     * In open mode, [sessionCodeUrl] is the bare URL and [sessionCode] is empty. In SESSION_CODE
+     * mode, these are populated while a code is live (unexpired): [sessionCodeUrl] is the fragment
+     * URL a browser would open and [sessionCode] is the same 8-character code shown standalone for
+     * manual entry. Null once the server stops or the code expires with no fallback.
      */
     val sessionCodeUrl: String? = null,
     val sessionCode: String? = null,
@@ -691,11 +695,21 @@ object DevConsoleInspectorBridge {
     @Volatile
     private var installedSource: InspectorDataSource = UnavailableInspectorDataSource
 
+    private val serverStateChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
     fun install(source: InspectorDataSource) {
         installedSource = source
     }
 
     fun source(): InspectorDataSource = installedSource
+
+    /** Emits an immediate refresh signal when the full runtime changes server lifecycle state. */
+    fun notifyServerStateChanged() {
+        serverStateChanges.tryEmit(Unit)
+    }
+
+    /** Process-local lifecycle signals consumed by SDK-owned inspector ViewModels. */
+    fun serverStateChanges(): Flow<Unit> = serverStateChanges.asSharedFlow()
 
     fun reset() {
         installedSource = UnavailableInspectorDataSource

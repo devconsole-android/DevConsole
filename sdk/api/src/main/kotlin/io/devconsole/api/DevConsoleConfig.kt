@@ -52,6 +52,13 @@ data class DevConsoleConfig(
     var browserConfig: BrowserConfig = BrowserConfig()
         private set
 
+    /**
+     * Browser authentication is off by default for local developer convenience. Set
+     * [BrowserSecurity.SESSION_CODE] before exposing a LAN-bound server on a shared network.
+     */
+    var browserSecurity: BrowserSecurity = BrowserSecurity.NONE
+        private set
+
     /** Uncaught-exception / ANR capture depth. See [CrashPolicy] for the enable gates and caps. */
     var crashPolicy: CrashPolicy = CrashPolicy()
         private set
@@ -109,6 +116,8 @@ data class DevConsoleConfig(
         }
 
     fun withBrowserConfig(value: BrowserConfig): DevConsoleConfig = duplicate().also { it.browserConfig = value }
+
+    fun withBrowserSecurity(value: BrowserSecurity): DevConsoleConfig = duplicate().also { it.browserSecurity = value }
 
     fun withCrashPolicy(value: CrashPolicy): DevConsoleConfig = duplicate().also { it.crashPolicy = value }
 
@@ -170,6 +179,7 @@ data class DevConsoleConfig(
             editingCapabilities == other.editingCapabilities &&
             retentionPolicy == other.retentionPolicy &&
             browserConfig == other.browserConfig &&
+            browserSecurity == other.browserSecurity &&
             crashPolicy == other.crashPolicy &&
             screenshotPolicy == other.screenshotPolicy &&
             captureCategories == other.captureCategories &&
@@ -183,6 +193,7 @@ data class DevConsoleConfig(
             it.editingCapabilities = editingCapabilities
             it.retentionPolicy = retentionPolicy
             it.browserConfig = browserConfig
+            it.browserSecurity = browserSecurity
             it.crashPolicy = crashPolicy
             it.screenshotPolicy = screenshotPolicy
             it.captureCategories = captureCategories
@@ -205,6 +216,7 @@ data class DevConsoleConfig(
         private var editingCapabilities = EditingCapabilities()
         private var retentionPolicy: RetentionPolicy? = null
         private var browserConfig = BrowserConfig()
+        private var browserSecurity = BrowserSecurity.NONE
         private var crashPolicy = CrashPolicy()
         private var screenshotPolicy = ScreenshotPolicy()
         private var captureCategories: Set<CaptureCategory> = CaptureCategory.all()
@@ -235,6 +247,8 @@ data class DevConsoleConfig(
 
         fun browserConfig(value: BrowserConfig) = apply { browserConfig = value }
 
+        fun browserSecurity(value: BrowserSecurity) = apply { browserSecurity = value }
+
         fun crashPolicy(value: CrashPolicy) = apply { crashPolicy = value }
 
         fun screenshotPolicy(value: ScreenshotPolicy) = apply { screenshotPolicy = value }
@@ -261,6 +275,7 @@ data class DevConsoleConfig(
                     .withSessionPolicy(sessionPolicy)
                     .withEditingCapabilities(editingCapabilities)
                     .withBrowserConfig(browserConfig)
+                    .withBrowserSecurity(browserSecurity)
                     .withCrashPolicy(crashPolicy)
                     .withScreenshotPolicy(screenshotPolicy)
                     .withCaptureCategories(captureCategories)

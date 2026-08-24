@@ -4,6 +4,7 @@
  */
 package io.devconsole.gradle
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -14,9 +15,9 @@ import java.io.File
  * no-op-shaped code is present, but that only exercises fixture projects built inside the test.
  * This is the complementary, much cheaper check on the real repository: the no-op modules a
  * release variant is meant to depend on (`sdk:noop` and the `-noop` capture adapters) must never
- * themselves declare a dependency on a full/enabled-side module. If one did, R8/proguard
- * shrinking would be the *only* thing keeping server/dashboard/capture code out of a protected
- * build -- the two-coordinate story (`releaseImplementation(project(":sdk:noop"))` etc., see
+ * themselves declare a dependency on a full/enabled-side module or Android permission. If one did,
+ * R8/proguard shrinking would be the *only* thing keeping server/dashboard/capture code out of a
+ * protected build -- the two-coordinate story (`releaseImplementation(project(":sdk:noop"))` etc., see
  * `samples/foundation-app/build.gradle.kts`) would already have failed to keep it out at the
  * dependency-graph level.
  *
@@ -80,6 +81,22 @@ class NoopRuntimeExcludesFullModulesTest {
                     "build using this module would pull in server/dashboard/capture code that R8 shrinking " +
                     "is not guaranteed to strip, defeating the two-coordinate debug/release story",
                 forbidden.isEmpty(),
+            )
+        }
+    }
+
+    @Test
+    fun `no-op modules do not declare Android permissions`() {
+        val repoRoot = repoRoot()
+
+        noopModules.forEach { moduleRelativePath ->
+            val manifest = File(repoRoot, "$moduleRelativePath/src/main/AndroidManifest.xml")
+            if (!manifest.exists()) return@forEach
+
+            assertFalse(
+                "$moduleRelativePath declares a permission in its no-op manifest; release variants " +
+                    "must not inherit DevConsole permissions from the no-op side",
+                Regex("<uses-permission\\b").containsMatchIn(manifest.readText()),
             )
         }
     }

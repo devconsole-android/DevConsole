@@ -4,6 +4,7 @@
  */
 package io.devconsole
 
+import android.Manifest
 import androidx.test.core.app.ApplicationProvider
 import io.devconsole.api.BindingMode
 import io.devconsole.api.BrowserBinding
@@ -18,9 +19,11 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -37,6 +40,12 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class PlatformFacadeProviderMoreScreenBindingTest {
+    @Before
+    fun grantNearbyWifiForLanAssertions() {
+        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>())
+            .grantPermissions(Manifest.permission.NEARBY_WIFI_DEVICES)
+    }
+
     @Test
     fun `More screen start binds LAN when the host configured LAN`() =
         runTest {

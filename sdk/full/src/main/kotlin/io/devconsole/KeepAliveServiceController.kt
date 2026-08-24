@@ -8,9 +8,10 @@ import android.content.Context
 import androidx.core.content.ContextCompat
 
 /**
- * Bridges server lifecycle to [DevConsoleForegroundService]. Kept out of PlatformFacadeProvider
- * so the gate check, the start/stop intents, and the never-throw guarantee are testable without
- * booting the whole facade.
+ * Bridges server lifecycle to [DevConsoleForegroundService]. The full runtime enables this by
+ * default through its manifest; the gate remains as a defensive boundary. Kept out of
+ * PlatformFacadeProvider so the gate check, the start/stop intents, and the never-throw guarantee
+ * are testable without booting the whole facade.
  */
 internal class KeepAliveServiceController(
     private val gate: KeepAliveGate,

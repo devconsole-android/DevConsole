@@ -49,4 +49,17 @@ class FullInspectorDataSourceServerControlTest {
             assertTrue(dataSource.setServerRunning(false) is InspectorCommandResult.Success)
             assertEquals(listOf("start", "stop"), calls)
         }
+
+    @Test
+    fun `server start permission is exposed to the SDK-owned inspector`() {
+        val dataSource =
+            FullInspectorDataSource(
+                networkTransactionStore = InMemoryNetworkTransactionStore(NetworkCursorCodec(ByteArray(16))),
+                mockEngine = MockEngine(emptyList()),
+                configSupplier = { null },
+                serverStartPermissionSupplier = { "android.permission.POST_NOTIFICATIONS" },
+            )
+
+        assertEquals("android.permission.POST_NOTIFICATIONS", dataSource.serverStartPermission())
+    }
 }

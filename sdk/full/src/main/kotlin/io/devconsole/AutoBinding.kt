@@ -35,8 +35,10 @@ internal object AutoBinding {
 
     /**
      * Whether a failed LAN attempt is one loopback could still serve. Only reachability refusals
-     * qualify; a port clash or a bad configuration would fail identically on loopback, and retrying
-     * those would report the same error twice while hiding which bind it came from.
+     * qualify. A bad configuration fails identically on loopback, and a port clash means all 20
+     * ports in the range were taken -- an environment problem, not a LAN-specific one, so silently
+     * handing back a `127.0.0.1` URL would be worse than the honest error. Retrying either would
+     * report the same failure twice while hiding which bind it came from.
      */
     fun rescuableByLoopback(result: ServerStartResult): Boolean =
         result is ServerStartResult.NoEligibleNetwork ||

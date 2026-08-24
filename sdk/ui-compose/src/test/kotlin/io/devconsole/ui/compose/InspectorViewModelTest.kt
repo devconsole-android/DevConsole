@@ -63,6 +63,128 @@ class InspectorViewModelTest {
         }
 
     @Test
+    fun `server lifecycle signal refreshes the snapshot without waiting for polling`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = RecordingInspectorDataSource(InspectorSnapshot(available = true))
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            val stoppedSnapshot =
+                InspectorSnapshot(
+                    available = true,
+                    health = InspectorHealthUi("Stopped", 1, 0, 0),
+                )
+            source.snapshotToReturn = stoppedSnapshot
+            DevConsoleInspectorBridge.notifyServerStateChanged()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(stoppedSnapshot.health, viewModel.state.value.health)
+        }
+
+    @Test
+    fun `server start waits for the SDK permission preflight`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = PermissionRecordingInspectorDataSource(InspectorSnapshot(available = true))
+            source.serverStartPermissionToReturn = "android.permission.ACCESS_LOCAL_NETWORK"
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.SetServerRunning(true))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals("android.permission.ACCESS_LOCAL_NETWORK", viewModel.serverStartPermission.value)
+            assertEquals(0, source.setServerRunningCallCount)
+        }
+
+    @Test
+    fun `granted required server start permission starts without a second preflight`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = PermissionRecordingInspectorDataSource(InspectorSnapshot(available = true))
+            source.serverStartPermissionToReturn = "android.permission.ACCESS_LOCAL_NETWORK"
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.SetServerRunning(true))
+            dispatcher.scheduler.advanceUntilIdle()
+            viewModel.dispatch(InspectorAction.ServerStartPermissionResult(granted = true))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(1, source.setServerRunningCallCount)
+            assertNull(viewModel.serverStartPermission.value)
+        }
+
+    @Test
+    fun `source without a permission capability starts directly`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = RecordingInspectorDataSource(InspectorSnapshot(available = true))
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.SetServerRunning(true))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(1, source.setServerRunningCallCount)
+            assertNull(viewModel.serverStartPermission.value)
+        }
+
+    @Test
+    fun `denied required server start permission leaves the server stopped`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = PermissionRecordingInspectorDataSource(InspectorSnapshot(available = true))
+            source.serverStartPermissionToReturn = "android.permission.ACCESS_LOCAL_NETWORK"
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.SetServerRunning(true))
+            dispatcher.scheduler.advanceUntilIdle()
+            viewModel.dispatch(InspectorAction.ServerStartPermissionResult(granted = false))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(0, source.setServerRunningCallCount)
+            assertNull(viewModel.serverStartPermission.value)
+        }
+
+    @Test
+    fun `denied notification permission still starts the server`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = PermissionRecordingInspectorDataSource(InspectorSnapshot(available = true))
+            source.serverStartPermissionToReturn = "android.permission.POST_NOTIFICATIONS"
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.SetServerRunning(true))
+            dispatcher.scheduler.advanceUntilIdle()
+            viewModel.dispatch(InspectorAction.ServerStartPermissionResult(granted = false))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(1, source.setServerRunningCallCount)
+            assertNull(viewModel.serverStartPermission.value)
+        }
+
+    @Test
+    fun `repeated start taps keep one permission preflight in flight`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = PermissionRecordingInspectorDataSource(InspectorSnapshot(available = true))
+            source.serverStartPermissionToReturn = "android.permission.ACCESS_LOCAL_NETWORK"
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.SetServerRunning(true))
+            viewModel.dispatch(InspectorAction.SetServerRunning(true))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals("android.permission.ACCESS_LOCAL_NETWORK", viewModel.serverStartPermission.value)
+            assertEquals(0, source.setServerRunningCallCount)
+        }
+
+    @Test
     fun `empty transactions produce an empty state`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
@@ -1545,7 +1667,7 @@ private fun sampleMockRule() =
 
 private fun sampleCaptureRule() = InspectorCaptureRuleUi(id = "capture-rule-1", host = "api.example.test")
 
-private class RecordingInspectorDataSource(
+private open class RecordingInspectorDataSource(
     initialSnapshot: InspectorSnapshot = InspectorSnapshot(),
 ) : InspectorDataSource {
     var snapshotToReturn: InspectorSnapshot = initialSnapshot
@@ -1628,6 +1750,8 @@ private class RecordingInspectorDataSource(
         private set
     var captureScreenshotCallCount = 0
         private set
+    var setServerRunningCallCount = 0
+        private set
     var lastRevokedPrincipalId: String? = null
         private set
     var lastExportHarSelection: Set<String>? = null
@@ -1664,6 +1788,11 @@ private class RecordingInspectorDataSource(
         private set
 
     override fun snapshot(): InspectorSnapshot = snapshotToReturn
+
+    override fun setServerRunning(running: Boolean): InspectorCommandResult {
+        setServerRunningCallCount++
+        return InspectorCommandResult.Success(summary = if (running) "Starting server" else "Stopping server")
+    }
 
     override suspend fun flaggedTransactionIds(): Set<String> = flaggedTransactionIdsToReturn
 
@@ -1856,4 +1985,13 @@ private class RecordingInspectorDataSource(
         captureScreenshotCallCount++
         return captureScreenshotResult
     }
+}
+
+private class PermissionRecordingInspectorDataSource(
+    snapshot: InspectorSnapshot,
+) : RecordingInspectorDataSource(snapshot),
+    InspectorServerStartPermissionProvider {
+    var serverStartPermissionToReturn: String? = null
+
+    override fun serverStartPermission(): String? = serverStartPermissionToReturn
 }

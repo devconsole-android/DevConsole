@@ -2,8 +2,8 @@
  * DevConsole browser dashboard.
  *
  * Single external script (CSP: script-src 'self', no 'unsafe-inline') that drives every
- * view. All fetch routes, param names, and the session-code exchange flow are the
- * functional contract shared with the SDK server — see server-ktor's DevConsoleKtorModule.
+ * view. All fetch routes, param names, and the open/session-code access flows are the functional
+ * contract shared with the SDK server — see server-ktor's DevConsoleKtorModule.
  */
 (() => {
   'use strict';
@@ -12,6 +12,7 @@
   // State
   // ================================================================
   let token = '';
+  let openAccess = false;
   let currentView = 'overview';
   let csrf = '';
   let paused = true;
@@ -225,7 +226,7 @@
   // DOM / formatting helpers
   // ================================================================
   const $ = (id) => document.getElementById(id);
-  const auth = () => ({ Authorization: 'Bearer ' + token });
+  const auth = () => (openAccess ? {} : { Authorization: 'Bearer ' + token });
   const esc = (s) =>
     String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = (name, cls) => `<svg class="ic${cls ? ' ' + esc(cls) : ''}" aria-hidden="true"><use href="#dc-${esc(name)}"/></svg>`;
@@ -2785,6 +2786,7 @@
     sessionExpired = true;
     consecutiveAuthFailures = 0;
     clearTimeout(streamRetry);
+    openAccess = false;
     token = '';
     csrf = '';
     stream?.close();
@@ -2904,6 +2906,33 @@
     el.textContent = text;
     el.title = title || text;
   }
+  function activateBrowserAccess(accessToken, csrfToken, source, isOpen = false) {
+    openAccess = isOpen;
+    token = isOpen ? 'open' : accessToken;
+    csrf = isOpen ? '' : csrfToken;
+    sessionExpired = false;
+    consecutiveAuthFailures = 0;
+    if (source !== 'manual') history.replaceState(null, '', location.pathname);
+    setStatus(isOpen ? 'Connected (open)' : 'Connected');
+    toast(isOpen ? 'Connected to DevConsole.' : 'Connected to DevConsole session.');
+    updateControlUi();
+    connectStream();
+    // `paused` starts true because there is nothing to tail before a session exists. Connecting is
+    // the moment that stops being true, and a console labelled LIVE / TAILING that quietly tails
+    // nothing until you notice the toggle is worse than one that never offered to. Paging into
+    // history still re-pauses (see the cursor check in the timeline load).
+    setPaused(false);
+    loadOverview();
+    // Prime the mocks/composer capability flags so "Mock this response"/"Resend" aren't dead
+    // until Mocks/Composer are visited.
+    loadMockRules();
+    loadComposerHostAllowlist();
+    refreshHostLine();
+    // Prime the evidence cache immediately on connect (not lazily on first Evidence-tray visit)
+    // so every row's flag button and the rail count are already correct across every view.
+    loadEvidenceFlags();
+  }
+
   async function exchangeSessionCode(code, source) {
     if (!code) return;
     setStatus('Connecting…');
@@ -2925,29 +2954,7 @@
       return;
     }
     const b = await r.json();
-    token = b.accessToken;
-    csrf = b.csrfToken;
-    sessionExpired = false;
-    consecutiveAuthFailures = 0;
-    if (source !== 'manual') history.replaceState(null, '', location.pathname);
-    setStatus('Connected');
-    toast('Connected to DevConsole session.');
-    updateControlUi();
-    connectStream();
-    // `paused` starts true because there is nothing to tail before a session exists. Connecting is
-    // the moment that stops being true, and a console labelled LIVE / TAILING that quietly tails
-    // nothing until you notice the toggle is worse than one that never offered to. Paging into
-    // history still re-pauses (see the cursor check in the timeline load).
-    setPaused(false);
-    loadOverview();
-    // Prime the mocks/composer capability flags so "Mock this response"/"Resend" aren't dead
-    // until Mocks/Composer are visited.
-    loadMockRules();
-    loadComposerHostAllowlist();
-    refreshHostLine();
-    // Prime the evidence cache immediately on connect (not lazily on first Evidence-tray visit)
-    // so every row's flag button and the rail count are already correct across every view.
-    loadEvidenceFlags();
+    activateBrowserAccess(b.accessToken, b.csrfToken, source);
   }
   /** The previous-run-crashed banner, driven by GET /api/v1/runs — `previousRun` is
    * already "the most recent non-active run" by the time it gets here (see loadOverview). Shown
@@ -2980,9 +2987,9 @@
           // input, since cardHtml() always renders fieldsHtml before its own buttons/lede order
           // isn't ours to change (it's shared by every card-grid view, not scoped to Overview).
           fieldsHtml: `
-            <p class="card-lede">This session is unauthenticated. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code that expires after five minutes. Scan the QR, or paste the code below.</p>
+            <p class="card-lede">This server requires a browser session. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code that expires after five minutes. Scan the QR, or paste the code below.</p>
             <ul class="connect-steps">
-              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential — a bare <code class="inline-code">http://host:port/</code> address alone stays unauthenticated forever.</li>
+              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential because this server is using SESSION_CODE; a bare <code class="inline-code">http://host:port/</code> address is not enough.</li>
               <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
               <li>Logcat deliberately never prints the code — read it from the device screen, not the log.</li>
             </ul>
@@ -5154,14 +5161,13 @@
   // probes instead (each endpoint's own `editable` bit, or a reactive 404 for composer).
   // ================================================================
   let sessionPrincipals = [];
-  // Populated only after an explicit "Rotate code now" — the server never surfaces the live
-  // session code to an already-authenticated browser any other way, so there is nothing to show
-  // until the user asks for a fresh one.
+  // Populated only after an explicit "Rotate code now" in SESSION_CODE mode — the server never
+  // surfaces the live session code to an already-authenticated browser any other way.
   let rotatedSessionCode = null;
   let lastSessionMeta = {};
   let lastSessionCapabilities = {};
   async function rotateSessionCode() {
-    if (!hasSession()) return;
+    if (!hasSession() || openAccess) return;
     if (!(await openConfirm('Rotate session code?', 'This immediately invalidates the current session code. Any device that has not yet connected with it will need the new one.', 'Rotate code')))
       return;
     const r = await fetch('/api/v1/auth/session-code/rotate', { method: 'POST', headers: controlHeaders() });
@@ -5255,7 +5261,7 @@
     ];
     const capOnCount = capRows.filter(([, on]) => on).length;
     $('sessionMetrics').innerHTML = metricsStripHtml([
-      { label: 'Browsers', val: String(sessionPrincipals.length + 1), sub: 'incl. this one', tone: 'ink' },
+      { label: openAccess ? 'Auth' : 'Browsers', val: openAccess ? 'open' : String(sessionPrincipals.length + 1), sub: openAccess ? 'no session' : 'incl. this one', tone: 'ink' },
       { label: 'Capabilities', val: String(capOnCount), sub: 'of ' + capRows.length + ' on', tone: capOnCount ? 'signal' : 'warn' },
       { label: 'Build', val: meta.build?.variant || '—', tone: 'ink' },
       { label: 'Protocol', val: meta.protocolVersion ? 'v' + meta.protocolVersion : '—', tone: 'muted' },
@@ -5264,12 +5270,14 @@
       {
         icon: 'alert', iconTone: lan ? 'warn' : 'signal', title: lan ? 'This console is reachable on your LAN' : 'This console is bound to the loopback interface', span: 2,
         lede: lan
-          ? 'Anyone on this network who has the session code can read every capture in this session, including redacted-but-present metadata. Debug builds only — the SDK refuses to start in release.'
+          ? (openAccess
+            ? 'Anyone on this network can read every capture and use the enabled dashboard capabilities. Use LOOPBACK or SESSION_CODE on shared networks. Debug builds only — the SDK refuses to start in release.'
+            : 'Anyone on this network who has the session code can read every capture in this session, including redacted-but-present metadata. Debug builds only — the SDK refuses to start in release.')
           : 'Only this device can reach the console — the SDK bound to loopback rather than a LAN-visible address.',
         rows: [
           { k: 'Bound address', v: endpoint ? endpoint.host + ':' + endpoint.port : '—', tone: 'ink', tag: endpoint?.bindingMode || false, tagTone: lan ? 'warn' : 'signal' },
           { k: 'Transport', v: 'http + ws, no TLS', tone: 'warn', tag: 'PLAINTEXT', tagTone: 'warn' },
-          { k: 'Auth', v: 'rotating session code', tone: 'signal' },
+          { k: 'Auth', v: openAccess ? 'open browser access' : 'rotating session code', tone: openAccess ? 'warn' : 'signal', tag: openAccess ? 'OPEN' : false, tagTone: 'warn' },
           { k: 'Build type', v: meta.build?.variant || 'unknown', tone: meta.build?.variant === 'debug' ? 'signal' : 'muted', tag: meta.build?.variant === 'debug' ? 'GUARDED' : false, tagTone: 'signal' },
         ].concat(
           rotatedSessionCode
@@ -5281,8 +5289,8 @@
             : [],
         ),
         buttons: [
-          { id: 'end-session', label: 'End session', icon: 'trash', kind: 'danger', disabled: !hasSession(), title: hasSession() ? 'End session' : 'Connect this browser first' },
-          { id: 'rotate-code', label: 'Rotate code now', icon: 'refresh', disabled: !hasSession(), title: hasSession() ? 'Invalidate the current session code and mint a new one' : 'Connect this browser first' },
+          { id: 'end-session', label: openAccess ? 'Stop server' : 'End session', icon: 'trash', kind: 'danger', disabled: !hasSession(), title: hasSession() ? (openAccess ? 'Stop the DevConsole server' : 'End this browser session') : 'Connect this browser first' },
+          { id: 'rotate-code', label: 'Rotate code now', icon: 'refresh', disabled: !hasSession() || openAccess, title: openAccess ? 'Session codes are disabled in open mode' : hasSession() ? 'Invalidate the current session code and mint a new one' : 'Connect this browser first' },
         ],
       },
       {
@@ -5956,7 +5964,7 @@
 
   // Shared control helpers
   // ================================================================
-  const controlHeaders = () => ({ ...auth(), 'X-DevConsole-CSRF': csrf });
+  const controlHeaders = () => (openAccess ? {} : { ...auth(), 'X-DevConsole-CSRF': csrf });
   const updateControlUi = () => {
     const enabled = hasSession();
     $('composerRun').disabled = !enabled;
@@ -7236,6 +7244,22 @@
     await exchangeSessionCode(code, 'hash');
   }
 
+  async function beginBrowserAccess() {
+    let health = null;
+    try {
+      const response = await fetch('/health');
+      if (response.ok) health = await response.json();
+    } catch (_) {
+      // Fall through to the legacy code/hash state if the health probe is unavailable.
+    }
+    if (health?.status === 'open') {
+      activateBrowserAccess('', '', 'open', true);
+      return;
+    }
+    if (location.hash.includes('code=')) beginSessionCode();
+    else loadOverview();
+  }
+
   /**
    * Populates the topbar host line from real server info — app id/version (overview) and the
    * bound LAN address (meta) — instead of a hard-coded example string.
@@ -7583,16 +7607,10 @@
       }
     });
 
-    // Without a valid `code=` hash there's no token to exchange — on a first-ever load that's
-    // just the static empty state, but after a successful connect the hash is stripped
-    // (exchangeSessionCode, source !== 'manual') and the token lives only in the `token`
-    // variable above, so a plain browser refresh would otherwise land here with no session and
-    // no way to get one back. Render the "Connect this browser" card (session-code input +
-    // Connect button, built by renderOverview/loadOverview when hasSession() is false) so the
-    // user can always paste a fresh code, instead of leaving the static placeholder text in
-    // index.html as a dead end.
-    if (location.hash.includes('code=')) beginSessionCode();
-    else loadOverview();
+    // The health response selects the connection flow. Open mode activates immediately; secure
+    // mode still accepts the single-use code in the URL fragment, while a plain secure URL keeps
+    // the existing manual-code empty state.
+    beginBrowserAccess();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireEvents);

@@ -1,5 +1,6 @@
 package io.devconsole
 
+import android.Manifest
 import android.app.Activity
 import android.app.Application
 import android.content.Context
@@ -10,6 +11,7 @@ import android.os.Build
 import io.devconsole.api.AccessInfo
 import io.devconsole.api.BrowserBinding
 import io.devconsole.api.BrowserEndpoint
+import io.devconsole.api.BrowserSecurity
 import io.devconsole.api.CaptureCategory
 import io.devconsole.api.CaptureRuleEngine
 import io.devconsole.api.CaptureRuleStore
@@ -51,7 +53,6 @@ import io.devconsole.remoteconfig.RemoteConfigSnapshot
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
 import io.devconsole.server.api.BrowserPrincipal
-import io.devconsole.server.api.LocalNetworkPermissionDecision
 import io.devconsole.server.api.LocalNetworkPermissionGate
 import io.devconsole.server.api.SdkHealthSnapshot
 import io.devconsole.server.api.ServerMetadata
@@ -88,6 +89,7 @@ import io.devconsole.timeline.InMemoryTimelineAnnotations
 import io.devconsole.timeline.Timeline
 import io.devconsole.timeline.TimelineAnnotations
 import io.devconsole.timeline.TimelineAppender
+import io.devconsole.ui.compose.DevConsoleInspectorBridge
 import io.devconsole.ui.compose.InspectorBrowserPrincipalUi
 import io.devconsole.ui.compose.InspectorBrowserUi
 import io.devconsole.ui.compose.InspectorHealthUi
@@ -101,6 +103,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -351,6 +354,10 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
 
     @Volatile private var bootstrapJob: Job? = null
 
+    /** Room history is hydrated after the socket is live and cancelled before teardown completes. */
+    @Volatile private var timelineHydrationJob: Job? = null
+    private val timelineHydrationGeneration = AtomicLong(0)
+
     /**
      * Durable timeline storage. Room opens the database file lazily on first query, so building it
      * during [initialize] costs no disk I/O on the calling thread. Left null if construction fails —
@@ -468,8 +475,13 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             val writer = createBatchWriter(store, eventBufferCapacity).also(EventBatchWriter::stop)
             batchWriter = writer
             batchWriterCapacity = eventBufferCapacity
-            PersistentTimeline(InMemoryTimeline(emptyList(), CursorCodec(randomCursorSecret())), writer)
-                .also { timelineAppender = it }
+            PersistentTimeline(
+                delegate = InMemoryTimeline(emptyList(), CursorCodec(randomCursorSecret())),
+                writer = writer,
+                persistenceReady = durableSessionReady.get(),
+                pendingCapacity = eventBufferCapacity,
+                onPendingDrop = { runtime.recordDroppedEvents(1) },
+            ).also { timelineAppender = it }
         }.getOrElse { InMemoryTimeline(emptyList(), CursorCodec(randomCursorSecret())).also { timelineAppender = it } }
 
     private fun createBatchWriter(
@@ -517,7 +529,16 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     /** Enables strict session writes only after the row is demonstrably durable. */
     private fun scheduleSessionBootstrap(application: Application) {
         val expectedSessionId = activeSessionId()
-        bootstrapJob = lifecycleScope.launch(Dispatchers.IO) { bootstrapDurableSession(application, expectedSessionId) }
+        bootstrapJob =
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    bootstrapDurableSession(application, expectedSessionId)
+                } finally {
+                    // The server may already be Running while Room catches up; refresh the SDK
+                    // inspector so its active-session/uptime data appears without polling.
+                    DevConsoleInspectorBridge.notifyServerStateChanged()
+                }
+            }
     }
 
     private fun disableSessionFirstRetention() {
@@ -554,6 +575,9 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 roomEventStore?.withSessionFirstRetention()
                 roomAttachmentStore?.withSessionFirstRetention()
                 durableSessionReady.set(true)
+                if (runtime.state.value is DevConsoleState.Running) {
+                    (cachedTimeline as? PersistentTimeline)?.setPersistenceReady(true)
+                }
             }
             active
         } catch (cancelled: CancellationException) {
@@ -602,7 +626,11 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
         val previous = batchWriter
         if (previous != null && batchWriterCapacity == capacity) return
         val replacement = createBatchWriter(store, capacity)
-        if (runtime.state.value is DevConsoleState.Running) replacement.start() else replacement.stop()
+        if (runtime.state.value is DevConsoleState.Running && durableSessionReady.get()) {
+            replacement.start()
+        } else {
+            replacement.stop()
+        }
         batchWriter = replacement
         batchWriterCapacity = capacity
         (cachedTimeline as? PersistentTimeline)?.replaceWriter(replacement)
@@ -741,7 +769,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
      * Split out of [initialize] purely to keep that function's cyclomatic complexity under the
      * project's detekt threshold -- every gated inspector below was already computed by the caller.
      */
-    @Suppress("LongParameterList")
+    @Suppress("LongMethod", "LongParameterList")
     private fun installInspectorBridge(
         application: Application,
         gatedPreferencesInspector: AndroidPreferencesInspector?,
@@ -802,10 +830,16 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 evidenceStore = roomEvidenceStore,
                 evidenceSessionId = ::currentOrFallbackSessionId,
                 serverControlScope = lifecycleScope,
-                startServer = { startBrowser(configuredStartRequest()) },
+                startServer = {
+                    val result = startBrowser(configuredStartRequest())
+                    if (result !is StartResult.Started) {
+                        logcatInfo("DevConsole", "In-app server start did not start: $result")
+                    }
+                },
                 stopServer = { stop(StopReason.UserRequested) },
                 republishKeepAliveNotification = ::republishKeepAliveNotification,
                 keepAlivePromptSupplier = ::keepAlivePromptNeeded,
+                serverStartPermissionSupplier = ::serverStartPermissionNeeded,
             ),
         )
     }
@@ -900,6 +934,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 databaseEditable = config.editingCapabilities.database,
                 filesEditable = config.editingCapabilities.files,
             )
+            serverEngine.withBrowserSecurity(config.browserSecurity)
         }
     }
 
@@ -973,6 +1008,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             sessionsProvider = { sessionStore?.sessions().orEmpty() },
             screenshotCapture = ::captureScreenshot,
         ).withRetainedCaptures(RetainedCaptureQuery({ eventStore }, runtime::currentSessionId))
+            .withBrowserSecurity(config.browserSecurity)
             .withAttachmentReader { attachmentId -> roomAttachmentStore?.read(attachmentId) }
             .withAttachmentMetadataReader { attachmentId -> roomAttachmentStore?.metadata(attachmentId) }
 
@@ -984,8 +1020,14 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     private suspend fun startLocked(request: StartRequest): StartResult {
         val validationErrors = request.validationErrors()
         if (validationErrors.isNotEmpty()) return StartResult.InvalidConfiguration(validationErrors)
-        bootstrapJob?.cancelAndJoin()
-        bootstrapJob = null
+        // A repeated explicit start is a restart request for the DevConsole-owned server. Stop it
+        // through the normal lifecycle path while this mutex is held, so its engine and foreground
+        // service are torn down before the unchanged engine bind loop retries 8080 first. No process
+        // lookup or force-kill is attempted: a listener owned by another process remains for the
+        // engine's normal fallback handling.
+        if (runtime.state.value is DevConsoleState.Running) {
+            stopLocked(StopReason.UserRequested)
+        }
         val lifecycleRejection =
             synchronized(liveCaptureLock) {
                 val sessionBeforeStart = runtime.currentSessionId()
@@ -1005,28 +1047,33 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             // beginServerStart creates a new core-owned ID after an explicit stop. Make its
             // durable ACTIVE row visible before any restarted capture source can emit.
             disableSessionFirstRetention()
-            val sessionReady = withContext(Dispatchers.IO) { bootstrapDurableSession(application, activeSessionId()) }
-            if (!sessionReady) {
-                batchWriter?.stop()
-                runtime.serverFailed("Durable app-run session is unavailable")
-                return@withContext StartResult.Failed("Durable app-run session is unavailable")
-            }
-            val lanPermitted = localNetworkPermitted(application)
-            rejectUnpermittedLan(runtime, request, lanPermitted)?.let { return@withContext it }
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    val history =
-                        roomEventStore
-                            ?.recentEvents(
-                                activeConfig?.storagePolicy?.maxTimelineEvents
-                                    ?: io.devconsole.api.StoragePolicy.DEFAULT_MAX_TIMELINE_EVENTS,
-                            ).orEmpty()
-                            .filter { it.sessionId == activeSessionId() }
-                    (cachedTimeline as? PersistentTimeline)?.replaceHydratedForSession(activeSessionId(), history)
-                }.onFailure {
-                    logcatInfo("DevConsole", "Timeline history is unavailable: ${it.javaClass.simpleName}")
+            val sessionReady =
+                if (sessionStore == null) {
+                    // buildPersistentTimeline() deliberately falls back to an in-memory timeline
+                    // when Room cannot be constructed. Keep that fallback usable: the browser
+                    // server must not become unavailable just because durable history did.
+                    logcatInfo("DevConsole", "Durable storage unavailable; starting with in-memory history")
+                    true
+                } else {
+                    // Initialization already starts this bootstrap in the background. Waiting for
+                    // it here made the SDK-owned Start button pay the full five-second timeout
+                    // when Room was still closing a stale session, even though the server itself
+                    // was ready to bind. Keep the server start path latency-bound to the socket;
+                    // the bootstrap enables durable writes when it completes.
+                    if (!durableSessionReady.get() && bootstrapJob?.isActive != true) {
+                        scheduleSessionBootstrap(application)
+                    }
+                    durableSessionReady.get()
                 }
+            if (!sessionReady) {
+                // A Room/bootstrap failure must not take down the developer server. Captures stay
+                // in memory while durable writes remain gated by durableSessionReady=false.
+                batchWriter?.stop()
+                logcatInfo("DevConsole", "Durable session unavailable; starting with in-memory history")
             }
+            val missingLanPermission = missingLanPermission(application)
+            rejectUnpermittedLan(runtime, request, missingLanPermission)?.let { return@withContext it }
+            val lanPermitted = missingLanPermission == null
             if (activeConfig?.crashPolicy?.anrWatchdogEnabled == true && categoryEnabled(CaptureCategory.CRASHES)) {
                 anrWatchdog.start()
             }
@@ -1042,8 +1089,6 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                     portRange = request.portRange,
                     sessionCodeTtlMs = sessionCodeTtlMs,
                 )
-            // The engine's bind loop does blocking socket probes (Thread.sleep per port); keep it off
-            // the caller's dispatcher so a host doing `lifecycleScope.launch { startBrowser() }` on Main never ANRs.
             val attempted = AutoBinding.initialMode(request.bindingMode, lanPermitted)
             val attempt = withContext(Dispatchers.IO) { activeEngine.start(serverRequest(attempted)) }
             // Only AUTO retries. The first attempt is left unmapped until the retry is settled so a
@@ -1059,102 +1104,195 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 } else {
                     attempt
                 }
-            mapStartResult(result)
+            mapStartResult(result).also {
+                if (result is ServerStartResult.Started) scheduleTimelineHydration()
+            }
         }
     }
 
-    private fun mapStartResult(result: ServerStartResult): StartResult =
-        when (result) {
-            is ServerStartResult.Started -> {
-                val credential =
-                    result.sessionCode.let {
-                        AccessInfo(
-                            connectUrl = it.browserUrl,
-                            sessionCode = it.code,
-                            expiresAtEpochMs = it.expiresAtEpochMs,
+    /**
+     * Reads only the active app-run history after the server is bound. The query can still be slow
+     * while Room recovers a stale database, but it no longer delays the SDK-owned Start action or
+     * the first browser connection. [PersistentTimeline] merges rows captured while this query is
+     * in flight, and the generation/session checks prevent a late result from crossing stop/start.
+     */
+    @Suppress("ReturnCount") // Guard clauses prevent launching work without every required owner.
+    private fun scheduleTimelineHydration() {
+        val store = roomEventStore ?: return
+        val timeline = cachedTimeline as? PersistentTimeline ?: return
+        val expectedSessionId = runtime.currentSessionId() ?: return
+        val generation = timelineHydrationGeneration.incrementAndGet()
+        timelineHydrationJob?.cancel()
+        timelineHydrationJob =
+            lifecycleScope.launch(Dispatchers.IO) {
+                val history =
+                    runCatching {
+                        store.recentEventsForSession(
+                            sessionId = expectedSessionId,
+                            limit =
+                                activeConfig?.storagePolicy?.maxTimelineEvents
+                                    ?: io.devconsole.api.StoragePolicy.DEFAULT_MAX_TIMELINE_EVENTS,
                         )
-                    }
-                val started =
-                    StartResult.Started(
-                        endpoint =
-                            BrowserEndpoint(
-                                host = result.endpoint.host,
-                                port = result.endpoint.port,
-                                bindingMode =
-                                    when (result.endpoint.bindingMode) {
-                                        ServerBindingMode.LOOPBACK -> PublicBindingMode.LOOPBACK
-                                        ServerBindingMode.LAN -> PublicBindingMode.LAN
-                                    },
-                            ),
-                        access = credential,
+                    }.onFailure {
+                        logcatInfo("DevConsole", "Timeline history is unavailable: ${it.javaClass.simpleName}")
+                    }.getOrDefault(emptyList())
+
+                if (!isActive || generation != timelineHydrationGeneration.get()) return@launch
+                if (runtime.currentSessionId() != expectedSessionId ||
+                    runtime.state.value !is DevConsoleState.Running
+                ) {
+                    return@launch
+                }
+                timeline.replaceHydratedForSession(expectedSessionId, history)
+                DevConsoleInspectorBridge.notifyServerStateChanged()
+            }
+    }
+
+    private fun mapStartResult(result: ServerStartResult): StartResult {
+        val mapped =
+            when (result) {
+                is ServerStartResult.Started -> {
+                    val credential =
+                        if (activeConfig?.browserSecurity == BrowserSecurity.NONE) {
+                            AccessInfo(
+                                connectUrl = "http://${result.endpoint.host}:${result.endpoint.port}",
+                                sessionCode = "",
+                                expiresAtEpochMs = Long.MAX_VALUE,
+                            )
+                        } else {
+                            result.sessionCode.let {
+                                AccessInfo(
+                                    connectUrl = it.browserUrl,
+                                    sessionCode = it.code,
+                                    expiresAtEpochMs = it.expiresAtEpochMs,
+                                )
+                            }
+                        }
+                    val started =
+                        StartResult.Started(
+                            endpoint =
+                                BrowserEndpoint(
+                                    host = result.endpoint.host,
+                                    port = result.endpoint.port,
+                                    bindingMode =
+                                        when (result.endpoint.bindingMode) {
+                                            ServerBindingMode.LOOPBACK -> PublicBindingMode.LOOPBACK
+                                            ServerBindingMode.LAN -> PublicBindingMode.LAN
+                                        },
+                                ),
+                            access = credential,
+                        )
+                    (cachedTimeline as? PersistentTimeline)?.setPersistenceReady(durableSessionReady.get())
+                    lastStarted = started
+                    runtime.serverStarted()
+                    sessionMarkerMonitor?.start(result.endpoint.bindingMode.name)
+                    keepAliveController?.onServerStarted(
+                        application,
+                        "http://${result.endpoint.host}:${result.endpoint.port}",
                     )
-                batchWriter?.start()
-                lastStarted = started
-                runtime.serverStarted()
-                sessionMarkerMonitor?.start(result.endpoint.bindingMode.name)
-                keepAliveController?.onServerStarted(
-                    application,
-                    "http://${result.endpoint.host}:${result.endpoint.port}",
-                )
-                logcatInfo(
-                    "DevConsole",
-                    "Dashboard available at: ${credential.connectUrl.withoutCredentials()} " +
-                        "(access link available through the DevConsole API/launcher; " +
-                        "binding: ${result.endpoint.bindingMode})",
-                )
-                started
-            }
+                    logcatInfo(
+                        "DevConsole",
+                        "Dashboard available at: ${credential.connectUrl.withoutCredentials()} " +
+                            "(access link available through the DevConsole API/launcher; " +
+                            "binding: ${result.endpoint.bindingMode})",
+                    )
+                    started
+                }
 
-            ServerStartResult.DisabledForBuild -> {
-                runtime.serverFailed("Server is disabled for this build")
-                StartResult.DisabledForBuild
-            }
+                ServerStartResult.DisabledForBuild -> {
+                    runtime.serverFailed("Server is disabled for this build")
+                    StartResult.DisabledForBuild
+                }
 
-            ServerStartResult.LocalNetworkPermissionRequired -> {
-                runtime.serverRequiresPermission()
-                StartResult.PermissionRequired("android.permission.ACCESS_LOCAL_NETWORK")
-            }
+                ServerStartResult.LocalNetworkPermissionRequired -> {
+                    runtime.serverRequiresPermission()
+                    StartResult.PermissionRequired("android.permission.ACCESS_LOCAL_NETWORK")
+                }
 
-            is ServerStartResult.InvalidConfiguration -> {
-                runtime.serverFailed(result.detail)
-                StartResult.Failed(result.detail)
-            }
+                is ServerStartResult.InvalidConfiguration -> {
+                    runtime.serverFailed(result.detail)
+                    StartResult.Failed(result.detail)
+                }
 
-            is ServerStartResult.PortUnavailable -> {
-                runtime.serverFailed("No loopback port available in ${result.attempted}")
-                StartResult.PortUnavailable(result.attempted)
-            }
+                is ServerStartResult.PortUnavailable -> {
+                    runtime.serverFailed("No loopback port available in ${result.attempted}")
+                    StartResult.PortUnavailable(result.attempted)
+                }
 
-            is ServerStartResult.NoEligibleNetwork -> {
-                runtime.serverFailed(result.detail)
-                StartResult.NoEligibleNetwork(result.detail)
-            }
+                is ServerStartResult.NoEligibleNetwork -> {
+                    runtime.serverFailed(result.detail)
+                    StartResult.NoEligibleNetwork(result.detail)
+                }
 
-            is ServerStartResult.Failed -> {
-                runtime.serverFailed(result.detail)
-                StartResult.Failed(result.detail)
+                is ServerStartResult.Failed -> {
+                    runtime.serverFailed(result.detail)
+                    StartResult.Failed(result.detail)
+                }
             }
-        }
+        // The SDK-owned More screen is snapshot-driven. Wake it as soon as the runtime has
+        // transitioned, instead of making a successful start wait for its five-second poll.
+        DevConsoleInspectorBridge.notifyServerStateChanged()
+        return mapped
+    }
 
     override suspend fun stop(reason: StopReason) = lifecycleMutex.withLock { stopLocked(reason) }
 
     private suspend fun stopLocked(reason: StopReason) {
         durableSessionReady.set(false)
-        bootstrapJob?.cancelAndJoin()
-        bootstrapJob = null
+        (cachedTimeline as? PersistentTimeline)?.setPersistenceReady(false)
+        (cachedTimeline as? PersistentTimeline)?.discardPendingPersistence()
+        timelineHydrationGeneration.incrementAndGet()
         lastStarted = null
-        sessionMarkerMonitor?.stop(reason.markerLabel())
-        withContext(Dispatchers.IO) { batchWriter?.flushAndStop() }
-        if (::serverEngine.isInitialized) withContext(Dispatchers.IO) { serverEngine.stop() }
-        sessionAuthority.reset()
-        sessionCodeAuthority.reset()
-        if (::featureFlags.isInitialized) featureFlags.reset()
-        mockEngineInstance.clearSessionRules()
-        anrWatchdog.stop()
-        sessionStore?.end(activeSessionId(), System.currentTimeMillis())
-        storedSessions = sessionStore?.sessions().orEmpty()
-        runtime.stop(reason)
-        if (::application.isInitialized) keepAliveController?.onServerStopped(application)
+        try {
+            stopStep("timeline hydration") {
+                timelineHydrationJob?.cancelAndJoin()
+                timelineHydrationJob = null
+            }
+            stopStep("bootstrap") {
+                bootstrapJob?.cancelAndJoin()
+                bootstrapJob = null
+            }
+            stopStep("session marker") { sessionMarkerMonitor?.stop(reason.markerLabel()) }
+            stopStep("event writer") { withContext(Dispatchers.IO) { batchWriter?.flushAndStop() } }
+            stopStep("server engine") {
+                if (::serverEngine.isInitialized) withContext(Dispatchers.IO) { serverEngine.stop() }
+            }
+            stopStep("browser sessions") {
+                sessionAuthority.reset()
+                sessionCodeAuthority.reset()
+            }
+            stopStep("feature flags") { if (::featureFlags.isInitialized) featureFlags.reset() }
+            stopStep("mock rules") { mockEngineInstance.clearSessionRules() }
+            stopStep("ANR watchdog") { anrWatchdog.stop() }
+            stopStep("durable session") {
+                runtime.currentSessionId()?.let { sessionId ->
+                    sessionStore?.end(sessionId, System.currentTimeMillis())
+                    storedSessions = sessionStore?.sessions().orEmpty()
+                }
+            }
+        } finally {
+            // Notification Stop must never leave the SDK reporting Running just because a best-
+            // effort cleanup step failed. The service removes its notification after stopAsync's
+            // callback, so finalize the public runtime state and wake the SDK-owned inspector here.
+            runtime.stop(reason)
+            DevConsoleInspectorBridge.notifyServerStateChanged()
+            if (::application.isInitialized) keepAliveController?.onServerStopped(application)
+        }
+    }
+
+    /** Cleanup is best-effort; cancellation still propagates so structured teardown can finish. */
+    @Suppress("TooGenericExceptionCaught") // Every cleanup failure is isolated so later stop steps still run.
+    private suspend fun stopStep(
+        label: String,
+        action: suspend () -> Unit,
+    ) {
+        try {
+            action()
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (failure: Exception) {
+            logcatInfo("DevConsole", "Stop cleanup failed ($label): ${failure.javaClass.simpleName}")
+        }
     }
 
     @Synchronized
@@ -1212,12 +1350,22 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     }
 
     override fun accessInfo(): AccessInfo? {
-        val info = liveSessionCodeInfo() ?: return null
-        return AccessInfo(
-            connectUrl = info.browserUrl,
-            sessionCode = info.code,
-            expiresAtEpochMs = info.expiresAtEpochMs,
-        )
+        val started = lastStarted ?: return null
+        return if (activeConfig?.browserSecurity == BrowserSecurity.NONE) {
+            AccessInfo(
+                connectUrl = "http://${started.endpoint.host}:${started.endpoint.port}",
+                sessionCode = "",
+                expiresAtEpochMs = Long.MAX_VALUE,
+            )
+        } else {
+            liveSessionCodeInfo()?.let { info ->
+                AccessInfo(
+                    connectUrl = info.browserUrl,
+                    sessionCode = info.code,
+                    expiresAtEpochMs = info.expiresAtEpochMs,
+                )
+            }
+        }
     }
 
     /**
@@ -1228,7 +1376,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
      * already-expired code. Null while the server isn't running.
      */
     private fun liveSessionCodeInfo(): SessionCodeInfo? {
-        lastStarted ?: return null
+        if (lastStarted == null || activeConfig?.browserSecurity != BrowserSecurity.SESSION_CODE) return null
         return sessionCodeAuthority.currentInfo() ?: sessionCodeAuthority.issueCode()
     }
 
@@ -1350,6 +1498,22 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     private fun keepAlivePromptNeeded(): Boolean =
         keepAliveGate?.shouldOfferNotificationPrompt(runtime.state.value is DevConsoleState.Running) ?: false
 
+    /**
+     * Permission preflight used only by the SDK-owned More-screen Start button. Explicit host/API
+     * starts retain their existing contract and still return [StartResult.PermissionRequired] when
+     * the caller requested a LAN bind without the local-network grant.
+     *
+     * AUTO and explicit LAN both surface the missing local-network grant here because this is the
+     * SDK-owned start path: the user can act on the permission before receiving a less useful
+     * loopback-only URL. Notification permission is deliberately not returned here. Android can
+     * run the foreground service while hiding its notification when POST_NOTIFICATIONS is denied,
+     * and the running-server snackbar remains available to request it later.
+     */
+    private fun serverStartPermissionNeeded(): String? {
+        val binding = activeConfig?.browserConfig?.binding ?: return null
+        return if (binding == BrowserBinding.LOOPBACK) null else missingLanPermission(application)
+    }
+
     /** Device/app metadata for the evidence bundle's session.json; honestly null before a durable session exists. */
     private suspend fun currentSessionSnapshot(): StoredSession? = sessionStore?.session(activeSessionId())
 
@@ -1436,10 +1600,17 @@ private fun DevConsoleConfig.toInspectorBrowserUi(
         binding = endpoint?.bindingMode?.name ?: browserConfig.binding.name,
         endpoint = endpoint?.let { "${it.host}:${it.port}" },
         principals = principals.map { it.toInspectorPrincipalUi() },
-        sessionCodeUrl = sessionCode?.browserUrl,
-        sessionCode = sessionCode?.code,
-        sessionCodeExpiresAtEpochMs = sessionCode?.expiresAtEpochMs,
-        sessionCodeRemainingTtlMs = sessionCodeRemainingTtlMs,
+        sessionCodeUrl =
+            if (browserSecurity == BrowserSecurity.NONE) {
+                endpoint?.let { "http://${it.host}:${it.port}" }
+            } else {
+                sessionCode?.browserUrl
+            },
+        sessionCode = if (browserSecurity == BrowserSecurity.NONE) "" else sessionCode?.code,
+        sessionCodeExpiresAtEpochMs =
+            if (browserSecurity == BrowserSecurity.NONE) null else sessionCode?.expiresAtEpochMs,
+        sessionCodeRemainingTtlMs =
+            if (browserSecurity == BrowserSecurity.NONE) null else sessionCodeRemainingTtlMs,
         bindAddressChanged = bindAddressChanged,
     )
 
@@ -1462,40 +1633,41 @@ private fun randomCursorSecret(): ByteArray = ByteArray(CURSOR_SECRET_BYTES).als
 /**
  * Whether a LAN bind would be allowed to reach the network right now.
  *
- * Below API 37 this is always true. At or above it, an ungranted `ACCESS_LOCAL_NETWORK` means the
- * platform silently drops LAN traffic even though the socket binds and completes handshakes -- see
+ * API 32 and below do not require a runtime LAN permission. API 33-36 require
+ * `NEARBY_WIFI_DEVICES`; API 37 and above require `ACCESS_LOCAL_NETWORK`. The latter can otherwise
+ * silently drop LAN traffic even though the socket binds and completes handshakes -- see
  * [LocalNetworkPermissionGate], which deliberately ignores `targetSdk` for that reason.
  */
-private fun localNetworkPermitted(application: Application): Boolean {
-    val isGranted =
+private fun missingLanPermission(application: Application): String? {
+    val nearbyGranted =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            application.checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) ==
+            PackageManager.PERMISSION_GRANTED
+    val localNetworkGranted =
         application.checkSelfPermission(LocalNetworkPermissionGate.PERMISSION) == PackageManager.PERMISSION_GRANTED
-    val decision =
-        LocalNetworkPermissionGate.evaluate(
-            bindingMode = ServerBindingMode.LAN,
-            deviceApi = Build.VERSION.SDK_INT,
-            targetSdk = application.applicationInfo.targetSdkVersion,
-            isGranted = isGranted,
-        )
-    return decision !is LocalNetworkPermissionDecision.PermissionRequired
+    return LanPermissionPolicy.missingPermission(
+        deviceApi = Build.VERSION.SDK_INT,
+        nearbyWifiGranted = nearbyGranted,
+        localNetworkGranted = localNetworkGranted,
+    )
 }
 
 /**
  * Null means the start may proceed; a non-null result is the early-return for
  * [PlatformFacadeProvider.start].
  *
- * Only an explicit [PublicBindingMode.LAN] is rejected here. [PublicBindingMode.AUTO] treats a
- * missing grant as a reason to bind loopback rather than a reason to fail, so it never reaches this
- * function -- which also means AUTO never surfaces [StartResult.PermissionRequired] and never gives
- * a host the cue to prompt for the permission. Hosts that want the prompt ask for LAN by name.
+ * Only an explicit [PublicBindingMode.LAN] is rejected here. [PublicBindingMode.AUTO] still keeps
+ * its host/API contract of falling back to loopback, while the SDK-owned More-screen preflight
+ * surfaces the same missing grant before it chooses a URL for the user.
  */
 private fun rejectUnpermittedLan(
     runtime: DevConsoleRuntime,
     request: StartRequest,
-    lanPermitted: Boolean,
+    missingPermission: String?,
 ): StartResult? {
-    if (request.bindingMode != PublicBindingMode.LAN || lanPermitted) return null
+    if (request.bindingMode != PublicBindingMode.LAN || missingPermission == null) return null
     runtime.serverRequiresPermission()
-    return StartResult.PermissionRequired(LocalNetworkPermissionGate.PERMISSION)
+    return StartResult.PermissionRequired(missingPermission)
 }
 
 private fun Application.serverMetadata(): ServerMetadata {

@@ -1,9 +1,11 @@
 package io.devconsole
 
+import android.Manifest
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import io.devconsole.api.BindingMode
 import io.devconsole.api.BrowserEndpoint
+import io.devconsole.api.BrowserSecurity
 import io.devconsole.api.DevConsoleConfig
 import io.devconsole.api.DevConsoleState
 import io.devconsole.api.InitResult
@@ -27,9 +29,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.net.HttpURLConnection
 import java.net.URL
@@ -49,6 +53,12 @@ import java.net.URL
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class FullFacadeTest {
+    @Before
+    fun grantNearbyWifiForLanAssertions() {
+        shadowOf(ApplicationProvider.getApplicationContext<Application>())
+            .grantPermissions(Manifest.permission.NEARBY_WIFI_DEVICES)
+    }
+
     @Test
     fun `invalid configuration returns structured errors before platform services are created`() {
         val provider = PlatformFacadeProvider()
@@ -100,10 +110,27 @@ class FullFacadeTest {
             // interface, so the default start reaches the network. See PlatformFacadeProviderAutoBindingTest.
             assertEquals(BindingMode.LAN, started.endpoint.bindingMode)
             assertTrue(started.endpoint.port in 8080..8099)
-            assertTrue(started.access.connectUrl.contains("#code="))
+            assertTrue(started.access.connectUrl.startsWith("http://"))
+            assertTrue(started.access.sessionCode.isEmpty())
             assertEquals(DevConsoleState.Running, provider.state().value)
             provider.stop(StopReason.UserRequested)
             assertEquals(DevConsoleState.Stopped, provider.state().value)
+        }
+
+    @Test
+    fun `repeated explicit start restarts the owned server and reclaims its requested port`() =
+        runTest {
+            val provider = PlatformFacadeProvider()
+            provider.initialize(ApplicationProvider.getApplicationContext(), DevConsoleConfig.default())
+            val request = StartRequest(BindingMode.LOOPBACK, 8890..8893)
+
+            val first = provider.startBrowser(request) as StartResult.Started
+            val second = provider.startBrowser(request) as StartResult.Started
+
+            assertTrue(first.endpoint.port in request.portRange)
+            assertEquals(first.endpoint.port, second.endpoint.port)
+            assertEquals(DevConsoleState.Running, provider.state().value)
+            provider.stop(StopReason.UserRequested)
         }
 
     @Test
@@ -162,7 +189,10 @@ class FullFacadeTest {
     fun `explicit mock kill switch remains disabled across server restart`() =
         runTest {
             val provider = PlatformFacadeProvider()
-            provider.initialize(ApplicationProvider.getApplicationContext(), DevConsoleConfig.default())
+            provider.initialize(
+                ApplicationProvider.getApplicationContext(),
+                DevConsoleConfig.default().withBrowserSecurity(BrowserSecurity.SESSION_CODE),
+            )
             provider.startBrowser(StartRequest(BindingMode.LOOPBACK, 8160..8179))
             provider.mockEngine().setEnabled(false)
 
@@ -253,7 +283,10 @@ class FullFacadeTest {
     fun `a browser can exchange the session code over HTTP with no approval round trip`() =
         runTest {
             val provider = PlatformFacadeProvider()
-            provider.initialize(ApplicationProvider.getApplicationContext(), DevConsoleConfig.default())
+            provider.initialize(
+                ApplicationProvider.getApplicationContext(),
+                DevConsoleConfig.default().withBrowserSecurity(BrowserSecurity.SESSION_CODE),
+            )
             val started = provider.startBrowser(StartRequest(BindingMode.LOOPBACK, 8280..8299)) as StartResult.Started
 
             val accessToken = exchangeSessionCodeOverHttp(started, "Test Browser")
@@ -268,7 +301,10 @@ class FullFacadeTest {
     fun `stopping the console revokes browser sessions`() =
         runTest {
             val provider = PlatformFacadeProvider()
-            provider.initialize(ApplicationProvider.getApplicationContext(), DevConsoleConfig.default())
+            provider.initialize(
+                ApplicationProvider.getApplicationContext(),
+                DevConsoleConfig.default().withBrowserSecurity(BrowserSecurity.SESSION_CODE),
+            )
             val started = provider.startBrowser(StartRequest(BindingMode.LOOPBACK, 8360..8379)) as StartResult.Started
 
             val accessToken = exchangeSessionCodeOverHttp(started, "Browser To Stop")
@@ -277,7 +313,10 @@ class FullFacadeTest {
 
             provider.stop(StopReason.UserRequested)
 
-            provider.initialize(ApplicationProvider.getApplicationContext(), DevConsoleConfig.default())
+            provider.initialize(
+                ApplicationProvider.getApplicationContext(),
+                DevConsoleConfig.default().withBrowserSecurity(BrowserSecurity.SESSION_CODE),
+            )
             val restarted = provider.startBrowser(StartRequest(BindingMode.LOOPBACK, 8380..8399)) as StartResult.Started
             // The old session does not survive a stop/restart -- a fresh authority means a fresh store.
             assertEquals(HttpURLConnection.HTTP_UNAUTHORIZED, sessionStatusOverHttp(restarted, accessToken))
@@ -384,6 +423,7 @@ class FullFacadeTest {
 
             assertEquals(started.endpoint, provider.endpoint())
             assertEquals(started.access.connectUrl, provider.accessInfo()?.connectUrl)
+            assertEquals("", started.access.sessionCode)
 
             provider.stop(StopReason.UserRequested)
 
@@ -400,7 +440,10 @@ class FullFacadeTest {
             val provider = PlatformFacadeProvider()
             provider.initialize(
                 ApplicationProvider.getApplicationContext(),
-                DevConsoleConfig.default().withBrowserConfig(io.devconsole.api.BrowserConfig(sessionCodeTtlMs = 20)),
+                DevConsoleConfig
+                    .default()
+                    .withBrowserSecurity(BrowserSecurity.SESSION_CODE)
+                    .withBrowserConfig(io.devconsole.api.BrowserConfig(sessionCodeTtlMs = 20)),
             )
             val started = provider.startBrowser(StartRequest(BindingMode.LOOPBACK, 8560..8579)) as StartResult.Started
 
@@ -417,7 +460,10 @@ class FullFacadeTest {
     fun `More surface's session-code URL is readable while running and cleared on stop`() =
         runTest {
             val provider = PlatformFacadeProvider()
-            provider.initialize(ApplicationProvider.getApplicationContext(), DevConsoleConfig.default())
+            provider.initialize(
+                ApplicationProvider.getApplicationContext(),
+                DevConsoleConfig.default().withBrowserSecurity(BrowserSecurity.SESSION_CODE),
+            )
             provider.startBrowser(StartRequest(BindingMode.LOOPBACK, 8500..8519)) as StartResult.Started
 
             val browser = DevConsoleInspectorBridge.source().snapshot().browser

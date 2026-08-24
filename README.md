@@ -91,8 +91,18 @@ way your manifest needs `INTERNET`, which most apps already declare:
 lifecycleScope.launch { // startBrowser is a suspend function; the server never starts on its own
     val result = DevConsole.startBrowser(StartRequest())
     val connectUrl = (result as? StartResult.Started)?.access?.connectUrl
-    // e.g. http://192.168.0.15:8080/#code=B7KQ2XWZ — surface this in your debug UI
+    // e.g. http://192.168.0.15:8080 — surface this in your debug UI
 }
+```
+
+Browser authentication is off by default for local development, so opening that URL does not
+require a new key after each build. To restore the single-use session-code flow, opt in explicitly:
+
+```kotlin
+DevConsole.initialize(
+    application,
+    DevConsoleConfig.default().withBrowserSecurity(BrowserSecurity.SESSION_CODE),
+)
 ```
 
 The default binding is `BindingMode.AUTO`: it binds your device's network address when there is one,
@@ -104,8 +114,8 @@ forward the port first:
 adb forward tcp:8080 tcp:8080   # use the port from the loopback start's log line
 ```
 
-Then open the **whole URL**. The `#code=` fragment is the credential, so a bare `http://host:port/`
-gets you nothing.
+Then open the URL. With the default `BrowserSecurity.NONE`, the bare address is enough. With
+`BrowserSecurity.SESSION_CODE`, open the full `#code=` URL because that fragment is the credential.
 
 > **The dashboard speaks plaintext HTTP.** On a network address, everything it shows — headers,
 > tokens, bodies — is readable by anyone who can see your traffic. That is fine on a home or office
@@ -128,7 +138,7 @@ gets you nothing.
 | **Remote Config inspector** | Every Remote Config value active on the device, and where each one came from — server, in-app default, static fallback, or a local override — plus last fetch time and status. Read-only. The Firebase adapter uses reflection — no compile-time Firebase dependency. |
 | **Data inspectors** | Browse SharedPreferences, SQLite (incl. a SQL console), and app files. Read-only by default; every edit surface is opt-in. |
 | **Evidence tray & exports** | Flag anything, attach it to a bug report bundle or Markdown/Jira/GitHub clipboard text. Export HAR, Postman Collection, or a full session ZIP. |
-| **Background keep-alive** | Opt-in foreground service that keeps the server alive while your app is backgrounded. Manifest-only opt-in, zero SDK-declared permissions. |
+| **Background keep-alive** | Default foreground service that keeps the server alive while your app is backgrounded. Enabled by the debug-only full runtime; the no-op runtime contributes no service or permissions. |
 
 Capture is category-scoped. `DevConsoleConfig.withCaptureCategories(...)` narrows what gets
 recorded to any of `NETWORK`, `SOCKET`, `MQTT`, `PUSH`, `LOGS`, `CRASHES`, `STATE`, `INSPECTION`,
@@ -221,13 +231,23 @@ when (result) {
     is StartResult.Started -> {
         result.endpoint              // host + port actually bound; bindingMode is LOOPBACK or LAN,
                                      // never AUTO — it reports the socket, not the request
-        result.access.connectUrl     // the full credential URL — treat as a secret
+        result.access.connectUrl     // bare URL by default; a #code= credential URL when opted in
     }
     is StartResult.PermissionRequired -> { /* explicit LAN only: request result.permission */ }
     else -> { /* NoEligibleNetwork, ServerUnavailable, ... */ }
 }
 
 DevConsole.stop(StopReason.UserRequested)
+```
+
+For a shared or untrusted network, combine loopback with `adb forward`, or keep the reachable
+binding and opt into the secure browser handshake:
+
+```kotlin
+DevConsole.initialize(
+    application,
+    DevConsoleConfig.default().withBrowserSecurity(BrowserSecurity.SESSION_CODE),
+)
 ```
 
 Java is fully supported via async variants and builders:
@@ -251,10 +271,12 @@ After `startBrowser`, filter Logcat on the `DevConsole` tag:
 I/DevConsole: Dashboard available at: http://192.168.0.15:8080/ (access link available through the DevConsole API/launcher; binding: LAN)
 ```
 
-**The session code is deliberately absent from Logcat.** The full URL, with its `#code=<session
-code>` credential fragment, comes from only three places: `StartResult.Started.access.connectUrl`,
-`DevConsole.accessInfo()`, and the device's More screen as text or a QR code. The port is the first
-free one in **8080–8099**, so read it from the log rather than assuming 8080.
+The default open mode has no session code, so Logcat prints only the bare dashboard URL. In
+`BrowserSecurity.SESSION_CODE` mode, the session code is deliberately absent from Logcat: the full
+URL, with its `#code=<session code>` credential fragment, comes from only three places:
+`StartResult.Started.access.connectUrl`, `DevConsole.accessInfo()`, and the device's More screen as
+text or a QR code. The port is the first free one in **8080–8099**, so read it from the log rather
+than assuming 8080.
 
 ### Connect from your browser
 
@@ -273,9 +295,10 @@ free one in **8080–8099**, so read it from the log rather than assuming 8080.
 
 `StartResult.Started.endpoint.bindingMode` always tells you which one you actually got.
 
-Open the **whole URL**. The `#code=` fragment is the credential. It is single-use, expires in five
-minutes, and creates a session immediately with no approval step. A bare `http://host:port/` sits
-unauthenticated forever. If a code lapses, issue a fresh one from the device.
+In the default open mode, open the bare `http://host:port/` address. If you opted into
+`BrowserSecurity.SESSION_CODE`, open the **whole URL**: its `#code=` fragment is single-use, expires
+in five minutes, and creates a session immediately with no approval step. If that code lapses, issue
+a fresh one from the device.
 
 ### Wire up your network stack
 
@@ -452,10 +475,11 @@ none at all.
 
 | Permission | Declared by | Why it exists | In your release build? |
 |---|---|---|---|
-| `ACCESS_LOCAL_NETWORK` | **DevConsole** (`devconsole`) | Android 17 (API 37) gates local-network access. Without it a LAN-bound dashboard binds and then silently serves nobody — see [LAN permission](docs/LAN_PERMISSION_AND_TROUBLESHOOTING.md). Requested at runtime only when you start in LAN mode. | **No** |
+| `ACCESS_LOCAL_NETWORK` | **DevConsole** (`devconsole`) | Android 17 (API 37) gates local-network access. Without it a LAN-bound dashboard binds and then silently serves nobody — see [LAN permission](docs/LAN_PERMISSION_AND_TROUBLESHOOTING.md). Declared by the full runtime and requested at runtime when needed. | **No** |
 | `ACCESS_NETWORK_STATE` | **DevConsole** (`devconsole`) | Normal (non-runtime) permission, used only to record connectivity-change markers on the timeline. | **No** |
-| `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SPECIAL_USE` | **You**, in `src/debug` | Opt-in only. Lets the dashboard server survive your app being backgrounded — [keep-alive](docs/BACKGROUND_KEEPALIVE.md). Omit them and you simply don't get the feature; DevConsole declares neither. | **No** (you put them in the debug manifest) |
-| `POST_NOTIFICATIONS` | **You**, in `src/debug` | Optional. Only decides whether the keep-alive notification is *visible* — the service runs either way. DevConsole never requests it unprompted; the inspector offers it. | **No** (same) |
+| `NEARBY_WIFI_DEVICES` | **DevConsole** (`devconsole`) | Nearby-devices permission used by Android 13–16's local-network compatibility path. The SDK declares `neverForLocation`; it does not read location. | **No** |
+| `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SPECIAL_USE` | **DevConsole** (`devconsole`) | Default debug-only keep-alive for the dashboard server — [keep-alive](docs/BACKGROUND_KEEPALIVE.md). The service runs whenever the server is running. | **No** |
+| `POST_NOTIFICATIONS` | **DevConsole** (`devconsole`) | Declared by the full runtime so the inspector can offer the Android 13+ runtime grant; it only controls notification visibility, not whether the service runs. | **No** |
 | `INTERNET` | **You**, in `src/main` | Binding the dashboard's TCP socket needs it. Not DevConsole-specific — most apps already declare it for their own networking, which is why DevConsole doesn't add it for you. | Yes — but it's yours, and almost certainly already there |
 
 Don't take the table's word for it. Check any build yourself:
@@ -474,16 +498,18 @@ resolved runtime classpath, and the final APK/AAB bytes. See
 DevConsole deliberately exposes your app's internals to a browser, and two of its defaults trade
 safety for a working first run. Know where the edges are:
 
-- **The dashboard speaks plaintext HTTP, and the default binding reaches your network.** There is no
-  TLS. `BindingMode.AUTO` binds your device's network address whenever it can, so anyone who can
-  watch your Wi-Fi packets can read everything the dashboard shows: headers, tokens, bodies,
-  exports. This is a debug-build-only surface behind a single-use expiring credential, which is why
-  the default favours reachability — but on an untrusted network (a conference, a café, a shared
-  office VLAN) pass `BindingMode.LOOPBACK`, or set
-  `BrowserConfig(binding = BrowserBinding.LOOPBACK)`, and use `adb forward`.
-- **The connect URL is a credential.** Holding a live `#code=` fragment creates a session, with no
-  approval step on the device. Codes are single-use and expire in five minutes; sessions last 30.
-  Treat the URL like a password. You can revoke sessions from the More screen.
+- **The dashboard speaks plaintext HTTP, and the default browser mode is open.** There is no TLS.
+  `BindingMode.AUTO` binds your device's network address whenever it can, and
+  `BrowserSecurity.NONE` means any client that can reach that address can read the dashboard and use
+  whatever editing capabilities the host enabled. Open mode still rejects browser mutations that
+  carry a foreign `Origin`; this protects against a cross-site browser request, not against another
+  client on the same reachable network. For a shared or untrusted network, pass
+  `BindingMode.LOOPBACK`, set `BrowserConfig(binding = BrowserBinding.LOOPBACK)`, or opt into
+  `BrowserSecurity.SESSION_CODE`.
+- **The connect URL is a credential only in SESSION_CODE mode.** Holding a live `#code=` fragment
+  creates a session, with no approval step on the device. Codes are single-use and expire in five
+  minutes; sessions last 30. Treat that URL like a password. You can revoke sessions from the More
+  screen.
 - **Redaction is an allowlist.** About 25 well-known field names and `Bearer` tokens get masked.
   Custom header names, signed-URL query params, and PII inside bodies pass through verbatim. See
   [docs/SECURITY_AND_REDACTION.md](docs/SECURITY_AND_REDACTION.md).

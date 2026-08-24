@@ -61,6 +61,19 @@ class DevConsoleContractTest {
         assertEquals(BindingMode.LOOPBACK, StartRequest(bindingMode = BindingMode.LOOPBACK).bindingMode)
     }
 
+    /**
+     * 8080 stays the preferred port, but the default must stay a *range*: a single-port default
+     * makes a second app on the device -- or a restart before the previous server released the
+     * port -- fail with [StartResult.PortUnavailable] instead of taking the next free port.
+     */
+    @Test
+    fun `StartRequest defaults to a port range headed by 8080`() {
+        val portRange = StartRequest().portRange
+
+        assertEquals(8080, portRange.first)
+        assertTrue("default range must leave fallback ports", portRange.last > portRange.first)
+    }
+
     @Test
     fun `default configuration is valid and uses documented session and storage limits`() {
         val config = DevConsoleConfig.default()

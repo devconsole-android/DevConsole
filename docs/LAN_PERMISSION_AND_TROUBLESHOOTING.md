@@ -3,7 +3,7 @@
 ## LAN binding
 
 ```kotlin
-DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LAN, portRange = 8080..8099))
+DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LAN))
 ```
 
 > The default, `BindingMode.AUTO`, does the same thing when it can and binds loopback when it
@@ -49,13 +49,16 @@ API 37, LAN mode works with no extra permission at all.
 > unreachable from a device that pings fine, this is why; upgrade, or grant the permission yourself
 > before starting.
 
-**The permission is declared for you; requesting it is yours.** `sdk:full` declares
-`ACCESS_LOCAL_NETWORK` in its own manifest, so it merges into your **debug** variant automatically
-and you do not add a `<uses-permission>` line. It never reaches release: `devconsole-noop` declares
+**The permissions are declared for you.** `sdk:full` declares `NEARBY_WIFI_DEVICES` for the Android
+13–16 compatibility path and `ACCESS_LOCAL_NETWORK` for Android 17+ in its own manifest, so they
+merge into your **debug** variant automatically and you do not add `<uses-permission>` lines. They
+never reach release: `devconsole-noop` declares
 nothing, which is why a release APK carries no trace of it (and why Google Play never sees it).
-Requesting it at runtime is still your app's job — use `ActivityResultContracts.RequestPermission`
-with `StartResult.PermissionRequired.permission` when you get that result back, exactly as all three
-samples do.
+Host-issued `startBrowser(StartRequest(bindingMode = BindingMode.LAN))` calls still return the
+version-appropriate `StartResult.PermissionRequired.permission` for the host to request with
+`ActivityResultContracts.RequestPermission`, exactly as the samples do. The SDK-owned More-screen
+Start button preflights the permission before launching the server, retries automatically after the
+grant, and shows an App-settings snackbar when Android has blocked the request.
 
 ## AUTO binding
 
@@ -94,11 +97,13 @@ preference only — it discovers nothing and starts nothing on its own.
 Still the safer default when you don't need cross-device access:
 
 ```kotlin
-DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK, portRange = 8080..8099))
+DevConsole.startBrowser(StartRequest(bindingMode = BindingMode.LOOPBACK))
 ```
 
-The server binds `127.0.0.1` on the first free port in `8080..8099`. On a physical device or an
-emulator that isn't already loopback-reachable from your machine, run:
+The server binds `127.0.0.1` on the first free port in `8080..8099` — 8080 is tried first, and the
+rest of the range keeps a second app (or a restart before the old server released the port) from
+failing outright. On a physical device or an emulator that isn't already loopback-reachable from
+your machine, run:
 
 ```bash
 adb forward tcp:8080 tcp:8080
@@ -128,24 +133,24 @@ that start to `BindingMode.LAN`.
 subnet/network (a guest Wi-Fi network with client isolation enabled will block this even though
 both devices show "connected"). For loopback mode, confirm `adb forward` targets the same port the
 SDK actually bound (`StartResult.Started.endpoint.port`), not a hardcoded `8080` — the SDK picks
-the first free port in the range, which may not be the first one.
+the first free port in the range, which may not be the first one. A repeated start from the same
+DevConsole runtime stops its own previous listener and retries `8080`; if an unrelated process owns
+`8080`, DevConsole leaves it alone and falls forward through the configured range.
 
-**Dashboard opens but every tab stays empty / status bar says "OFFLINE / PAUSED" forever** —
-you opened the bare `http://<host>:<port>/` instead of the actual connect URL. The dashboard's
-`Authorization` token only exists after the session-code exchange, and that exchange only runs if
-the URL's fragment contains `#code=<session code>` — the plain host:port URL has no fragment, so
-the page just sits there unauthenticated and every API call silently 401s. Always open (or scan
-the QR code for) `StartResult.Started.access.connectUrl` specifically, not
-`StartResult.Started.endpoint.host`/`.port` alone — the two are easy to conflate since the
-endpoint is also directly answerable from the same `StartResult`, but only the full connect URL
-actually authenticates the session.
+**Dashboard opens but every tab stays empty / status bar says "OFFLINE / PAUSED" forever** — first
+check which browser-security mode the server uses. The public full SDK defaults to open access, where
+the bare `http://<host>:<port>/` URL is correct. If you opted into
+`BrowserSecurity.SESSION_CODE`, use `StartResult.Started.access.connectUrl` or its QR so the
+`#code=<session code>` fragment can create the browser session; a plain host:port URL has no
+credential and will remain unauthenticated. The server's `/health` response says `open` or
+`auth_required`.
 
 **`StartResult.DisabledForBuild`** — you're running against `devconsole-noop` (production/protected
 variant). See [BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md](BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md).
 
-**Session expired / browser suddenly logged out** — sessions have an absolute 30-minute TTL (refreshable
-via `/auth/refresh`); they are also revoked immediately on server stop. Issue a fresh session code
-from the device and reconnect.
+**Session expired / browser suddenly logged out** — this applies to `SESSION_CODE` mode: sessions have
+an absolute 30-minute TTL (refreshable via `/auth/refresh`) and are revoked immediately on server stop.
+Issue a fresh session code from the device and reconnect. Open mode has no browser session to expire.
 
 ## Session codes ("SESSION_CODE_EXPIRED" / "SESSION_CODE_INVALID")
 

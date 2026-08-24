@@ -43,6 +43,11 @@ enum class BindingMode { LOOPBACK, LAN, AUTO }
 /** Stable host-facing server start options. */
 data class StartRequest(
     val bindingMode: BindingMode = BindingMode.AUTO,
+    /**
+     * Ports tried in order, so 8080 stays the preferred address while the range leaves room for a
+     * second app (or a second start before the first server stopped) to land on the next free port
+     * instead of failing with [StartResult.PortUnavailable].
+     */
     val portRange: IntRange = DEFAULT_PORT_RANGE_START..DEFAULT_PORT_RANGE_END,
 ) {
     fun validationErrors(): List<ConfigValidationError> {
@@ -69,10 +74,13 @@ data class BrowserEndpoint(
 )
 
 /**
- * Ephemeral connect information for the SESSION_CODE flow. [sessionCode] is a complete access
- * credential -- the live 8-character code -- and [connectUrl] embeds it in the `#code=` fragment.
- * There is no on-device approval step: whoever presents the code within its TTL gets a full
- * session. Never log, display outside the trusted device screen, or persist either value.
+ * Connect information for the running browser server.
+ *
+ * In the default [BrowserSecurity.NONE] mode, [connectUrl] is a bare server URL, [sessionCode] is
+ * empty, and [expiresAtEpochMs] is [Long.MAX_VALUE]. In [BrowserSecurity.SESSION_CODE] mode,
+ * [sessionCode] is a complete ephemeral credential and [connectUrl] embeds it in the `#code=`
+ * fragment. There is no on-device approval step: whoever presents that code within its TTL gets a
+ * full session. Never log, display outside the trusted device screen, or persist a session code.
  */
 class AccessInfo(
     val connectUrl: String,

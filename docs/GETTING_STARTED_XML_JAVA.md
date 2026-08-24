@@ -10,9 +10,10 @@ touch a coroutine: the `...Async` variants take a callback instead.
    The two coordinates are `com.github.devconsole-android.DevConsole:devconsole` for debug and
    `com.github.devconsole-android.DevConsole:devconsole-noop` for release; there is no BOM.
 
-2. Add `INTERNET` to your own app's manifest. The SDK's manifests auto-merge
-   `ACCESS_LOCAL_NETWORK`/`ACCESS_NETWORK_STATE`, but not `INTERNET` — without it, the embedded
-   server fails with an opaque socket error instead of a clear permission message:
+2. Add `INTERNET` to your own app's manifest. The full debug runtime auto-merges
+   `ACCESS_LOCAL_NETWORK`, `NEARBY_WIFI_DEVICES`, `ACCESS_NETWORK_STATE`, and the default
+   foreground-service permissions; it does not merge `INTERNET` — without it, the embedded server
+   fails with an opaque socket error instead of a clear permission message:
 
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
@@ -28,7 +29,8 @@ touch a coroutine: the `...Async` variants take a callback instead.
 ```
 
 4. Initialize, and use the `Async` counterparts of `startBrowser()`/`stop()` since Java has no
-   coroutines. Pass `startBrowserAsync(...)` a callback and call `panel.setEndpoint(...)` from it if
+   coroutines. The full debug runtime starts its foreground keep-alive service automatically when
+   `startBrowserAsync(...)` succeeds. Pass it a callback and call `panel.setEndpoint(...)` from it if
    you want the panel to show the bound address once it's known (`DevConsoleState.Running` itself
    carries no payload, so this is the only way to get it):
 

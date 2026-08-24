@@ -84,10 +84,10 @@ The device-side "More" destination (`sdk:ui-compose`'s `InspectorMoreScreen`, re
 `DevConsoleConfig.openTriggers`) is the operator console for the running server, independent of any
 connected browser:
 
-- **Session-code / connect** — shows the live `#code=` connect URL as text and as a **QR code**
-  (rendered on-device with an embedded QR encoder, no third-party dependency or network call), so a
-  second device can scan its way in without retyping an 8-character code. Regenerating shows the
-  new code/QR immediately; the previous code is invalidated the instant a new one is issued.
+- **Browser access / connect** — shows the live dashboard URL as text and as a **QR code** (rendered
+  on-device with an embedded QR encoder, no third-party dependency or network call). The default open
+  mode needs no key; with `BrowserSecurity.SESSION_CODE`, the QR contains the live single-use code and
+  regenerating immediately invalidates the previous code.
 - **Browser sessions** — every connected browser (label, source IP, expiry) with a per-session
   **Revoke** action. Revocation is symmetric: any session, including one revoking itself, can end
   any other (`DELETE /api/v1/auth/principals/{id}`) — see

@@ -47,9 +47,10 @@ release no-op counterpart, so a plain `implementation` dependency ships the laun
 release build with no build-time warning. The Gradle plugin's variant protection does not cover this
 module today; it is your responsibility to scope it to `debugImplementation` yourself.
 
-3. Add `INTERNET` to your own app's manifest. The SDK's manifests auto-merge
-   `ACCESS_LOCAL_NETWORK`/`ACCESS_NETWORK_STATE`, but not `INTERNET` — without it, the embedded
-   server fails with an opaque socket error instead of a clear permission message:
+3. Add `INTERNET` to your own app's manifest. The full debug runtime auto-merges
+   `ACCESS_LOCAL_NETWORK`, `NEARBY_WIFI_DEVICES`, `ACCESS_NETWORK_STATE`, and the default
+   foreground-service permissions; it does not merge `INTERNET` — without it, the embedded server
+   fails with an opaque socket error instead of a clear permission message:
 
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
@@ -67,7 +68,8 @@ module today; it is your responsibility to scope it to `debugImplementation` you
 5. Initialize and bind the panel. On a debuggable build the SDK has already auto-initialized by
    this point, so `initialize` is only needed when you have configuration to pass (state providers,
    flags, open triggers). The panel starts out showing "not running" either way -- the browser
-   server is never auto-started, so `onStart` below is what actually opens it. `DevConsoleState.Running` carries no
+   server is never auto-started, so `onStart` below is what actually opens it. Once opened, the full
+   debug runtime starts its foreground keep-alive service automatically. `DevConsoleState.Running` carries no
    payload, so call `panel.setEndpoint(...)` with the `StartResult.Started.endpoint` your own
    `onStart` receives if you want the running address shown — it's cleared automatically the next
    time the panel renders a non-running state:
@@ -95,8 +97,9 @@ panel.bind(
 )
 ```
 
-6. Tap Start — the panel now shows the bound address (e.g. `DevConsole server is running at 192.168.0.15:8080`)
-   — then open that address (or the connect URL with its `#code=` fragment) in a browser on the same machine (or
-   `adb forward tcp:8080 tcp:8080` first if the device isn't local).
+6. Tap Start — the panel now shows the bound address (e.g. `DevConsole server is running at 192.168.0.15:8080`).
+   Open that address in the default open mode; if you configure `BrowserSecurity.SESSION_CODE`, use the
+   connect URL with its `#code=` fragment instead. Use `adb forward tcp:8080 tcp:8080` first if the device
+   isn't local — 8080 is only the first port tried, so use whatever port the panel actually shows.
 
 Every SDK entry point used above is also directly Java-callable — see [GETTING_STARTED_XML_JAVA.md](GETTING_STARTED_XML_JAVA.md) if your project is Java rather than Kotlin. [`samples/views-java-app`](../samples/views-java-app/src/main/java/io/devconsole/sample/viewsjava/MainActivity.java) shows a complete working example with `DevConsolePanelView`, network capture, mocks, and the open triggers. See [NETWORK_INSPECTOR.md](NETWORK_INSPECTOR.md), [WEBSOCKET_INSPECTOR.md](WEBSOCKET_INSPECTOR.md), [PUSH.md](PUSH.md), [COMPOSER_AND_MOCKS.md](COMPOSER_AND_MOCKS.md), and [STATE_AND_FLAGS.md](STATE_AND_FLAGS.md) for wiring the actual inspectors once the panel is working.

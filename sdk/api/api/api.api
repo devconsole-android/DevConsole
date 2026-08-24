@@ -62,6 +62,14 @@ public final class io/devconsole/api/BrowserEndpoint {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/devconsole/api/BrowserSecurity : java/lang/Enum {
+	public static final field NONE Lio/devconsole/api/BrowserSecurity;
+	public static final field SESSION_CODE Lio/devconsole/api/BrowserSecurity;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/devconsole/api/BrowserSecurity;
+	public static fun values ()[Lio/devconsole/api/BrowserSecurity;
+}
+
 public final class io/devconsole/api/CaptureCategory : java/lang/Enum {
 	public static final field CRASHES Lio/devconsole/api/CaptureCategory;
 	public static final field Companion Lio/devconsole/api/CaptureCategory$Companion;
@@ -249,6 +257,7 @@ public final class io/devconsole/api/DevConsoleConfig {
 	public static final fun default ()Lio/devconsole/api/DevConsoleConfig;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBrowserConfig ()Lio/devconsole/api/BrowserConfig;
+	public final fun getBrowserSecurity ()Lio/devconsole/api/BrowserSecurity;
 	public final fun getCaptureCategories ()Ljava/util/Set;
 	public final fun getComposerAllowedHosts ()Ljava/util/Set;
 	public final fun getComposerEnabled ()Z
@@ -272,6 +281,7 @@ public final class io/devconsole/api/DevConsoleConfig {
 	public final fun validationErrors (Z)Ljava/util/List;
 	public static synthetic fun validationErrors$default (Lio/devconsole/api/DevConsoleConfig;ZILjava/lang/Object;)Ljava/util/List;
 	public final fun withBrowserConfig (Lio/devconsole/api/BrowserConfig;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withBrowserSecurity (Lio/devconsole/api/BrowserSecurity;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withCaptureCategories (Ljava/util/Set;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withCaptureCategories ([Lio/devconsole/api/CaptureCategory;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withCrashPolicy (Lio/devconsole/api/CrashPolicy;)Lio/devconsole/api/DevConsoleConfig;
@@ -291,6 +301,7 @@ public final class io/devconsole/api/DevConsoleConfig$Builder {
 	public final fun addRemoteConfigProvider (Lio/devconsole/remoteconfig/RemoteConfigProvider;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun addStateProvider (Lio/devconsole/state/StateProvider;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun browserConfig (Lio/devconsole/api/BrowserConfig;)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun browserSecurity (Lio/devconsole/api/BrowserSecurity;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun build ()Lio/devconsole/api/DevConsoleConfig;
 	public final fun captureCategories (Ljava/util/Set;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun composerAllowedHosts (Ljava/util/Set;)Lio/devconsole/api/DevConsoleConfig$Builder;
