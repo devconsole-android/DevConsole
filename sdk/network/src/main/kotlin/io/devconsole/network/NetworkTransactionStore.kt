@@ -98,6 +98,15 @@ interface NetworkTransactionStore {
     fun find(id: String): NetworkTransaction?
 
     fun statusDistribution(): Map<String, Int>
+
+    /**
+     * Discards every stored transaction. Backs the operator-facing "clear captures" affordance on
+     * both the in-app inspector and the dashboard, as well as the session-rollover reset in
+     * `PlatformFacadeProvider`. On the interface rather than only on
+     * [InMemoryNetworkTransactionStore] because callers that hold a store through this type -- the
+     * Ktor module's `networkTransactions`, notably -- are exactly the ones that need it.
+     */
+    fun clear()
 }
 
 /** Bounded, thread-safe transaction store for the live network inspector. */
@@ -133,7 +142,7 @@ class InMemoryNetworkTransactionStore(
         return this
     }
 
-    fun clear() =
+    override fun clear() =
         synchronized(lock) {
             transactions.clear()
             storedBytes = 0

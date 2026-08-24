@@ -379,6 +379,7 @@ private fun TrafficRow(
             leadColor = leadColor,
             leadContainerColor = leadBg,
             title = transaction.path.substringBefore('?'),
+            titleMaxLines = 2,
             subtitle = "${transaction.host} · ${formatCaptureClockTime(transaction.startedAtEpochMs)}$mockedSuffix",
             trailValue = transaction.statusCode?.toString() ?: "ERR",
             trailValueColor = statusTint(transaction.statusCode, colors),

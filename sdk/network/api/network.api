@@ -180,7 +180,7 @@ public final class io/devconsole/network/InMemoryNetworkTransactionStore : io/de
 	public static final field DEFAULT_MAX_TRANSACTIONS I
 	public fun <init> (Lio/devconsole/network/NetworkCursorCodec;I)V
 	public synthetic fun <init> (Lio/devconsole/network/NetworkCursorCodec;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun clear ()V
+	public fun clear ()V
 	public fun find (Ljava/lang/String;)Lio/devconsole/network/NetworkTransaction;
 	public fun page (Lio/devconsole/network/NetworkTransactionQuery;)Lio/devconsole/network/NetworkTransactionPage;
 	public fun record (Lio/devconsole/network/NetworkTransaction;)V
@@ -551,6 +551,7 @@ public final class io/devconsole/network/NetworkTransactionRecorder$Companion {
 }
 
 public abstract interface class io/devconsole/network/NetworkTransactionStore {
+	public abstract fun clear ()V
 	public abstract fun find (Ljava/lang/String;)Lio/devconsole/network/NetworkTransaction;
 	public abstract fun page (Lio/devconsole/network/NetworkTransactionQuery;)Lio/devconsole/network/NetworkTransactionPage;
 	public abstract fun record (Lio/devconsole/network/NetworkTransaction;)V

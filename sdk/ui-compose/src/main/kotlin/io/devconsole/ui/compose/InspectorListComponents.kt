@@ -107,6 +107,13 @@ internal fun TonalListRow(
     subtitle: String,
     trailValue: String,
     modifier: Modifier = Modifier,
+    /**
+     * Lines [title] may wrap to before it ellipsizes. `1` -- one line, the row's fixed 48dp shape --
+     * for every list whose titles are scannable at a glance; raise it only where the title is the
+     * row's payload rather than its label (a log message, a crash reason) and truncating it loses
+     * the thing the reader came for. The row grows to fit, since its height is a `heightIn` floor.
+     */
+    titleMaxLines: Int = 1,
     trailValueColor: Color = DevConsoleTheme.colors.ink,
     trailSubtitle: String? = null,
     containerColor: Color = Color.Transparent,
@@ -160,7 +167,7 @@ internal fun TonalListRow(
                 title,
                 color = DevConsoleTheme.colors.ink,
                 style = DevConsoleType.rowTitle,
-                maxLines = 1,
+                maxLines = titleMaxLines,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(

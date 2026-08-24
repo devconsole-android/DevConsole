@@ -102,6 +102,7 @@ class InspectorViewModel
                 is InspectorAction.OpenTable -> openTable(action.database, action.table)
                 is InspectorAction.ExecuteSql -> executeSql(action.database, action.sql)
                 InspectorAction.DismissCommandResult -> dismissCommandResult()
+                InspectorAction.ClearTransactions -> clearTransactions()
                 InspectorAction.ExportHar -> exportHar()
                 InspectorAction.ExportPostman -> exportPostman()
                 InspectorAction.ExportSessionZip -> exportSessionZip()
@@ -545,6 +546,22 @@ class InspectorViewModel
             viewModelScope.launch(dispatcher) {
                 val result = dataSource.executeSql(database, sql)
                 mutableState.update { it.copy(sqlResult = result) }
+            }
+        }
+
+        /**
+         * Ungated, like the exports below: clearing discards this SDK's own capture buffer and never
+         * touches host application state (see FullInspectorDataSource). The selection is dropped
+         * before the reload because it holds ids, not captures -- keeping it would leave the traffic
+         * tab in selection mode over rows that no longer exist. [loadSnapshot] then re-reads, so the
+         * emptied list comes from the adapter's real post-clear state rather than an assumed-empty
+         * local one.
+         */
+        private fun clearTransactions() {
+            viewModelScope.launch(dispatcher) {
+                showComposerResult(dataSource.clearTransactions())
+                mutableState.update { it.copy(selectedTransactionIds = emptySet()) }
+                loadSnapshot()
             }
         }
 
