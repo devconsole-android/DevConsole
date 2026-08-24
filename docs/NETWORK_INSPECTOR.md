@@ -107,6 +107,17 @@ detail pane showing redacted headers and body. From the detail pane you can:
   export is available as an in-app action on the device — see
   [DATA_INSPECTORS_AND_EXPORTS.md](DATA_INSPECTORS_AND_EXPORTS.md).
 
+The Network page's toolbar also carries **Clear captures** (`DELETE /api/v1/network/transactions`),
+which discards every captured transaction on the device after a confirmation. The same action is
+available in the in-app inspector, as the trash icon in the Observe screen's top area on the Traffic
+tab. Either one empties the single shared store, so a clear on the device empties the dashboard's
+list too (and vice versa) on its next read.
+
+Captures are held in memory only, so a clear cannot be undone. Anything flagged as evidence survives
+it: the evidence tray stores materialized copies of flagged captures and outlives the live buffer by
+design — see [EVIDENCE_AND_BUG_REPORTS.md](EVIDENCE_AND_BUG_REPORTS.md). Timeline events recorded for
+those requests are a separate store and are likewise untouched.
+
 The Overview page's network-status-distribution widget (`GET /api/v1/overview`) buckets recent
 transactions by `2xx`/`3xx`/`4xx`/`5xx`/`pending` via `NetworkTransactionStore.statusDistribution()`.
 

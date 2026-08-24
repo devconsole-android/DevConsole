@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
  * bezier replication of arcs -- the design spec's pixel-authoritative language covers
  * sizes/spacing/radii/colors/typography/states, not icon vector art).
  */
-internal enum class ObserveGlyph { Plug, Activity, Filter, Refresh, Download, Sun, Tag }
+internal enum class ObserveGlyph { Plug, Activity, Filter, Refresh, Download, Sun, Tag, Trash }
 
 private const val GLYPH_VIEWBOX = 16f
 private const val GLYPH_STROKE_WIDTH = 1.4f
@@ -105,6 +105,19 @@ private fun DrawScope.drawObserveGlyph(
             path.lineTo(8.5f * scale, 12f * scale)
             path.lineTo(10.5f * scale, 8f * scale)
             path.lineTo(14f * scale, 8f * scale)
+        }
+        ObserveGlyph.Trash -> {
+            // M2.5 4h11M6.5 4V2.5h3V4M4 4l.75 9.5h6.5L12 4 -- lid line, handle, tapered can.
+            path.moveTo(2.5f * scale, 4f * scale)
+            path.lineTo(13.5f * scale, 4f * scale)
+            path.moveTo(6.5f * scale, 4f * scale)
+            path.lineTo(6.5f * scale, 2.5f * scale)
+            path.lineTo(9.5f * scale, 2.5f * scale)
+            path.lineTo(9.5f * scale, 4f * scale)
+            path.moveTo(4f * scale, 4f * scale)
+            path.lineTo(4.75f * scale, 13.5f * scale)
+            path.lineTo(11.25f * scale, 13.5f * scale)
+            path.lineTo(12f * scale, 4f * scale)
         }
         ObserveGlyph.Tag -> {
             // M2 8.5 7.5 3h5.5v5.5L8.5 13 2 8.5Z + a small punch-hole -- a price tag shape.

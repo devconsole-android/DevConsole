@@ -121,6 +121,7 @@ public final class io/devconsole/ui/compose/ComposableSingletons$InspectorNavCom
 	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorNavComponentsKt;
 	public fun <init> ()V
 	public final fun getLambda$-1348228066$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-945241836$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$1070396343$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 }
 
@@ -138,6 +139,7 @@ public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObserv
 	public final fun getLambda$-1017166837$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-1550195010$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-1782394095$ui_compose_release ()Lkotlin/jvm/functions/Function2;
+	public final fun getLambda$-219796685$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-650102098$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-970086269$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$-998201989$ui_compose_release ()Lkotlin/jvm/functions/Function2;
@@ -154,6 +156,12 @@ public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObserv
 	public fun <init> ()V
 	public final fun getLambda$-1047114689$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$-1125610964$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+}
+
+public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObserveScreenKt {
+	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorObserveScreenKt;
+	public fun <init> ()V
+	public final fun getLambda$-606130299$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 }
 
 public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObserveSignalsKt {
@@ -260,6 +268,14 @@ public final class io/devconsole/ui/compose/InspectorAction$CaptureScreenshot : 
 public final class io/devconsole/ui/compose/InspectorAction$ClearTransactionSelection : io/devconsole/ui/compose/InspectorAction {
 	public static final field $stable I
 	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$ClearTransactionSelection;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/ui/compose/InspectorAction$ClearTransactions : io/devconsole/ui/compose/InspectorAction {
+	public static final field $stable I
+	public static final field INSTANCE Lio/devconsole/ui/compose/InspectorAction$ClearTransactions;
 	public fun equals (Ljava/lang/Object;)Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
@@ -895,6 +911,7 @@ public final class io/devconsole/ui/compose/InspectorCrashUi {
 public abstract interface class io/devconsole/ui/compose/InspectorDataSource {
 	public fun captureRules ()Ljava/util/List;
 	public fun captureScreenshot (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun clearTransactions ()Lio/devconsole/ui/compose/InspectorCommandResult;
 	public fun crashesForSession (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun deleteCaptureRule (Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult;
 	public abstract fun deleteFile (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/ui/compose/InspectorCommandResult;
@@ -941,6 +958,7 @@ public abstract interface class io/devconsole/ui/compose/InspectorDataSource {
 public final class io/devconsole/ui/compose/InspectorDataSource$DefaultImpls {
 	public static fun captureRules (Lio/devconsole/ui/compose/InspectorDataSource;)Ljava/util/List;
 	public static fun captureScreenshot (Lio/devconsole/ui/compose/InspectorDataSource;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun clearTransactions (Lio/devconsole/ui/compose/InspectorDataSource;)Lio/devconsole/ui/compose/InspectorCommandResult;
 	public static fun crashesForSession (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun exportHar$default (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/util/Set;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorCommandResult;
 	public static synthetic fun exportPostman$default (Lio/devconsole/ui/compose/InspectorDataSource;Ljava/util/Set;ILjava/lang/Object;)Lio/devconsole/ui/compose/InspectorCommandResult;

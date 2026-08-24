@@ -170,6 +170,57 @@ class InMemoryNetworkTransactionStoreTest {
         assertEquals(listOf("matching"), page.transactions.map(NetworkTransaction::id))
     }
 
+    @Test
+    fun `clear empties the store`() {
+        val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
+        store.record(transaction("first", 100, "GET", "https://api.test/first", 200))
+        store.record(transaction("second", 200, "POST", "https://api.test/second", 201))
+
+        store.clear()
+
+        assertEquals(emptyList<NetworkTransaction>(), store.page(NetworkTransactionQuery(limit = 10)).transactions)
+        assertNull(store.find("first"))
+        assertEquals(emptyMap<String, Int>(), store.statusDistribution())
+    }
+
+    /**
+     * [InMemoryNetworkTransactionStore] prunes on a running byte total, so a clear that emptied the
+     * list without zeroing that total would leave the store believing it still held the cleared
+     * bytes -- and evict freshly recorded captures to get back under a budget nothing is using.
+     */
+    @Test
+    fun `clear resets the byte budget so later records are not evicted`() {
+        val store =
+            InMemoryNetworkTransactionStore(
+                NetworkCursorCodec("network-cursor-key".encodeToByteArray()),
+                maxTransactions = 10,
+            ).withByteCapacity(700)
+        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+        val bulky = { id: String ->
+            NetworkTransaction(
+                id = id,
+                startedAtEpochMs = 1L,
+                completedAtEpochMs = 2L,
+                capture =
+                    factory.capture(
+                        NetworkRequestInput(
+                            "POST",
+                            "https://api.test/$id",
+                            body = "x".repeat(500).encodeToByteArray(),
+                            contentType = "text/plain",
+                        ),
+                        null,
+                    ),
+            )
+        }
+        store.record(bulky("before-clear"))
+
+        store.clear()
+        store.record(bulky("after-clear"))
+
+        assertEquals(listOf("after-clear"), store.page(NetworkTransactionQuery(limit = 10)).transactions.map { it.id })
+    }
+
     private fun transaction(
         id: String,
         startedAt: Long,

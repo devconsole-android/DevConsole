@@ -2,6 +2,7 @@
  * @author Shakib
  * @since 05/08/26
  */
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @file:Suppress("FunctionNaming", "MagicNumber", "TooManyFunctions", "UnusedPrivateMember", "MatchingDeclarationName")
 
 package io.devconsole.ui.compose
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -26,6 +29,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,20 +41,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
  * Which rule the create/edit sheet is showing; [InspectorMockRuleUi.id] is disabled for [Edit].
  * [New.draft] lets a caller prefill a brand-new rule (e.g. mock-from-capture's
  * [mockRuleDraftFromTransaction]) while keeping the id field editable, unlike [Edit].
- * [New.prefillNote], when set, renders under the body field -- honesty about *where* a prefilled
- * body/headers came from (a redacted, possibly-truncated capture preview) rather than presenting it
- * as the real payload.
+ * [New.prefillNote], when set, renders under the body field -- reserved for a prefill the form
+ * genuinely could not carry (a binary response body), not for narrating an ordinary one.
  */
 internal sealed interface MockRuleEditorTarget {
     /**
@@ -174,7 +181,10 @@ internal fun MockRuleEditorScreen(
     val errors = rememberMockRuleFormErrors(form)
     var showErrors by remember { mutableStateOf(false) }
     var advancedExpanded by rememberSaveable { mutableStateOf(false) }
-    var bodyFormatError by remember { mutableStateOf<String?>(null) }
+    // Collapsed when the rule already carries headers -- a capture prefill dumps 20+ lines here and
+    // pushed status/body off-screen. A blank rule opens expanded: nothing to hide, and the field is
+    // where a new rule's Content-Type gets typed.
+    var headersExpanded by rememberSaveable(target.formSourceKey()) { mutableStateOf(initial.headers.isEmpty()) }
 
     BackHandler(onBack = onCancel)
 
@@ -216,9 +226,9 @@ internal fun MockRuleEditorScreen(
             delayError = errors.delay,
             advancedExpanded = advancedExpanded,
             onAdvancedExpandedChange = { advancedExpanded = it },
-            bodyFormatError = bodyFormatError,
-            onBodyFormatErrorChange = { bodyFormatError = it },
             prefillNote = (target as? MockRuleEditorTarget.New)?.prefillNote,
+            headersExpanded = headersExpanded,
+            onHeadersExpandedChange = { headersExpanded = it },
         )
     }
 }
@@ -328,35 +338,19 @@ private fun MockRuleEditorBodyFields(
     delayError: String?,
     advancedExpanded: Boolean,
     onAdvancedExpandedChange: (Boolean) -> Unit,
-    bodyFormatError: String?,
-    onBodyFormatErrorChange: (String?) -> Unit,
     prefillNote: String?,
+    headersExpanded: Boolean,
+    onHeadersExpandedChange: (Boolean) -> Unit,
 ) {
-    MockRuleTextField(
-        "Response headers",
-        form.headersText.value,
-        { form.headersText.value = it },
-        colors,
-        placeholder = "Content-Type: application/json",
-        singleLine = false,
-        minLines = 3,
+    MockRuleHeadersSection(
+        form = form,
+        colors = colors,
+        expanded = headersExpanded,
+        onToggle = { onHeadersExpandedChange(!headersExpanded) },
     )
     MockRuleBodyField(
         value = form.bodyText.value,
-        onValueChange = {
-            form.bodyText.value = it
-            onBodyFormatErrorChange(null)
-        },
-        formatError = bodyFormatError,
-        onFormatClick = {
-            when (val result = formatMockRuleBodyJson(form.bodyText.value)) {
-                is JsonFormatResult.Formatted -> {
-                    form.bodyText.value = result.text
-                    onBodyFormatErrorChange(null)
-                }
-                is JsonFormatResult.Error -> onBodyFormatErrorChange("Not valid JSON: ${result.message}")
-            }
-        },
+        onValueChange = { form.bodyText.value = it },
         colors = colors,
     )
     if (prefillNote != null) {
@@ -471,50 +465,33 @@ private fun MockRuleTextField(
     placeholder: String = "",
     enabled: Boolean = true,
     errorText: String? = null,
-    singleLine: Boolean = true,
-    minLines: Int = 1,
 ) {
     // The field's own accessible name, announced on the actual editable/value node (not merged with
     // the sibling label Text) so its edit action stays reachable.
     val fieldDescription = if (errorText != null) "$label, error: $errorText" else label
     Column(modifier = modifier.fillMaxWidth().padding(bottom = 16.dp)) {
         MockRuleFieldLabel(label, colors)
-        if (singleLine) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(if (enabled) colors.surface2 else colors.surface3)
-                        .padding(horizontal = 16.dp)
-                        .semantics(mergeDescendants = true) { contentDescription = fieldDescription },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (enabled) {
-                    InspectorPlainTextField(value, onValueChange, placeholder, colors.ink, colors.text3)
-                } else {
-                    Text(
-                        value.ifBlank { placeholder },
-                        color = colors.muted,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                    )
-                }
-            }
-        } else {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 22.dp * minLines + 24.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(colors.surface2)
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .semantics(mergeDescendants = true) { contentDescription = fieldDescription },
-            ) {
-                InspectorMultilineTextField(value, onValueChange, placeholder, colors.ink, colors.text3)
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(if (enabled) colors.surface2 else colors.surface3)
+                    .padding(horizontal = 16.dp)
+                    .semantics(mergeDescendants = true) { contentDescription = fieldDescription },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (enabled) {
+                InspectorPlainTextField(value, onValueChange, placeholder, colors.ink, colors.text3)
+            } else {
+                Text(
+                    value.ifBlank { placeholder },
+                    color = colors.muted,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                )
             }
         }
         if (errorText != null) {
@@ -528,15 +505,127 @@ private fun MockRuleTextField(
     }
 }
 
-/** Response body field with a non-blocking JSON Format action. */
+/**
+ * Response headers behind a [CollapsibleSection]. The meta line carries what collapsing would
+ * otherwise hide: how many headers are in there, and how many lines Save is going to drop on the
+ * floor (a line with no colon parses to nothing -- silent until now).
+ */
+@Composable
+private fun MockRuleHeadersSection(
+    form: MockRuleFormFields,
+    colors: DevConsoleColors,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val parsed = remember(form.headersText.value) { parseMockRuleHeaderLines(form.headersText.value) }
+    CollapsibleSection(
+        label = "Response headers",
+        expanded = expanded,
+        onToggle = onToggle,
+        meta = parsed.metaLabel(),
+        metaColor = if (parsed.skippedLines > 0) colors.warn else colors.muted,
+        modifier = Modifier.padding(bottom = 12.dp),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .heightIn(min = 90.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(colors.surface2)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .semantics(mergeDescendants = true) { contentDescription = "Response headers" },
+        ) {
+            InspectorMultilineTextField(
+                form.headersText.value,
+                { form.headersText.value = it },
+                "Content-Type: application/json",
+                colors.ink,
+                colors.text3,
+            )
+        }
+    }
+}
+
+/**
+ * Kept short on purpose: the section header gives the label only what is left after the meta, and
+ * "23 headers \u00b7 1 ignored" is long enough to ellipsize "Response headers" itself. The noun is
+ * already in the label, so the flagged variant drops it.
+ */
+private fun ParsedMockRuleHeaders.metaLabel(): String =
+    if (skippedLines == 0) {
+        "${headers.size} header${if (headers.size == 1) "" else "s"}"
+    } else {
+        "${headers.size} \u00b7 $skippedLines ignored"
+    }
+
+/**
+ * Response body field with a non-blocking JSON Format action and a FIND toggle that reveals a
+ * key search: matching keys get the same wash the read-only viewer uses, and the count sits in the
+ * search field itself. Collapsed by default -- most rules are small enough to read.
+ */
 @Composable
 private fun MockRuleBodyField(
     value: String,
     onValueChange: (String) -> Unit,
-    formatError: String?,
-    onFormatClick: () -> Unit,
     colors: DevConsoleColors,
 ) {
+    // Search state is this field's own business: nothing above it saves, validates or reads a query.
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val matches = remember(value, query) { bodySearchMatches(value, query) }
+    // Editing the body or the query re-keys this, so the arrows always restart from the first hit
+    // rather than pointing at an ordinal that no longer means the same match.
+    var activeIndex by remember(matches) { mutableStateOf(0) }
+    // The caret lives here (not in the form) because only the arrows need to move it. Coerced on
+    // read: FORMAT rewrites the body underneath us, which can leave a stale range past its end.
+    var selection by remember { mutableStateOf(TextRange.Zero) }
+    val activeMatch = matches.getOrNull(activeIndex)
+    val fieldValue = TextFieldValue(text = value, selection = selection.within(value.length))
+
+    // Scroll-to-match without focus: a FocusRequester would work too, but focusing a text field
+    // summons the keyboard (hide() loses the race against the IME's own show), which both covers the
+    // body and leaves the scaffold's ime padding fighting the scroll. bringIntoView needs neither.
+    val bringMatchIntoView = remember { BringIntoViewRequester() }
+    var bodyTextLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val scope = rememberCoroutineScope()
+
+    // Lives here rather than in the parent so FORMAT can share the caret and scroll the arrows use.
+    var formatError by remember { mutableStateOf<String?>(null) }
+
+    fun revealOffset(offset: Int) {
+        val at = offset.coerceIn(0, (value.length - 1).coerceAtLeast(0))
+        selection = TextRange(at, (at + 1).coerceAtMost(value.length))
+        val layout = bodyTextLayout ?: return
+        scope.launch { bringMatchIntoView.bringIntoView(layout.getBoundingBox(at)) }
+    }
+
+    // Wraps in both directions -- "next" off the last hit lands on the first, same as any find bar.
+    fun jumpToMatch(step: Int) {
+        if (matches.isEmpty()) return
+        val next = (activeIndex + step).mod(matches.size)
+        activeIndex = next
+        revealOffset(matches[next].first)
+        selection = TextRange(matches[next].first, matches[next].last + 1)
+    }
+
+    // Re-indenting valid-but-mangled JSON is the whole job here. Broken JSON can't be reformatted --
+    // a formatter that guessed where your missing comma went would be worse than one that refuses --
+    // so instead the caret goes to the character the parser choked on, which is the actionable half.
+    fun formatBody() {
+        when (val result = formatMockRuleBodyJson(value)) {
+            is JsonFormatResult.Formatted -> {
+                onValueChange(result.text)
+                formatError = null
+            }
+            is JsonFormatResult.Error -> {
+                formatError = "Not valid JSON: ${result.message}"
+                revealOffset(result.offset)
+            }
+        }
+    }
+
     Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
         Row(
             Modifier.fillMaxWidth(),
@@ -544,20 +633,33 @@ private fun MockRuleBodyField(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             MockRuleFieldLabel("Response body", colors)
-            Text(
-                "FORMAT",
-                color = colors.put,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.5.sp,
-                modifier =
-                    Modifier
-                        .minimumInteractiveComponentSize()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(colors.putSoft)
-                        .clickable(onClick = onFormatClick, role = Role.Button)
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                        .semantics { contentDescription = "Format response body as JSON" },
+            MockRuleBodyActions(
+                colors = colors,
+                searchExpanded = searchExpanded,
+                // Collapsing clears the query: a hidden find that still filters nothing but is
+                // secretly holding "aut" is a surprise waiting for the next time it opens. It also
+                // collapses the selection the arrows left behind -- otherwise the match you stepped
+                // to stays visibly highlighted by the field's own selection colour, so closing the
+                // search looks like it kept one hit selected for no reason. Caret stays where the
+                // match was, so typing carries on from there.
+                onToggleSearch = {
+                    searchExpanded = !searchExpanded
+                    if (!searchExpanded) {
+                        query = ""
+                        selection = TextRange(selection.start)
+                    }
+                },
+                onFormat = { formatBody() },
+            )
+        }
+        if (searchExpanded) {
+            MockRuleBodySearchRow(
+                query = query,
+                onQueryChange = { query = it },
+                activeIndex = activeIndex,
+                matchCount = matches.size,
+                colors = colors,
+                onStep = ::jumpToMatch,
             )
         }
         val bodyDescription = if (formatError != null) "Response body, error: $formatError" else "Response body"
@@ -571,11 +673,26 @@ private fun MockRuleBodyField(
                     .padding(horizontal = 16.dp, vertical = 12.dp)
                     .semantics(mergeDescendants = true) { contentDescription = bodyDescription },
         ) {
-            InspectorMultilineTextField(value, onValueChange, "{ }", colors.ink, colors.text3)
+            InspectorMultilineTextField(
+                fieldValue,
+                { edited ->
+                    selection = edited.selection
+                    if (edited.text != value) {
+                        formatError = null
+                        onValueChange(edited.text)
+                    }
+                },
+                "{ }",
+                colors.ink,
+                colors.text3,
+                modifier = Modifier.bringIntoViewRequester(bringMatchIntoView),
+                onTextLayout = { bodyTextLayout = it },
+                visualTransformation = rememberJsonSyntaxTransformation(colors, query, activeMatch),
+            )
         }
-        if (formatError != null) {
+        formatError?.let { message ->
             Text(
-                formatError,
+                message,
                 color = colors.warn,
                 fontSize = 11.5.sp,
                 modifier = Modifier.padding(top = 4.dp, start = 4.dp),
@@ -583,6 +700,99 @@ private fun MockRuleBodyField(
         }
     }
 }
+
+/** The body field's find row: query, "3/12", and the two step arrows. [onStep] takes -1 or +1. */
+@Composable
+private fun MockRuleBodySearchRow(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    activeIndex: Int,
+    matchCount: Int,
+    colors: DevConsoleColors,
+    onStep: (Int) -> Unit,
+) {
+    InspectorDetailSearchField(
+        query = query,
+        onQueryChange = onQueryChange,
+        matchLabel = bodyMatchLabel(query, activeIndex, matchCount),
+        placeholder = "Find in body",
+        matchColor = if (query.isNotBlank() && matchCount == 0) colors.warn else colors.muted,
+        onPrevious = { onStep(-1) },
+        onNext = { onStep(1) },
+        navigationEnabled = matchCount > 0,
+    )
+}
+
+/** Keeps a caret from pointing past the end of a body that FORMAT just rewrote shorter. */
+private fun TextRange.within(length: Int): TextRange = TextRange(start.coerceIn(0, length), end.coerceIn(0, length))
+
+/** The body field's FIND (filled while open) and FORMAT pills. */
+@Composable
+private fun MockRuleBodyActions(
+    colors: DevConsoleColors,
+    searchExpanded: Boolean,
+    onToggleSearch: () -> Unit,
+    onFormat: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        MockRuleBodyAction(
+            label = "FIND",
+            color = if (searchExpanded) colors.signalInk else colors.signal,
+            container = if (searchExpanded) colors.signal else colors.signalSoft,
+            description = if (searchExpanded) "Hide body search" else "Search response body",
+            onClick = onToggleSearch,
+        )
+        MockRuleBodyAction(
+            label = "FORMAT",
+            color = colors.put,
+            container = colors.putSoft,
+            description = "Format response body as JSON",
+            onClick = onFormat,
+        )
+    }
+}
+
+/** The FORMAT/FIND pills above the body field -- same shape, different tone. */
+@Composable
+private fun MockRuleBodyAction(
+    label: String,
+    color: Color,
+    container: Color,
+    description: String,
+    onClick: () -> Unit,
+) {
+    Text(
+        label,
+        color = color,
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.Bold,
+        fontSize = 11.5.sp,
+        modifier =
+            Modifier
+                .minimumInteractiveComponentSize()
+                .clip(RoundedCornerShape(6.dp))
+                .background(container)
+                .clickable(onClick = onClick, role = Role.Button)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .semantics { contentDescription = description },
+    )
+}
+
+/**
+ * "3/12" while there is something to step through -- same shape as [detailSearchMatchLabel] on the
+ * read-only detail screens. Empty while nothing is typed: a "0" on an empty query reads as a failed
+ * search.
+ */
+private fun bodyMatchLabel(
+    query: String,
+    activeIndex: Int,
+    matchCount: Int,
+): String =
+    when {
+        query.isBlank() -> ""
+        matchCount == 0 -> "No match"
+        else -> "${activeIndex + 1}/$matchCount"
+    }
 
 /**
  * Editable Compose state for every field on the sheet, seeded once from [initial]. [methodChips]/
@@ -631,7 +841,9 @@ private fun rememberMockRuleFormFields(
         pathPattern = rememberSaveable(sourceKey) { mutableStateOf(initial.pathPattern) },
         statusText = rememberSaveable(sourceKey) { mutableStateOf(initial.statusCode.toString()) },
         headersText = rememberSaveable(sourceKey) { mutableStateOf(initial.headers.toMockRuleHeaderLines()) },
-        bodyText = rememberSaveable(sourceKey) { mutableStateOf(initial.body) },
+        // Opens pretty-printed so a captured one-line JSON body is readable without tapping
+        // Format; a non-JSON body (HTML, plain text, template) stays exactly as captured.
+        bodyText = rememberSaveable(sourceKey) { mutableStateOf(prettyOrRaw(initial.body)) },
         priorityText = rememberSaveable(sourceKey) { mutableStateOf(initial.priority.toString()) },
         scope = rememberSaveable(sourceKey) { mutableStateOf(initial.scope) },
         scopeChips = remember(initial.scope) { chipsIncluding(MOCK_RULE_SCOPES, initial.scope) },
@@ -687,9 +899,6 @@ private val MOCK_DRAFT_STRIPPED_HEADERS =
 /** The exact placeholder [FullInspectorDataSource]'s `previewText()` returns for a non-textual response. */
 private val BINARY_PREVIEW_PLACEHOLDER = Regex("""\[binary, \d+ bytes]""")
 
-private const val CAPTURE_PREFILL_NOTE =
-    "Prefilled from a captured response — the body and headers are the redacted preview and may " +
-        "be truncated. Review before saving."
 private const val CAPTURE_PREFILL_BINARY_NOTE =
     "The captured response body is binary and can't be prefilled here — enter one manually."
 
@@ -697,9 +906,9 @@ private const val CAPTURE_PREFILL_BINARY_NOTE =
  * Prefills a brand-new rule from a captured transaction -- the net detail's "Mock this response"
  * action. [existingIds] lets [suggestMockRuleId] avoid suggesting an id that already names a rule.
  * [InspectorTransactionUi.responsePreview] is a *redacted, possibly-truncated* capture preview, not
- * the real payload -- [MockRuleEditorTarget.New.prefillNote] carries that caveat
- * to the sheet; a binary response's literal `"[binary, N bytes]"` placeholder is never usable as a
- * body, so it prefills empty with a more specific note instead.
+ * the real payload -- the prefilled body is editable, so that needs no on-screen caveat. A binary
+ * response's literal `"[binary, N bytes]"` placeholder, though, is never usable as a body, so it
+ * prefills empty and carries a [MockRuleEditorTarget.New.prefillNote] saying to enter one by hand.
  */
 internal fun mockRuleDraftFromTransaction(
     transaction: InspectorTransactionUi,
@@ -723,7 +932,7 @@ internal fun mockRuleDraftFromTransaction(
         )
     return MockRuleEditorTarget.New(
         draft = draft,
-        prefillNote = if (isBinary) CAPTURE_PREFILL_BINARY_NOTE else CAPTURE_PREFILL_NOTE,
+        prefillNote = if (isBinary) CAPTURE_PREFILL_BINARY_NOTE else null,
         sourceKey = transaction.id,
     )
 }

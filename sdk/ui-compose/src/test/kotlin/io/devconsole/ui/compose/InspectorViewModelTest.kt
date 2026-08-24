@@ -732,6 +732,77 @@ class InspectorViewModelTest {
         }
 
     @Test
+    fun `clearing transactions calls through and re-reads the emptied snapshot`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source =
+                RecordingInspectorDataSource(
+                    InspectorSnapshot(available = true, transactions = listOf(sampleTransaction("tx-1"))),
+                )
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+            assertEquals(1, viewModel.state.value.transactions.size)
+            // The adapter is the one that actually empties the store, so the fake models that too --
+            // otherwise the reload after the clear would hand back the same captures and the test
+            // would pass without the view model ever having refreshed.
+            source.snapshotToReturn = InspectorSnapshot(available = true, transactions = emptyList())
+
+            viewModel.dispatch(InspectorAction.ClearTransactions)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(1, source.clearTransactionsCallCount)
+            assertTrue(
+                viewModel.state.value.transactions
+                    .isEmpty(),
+            )
+            assertEquals(source.clearTransactionsResult, viewModel.state.value.lastCommandResult)
+        }
+
+    /**
+     * Selection holds ids, not captures. Leaving it populated across a clear would leave the traffic
+     * tab in selection mode over rows that no longer exist, and hand the exporters a selection that
+     * resolves to nothing.
+     */
+    @Test
+    fun `clearing transactions drops the traffic selection`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val transactions = listOf(sampleTransaction("tx-1"), sampleTransaction("tx-2"))
+            val source = RecordingInspectorDataSource(InspectorSnapshot(available = true, transactions = transactions))
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+            viewModel.dispatch(InspectorAction.ToggleTransactionSelection("tx-1"))
+            assertEquals(setOf("tx-1"), viewModel.state.value.selectedTransactionIds)
+            source.snapshotToReturn = InspectorSnapshot(available = true, transactions = emptyList())
+
+            viewModel.dispatch(InspectorAction.ClearTransactions)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertTrue(
+                viewModel.state.value.selectedTransactionIds
+                    .isEmpty(),
+            )
+        }
+
+    /** An adapter with no capture store to empty reports Unavailable; the surface still shows it. */
+    @Test
+    fun `an unavailable clear surfaces its result without emptying anything`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val transactions = listOf(sampleTransaction("tx-1"))
+            val source = RecordingInspectorDataSource(InspectorSnapshot(available = true, transactions = transactions))
+            source.clearTransactionsResult = InspectorCommandResult.Unavailable
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.ClearTransactions)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(InspectorCommandResult.Unavailable, viewModel.state.value.lastCommandResult)
+            assertEquals(transactions, viewModel.state.value.transactions)
+        }
+
+    @Test
     fun `exporting HAR calls through and stores the result`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
@@ -1689,6 +1760,7 @@ private open class RecordingInspectorDataSource(
     var tablesToReturn: InspectorDatabaseListingUi? = null
     var queryToReturn: InspectorQueryResultUi? = null
     var sqlResult: InspectorSqlResultUi = InspectorSqlResultUi.Failed("n/a")
+    var clearTransactionsResult: InspectorCommandResult = InspectorCommandResult.Success(summary = "Captures cleared")
     var exportHarResult: InspectorCommandResult = InspectorCommandResult.Success(summary = "Saved to har")
     var exportPostmanResult: InspectorCommandResult = InspectorCommandResult.Success(summary = "Saved to postman")
     var exportSessionZipResult: InspectorCommandResult = InspectorCommandResult.Success(summary = "Saved to zip")
@@ -1739,6 +1811,8 @@ private open class RecordingInspectorDataSource(
     var executeSqlCallCount = 0
         private set
     var lastSql: String? = null
+        private set
+    var clearTransactionsCallCount = 0
         private set
     var exportHarCallCount = 0
         private set
@@ -1956,6 +2030,11 @@ private open class RecordingInspectorDataSource(
         executeSqlCallCount++
         lastSql = sql
         return sqlResult
+    }
+
+    override fun clearTransactions(): InspectorCommandResult {
+        clearTransactionsCallCount++
+        return clearTransactionsResult
     }
 
     override fun exportHar(transactionIds: Set<String>): InspectorCommandResult {

@@ -50,8 +50,10 @@ internal sealed interface JsonValue {
     data object Null : JsonValue
 }
 
+/** [offset] is where the parser gave up, so a caller with the text on screen can point at it. */
 internal class JsonSyntaxException(
     message: String,
+    val offset: Int = 0,
 ) : Exception(message)
 
 /** Pretty-prints with [indentUnit]-per-level indentation (2-space by default, matching every caller). */
@@ -114,7 +116,7 @@ internal class MinimalJsonParser(
         return value
     }
 
-    private fun fail(message: String): Nothing = throw JsonSyntaxException(message)
+    private fun fail(message: String): Nothing = throw JsonSyntaxException(message, pos)
 
     private fun skipWhitespace() {
         while (pos < text.length && text[pos].isWhitespace()) pos++

@@ -1229,6 +1229,35 @@ fun Application.devConsoleModule(
                 }
             call.respondNetworkTransactionPage(networkTransactions.page(query))
         }
+        /**
+         * Discards every captured transaction -- the dashboard's "Clear" action beside the HAR and
+         * Postman exports, and the counterpart of the in-app inspector's own clear.
+         *
+         * Gated like the evidence-tray mutations rather than like a capability-guarded control
+         * route: it empties this SDK's own capture buffer and never reaches host application state.
+         * Evidence is deliberately left alone -- `EvidenceStore` holds materialized copies of
+         * flagged captures, so clearing the live buffer must not destroy collected bug evidence.
+         *
+         * Idempotent: clearing an already-empty store is a plain success, so the button never has to
+         * reason about whether anything is left to clear.
+         */
+        delete("/api/v1/network/transactions") {
+            val session =
+                call.captureControlSession(
+                    sessionAuthority,
+                    commandAuditLog,
+                    "network.clear",
+                    "transactions",
+                ) ?: return@delete
+            if (!categoryEnabled("network")) {
+                commandAuditLog.recordControlFailure(session.id, "network.clear", "transactions")
+                call.respondCategoryDisabled("network")
+                return@delete
+            }
+            networkTransactions.clear()
+            commandAuditLog.recordControlSuccess(session.id, "network.clear", "transactions")
+            call.respondText("{\"status\":\"cleared\"}", contentType = io.ktor.http.ContentType.Application.Json)
+        }
         get("/api/v1/retained-events") {
             if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) == null) {
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
@@ -1767,7 +1796,7 @@ fun Application.devConsoleModule(
         }
         post("/api/v1/evidence") {
             val session =
-                call.evidenceControlSession(
+                call.captureControlSession(
                     sessionAuthority,
                     commandAuditLog,
                     "evidence.flag",
@@ -1845,7 +1874,7 @@ fun Application.devConsoleModule(
         delete("/api/v1/evidence/{kind}/{id}") {
             val subjectId = call.parameters["id"].orEmpty()
             val session =
-                call.evidenceControlSession(
+                call.captureControlSession(
                     sessionAuthority,
                     commandAuditLog,
                     "evidence.unflag",
@@ -1871,7 +1900,7 @@ fun Application.devConsoleModule(
         }
         delete("/api/v1/evidence") {
             val session =
-                call.evidenceControlSession(
+                call.captureControlSession(
                     sessionAuthority,
                     commandAuditLog,
                     "evidence.clear",
@@ -1889,7 +1918,7 @@ fun Application.devConsoleModule(
         }
         put("/api/v1/evidence/report") {
             val session =
-                call.evidenceControlSession(
+                call.captureControlSession(
                     sessionAuthority,
                     commandAuditLog,
                     "evidence.report.save",
@@ -1944,7 +1973,7 @@ fun Application.devConsoleModule(
         // so this route only needs to map every ScreenshotResult variant to its own response.
         post("/api/v1/screenshots") {
             val session =
-                call.evidenceControlSession(
+                call.captureControlSession(
                     sessionAuthority,
                     commandAuditLog,
                     "screenshot.capture",
@@ -4364,15 +4393,16 @@ private suspend fun io.ktor.server.application.ApplicationCall.composerExecution
 }
 
 /**
- * Shared entry gate for every evidence-tray and screenshot mutation route: authenticated bearer
- * session, then origin and CSRF. Unlike mocks/capture-rules/preferences/files/database, there is no
- * separate editing capability here -- flagging evidence or capturing a screenshot never lets a
- * session touch host application state, so this mirrors [isReadMutationAuthorized]'s two-stage gate
- * (auth, then CSRF) rather than [mockRuleControlSession]'s three-stage one, while still auditing every
- * rejection past authentication under [commandType] like every other command route.
+ * Shared entry gate for every mutation that touches only this SDK's own captured data -- the
+ * evidence tray, screenshots, and clearing the network capture buffer: authenticated bearer session,
+ * then origin and CSRF. Unlike mocks/capture-rules/preferences/files/database, there is no separate
+ * editing capability here -- flagging evidence, capturing a screenshot or discarding captures never
+ * lets a session touch host application state, so this mirrors [isReadMutationAuthorized]'s two-stage
+ * gate (auth, then CSRF) rather than [mockRuleControlSession]'s three-stage one, while still auditing
+ * every rejection past authentication under [commandType] like every other command route.
  */
 @Suppress("ReturnCount") // One early-exit per gate stage (auth, CSRF) reads clearest.
-private suspend fun io.ktor.server.application.ApplicationCall.evidenceControlSession(
+private suspend fun io.ktor.server.application.ApplicationCall.captureControlSession(
     sessionAuthority: SessionAuthority,
     commandAuditLog: CommandAuditLog,
     commandType: String,

@@ -38,6 +38,14 @@
   // draft came from "Mock this response" (or an edit of a rule that already had one), reset on
   // every dialog open, and included in the save payload as-is (never re-derived from edited fields).
   let mockRuleDraftSourceBodySnapshot = null;
+  // Full-window mode for the mock rule dialog. Deliberately outside openMockRuleDialog so it
+  // sticks for the rest of the page session: someone hand-writing JSON bodies wants the big
+  // editor on every rule, not one dialog at a time.
+  let mockBodyExpanded = false;
+  // Find-in-body for the response body editor. `ranges` are [start, end) offsets into the
+  // textarea's CURRENT value, so they are recomputed from scratch on every body change (Format
+  // rewrites the whole string) rather than carried across edits. Reset on each dialog open.
+  let mockBodyFind = { query: '', ranges: [], index: 0 };
   let preferencesEditable = false;
   let databaseEditable = false;
   let filesEditable = false;
@@ -1402,6 +1410,10 @@
   // codeBlockHtml, which already esc()s every token.
   // ================================================================
   const MOCK_RULE_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
+  // Find-in-body stops counting here: a one-character query against a large body would
+  // otherwise build tens of thousands of <mark>s on every keystroke. The count renders as
+  // "N+" when it caps, so the number on screen is never quietly wrong.
+  const MOCK_BODY_FIND_MAX = 2000;
   const MOCK_HEADER_NAME_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
   function mockRuleFieldEls() {
     return {
@@ -1451,17 +1463,27 @@
     const raw = $('mockRuleBody').value;
     const statusEl = $('mockRuleBodyStatus');
     const previewEl = $('mockRuleBodyPreview');
-    if (!raw.trim()) { statusEl.textContent = ''; statusEl.className = 'card-field-help'; previewEl.innerHTML = ''; return; }
-    try {
-      const parsed = JSON.parse(raw);
-      statusEl.textContent = 'valid JSON';
-      statusEl.className = 'card-field-help tone-text-signal';
-      previewEl.innerHTML = codeBlockHtml(formatJsonLines(parsed), false, 'Mock rule body preview');
-    } catch (err) {
-      statusEl.textContent = 'not JSON — will be sent verbatim: ' + err.message;
-      statusEl.className = 'card-field-help tone-text-warn';
+    if (!raw.trim()) {
+      statusEl.textContent = '';
+      statusEl.className = 'card-field-help';
       previewEl.innerHTML = '';
+    } else {
+      try {
+        const parsed = JSON.parse(raw);
+        statusEl.textContent = 'valid JSON';
+        statusEl.className = 'card-field-help tone-text-signal';
+        previewEl.innerHTML = codeBlockHtml(formatJsonLines(parsed), false, 'Mock rule body preview');
+      } catch (err) {
+        statusEl.textContent = 'not JSON — will be sent verbatim: ' + err.message;
+        statusEl.className = 'card-field-help tone-text-warn';
+        previewEl.innerHTML = '';
+      }
     }
+    // Every path that changes the body funnels through here (the input listener, Format's direct
+    // .value rewrite, and the dialog opening on a different rule), so it is the one place find
+    // offsets can be kept honest. An empty body takes the branch above rather than returning
+    // early: reopening on a blank rule still has to clear the previous rule's highlights.
+    refreshMockBodyFind();
   }
   function formatMockRuleBody() {
     const el = $('mockRuleBody');
@@ -1472,6 +1494,130 @@
       /* non-JSON bodies are legitimate — leave verbatim, refreshMockBodyEditor reports it below */
     }
     refreshMockBodyEditor();
+  }
+  /** Literal (never regex) case-insensitive scan for non-overlapping matches of [query] in [text].
+   * A mock body is JSON, so `"`, `{` and `[` are ordinary things to search for -- treating the
+   * query as a pattern would make the common case throw or silently match the wrong thing. */
+  function mockBodyFindRanges(text, query) {
+    if (!query) return [];
+    const haystack = text.toLowerCase();
+    const needle = query.toLowerCase();
+    const ranges = [];
+    for (let i = haystack.indexOf(needle); i !== -1; i = haystack.indexOf(needle, i + needle.length)) {
+      ranges.push([i, i + needle.length]);
+      if (ranges.length >= MOCK_BODY_FIND_MAX) break;
+    }
+    return ranges;
+  }
+  /** The mirror is laid out by CSS except for the scrollbar gutter: once the textarea overflows,
+   * its content box narrows by the scrollbar's width and its text rewraps. The mirror has
+   * `overflow: hidden` and never grows one, so that width is measured off the live element and
+   * added as padding -- otherwise every mark below the first wrapped line drifts. */
+  function syncMockBodyHighlightMetrics() {
+    const ta = $('mockRuleBody');
+    const layer = $('mockRuleBodyHighlight');
+    if (!ta || !layer) return;
+    const gutter = Math.max(0, ta.offsetWidth - ta.clientWidth - 2);
+    layer.style.paddingRight = 11 + gutter + 'px';
+    layer.scrollTop = ta.scrollTop;
+    layer.scrollLeft = ta.scrollLeft;
+  }
+  /** Paints the mirror. Skipped entirely with no active query -- the layer still has to exist to
+   * carry the editor's background (the textarea above it is transparent), but building a copy of
+   * the whole body on every keystroke would be pure waste when nothing is highlighted. */
+  function renderMockBodyHighlight() {
+    const layer = $('mockRuleBodyHighlight');
+    if (!layer) return;
+    const { query, ranges, index } = mockBodyFind;
+    if (!query || !ranges.length) { layer.innerHTML = ''; return; }
+    const text = $('mockRuleBody').value;
+    let html = '';
+    let at = 0;
+    ranges.forEach(([start, end], i) => {
+      html += esc(text.slice(at, start));
+      html += `<mark${i === index ? ' class="current"' : ''}>${esc(text.slice(start, end))}</mark>`;
+      at = end;
+    });
+    // The trailing newline keeps the mirror's last line box in step with the textarea's, which
+    // always reserves one for the caret.
+    layer.innerHTML = html + esc(text.slice(at)) + '\n';
+    syncMockBodyHighlightMetrics();
+  }
+  /** Scrolls the current match into view without focusing the textarea, so the find field keeps
+   * the caret and Enter can keep stepping. The mark's own laid-out position in the mirror is the
+   * measurement -- the textarea can't report where a range sits, and asking it to scroll would
+   * mean focusing it. */
+  function revealMockBodyMatch() {
+    const ta = $('mockRuleBody');
+    const mark = $('mockRuleBodyHighlight')?.querySelector('mark.current');
+    if (!ta || !mark) return;
+    const top = mark.offsetTop;
+    const bottom = top + mark.offsetHeight;
+    if (top < ta.scrollTop || bottom > ta.scrollTop + ta.clientHeight) {
+      ta.scrollTop = Math.max(0, top - ta.clientHeight / 2 + mark.offsetHeight / 2);
+    }
+    // Also park the textarea's own selection on the match, so clicking into the editor lands the
+    // caret where the user was looking rather than back where they last typed.
+    const [start, end] = mockBodyFind.ranges[mockBodyFind.index];
+    ta.setSelectionRange(start, end);
+    syncMockBodyHighlightMetrics();
+  }
+  function setMockBodyFindCount(text, tone) {
+    const el = $('mockRuleBodyFindCount');
+    el.textContent = text;
+    el.className = 'card-field-help' + (tone ? ' ' + tone : '');
+  }
+  /** Recomputes matches against the live body and repaints. [keepIndex] holds the user's place
+   * across a body edit; the find field's own input resets to the first match instead. */
+  function refreshMockBodyFind({ keepIndex = true, reveal = false } = {}) {
+    const ranges = mockBodyFindRanges($('mockRuleBody').value, mockBodyFind.query);
+    mockBodyFind.ranges = ranges;
+    mockBodyFind.index = ranges.length ? (keepIndex ? Math.min(mockBodyFind.index, ranges.length - 1) : 0) : 0;
+    const capped = ranges.length >= MOCK_BODY_FIND_MAX;
+    $('mockRuleBodyFindPrev').disabled = ranges.length < 2;
+    $('mockRuleBodyFindNext').disabled = ranges.length < 2;
+    if (!mockBodyFind.query) setMockBodyFindCount('');
+    else if (!ranges.length) setMockBodyFindCount('no matches', 'tone-text-warn');
+    else setMockBodyFindCount(mockBodyFind.index + 1 + ' of ' + ranges.length + (capped ? '+' : ''));
+    renderMockBodyHighlight();
+    if (reveal) revealMockBodyMatch();
+  }
+  function stepMockBodyFind(delta) {
+    const total = mockBodyFind.ranges.length;
+    if (!total) return;
+    mockBodyFind.index = (mockBodyFind.index + delta + total) % total;
+    setMockBodyFindCount(mockBodyFind.index + 1 + ' of ' + total + (total >= MOCK_BODY_FIND_MAX ? '+' : ''));
+    renderMockBodyHighlight();
+    revealMockBodyMatch();
+  }
+  function applyMockBodyFindQuery(query) {
+    mockBodyFind.query = query;
+    refreshMockBodyFind({ keepIndex: false, reveal: true });
+  }
+  /** Applies full-window mode to the dialog shell and syncs the toggle's label, icon, and pressed
+   * state. Only the box grows -- no field is hidden, so a validation error can never land on
+   * something the user can't see. */
+  function setMockBodyExpanded(expanded) {
+    mockBodyExpanded = expanded;
+    const modal = $('mockRuleModal')?.querySelector('.modal');
+    const btn = $('mockRuleBodyExpand');
+    if (!modal || !btn) return;
+    modal.classList.toggle('mock-modal-expanded', expanded);
+    btn.setAttribute('aria-pressed', String(expanded));
+    btn.title = expanded ? 'Shrink the dialog back to its normal size' : 'Expand the dialog to fill the window (the body editor takes the extra room)';
+    $('mockRuleBodyExpandLabel').textContent = expanded ? 'Exit full window' : 'Full window';
+    btn.querySelector('use')?.setAttribute('href', expanded ? '#dc-collapse' : '#dc-expand');
+  }
+  function toggleMockBodyExpanded() {
+    setMockBodyExpanded(!mockBodyExpanded);
+    // The box just changed width, so the body rewraps and the scrollbar may come or go.
+    syncMockBodyHighlightMetrics();
+    const el = $('mockRuleBody');
+    // A plain focus() scrolls the *end* of a now-tall textarea into view, hiding the start of the
+    // body; park the field at the top of the scrolling .modal-body instead so the toggle lands on
+    // line 1 either way.
+    el.focus({ preventScroll: true });
+    el.closest('.field')?.scrollIntoView({ block: 'start' });
   }
   /** Only a plain (optionally delayed) static response with an untruncated body survives a round
    * trip through this dialog -- richer actions (ConnectionFailure/Timeout/TemplateResponse/etc.)
@@ -1503,6 +1649,9 @@
     setFieldError(f.headers, false);
     setMockDialogError('');
     $('mockRuleModalTitleText').textContent = editing ? 'Edit mock rule' : 'New mock rule';
+    setMockBodyExpanded(mockBodyExpanded);
+    $('mockRuleBodyFind').value = '';
+    mockBodyFind = { query: '', ranges: [], index: 0 };
     refreshMockBodyEditor();
     syncMockRuleDialogGate();
     mockDialogOpenerEl = document.activeElement;
@@ -5964,6 +6113,34 @@
 
   // Shared control helpers
   // ================================================================
+
+  /**
+   * Wires a search box whose filtering happens on the *server* (Network, Sockets) — as opposed to
+   * Timeline/Push/Crashes, which filter an already-loaded page in the browser and so can listen
+   * straight to `input` and re-render.
+   *
+   * Those two shipped with no listener at all: `loadNetwork`/`loadSocketMessages` read the box at
+   * request time, so the query did reach the server, but only when some unrelated control happened
+   * to trigger a reload — and the one button that always does ("Apply") sits inside the collapsed
+   * "More filters" block. Typing and pressing Enter did nothing, which is what #22 reported.
+   *
+   * Debounced because each reload is a request against the shared 120/min read budget
+   * (`readQueryLimiter`), and a 12-character query typed at speed would otherwise be 12 of them.
+   * Enter and blur flush immediately, so an operator who wants the result now never waits on the
+   * timer. Clearing the box via the native ✕ fires `input` like any other edit, so it reloads too.
+   */
+  const SEARCH_DEBOUNCE_MS = 300;
+  function wireServerSearch(id, reload) {
+    const input = $(id);
+    if (!input) return;
+    let timer = null;
+    const flush = () => { clearTimeout(timer); timer = null; reload(); };
+    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(flush, SEARCH_DEBOUNCE_MS); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); flush(); } });
+    // Only flush on blur if an edit is still pending — otherwise every focus change reloads.
+    input.addEventListener('blur', () => { if (timer) flush(); });
+  }
+
   const controlHeaders = () => (openAccess ? {} : { ...auth(), 'X-DevConsole-CSRF': csrf });
   const updateControlUi = () => {
     const enabled = hasSession();
@@ -5978,6 +6155,9 @@
     // Note: the timeline note textarea/save button are rendered inside the event detail pane
     // (renderEventDetail) with their disabled state set directly from `token` at render time,
     // since they only exist in the DOM once an event is selected.
+    // Clearing is a CSRF-gated mutation, so it needs a full session, not just a read token.
+    $('networkClear').disabled = !enabled;
+    $('networkClear').title = enabled ? 'Discard every captured request on the device' : 'Connect this browser first';
     $('quickExport').disabled = !token;
     // Capture is off by default on the host (ScreenshotPolicy.enabled = false) and no route
     // reports that ahead of time — this button is only
@@ -7083,6 +7263,30 @@
   async function downloadPostman() {
     await downloadNetworkExport('/api/v1/network/postman', 'devconsole-network.postman_collection.json');
   }
+  /**
+   * DELETE /api/v1/network/transactions — discards every captured transaction on the device, then
+   * reloads so the list renders from the real post-clear server state rather than an assumed-empty
+   * local one (same reasoning as clearEvidenceTray). Confirmed first: captures live in memory only,
+   * so there is nothing to undo it with. The local selection is dropped too, since its ids no longer
+   * resolve to anything.
+   */
+  async function clearNetworkCaptures() {
+    if (!hasSession()) return;
+    const ok = await openConfirm('Clear captured requests?', 'Every captured request is discarded on the device. Captures are held in memory only, so this cannot be undone. Anything flagged as evidence is kept.', 'Clear captures');
+    if (!ok) return;
+    const r = await fetch('/api/v1/network/transactions', { method: 'DELETE', headers: controlHeaders() });
+    if (r.ok) {
+      clearNetworkSelection();
+      toast('Captured requests cleared.');
+    } else {
+      // One read only — the body stream cannot be consumed twice. CATEGORY_DISABLED arrives nested
+      // under `error` (respondCategoryDisabled), every other code at the top level.
+      let code;
+      try { const body = await r.json(); code = body.code || body.error?.code; } catch { code = undefined; }
+      toast(code === 'CATEGORY_DISABLED' ? 'Network capture is disabled for this app run.' : 'Could not clear captures: ' + r.status, 'error');
+    }
+    loadNetwork();
+  }
   /** Backs the 'related' tab in renderNetworkDetail. Guarded against duplicate in-flight fetches
    * for the same id (a re-render can happen — e.g. focus restore — while the request is still
    * out) and only re-renders if that tab/transaction is still what's on screen when it resolves. */
@@ -7358,11 +7562,13 @@
     // ---- Network -----------------------------------------------------------------
     wireSeg($('networkStatusSeg'), (value) => { networkStatusFilter = value; applyNetworkFilters(); });
     wireSeg($('networkMethodSeg'), (value) => { networkMethodFilter = value; applyNetworkFilters(); });
+    wireServerSearch('networkSearch', () => loadNetwork());
     $('networkRefresh').onclick = () => loadNetwork();
     $('networkNewest').onclick = () => loadNetwork();
     $('networkOlder').onclick = () => networkCursor && loadNetwork(networkCursor);
     $('networkHarDownload').onclick = downloadHar;
     $('networkPostmanDownload').onclick = downloadPostman;
+    $('networkClear').onclick = clearNetworkCaptures;
     $('networkSelectAllVisible').onclick = () => toggleSelectAllVisibleNetwork();
     $('networkSelectionBar').addEventListener('click', (e) => {
       const btn = e.target.closest('[data-sel-action]');
@@ -7378,6 +7584,7 @@
     $('timelineOlder').onclick = () => timelineCursor && load(timelineCursor);
 
     // ---- WebSockets ----------------------------------------------------------------
+    wireServerSearch('socketSearch', () => loadSocketMessages());
     wireSeg($('socketFrameTypeSeg'), (value) => { socketFrameTypeFilter = value; loadSocketMessages(); });
     wireSeg($('socketDirectionSeg'), (value) => { socketDirectionFilter = value; loadSocketMessages(); });
     // Protocol changes which connections are in scope too, not just which messages, so it re-runs
@@ -7482,8 +7689,30 @@
     $('mockRuleCancel').onclick = closeMockRuleDialog;
     $('mockRuleSave').onclick = saveMockRuleDialog;
     $('mockRuleBodyFormat').onclick = formatMockRuleBody;
+    $('mockRuleBodyExpand').onclick = toggleMockBodyExpanded;
     $('mockRuleBody').addEventListener('input', refreshMockBodyEditor);
     $('mockRuleBody').addEventListener('blur', formatMockRuleBody);
+    $('mockRuleBody').addEventListener('scroll', syncMockBodyHighlightMetrics);
+    $('mockRuleBodyFind').addEventListener('input', (e) => applyMockBodyFindQuery(e.target.value));
+    $('mockRuleBodyFind').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); stepMockBodyFind(e.shiftKey ? -1 : 1); return; }
+      // Escape clears the search before it closes the dialog -- stopPropagation keeps
+      // mockDialogKeydown (a document listener) from dismissing a dialog mid-edit over a
+      // keystroke the user meant for the find field. With the field already empty it falls
+      // through and Escape closes the dialog as it does everywhere else.
+      if (e.key === 'Escape' && e.target.value) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.target.value = '';
+        applyMockBodyFindQuery('');
+      }
+    });
+    for (const [id, delta] of [['mockRuleBodyFindPrev', -1], ['mockRuleBodyFindNext', 1]]) {
+      // Stepping must not pull focus out of the find field (and must not blur the textarea into
+      // formatMockRuleBody, which would rewrite the body under the offsets being stepped through).
+      $(id).addEventListener('mousedown', (e) => e.preventDefault());
+      $(id).onclick = () => stepMockBodyFind(delta);
+    }
     wireCardGrid('mockRuleList', {
       onToggle: (id) => {
         const checked = document.querySelector(`[data-card-toggle="${CSS.escape(id)}"]`)?.getAttribute('aria-checked') === 'true';

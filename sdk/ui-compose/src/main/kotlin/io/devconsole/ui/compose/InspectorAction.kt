@@ -153,6 +153,13 @@ sealed interface InspectorAction {
 
     data object DismissCommandResult : InspectorAction
 
+    /**
+     * Discards every captured network transaction -- the Traffic tab's "clear captures" action.
+     * Irreversible: captures live only in the in-memory store, so nothing can restore them. The
+     * surface is expected to confirm before dispatching this.
+     */
+    data object ClearTransactions : InspectorAction
+
     /** Exports the current traffic selection ([InspectorState.selectedTransactionIds]) as a HAR file. */
     data object ExportHar : InspectorAction
 

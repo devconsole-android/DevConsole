@@ -200,6 +200,16 @@ id, if the selected transactions happen to share a dedup key; it can also make
 `X-DevConsole-Export-Count` (measured before dedup) read higher than the number of `item`s that
 actually end up in the Postman collection body.
 
+`DELETE /api/v1/network/transactions` discards every captured transaction — the dashboard's "Clear
+captures" toolbar button, and the counterpart of the in-app inspector's own clear action. Gated like
+the evidence-tray mutations rather than by an editing capability: bearer session plus `Origin` and
+`X-DevConsole-CSRF`, audited as `network.clear`, and subject to the same `network` capture-category
+check as the read routes above (`CATEGORY_DISABLED` 403 when the host disabled the category). It
+answers `{"status":"cleared"}` and is idempotent — clearing an already-empty store is a plain
+success. Evidence is untouched: the tray holds materialized copies of flagged captures, so clearing
+the live buffer never destroys collected evidence. Any outstanding pagination cursor is invalidated
+by the shrink, per §4.2.
+
 ### Mocks
 
 `GET /api/v1/mocks` (enabled flag), `POST /api/v1/mocks/disable-all` (auth), `POST

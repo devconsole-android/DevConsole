@@ -77,4 +77,49 @@ class InspectorMockRuleBodyFormatTest {
 
         assertTrue(result is JsonFormatResult.Error)
     }
+
+    @Test
+    fun `prettyOrRaw pretty-prints JSON and passes non-JSON through`() {
+        assertEquals("{\n  \"a\": 1\n}", prettyOrRaw("""{"a":1}"""))
+        assertEquals("<html>nope</html>", prettyOrRaw("<html>nope</html>"))
+        assertEquals("", prettyOrRaw(""))
+    }
+
+    @Test
+    fun `a body past the auto-format cap opens exactly as captured`() {
+        val big = """{"a":"${"x".repeat(MAX_AUTO_FORMAT_BODY_CHARS)}"}"""
+
+        assertEquals(big, prettyOrRaw(big))
+        // The explicit FORMAT action is uncapped -- the user asked for that one.
+        assertTrue(formatMockRuleBodyJson(big) is JsonFormatResult.Formatted)
+    }
+
+    @Test
+    fun `a syntax error carries the offset it choked on`() {
+        val body = """{"a":1,"b":}"""
+
+        val result = formatMockRuleBodyJson(body)
+
+        check(result is JsonFormatResult.Error)
+        // Points at the '}' that showed up where a value belonged, not at the start of the body.
+        assertEquals('}', body[result.offset])
+    }
+
+    @Test
+    fun `re-formatting mangled-but-valid json is the normal case`() {
+        val mangled = "{\n\"a\" :   1,\n\t\t\"b\":[ 2 ,3 ]   }"
+
+        assertEquals(
+            """
+            {
+              "a": 1,
+              "b": [
+                2,
+                3
+              ]
+            }
+            """.trimIndent(),
+            (formatMockRuleBodyJson(mangled) as JsonFormatResult.Formatted).text,
+        )
+    }
 }
