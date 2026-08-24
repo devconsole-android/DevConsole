@@ -112,6 +112,8 @@ class AndroidInspectorExporterTest {
         override fun find(id: String): NetworkTransaction? = null
 
         override fun statusDistribution(): Map<String, Int> = emptyMap()
+
+        override fun clear() = Unit
     }
 
     @Test

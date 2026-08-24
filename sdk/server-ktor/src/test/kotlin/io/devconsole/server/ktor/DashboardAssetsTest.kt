@@ -24,6 +24,34 @@ class DashboardAssetsTest {
         assertFalse(script.contains("structuredClone"))
     }
 
+    /**
+     * Regression for #22 ("Search Functionality Is Not Working"). Network and Socket search are
+     * server-side filters, so unlike the Timeline/Push/Crashes boxes -- which re-render an
+     * already-loaded page and can listen straight to `input` -- they have to re-issue the query.
+     * Both shipped with no listener at all, so typing in "Search captures" did nothing until some
+     * unrelated control (Apply, a status chip, Refresh) happened to trigger a reload.
+     */
+    @Test
+    fun `server-backed search boxes are wired to re-issue their query`() {
+        val script = DashboardAssets.js()
+
+        assertTrue(script.contains("function wireServerSearch("))
+        assertTrue(script.contains("wireServerSearch('networkSearch'"))
+        assertTrue(script.contains("wireServerSearch('socketSearch'"))
+    }
+
+    /**
+     * The Network hint used to claim "Search spans every field", but the server matches against
+     * `NetworkTransactionStore.searchableText()`, which deliberately excludes request and response
+     * bodies. Copy that promises a capability the filter does not have reads as a broken search.
+     */
+    @Test
+    fun `network search hint does not promise fields the server never matches`() {
+        val dashboard = DashboardAssets.index()
+
+        assertFalse(dashboard.contains("Search spans every field"))
+    }
+
     @Test
     fun `navigation rail groups views under the six design-mock workspace labels`() {
         val dashboard = DashboardAssets.index()

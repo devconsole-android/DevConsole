@@ -14,13 +14,16 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -36,9 +39,11 @@ import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -104,6 +109,8 @@ internal data class ObserveUiState(
     val detailTarget: ObserveDetailTarget? = null,
     /** Non-null while the net detail's "Mock this response" action has a create sheet open. */
     val mockDraft: MockRuleEditorTarget.New? = null,
+    /** True while the Traffic tab's "clear captures" confirmation is showing. */
+    val clearTransactionsPending: Boolean = false,
     /** Hero collapse is hoisted per tab, independent of every other tab's. */
     val trafficHeroCollapsed: Boolean = true,
     val socketsHeroCollapsed: Boolean = true,
@@ -150,6 +157,11 @@ internal data class ObserveActions(
     val onSelectAllFilteredTransactions: (Set<String>) -> Unit,
     /** Explicit close or back-press out of selection mode. */
     val onClearTransactionSelection: () -> Unit,
+    /** Traffic tab trash action: opens the confirmation, never clears on its own. */
+    val onRequestClearTransactions: () -> Unit,
+    /** Confirms the pending clear -- the only path that actually discards captures. */
+    val onConfirmClearTransactions: () -> Unit,
+    val onCancelClearTransactions: () -> Unit,
     /** Exports [InspectorState.selectedTransactionIds] (or everything, if empty) as a HAR file. */
     val onExportHar: () -> Unit,
     /** Same scope as [onExportHar], as a Postman collection instead. */
@@ -203,6 +215,13 @@ private class ObserveRouteState(
     var bookmarkedIds by mutableStateOf(emptySet<String>())
     var detailTarget by mutableStateOf<ObserveDetailTarget?>(null)
     var mockDraft by mockDraftState
+
+    /**
+     * Plain `mutableStateOf`, not `rememberSaveable`: losing an open confirmation across a rotation
+     * is the safe direction to fail for a destructive action -- the operator re-taps rather than
+     * having a pre-armed "clear everything" dialog survive a configuration change.
+     */
+    var clearTransactionsPending by mutableStateOf(false)
 
     // Collapsed by default on every tab.
     var trafficHeroCollapsed by trafficHeroCollapsedState
@@ -270,6 +289,7 @@ private fun ObserveRouteState.toUiState(
     flaggedCrashIds = flaggedCrashIds,
     detailTarget = detailTarget,
     mockDraft = mockDraft,
+    clearTransactionsPending = clearTransactionsPending,
     trafficHeroCollapsed = trafficHeroCollapsed,
     socketsHeroCollapsed = socketsHeroCollapsed,
     pushHeroCollapsed = pushHeroCollapsed,
@@ -399,6 +419,14 @@ private fun rememberObserveActions(
         onToggleTransactionSelection = { id -> viewModel.dispatch(InspectorAction.ToggleTransactionSelection(id)) },
         onSelectAllFilteredTransactions = { ids -> viewModel.dispatch(InspectorAction.SelectTransactions(ids)) },
         onClearTransactionSelection = { viewModel.dispatch(InspectorAction.ClearTransactionSelection) },
+        onRequestClearTransactions = { routeState.clearTransactionsPending = true },
+        // The toast comes from lastCommandResult like every other mutation (see ObserveRoute's
+        // LaunchedEffect); this only has to close the dialog.
+        onConfirmClearTransactions = {
+            routeState.clearTransactionsPending = false
+            viewModel.dispatch(InspectorAction.ClearTransactions)
+        },
+        onCancelClearTransactions = { routeState.clearTransactionsPending = false },
         onExportHar = { viewModel.dispatch(InspectorAction.ExportHar) },
         onExportPostman = { viewModel.dispatch(InspectorAction.ExportPostman) },
         copyText = { text ->
@@ -556,7 +584,18 @@ internal fun ObserveScreen(
                 // The old search icon here only ever showed a "search opens the keyboard on device"
                 // message (dead chrome) -- InspectorSearchBar below, in each tab's own list, is the
                 // one real search affordance, so the top-area action is dropped rather than kept.
-                actions = listOf(themeToggleTopAction(actions.onToggleTheme)),
+                //
+                // Clear only exists on Traffic (the only tab whose captures it discards) and only
+                // once there is something to discard, so it never offers a no-op. It sits *before*
+                // the theme toggle so that toggle keeps its usual rightmost slot instead of sliding
+                // sideways as captures come and go.
+                actions =
+                    buildList {
+                        if (state.observeTab == ObserveTab.TRAFFIC && state.transactions.isNotEmpty()) {
+                            add(clearCapturesTopAction(actions.onRequestClearTransactions))
+                        }
+                        add(themeToggleTopAction(actions.onToggleTheme))
+                    },
             )
             previousCrashedSession(state.sessions)?.let { session ->
                 PreviousRunCrashedBanner(session = session, onViewCrash = { actions.onViewPreviousCrash(session.id) })
@@ -583,6 +622,13 @@ internal fun ObserveScreen(
                 }
             }
         }
+        if (ui.clearTransactionsPending) {
+            ClearTransactionsConfirmDialog(
+                captureCount = state.transactions.size,
+                onConfirm = actions.onConfirmClearTransactions,
+                onDismiss = actions.onCancelClearTransactions,
+            )
+        }
         ui.detailTarget?.let { target -> ObserveDetailOverlay(target, state, ui, actions) }
         ui.mockDraft?.let { target ->
             MockRuleEditorScreen(
@@ -592,6 +638,55 @@ internal fun ObserveScreen(
             )
         }
     }
+}
+
+/**
+ * Confirmation for the Traffic tab's clear action, shaped like `MockRuleDeleteConfirmDialog` on the
+ * Control screen. Names the count so the operator sees what they are about to lose, and says plainly
+ * that evidence survives -- flagged captures are materialized into the durable `EvidenceStore`, so a
+ * clear does not cost anyone the bug they were collecting.
+ */
+@Composable
+private fun ClearTransactionsConfirmDialog(
+    captureCount: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = DevConsoleTheme.colors
+    val plural = if (captureCount == 1) "capture" else "captures"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Clear $captureCount $plural?") },
+        text = {
+            Text(
+                "Captured requests are held in memory only, so this can't be undone. " +
+                    "Anything you flagged as evidence is kept.",
+            )
+        },
+        confirmButton = {
+            Text(
+                "CLEAR",
+                color = colors.error,
+                fontWeight = FontWeight.Bold,
+                modifier =
+                    Modifier
+                        .minimumInteractiveComponentSize()
+                        .clickable(onClick = onConfirm, role = Role.Button)
+                        .padding(12.dp),
+            )
+        },
+        dismissButton = {
+            Text(
+                "CANCEL",
+                color = colors.muted,
+                modifier =
+                    Modifier
+                        .minimumInteractiveComponentSize()
+                        .clickable(onClick = onDismiss, role = Role.Button)
+                        .padding(12.dp),
+            )
+        },
+    )
 }
 
 /**

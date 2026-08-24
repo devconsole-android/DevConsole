@@ -18,6 +18,51 @@ before it can reach a release. (There was briefly a separate `sdk:plugin-api` mo
 third-party plugin framework; it was removed before ever shipping — see Removed, below — so it never
 joined this list.)
 
+## Unreleased
+
+Captured requests could only ever be discarded by restarting the session, so a long debugging run
+turned the Traffic list into a haystack ([#23](https://github.com/devconsole-android/DevConsole/issues/23)).
+Both operator surfaces can now clear them.
+
+**Version note, deliberately unresolved here:** `NetworkTransactionStore` gains an abstract
+`clear()`. That interface is not documented as a host extension point and nothing outside this repo
+is known to implement it, but under this file's own [policy](#versioning-and-stability-policy) a new
+abstract member is source-breaking for anyone who does. It is in `sdk:network`, not `sdk:api`, so it
+does not automatically read as a major. The number is left for the release decision rather than
+assumed.
+
+### Added
+
+- **Clear captured requests**, on the device and in the browser. The in-app inspector grows a trash
+  action in the Observe screen's top area, shown on the Traffic tab once there is something to
+  discard; the dashboard's Network toolbar grows a **Clear captures** button beside the HAR and
+  Postman exports. Both confirm first, and both name what survives.
+
+  The two surfaces share one store, so a clear on either empties the other on its next read. Captures
+  are held in memory only, which is what makes this irreversible and why the confirmation is not
+  optional.
+
+  Evidence is deliberately spared: the tray holds materialized copies of flagged captures and
+  outlives the live buffer by design, so clearing never costs anyone the bug they were collecting.
+  Timeline events recorded for those requests are a separate store and are likewise untouched.
+
+- **`DELETE /api/v1/network/transactions`**, backing the dashboard button. Gated like the
+  evidence-tray mutations rather than by an editing capability — bearer session plus `Origin` and
+  `X-DevConsole-CSRF`, audited as `network.clear` — because it empties this SDK's own capture buffer
+  and never reaches host application state. Subject to the same `network` capture-category check as
+  the read routes, and idempotent: clearing an already-empty store is a plain success. See
+  [docs/PROTOCOL_REFERENCE.md](docs/PROTOCOL_REFERENCE.md).
+
+- **`InspectorDataSource.clearTransactions()`**, defaulting to `Unavailable` so existing adapters
+  keep compiling, and `InspectorAction.ClearTransactions` to reach it.
+
+### Changed
+
+- **`NetworkTransactionStore.clear()` is now part of the interface** rather than only of
+  `InMemoryNetworkTransactionStore`. The Ktor module holds its store through the interface, so the
+  new route could not otherwise reach it. Left abstract rather than given a no-op default: a custom
+  store that silently declined to clear would fail invisibly, which is worse than failing to compile.
+
 ## 1.2.4 — 2026-08-20
 
 ### Fixed

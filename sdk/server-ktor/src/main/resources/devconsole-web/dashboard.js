@@ -5956,6 +5956,34 @@
 
   // Shared control helpers
   // ================================================================
+
+  /**
+   * Wires a search box whose filtering happens on the *server* (Network, Sockets) — as opposed to
+   * Timeline/Push/Crashes, which filter an already-loaded page in the browser and so can listen
+   * straight to `input` and re-render.
+   *
+   * Those two shipped with no listener at all: `loadNetwork`/`loadSocketMessages` read the box at
+   * request time, so the query did reach the server, but only when some unrelated control happened
+   * to trigger a reload — and the one button that always does ("Apply") sits inside the collapsed
+   * "More filters" block. Typing and pressing Enter did nothing, which is what #22 reported.
+   *
+   * Debounced because each reload is a request against the shared 120/min read budget
+   * (`readQueryLimiter`), and a 12-character query typed at speed would otherwise be 12 of them.
+   * Enter and blur flush immediately, so an operator who wants the result now never waits on the
+   * timer. Clearing the box via the native ✕ fires `input` like any other edit, so it reloads too.
+   */
+  const SEARCH_DEBOUNCE_MS = 300;
+  function wireServerSearch(id, reload) {
+    const input = $(id);
+    if (!input) return;
+    let timer = null;
+    const flush = () => { clearTimeout(timer); timer = null; reload(); };
+    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(flush, SEARCH_DEBOUNCE_MS); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); flush(); } });
+    // Only flush on blur if an edit is still pending — otherwise every focus change reloads.
+    input.addEventListener('blur', () => { if (timer) flush(); });
+  }
+
   const controlHeaders = () => ({ ...auth(), 'X-DevConsole-CSRF': csrf });
   const updateControlUi = () => {
     const enabled = hasSession();
@@ -5970,6 +5998,9 @@
     // Note: the timeline note textarea/save button are rendered inside the event detail pane
     // (renderEventDetail) with their disabled state set directly from `token` at render time,
     // since they only exist in the DOM once an event is selected.
+    // Clearing is a CSRF-gated mutation, so it needs a full session, not just a read token.
+    $('networkClear').disabled = !enabled;
+    $('networkClear').title = enabled ? 'Discard every captured request on the device' : 'Connect this browser first';
     $('quickExport').disabled = !token;
     // Capture is off by default on the host (ScreenshotPolicy.enabled = false) and no route
     // reports that ahead of time — this button is only
@@ -7075,6 +7106,30 @@
   async function downloadPostman() {
     await downloadNetworkExport('/api/v1/network/postman', 'devconsole-network.postman_collection.json');
   }
+  /**
+   * DELETE /api/v1/network/transactions — discards every captured transaction on the device, then
+   * reloads so the list renders from the real post-clear server state rather than an assumed-empty
+   * local one (same reasoning as clearEvidenceTray). Confirmed first: captures live in memory only,
+   * so there is nothing to undo it with. The local selection is dropped too, since its ids no longer
+   * resolve to anything.
+   */
+  async function clearNetworkCaptures() {
+    if (!hasSession()) return;
+    const ok = await openConfirm('Clear captured requests?', 'Every captured request is discarded on the device. Captures are held in memory only, so this cannot be undone. Anything flagged as evidence is kept.', 'Clear captures');
+    if (!ok) return;
+    const r = await fetch('/api/v1/network/transactions', { method: 'DELETE', headers: controlHeaders() });
+    if (r.ok) {
+      clearNetworkSelection();
+      toast('Captured requests cleared.');
+    } else {
+      // One read only — the body stream cannot be consumed twice. CATEGORY_DISABLED arrives nested
+      // under `error` (respondCategoryDisabled), every other code at the top level.
+      let code;
+      try { const body = await r.json(); code = body.code || body.error?.code; } catch { code = undefined; }
+      toast(code === 'CATEGORY_DISABLED' ? 'Network capture is disabled for this app run.' : 'Could not clear captures: ' + r.status, 'error');
+    }
+    loadNetwork();
+  }
   /** Backs the 'related' tab in renderNetworkDetail. Guarded against duplicate in-flight fetches
    * for the same id (a re-render can happen — e.g. focus restore — while the request is still
    * out) and only re-renders if that tab/transaction is still what's on screen when it resolves. */
@@ -7334,11 +7389,13 @@
     // ---- Network -----------------------------------------------------------------
     wireSeg($('networkStatusSeg'), (value) => { networkStatusFilter = value; applyNetworkFilters(); });
     wireSeg($('networkMethodSeg'), (value) => { networkMethodFilter = value; applyNetworkFilters(); });
+    wireServerSearch('networkSearch', () => loadNetwork());
     $('networkRefresh').onclick = () => loadNetwork();
     $('networkNewest').onclick = () => loadNetwork();
     $('networkOlder').onclick = () => networkCursor && loadNetwork(networkCursor);
     $('networkHarDownload').onclick = downloadHar;
     $('networkPostmanDownload').onclick = downloadPostman;
+    $('networkClear').onclick = clearNetworkCaptures;
     $('networkSelectAllVisible').onclick = () => toggleSelectAllVisibleNetwork();
     $('networkSelectionBar').addEventListener('click', (e) => {
       const btn = e.target.closest('[data-sel-action]');
@@ -7354,6 +7411,7 @@
     $('timelineOlder').onclick = () => timelineCursor && load(timelineCursor);
 
     // ---- WebSockets ----------------------------------------------------------------
+    wireServerSearch('socketSearch', () => loadSocketMessages());
     wireSeg($('socketFrameTypeSeg'), (value) => { socketFrameTypeFilter = value; loadSocketMessages(); });
     wireSeg($('socketDirectionSeg'), (value) => { socketDirectionFilter = value; loadSocketMessages(); });
     // Protocol changes which connections are in scope too, not just which messages, so it re-runs

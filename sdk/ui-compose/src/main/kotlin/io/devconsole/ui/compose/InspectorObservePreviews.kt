@@ -175,6 +175,9 @@ private val PreviewObserveActions =
         onToggleTransactionSelection = {},
         onSelectAllFilteredTransactions = {},
         onClearTransactionSelection = {},
+        onRequestClearTransactions = {},
+        onConfirmClearTransactions = {},
+        onCancelClearTransactions = {},
         onExportHar = {},
         onExportPostman = {},
         copyText = {},
@@ -319,6 +322,23 @@ private fun ObserveScreenTrafficHeroCollapsedPreview() {
         ObserveScreen(
             state = PreviewObserveState,
             ui = PreviewObserveUi.copy(trafficHeroCollapsed = true),
+            actions = PreviewObserveActions,
+        )
+    }
+}
+
+/**
+ * The Traffic tab with the clear confirmation up -- also the only preview showing the trash action
+ * in the top area, since it renders only on Traffic and only with captures present.
+ */
+@Preview(name = "Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, backgroundColor = 0xFF0B0E0D)
+@Preview(name = "Light", uiMode = Configuration.UI_MODE_NIGHT_NO, showBackground = true, backgroundColor = 0xFFF3F6EE)
+@Composable
+private fun ObserveScreenClearTransactionsConfirmPreview() {
+    DevConsoleTheme(darkTheme = isSystemInDarkTheme()) {
+        ObserveScreen(
+            state = PreviewObserveState.copy(observeTab = ObserveTab.TRAFFIC),
+            ui = PreviewObserveUi.copy(clearTransactionsPending = true),
             actions = PreviewObserveActions,
         )
     }
