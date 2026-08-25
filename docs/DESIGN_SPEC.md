@@ -239,20 +239,20 @@ Network, WebSockets, Push and Crashes. Timeline hand-rolls its own head from the
 is the odd one out; folding it into the helper is an open item (§9).
 
 ```
-┌ .detail-head ───────────────────────────────────────────────┐
-│ [BADGE] [MOCK] title (mono, ellipsis)      STATUS  [⤢] [⋮]  │  head row
-│ ‹facts strip — see below›                                   │  .detail-facts
-│ ‹actions row — see below›                                   │  .detail-actions-row
-│ Summary │ Request & response │ Headers │ …        [Stacked] │  .detail-tabs
-├ .detail-find (compare/diff tabs only) ──────────────────────┤
-│ 🔍 Find in headers, payload and response…   N matches       │
-├ .detail-body (scrolls) ─────────────────────────────────────┤
-│  ┌ .sbs-pane ─────────┐  ┌ .sbs-pane ─────────┐             │
-│  │ ● Request   [Copy] │  │ ● Response  [Copy] │             │  .sbs-grid
-│  │ › Request headers  │  │ › Response headers │             │  collapsed
-│  │ ⌄ Payload          │  │ ⌄ Body             │             │  expanded
-│  └────────────────────┘  └────────────────────┘             │
-│  🔒 redaction footnote                                       │
+┌ .detail-head ────────────────────────────────────────────────┐
+│ [BADGE] [MOCK] title (mono, ellipsis)    STATUS  [⤢] [⋮]     │  head row
+│ ‹facts strip — see table below›                              │  .detail-facts
+│ ‹actions row — see table below›                              │  .detail-actions-row
+│ Summary │ Request & response │ Headers │ …    [Stacked]      │  .detail-tabs
+├ .detail-find (compare/diff tabs only) ───────────────────────┤
+│ Find in headers, payload and response…      N matches        │
+├ .detail-body (scrolls) ──────────────────────────────────────┤
+│  ┌ .sbs-pane ────────┐  ┌ .sbs-pane ────────┐                │  .sbs-grid
+│  │ ● Request  [Copy] │  │ ● Response [Copy] │                │
+│  │ › Request headers │  │ › Response headers│                │  collapsed
+│  │ ⌄ Payload         │  │ ⌄ Body            │                │  expanded
+│  └───────────────────┘  └───────────────────┘                │
+│  redaction footnote                                          │
 └──────────────────────────────────────────────────────────────┘
 ```
 
