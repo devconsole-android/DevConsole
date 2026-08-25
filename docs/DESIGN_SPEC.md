@@ -232,6 +232,63 @@ must recompute mid-scroll rather than assume) — see §9.
 - **Toolbar** (`.toolbar`): flex row, wraps, `align-items: flex-end` so label-stacked fields
   (uppercase label over input) share a bottom baseline with bare buttons. (This was a bug — see §9.)
 
+## 4a. Detail pane anatomy (split views)
+
+Four of the five split views build their right-hand pane from one shared helper (`detailHeadHtml`) —
+Network, WebSockets, Push and Crashes. Timeline hand-rolls its own head from the same classes and
+is the odd one out; folding it into the helper is an open item (§9).
+
+```
+┌ .detail-head ────────────────────────────────────────────────┐
+│ [BADGE] [MOCK] title (mono, ellipsis)    STATUS  [⤢] [⋮]     │  head row
+│ ‹facts strip — see table below›                              │  .detail-facts
+│ ‹actions row — see table below›                              │  .detail-actions-row
+│ Summary │ Request & response │ Headers │ …    [Stacked]      │  .detail-tabs
+├ .detail-find (compare/diff tabs only) ───────────────────────┤
+│ Find in headers, payload and response…      N matches        │
+├ .detail-body (scrolls) ──────────────────────────────────────┤
+│  ┌ .sbs-pane ────────┐  ┌ .sbs-pane ────────┐                │  .sbs-grid
+│  │ ● Request  [Copy] │  │ ● Response [Copy] │                │
+│  │ › Request headers │  │ › Response headers│                │  collapsed
+│  │ ⌄ Payload         │  │ ⌄ Body            │                │  expanded
+│  └───────────────────┘  └───────────────────┘                │
+│  redaction footnote                                          │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Two variants of the head's middle band.** The facts strip and the actions row are per-pane
+choices, not fixed furniture:
+
+| Pane | Facts strip | Actions |
+|---|---|---|
+| **Network** | none — folded into the Summary tab | kebab **⋮** menu, right of the expand button |
+| WebSockets, Push, Crashes | `.detail-facts` row under the title | flat `.detail-actions-row` |
+
+The kebab is opt-in via `detailHeadHtml`'s `actionsMenu` flag. Network carries up to seven actions
+(flag, pin, resend, clone, mock *or* unmock, cURL, fetch) — a full row of buttons for controls
+used occasionally, not per-capture. The other panes carry two or three, where a row costs nothing
+and a menu would only add a click. Menu items keep the same `data-detail-action` ids as row
+buttons, so a pane's delegated click handler is identical either way. The panel is
+`position: fixed` (placed by `positionDetailMenuPanel()`) because `.detail-pane-v2` is
+`overflow: hidden` and an absolutely positioned popup clips at the pane edge — the same trade
+`.drop-panel` makes. It closes on pick, outside click, and Escape (returning focus to its button).
+
+**Network's tab order** is `Summary · Request & response · [Diff vs baseline] · Headers · Timing ·
+Related events`. Summary leads because it absorbed the head's old facts strip and is the "what is
+this capture" view: time, duration, request url/method, response status, `response.error` on a
+failure, content type, correlation id, mock rule (a link into Mocks), vs-original field count, and
+tags. Diff only appears once a baseline is pinned. **Default selection is Request & response**, not
+the first tab — the body is what an engineer opens a capture to read.
+
+Consequently Network's two compare panes hold only headers and body; they have no "General" group,
+because everything it used to duplicate now lives one tab left. Group collapse defaults come from
+`detailGroupHtml`: `Payload`/`Body` open, everything else collapsed, an explicit user toggle always
+winning over the default.
+
+**Simple mode** hides the Headers/Timing/Related tabs outright, and hides individual actions that
+carry `hideInSimple` (`fetch` always; `pin` only while no baseline is pinned, so a pinned baseline
+can never be stranded behind a mode switch).
+
 ## 4b. Layout (Android in-app inspector)
 
 - **Bottom nav, 4 destinations:** `01 Observe · 02 Control · 03 Data · 04 More` (numbered + label,
@@ -300,7 +357,9 @@ tray screen becomes a natural addition, just not one this pass builds.
 - **Segmented control** (`.seg`): joined buttons, one active (signal).
 - **Chips / chip-row** (`.chip-row`): wrapping pill filters.
 - **Cards** (`.card`): panel surface, 1px `--line`, 16px pad, `h2` with small leading icon.
-- **Split panes:** `.list` (rows) + `.splitter` + `.detail-pane` (min-width 300px).
+- **Split panes:** `.list-pane` (rows) + `.splitter` (5px) + `.detail-pane-v2`, inside `.split-shell`
+  (min 360px per column). Detail-pane anatomy — head, facts/actions variants, tabs, find bar,
+  side-by-side groups — is specified in §4a.
 - **Data table** (`.db-table`): real `<table>`, `<th scope=col>`, truncation via `.db-truncated`,
   horizontal scroll in `.db-table-wrap`.
 - **Empty states** (`.empty-state`): centered icon + title + sub. Used widely — design these well;
@@ -317,9 +376,10 @@ tray screen becomes a natural addition, just not one this pass builds.
 
 1. **Overview** — landing / status summary, connect prompt when unauthenticated, and the
    previous-run-crashed banner (see [CRASH_AND_ANR.md](CRASH_AND_ANR.md#the-previous-run-crashed-banner)).
-2. **Network** — captured HTTP list + detail; toolbar (search, status seg, method seg, Apply, Clear,
-   HAR, Postman); detail action row (Clone to composer, cURL, fetch, JSON, Related events); redacted
-   metadata pane.
+2. **Network** — captured HTTP list + detail; toolbar (search, status seg, method seg, service drop,
+   HAR, Postman, Clear) over a "More filters" disclosure; redacted metadata pane whose actions
+   (flag, pin, resend, clone, mock/unmock, cURL, fetch) live in the head's **⋮ menu** and whose tabs
+   lead with Summary — see §4a.
 3. **WebSockets** — socket sessions (URL, STATE/SENT/RECV), frame list per socket.
 4. **Timeline** — unified event timeline (search).
 5. **Crashes** — crash/ANR list + detail: kind/thread badges, breadcrumb strip, the all-thread dump
@@ -427,6 +487,10 @@ The final web visual contract relies on a rigid separation of concerns. `dashboa
   next step: the device's More screen, the `adb forward tcp:8080 tcp:8080` command (with its caveat
   that 8080 is only the first port tried), and the two browser access modes: a bare URL by default or
   the `#code=` credential when SESSION_CODE is selected.
+- **Network's detail head carried three stacked strips** (facts, actions, tabs) before the panes
+  even started, each duplicating something already on screen — the facts repeated the compare
+  panes' "General" groups. Facts moved into the Summary tab, the General groups went away, the
+  actions row became a ⋮ menu, and Summary was ordered first. See §4a.
 - **Cross-surface parity was undecided** — resolved and documented in §4c, with a full 16-row table
   of which web views the Android inspector mirrors, which it deliberately doesn't (Composer, capture
   rules, Overview), and one open naming mismatch (Timeline / Logs) left as a documented gap rather
@@ -435,6 +499,8 @@ The final web visual contract relies on a rigid separation of concerns. `dashboa
 **Open / worth a design eye:**
 - **Table/detail density** on Network/Database detail panes — readability at scale — is still
   unaddressed by this pass.
+- **Timeline's detail head is hand-rolled** rather than built from `detailHeadHtml` like the other
+  three split views (§4a), so it drifts from them silently whenever the shared helper changes.
 - **The Timeline / Logs naming mismatch** (§4c) — same underlying event stream, different name on
   each surface. Documented, not fixed; fixing it is a code change (renaming `ObserveTab.LOGS` or the
   web view, or both to a shared name), out of scope for a documentation-only pass.
