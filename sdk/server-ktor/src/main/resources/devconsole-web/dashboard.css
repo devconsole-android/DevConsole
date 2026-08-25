@@ -851,6 +851,30 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .detail-head-status { font-family: var(--font-mono); font-size: 13px; font-weight: 700; }
 .detail-expand { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--muted); }
 .detail-expand.active { border-color: var(--signal); background: var(--signal-soft); color: var(--signal); }
+
+/* Kebab (⋮) actions menu, sitting immediately right of .detail-expand — same 26px footprint, so
+   the head row's right edge reads as one pair of controls rather than two sizes. */
+.detail-menu-btn { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--muted); }
+.detail-menu-btn:hover { color: var(--ink); border-color: var(--border-strong); }
+.detail-menu-btn.active { border-color: var(--signal); background: var(--signal-soft); color: var(--signal); }
+/* position: fixed, not absolute: .detail-pane-v2 is overflow: hidden, so an absolutely positioned
+   popup would be clipped at the pane's edge. Placed by positionDetailMenuPanel(), same contract
+   as the toolbar dropdowns' .drop-panel. */
+.detail-menu-panel {
+  position: fixed; z-index: 200; min-width: 200px; max-width: min(92vw, 320px);
+  display: grid; gap: 1px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: var(--elev-3);
+}
+.detail-menu-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px;
+  border: none; border-radius: 6px; background: transparent; text-align: left; color: var(--muted); font-size: 12.5px;
+}
+.detail-menu-item .ic { flex: 0 0 auto; color: var(--text-3); }
+.detail-menu-item:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.detail-menu-item:hover:not(:disabled) .ic { color: inherit; }
+.detail-menu-item.on { color: var(--signal); background: var(--signal-soft); }
+.detail-menu-item.on .ic { color: var(--signal); }
+.detail-menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
 .detail-facts { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; }
 .detail-fact { display: flex; align-items: baseline; gap: 8px; font-size: 11.5px; }
 .detail-fact-k { font-size: 10.5px; font-weight: 600; color: var(--text-3); }
@@ -920,6 +944,10 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 /* Find-highlight must win over both grid sizes' background overrides above — same (0,3,0)
    specificity as `.kv-grid.kv-grid-lg .kv-v` but declared after it, so source order decides. */
 .kv-grid .kv-k.hit, .kv-grid .kv-v.hit { background: var(--signal-soft); }
+/* Clickable kv value (Network summary's "mock rule: <id>" → Mocks). A <button> inside .kv-v, so
+   it resets to the cell's own type instead of the UA button defaults. */
+.kv-link { font: inherit; color: var(--signal); background: transparent; border: none; padding: 0; border-radius: 4px; cursor: pointer; }
+.kv-link:hover { text-decoration: underline; }
 
 /* Code blocks with JSON syntax tokens */
 .code-block { border: 1px solid var(--line); border-radius: 6px; background: var(--code-bg); padding: 8px 12px; overflow-x: auto; }

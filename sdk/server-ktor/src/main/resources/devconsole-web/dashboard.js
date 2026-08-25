@@ -99,6 +99,9 @@
   let networkTab = 'compare';
   let networkDetailQuery = '';
   let networkSbsStacked = false;
+  // Open state of the detail pane's kebab (⋮) actions menu. Module-level, not DOM state, because
+  // renderNetworkDetail replaces the whole pane via innerHTML on every keystroke in the find box.
+  let networkActionsMenuOpen = false;
   // Backing state for the 'related' detail tab — see loadRelatedEvents/renderNetworkDetail.
   let networkRelatedEvents = [];
   let networkRelatedEventsForId = null;
@@ -712,10 +715,18 @@
     }));
     return n;
   }
+  /** `mockRuleLink: true` on a row renders its value as the same "open this rule in Mocks" button
+   * the detail head's facts row used to carry — the delegated `[data-open-mock-rule]` handler in
+   * wireNetworkDetailPane already covers anything inside the detail pane, head or body. */
   function kvGridHtml(rows, large) {
     if (!rows.length) return '';
     return `<div class="kv-grid${large ? ' kv-grid-lg' : ''}">${rows
-      .map((r) => `<span class="kv-k${r.hit ? ' hit' : ''}">${esc(r.k)}</span><span class="kv-v${r.tone ? ' tone-text-' + r.tone : ''}${r.hit ? ' hit' : ''}">${esc(r.v)}</span>`)
+      .map((r) => {
+        const v = r.mockRuleLink
+          ? `<button type="button" class="kv-link" data-open-mock-rule="${esc(r.v)}" title="Open ${esc(r.v)} in Mocks">${esc(r.v)}</button>`
+          : esc(r.v);
+        return `<span class="kv-k${r.hit ? ' hit' : ''}">${esc(r.k)}</span><span class="kv-v${r.tone ? ' tone-text-' + r.tone : ''}${r.hit ? ' hit' : ''}">${v}</span>`;
+      })
       .join('')}</div>`;
   }
   function barsHtml(bars) {
@@ -3686,6 +3697,10 @@
     const inside = (id) => path.some((el) => el.id === id);
     if (networkHostDropOpen && !inside('networkHostDrop')) { networkHostDropOpen = false; renderNetworkHostDrop(); }
     if (socketConnDropOpen && !inside('socketConnDrop')) { socketConnDropOpen = false; renderSocketConnDrop(); }
+    // The detail pane's kebab menu closes on the same rule. Its own button and items are handled
+    // in wireNetworkDetailPane (which runs first, on the pane), so by the time this fires they
+    // have already cleared the flag — this only catches genuine outside clicks.
+    if (networkActionsMenuOpen && !inside('detailActionsMenuPanel') && !inside('detailActionsMenuBtn')) { networkActionsMenuOpen = false; renderNetworkDetail(); }
   }
 
   function renderNetworkHostDrop() {
@@ -6578,8 +6593,15 @@
    * inside `.detail-head` instead, where `flex`/`min-height`/`overflow` mean nothing — so a body
    * taller than the pane grew the head past it and `.detail-pane-v2`'s `overflow: hidden` simply
    * cut it off, with nothing anywhere able to scroll to the rest. */
-  function detailHeadHtml({ badgeText, badgeTone, title, statusText, sTone, mocked, extraBadge, facts, actions, tabs, layoutToggle }) {
+  /** `actionsMenu` opts a pane out of the flat `.detail-actions-row` and into a kebab (⋮) menu
+   * beside the expand button — same `actions` model, same `data-detail-action` ids, so a pane's
+   * existing delegated click handler covers the items unchanged. Opt-in per pane (Network only
+   * today) rather than a blanket switch: the other detail panes carry two or three actions each,
+   * where a row costs nothing and a menu would only add a click. `menuOpen` is the caller's own
+   * state, since these panes re-render wholesale and the flag has to outlive the innerHTML swap. */
+  function detailHeadHtml({ badgeText, badgeTone, title, statusText, sTone, mocked, extraBadge, facts, actions, tabs, layoutToggle, actionsMenu, menuOpen }) {
     const zoom = document.body.classList.contains('detail-zoom');
+    const hasActions = actions && actions.length;
     return `<div class="detail-head">
       <div class="detail-head-row">
         <span class="detail-badge badge-${badgeTone}">${esc(badgeText)}</span>
@@ -6588,6 +6610,25 @@
         <span class="detail-head-title">${esc(title)}</span>
         <span class="detail-head-status tone-text-${sTone || 'muted'}">${esc(statusText || '')}</span>
         <button type="button" class="detail-expand${zoom ? ' active' : ''}" data-action="toggle-zoom" aria-pressed="${zoom}" title="${zoom ? 'Restore the split view (f)' : 'Expand this pane to full width (f)'}">${icon(zoom ? 'collapse' : 'expand', 'ic-sm')}</button>
+        ${
+          actionsMenu && hasActions
+            ? `<button type="button" class="detail-menu-btn${menuOpen ? ' active' : ''}" id="detailActionsMenuBtn" data-action="toggle-actions-menu" aria-haspopup="menu"${
+                menuOpen ? ' aria-controls="detailActionsMenuPanel"' : ''
+              } aria-expanded="${Boolean(menuOpen)}" title="Actions">${icon('dots', 'ic-sm')}</button>
+        ${
+          menuOpen
+            ? `<div class="detail-menu-panel" id="detailActionsMenuPanel" role="menu" aria-label="Actions">${actions
+                .map(
+                  (a) =>
+                    `<button type="button" role="menuitem" class="detail-menu-item${a.on ? ' on' : ''}${a.hideInSimple ? ' detail-action-hide-simple' : ''}" data-detail-action="${esc(
+                      a.id,
+                    )}" ${a.disabled ? 'disabled' : ''} title="${esc(a.title || a.label)}">${a.icon ? icon(a.icon, 'ic-sm') : ''}<span>${esc(a.label)}</span></button>`,
+                )
+                .join('')}</div>`
+            : ''
+        }`
+            : ''
+        }
       </div>
       ${
         facts && facts.length
@@ -6600,7 +6641,7 @@
               .join('')}</div>`
           : ''
       }
-      ${actions && actions.length ? `<div class="detail-actions-row">${actions.map((a) => `<button type="button" class="detail-action-btn${a.on ? ' on' : ''}${a.hideInSimple ? ' detail-action-hide-simple' : ''}" data-detail-action="${esc(a.id)}" ${a.disabled ? 'disabled' : ''} title="${esc(a.title || a.label)}">${a.icon ? icon(a.icon, 'ic-sm') : ''}${esc(a.label)}</button>`).join('')}</div>` : ''}
+      ${hasActions && !actionsMenu ? `<div class="detail-actions-row">${actions.map((a) => `<button type="button" class="detail-action-btn${a.on ? ' on' : ''}${a.hideInSimple ? ' detail-action-hide-simple' : ''}" data-detail-action="${esc(a.id)}" ${a.disabled ? 'disabled' : ''} title="${esc(a.title || a.label)}">${a.icon ? icon(a.icon, 'ic-sm') : ''}${esc(a.label)}</button>`).join('')}</div>` : ''}
       ${
         tabs && tabs.length
           ? `<div class="detail-tabs">${tabs.map((t) => `<button type="button" class="detail-tab${t.active ? ' active' : ''}" data-detail-tab="${esc(t.id)}">${esc(t.label)}${t.count ? `<span class="detail-tab-count">${esc(t.count)}</span>` : ''}</button>`).join('')}${
@@ -6778,8 +6819,9 @@
     const reqPane = {
       side: 'Request', dotTone: 'put', meta: detail.method + (detail.request?.contentType ? ' · ' + detail.request.contentType : ''), metaTone: 'muted',
       actions: [{ id: 'copy-request', label: 'Copy', icon: 'copy', title: 'Copy the whole request (line, headers, payload)' }],
+      // No 'General' group: url/method/sent-at are the Summary tab's job now (see
+      // networkSummaryKvs), and this tab is for the headers and the body.
       groups: [
-        { label: 'General', copyLabel: 'request line', kvs: markKvHits([{ k: 'url', v: detail.request?.url || '' }, { k: 'method', v: detail.method }, { k: 'sent at', v: time(detail.startedAtEpochMs) }], query) },
         { label: 'Request headers', copyLabel: 'request headers', meta: String(headerRows(detail.request?.headers).length), kvs: markKvHits(headerRows(detail.request?.headers), query) },
         reqBody
           ? { label: 'Payload', copyLabel: 'request payload', meta: detail.request?.contentType || '', code: reqBody, body: { raw: bodyRawText(detail.request?.body), contentType: detail.request?.contentType } }
@@ -6794,16 +6836,16 @@
       actions: hasResponse
         ? [{ id: 'copy-response', label: 'Copy', icon: 'copy', title: 'Copy the whole response (status, headers, body)' }]
         : [{ id: 'copy-error', label: 'Copy error', icon: 'copy' }],
+      // Same as the request pane: no 'General' group — status/duration/content type (and, on the
+      // failure branch, the error string) live in the Summary tab.
       groups: hasResponse
         ? [
-            { label: 'General', copyLabel: 'status line', kvs: markKvHits([{ k: 'status', v: String(detail.status) }, { k: 'duration', v: (detail.durationMs ?? '—') + ' ms' }, { k: 'content type', v: detail.response.contentType || '—' }], query) },
             { label: 'Response headers', copyLabel: 'response headers', meta: String(headerRows(detail.response.headers).length), kvs: markKvHits(headerRows(detail.response.headers), query) },
             resBody
               ? { label: 'Body', copyLabel: 'response body', meta: detail.response.contentType || '', code: resBody, body: { raw: bodyRawText(detail.response.body), contentType: detail.response.contentType, diffInfo, diffSig } }
               : { label: 'Body', empty: 'No body.' },
           ]
         : [
-            { label: 'General', copyLabel: 'failure detail', kvs: markKvHits([{ k: 'status', v: '— no response' }, { k: 'error', v: detail.error || 'unknown' }], query) },
             { label: 'Response headers', empty: 'Connection failed before headers arrived.' },
             { label: 'Body', empty: 'No body.' },
           ],
@@ -6858,14 +6900,26 @@
     };
   }
 
-  function networkSummaryKvs(detail) {
+  /** The detail head used to repeat time/duration/content type/correlation/mock rule as a facts
+   * strip under the title; they live here now (one place, one format) so the head stays title +
+   * actions + tabs. `mockRuleId`/`mockDiffTotal` are computed in renderNetworkDetail (they need
+   * mockRulesCache) and passed down rather than recomputed. */
+  function networkSummaryKvs(detail, { mockRuleId, mockDiffTotal } = {}) {
     const rows = [
+      { k: 'time', v: time(detail.startedAtEpochMs) },
+      { k: 'duration', v: detail.durationMs != null ? detail.durationMs + ' ms' : '—' },
       { k: 'request.url', v: detail.request?.url || '' },
       { k: 'request.method', v: detail.method },
-      { k: 'response.status', v: detail.status != null ? String(detail.status) : detail.error ? '— (' + detail.error + ')' : '—', tone: statusTone(detail.status) },
+      { k: 'response.status', v: detail.status != null ? String(detail.status) : detail.error ? '— no response' : '—', tone: statusTone(detail.status) },
     ];
+    // The error string used to be parenthesised into response.status above, and to double as the
+    // compare tab's failure "General" group. Both are gone: this is its one home, on its own row
+    // so a long exception message isn't buried inside another value.
+    if (detail.error) rows.push({ k: 'response.error', v: detail.error, tone: 'error' });
     if (detail.response?.contentType) rows.push({ k: 'response.contentType', v: detail.response.contentType });
     if (detail.correlationId) rows.push({ k: 'correlationId', v: detail.correlationId });
+    if (mockRuleId) rows.push({ k: 'mock rule', v: mockRuleId, mockRuleLink: true });
+    if (mockDiffTotal > 0) rows.push({ k: 'vs original', v: mockDiffTotal + (mockDiffTotal === 1 ? ' field differs' : ' fields differ') + ' from original', tone: 'warn' });
     const tags = Object.entries(detail.tags || {});
     if (tags.length) rows.push({ k: 'tags', v: tags.map(([k, v]) => k + '=' + v).join(', ') });
     return rows;
@@ -6917,10 +6971,12 @@
     if (networkTab === 'diff' && !pinId) networkTab = 'compare';
     const diffCount = hasPin ? diffHeaderStats(networkDetailCache.get(pinId), detail) : null;
     const relatedFresh = networkRelatedEventsForId === detail.id;
-    const tabs = [{ id: 'compare', label: 'Request & response' }]
+    // Summary leads: it absorbed the head's old facts strip (time/duration/content type/
+    // correlation/mock rule/error), so it is the "what is this capture" tab and reads first.
+    // `networkTab` still defaults to 'compare' — order here, not which tab opens selected.
+    const tabs = [{ id: 'summary', label: 'Summary' }, { id: 'compare', label: 'Request & response' }]
       .concat(pinId ? [{ id: 'diff', label: 'Diff vs baseline', count: hasPin ? String(diffCount.changed + diffCount.added) : 'pick one' }] : [])
       .concat([
-        { id: 'summary', label: 'Summary' },
         { id: 'headers', label: 'Headers', count: String(headerRows(detail.request?.headers).length + headerRows(detail.response?.headers).length) },
         { id: 'timing', label: 'Timing' },
         { id: 'related', label: 'Related events', count: relatedFresh ? String(networkRelatedEvents.length) : undefined },
@@ -6967,12 +7023,10 @@
       badgeText: detail.method, badgeTone: methodTone(detail.method), title: detail.host + detail.path,
       statusText: detail.status != null ? String(detail.status) : detail.error ? 'FAILED' : '—', sTone: statusTone(detail.status),
       mocked: isMocked,
-      facts: [{ k: 'time', v: time(detail.startedAtEpochMs) }, { k: 'duration', v: detail.durationMs != null ? detail.durationMs + ' ms' : '—' }]
-        .concat(detail.response?.contentType ? [{ k: 'content type', v: detail.response.contentType }] : [])
-        .concat(detail.correlationId ? [{ k: 'correlation', v: detail.correlationId }] : [])
-        .concat(mockRuleId ? [{ k: 'mock rule', v: mockRuleId, link: true }] : [])
-        .concat(mockDiffTotal > 0 ? [{ k: 'vs original', v: mockDiffTotal + (mockDiffTotal === 1 ? ' field differs' : ' fields differ') + ' from original' }] : []),
+      // No facts strip: time/duration/content type/correlation/mock rule now live in the Summary
+      // tab (see networkSummaryKvs) instead of being repeated under the title.
       actions, tabs, layoutToggle,
+      actionsMenu: true, menuOpen: networkActionsMenuOpen,
     });
     let findBar = '';
     let bodyHtml;
@@ -6994,7 +7048,7 @@
         bodyHtml = `<div class="sbs-grid${networkSbsStacked ? ' stacked' : ''}">${panes.map(sbsPaneHtml).join('')}</div>`;
       }
     } else if (networkTab === 'summary') {
-      bodyHtml = kvGridHtml(networkSummaryKvs(detail), true);
+      bodyHtml = kvGridHtml(networkSummaryKvs(detail, { mockRuleId, mockDiffTotal }), true);
     } else if (networkTab === 'headers') {
       bodyHtml = kvGridHtml(networkHeadersKvs(detail), true);
     } else if (networkTab === 'timing') {
@@ -7023,7 +7077,26 @@
     bodyHtml += `<div class="detail-footnote">${icon('lock', 'ic-sm')}<span>Headers and bodies are redacted by the on-device allowlist before they reach this browser. Values shown as •••• never left the app.</span></div>`;
     pane.innerHTML = head + findBar + `<div class="detail-body">${bodyHtml}</div>`;
     mountBodyViewers(pane);
+    // The menu panel is position: fixed (the detail pane is overflow: hidden, so an absolutely
+    // positioned popup would be clipped at the pane edge) — same trade the toolbar dropdowns make.
+    if (networkActionsMenuOpen) positionDetailMenuPanel();
     restoreFocus(focusSnap, pane);
+  }
+
+  /** Right-aligns the actions menu under its kebab button, flipping above when there isn't room
+   * below — the .drop-panel contract in positionDropPanel, minus the multi-select chrome. */
+  function positionDetailMenuPanel() {
+    requestAnimationFrame(() => {
+      const btn = $('detailActionsMenuBtn'), panel = $('detailActionsMenuPanel');
+      if (!btn || !panel) return;
+      const rc = btn.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const below = vh - rc.bottom - 16;
+      const useBelow = below >= 200 || below >= rc.top - 16;
+      panel.style.left = Math.max(8, rc.right - panel.offsetWidth) + 'px';
+      if (useBelow) { panel.style.top = rc.bottom + 5 + 'px'; panel.style.bottom = 'auto'; }
+      else { panel.style.bottom = vh - rc.top + 5 + 'px'; panel.style.top = 'auto'; }
+    });
   }
 
   function detailActionText(id, detail) {
@@ -7048,6 +7121,7 @@
   function wireNetworkDetailPane() {
     const pane = $('networkDetailPane');
     pane.addEventListener('click', (e) => {
+      if (e.target.closest('[data-action="toggle-actions-menu"]')) { networkActionsMenuOpen = !networkActionsMenuOpen; renderNetworkDetail(); return; }
       if (e.target.closest('[data-action="toggle-zoom"]')) { toggleDetailZoom(); return; }
       const mockLink = e.target.closest('[data-open-mock-rule]');
       if (mockLink) { openMockRuleFromNetwork(mockLink.dataset.openMockRule); return; }
@@ -7082,6 +7156,11 @@
       const actionBtn = e.target.closest('[data-detail-action]');
       if (!actionBtn || !selectedTransactionDetail) return;
       const id = actionBtn.dataset.detailAction;
+      // Picking an item dismisses the menu, the way a menu is expected to behave — repainted here
+      // rather than per branch, because most branches (copy, cURL, clone-to-composer) don't
+      // re-render this pane themselves and would leave the popup hanging open over it. `id` is
+      // read first since the repaint detaches `actionBtn` from the tree.
+      if (networkActionsMenuOpen) { networkActionsMenuOpen = false; renderNetworkDetail(); }
       if (id === 'flag') { const d = selectedTransactionDetail; toggleEvidenceFlag('network', d.id, d.method + ' ' + d.host + d.path); renderNetworkDetail(); }
       else if (id === 'pin') pinNetworkBaseline(selectedTransactionId);
       else if (id === 'resend') resendCapturedRequest();
@@ -7814,6 +7893,7 @@
       // existing composedPath-based outside-click closer instead of replacing it.
       if (e.key === 'Escape' && networkHostDropOpen) { networkHostDropOpen = false; renderNetworkHostDrop(); $('networkHostDropBtn')?.focus(); return; }
       if (e.key === 'Escape' && socketConnDropOpen) { socketConnDropOpen = false; renderSocketConnDrop(); $('socketConnDropBtn')?.focus(); return; }
+      if (e.key === 'Escape' && networkActionsMenuOpen) { networkActionsMenuOpen = false; renderNetworkDetail(); $('detailActionsMenuBtn')?.focus(); return; }
       if (typing || dialogOpen || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === '/') { const id = viewFilterInput[currentView]; if (id && $(id)) { e.preventDefault(); $(id).focus(); } }
       else if (e.key === '?') { e.preventDefault(); toggleShortcuts(); }
