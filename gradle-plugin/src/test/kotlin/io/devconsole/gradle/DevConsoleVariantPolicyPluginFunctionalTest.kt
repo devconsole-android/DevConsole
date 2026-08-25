@@ -10,6 +10,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class DevConsoleVariantPolicyPluginFunctionalTest {
     @get:Rule
@@ -115,6 +117,25 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
             }
             """.trimIndent(),
         )
+    }
+
+    /**
+     * Writes a zip into the fixture's project directory. Built here rather than in the fixture's
+     * build script because Kotlin DSL resolves `java` to Gradle's `java` extension, so a script
+     * cannot name `java.util.zip` at all.
+     */
+    private fun writeZip(
+        relativePath: String,
+        vararg entries: Pair<String, ByteArray>,
+    ) {
+        val target = File(projectDir.root, relativePath).apply { parentFile.mkdirs() }
+        ZipOutputStream(target.outputStream().buffered()).use { zip ->
+            entries.forEach { (name, bytes) ->
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(bytes)
+                zip.closeEntry()
+            }
+        }
     }
 
     private fun runner(vararg args: String): GradleRunner = GradleRunner.create()
@@ -1005,10 +1026,262 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         assertTrue(result.output, !result.output.contains("PartnerRelease"))
     }
 
+    @Test
+    fun `assembleRelease builds a clean protected variant to completion without building an app bundle`() {
+        writeFixture(
+            devConsoleBlock = "",
+            androidPlugin = "com.android.application",
+            applicationIdLine =
+                """
+                applicationId = "io.devconsole.fixture"
+                versionCode = 1
+                """.trimIndent(),
+        )
+
+        val result = runner("assembleRelease").build()
+
+        assertTrue(result.output, result.output.contains("BUILD SUCCESSFUL"))
+        assertTrue(result.output, result.output.contains(":verifyReleaseDevConsolePackagedArtifact"))
+        // The packaged scan naming SingleArtifact.BUNDLE alongside SingleArtifact.APK dragged the whole
+        // bundle pipeline into every release APK build -- wasted work, and the direct cause of the
+        // wizard failure the next test covers.
+        BUNDLE_PIPELINE_TASKS.forEach { task ->
+            assertTrue(result.output, !result.output.contains(task))
+        }
+    }
+
+    @Test
+    fun `assembleRelease builds to completion from the Studio signed-APK wizard's injected output location`() {
+        writeFixture(
+            devConsoleBlock = "",
+            androidPlugin = "com.android.application",
+            applicationIdLine =
+                """
+                applicationId = "io.devconsole.fixture"
+                versionCode = 1
+                """.trimIndent(),
+        )
+        val destination = File(projectDir.root, "wizard-out").apply { mkdirs() }
+
+        // What Android Studio's "Generate Signed Bundle / APK" wizard passes. It puts AGP's final AAB
+        // path inside package<Variant>'s output directory, so any graph holding both package<Variant>
+        // and produce<Variant>BundleIdeListingFile is rejected by Gradle for an undeclared dependency.
+        // An APK build has no business containing the latter; it only did because of the packaged scan.
+        val result = runner(
+            "assembleRelease",
+            "-Pandroid.injected.apk.location=${destination.absolutePath}",
+        ).build()
+
+        assertTrue(result.output, result.output.contains("BUILD SUCCESSFUL"))
+    }
+
+    @Test
+    fun `bundleRelease builds to completion from the Studio signed-bundle wizard's injected output location`() {
+        writeFixture(
+            devConsoleBlock = "",
+            androidPlugin = "com.android.application",
+            applicationIdLine =
+                """
+                applicationId = "io.devconsole.fixture"
+                versionCode = 1
+                """.trimIndent(),
+        )
+        val destination = File(projectDir.root, "wizard-out").apply { mkdirs() }
+
+        val result = runner(
+            "bundleRelease",
+            "-Pandroid.injected.apk.location=${destination.absolutePath}",
+        ).build()
+
+        assertTrue(result.output, result.output.contains("BUILD SUCCESSFUL"))
+        assertTrue(result.output, result.output.contains(":verifyReleaseDevConsolePackagedBundle"))
+    }
+
+    @Test
+    fun `bundleRelease still opens the app bundle and rejects content only the package reveals`() {
+        writeFixture(
+            devConsoleBlock = "autoWireDependencies.set(false)",
+            androidPlugin = "com.android.application",
+            applicationIdLine =
+                """
+                applicationId = "io.devconsole.fixture"
+                versionCode = 1
+                """.trimIndent(),
+        )
+        // Nothing in the dependency graph gives this away -- only reading the packaged bytes does. So
+        // a failure here proves the AAB itself was opened, which is the coverage the split must keep.
+        File(projectDir.root, "src/main/assets/devconsole-web/index.html").apply { parentFile.mkdirs() }
+            .writeText("<!doctype html><title>forbidden dashboard</title>")
+
+        val result = runner("bundleRelease").buildAndFail()
+
+        assertTrue(result.output, result.output.contains("assets/devconsole-web/"))
+        assertTrue(result.output, result.output.contains(".aab!/"))
+    }
+
+    @Test
+    fun `a packaged artifact the build never produced is a warning, not a failed release`() {
+        writeFixture(
+            devConsoleBlock = "",
+            androidPlugin = "com.android.application",
+            applicationIdLine =
+                """
+                applicationId = "io.devconsole.fixture"
+                versionCode = 1
+                """.trimIndent(),
+            // Points a scan at a path nothing writes. Whatever leaves an expected artifact missing --
+            // a task-graph mistake here, an AGP change, a host's own output redirection -- must never
+            // be the reason a release build fails. This used to throw FileNotFoundException.
+            extraBuildScript =
+                """
+                tasks.register<io.devconsole.gradle.VerifyDevConsolePackagedArtifactTask>("verifyMissingArtifact") {
+                    variantName.set("release")
+                    failOnUnsafeVariant.set(true)
+                    packagedArtifacts.from(layout.buildDirectory.file("nowhere/absent.aab"))
+                    jsonReport.set(layout.buildDirectory.file("reports/devconsole/absent.json").map { it.asFile })
+                }
+                """.trimIndent(),
+        )
+
+        val result = runner("verifyMissingArtifact").build()
+
+        assertTrue(result.output, result.output.contains("BUILD SUCCESSFUL"))
+        assertTrue(result.output, result.output.contains("it was not produced by this build"))
+    }
+
+    @Test
+    fun `an entry too large to read through is reported but does not fail the build`() {
+        writeFixture(
+            devConsoleBlock = "autoWireDependencies.set(false)",
+            androidPlugin = "com.android.application",
+            applicationIdLine =
+                """
+                applicationId = "io.devconsole.fixture"
+                versionCode = 1
+                """.trimIndent(),
+            // A real liveRelease AAB failed on exactly this: R8's mapping file ran past the scanner's
+            // 64 MiB read limit, and the resulting "scan-limit-exceeded" note was counted as a
+            // violation. Not finishing a read says nothing about what leaked, and must never stop a
+            // release. Hence the deliberately oversized entry below.
+            extraBuildScript =
+                """
+                tasks.register<io.devconsole.gradle.VerifyDevConsolePackagedArtifactTask>("verifyOversized") {
+                    variantName.set("release")
+                    failOnUnsafeVariant.set(true)
+                    packagedArtifacts.from(file("oversized.zip"))
+                    jsonReport.set(layout.buildDirectory.file("reports/devconsole/oversized.json").map { it.asFile })
+                }
+                """.trimIndent(),
+        )
+        // One entry past the scanner's 64 MiB read limit. Harmless content: the point is that the read
+        // cannot finish, not what is in it.
+        writeZip("oversized.zip", "huge.txt" to ByteArray(65 * 1024 * 1024) { 'a'.code.toByte() })
+
+        val result = runner("verifyOversized").build()
+
+        assertTrue(result.output, result.output.contains("BUILD SUCCESSFUL"))
+        assertTrue(result.output, result.output.contains("could not scan"))
+        val report = File(projectDir.root, "build/reports/devconsole/oversized.json").readText()
+        assertTrue(report, report.contains("scan-limit-exceeded"))
+        assertTrue(report, report.contains("\"violations\":[]"))
+    }
+
+    @Test
+    fun `app bundle build metadata is left out of the scan`() {
+        writeFixture(
+            devConsoleBlock = "autoWireDependencies.set(false)",
+            androidPlugin = "com.android.application",
+            applicationIdLine =
+                """
+                applicationId = "io.devconsole.fixture"
+                versionCode = 1
+                """.trimIndent(),
+            // BUNDLE-METADATA is Play-stripped build output, so a DevConsole name appearing there says
+            // nothing about what reaches a device -- R8's mapping file names every class the build saw.
+            extraBuildScript =
+                """
+                tasks.register<io.devconsole.gradle.VerifyDevConsolePackagedArtifactTask>("verifyFakeBundle") {
+                    variantName.set("release")
+                    failOnUnsafeVariant.set(true)
+                    packagedArtifacts.from(file("fake.aab"))
+                    jsonReport.set(layout.buildDirectory.file("reports/devconsole/fake-bundle.json").map { it.asFile })
+                }
+                """.trimIndent(),
+        )
+        writeZip(
+            "fake.aab",
+            "BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map" to
+                "DEVCONSOLE_ENABLED_FULL_V1".toByteArray(),
+        )
+
+        val result = runner("verifyFakeBundle").build()
+
+        assertTrue(result.output, result.output.contains("BUILD SUCCESSFUL"))
+    }
+
+    @Test
+    fun `the verification kill switch lets a violating release build ship anyway, loudly`() {
+        writeFixture(
+            devConsoleBlock = "autoWireDependencies.set(false)",
+            androidPlugin = "com.android.application",
+            applicationIdLine =
+                """
+                applicationId = "io.devconsole.fixture"
+                versionCode = 1
+                """.trimIndent(),
+        )
+        File(
+            projectDir.root,
+            "src/main/java/io/devconsole/internal/enabled/FullRuntimeMarker.java",
+        ).apply { parentFile.mkdirs() }
+            .writeText(
+                """
+                package io.devconsole.internal.enabled;
+                public final class FullRuntimeMarker {
+                    public static final String SIGNATURE = "DEVCONSOLE_ENABLED_FULL_V1";
+                }
+                """.trimIndent(),
+            )
+
+        // Same project that `assembleRelease fails a violating project, not just check` proves is
+        // rejected. Nothing this plugin does should ever be the reason a release cannot be built at
+        // all, so there has to be a way past it that does not involve editing build files.
+        val result = runner("assembleRelease", "-Pdevconsole.verification.enabled=false").build()
+
+        assertTrue(result.output, result.output.contains("BUILD SUCCESSFUL"))
+        assertTrue(result.output, result.output.contains("verification is switched off"))
+        assertTrue(result.output, !result.output.contains(":verifyReleaseDevConsolePackagedArtifact"))
+    }
+
+    @Test
+    fun `the kill switch leaves the verification tasks runnable by name`() {
+        writeFixture(
+            devConsoleBlock = "autoWireDependencies.set(false)",
+            androidPlugin = "com.android.application",
+            applicationIdLine =
+                """
+                applicationId = "io.devconsole.fixture"
+                versionCode = 1
+                """.trimIndent(),
+        )
+        File(projectDir.root, "src/main/assets/devconsole-web/index.html").apply { parentFile.mkdirs() }
+            .writeText("<!doctype html><title>forbidden dashboard</title>")
+
+        // Off the release path, not gone: a host that switched the wiring off can still audit.
+        val result = runner("verifyDevConsoleProtectedArtifacts", "-Pdevconsole.verification.enabled=false")
+            .buildAndFail()
+
+        assertTrue(result.output, result.output.contains("assets/devconsole-web/"))
+    }
+
     private companion object {
         /** A valid, empty zip -- enough for Gradle to accept the stub as a jar artifact. */
         val EMPTY_JAR_BYTES =
             byteArrayOf(0x50, 0x4B, 0x05, 0x06) + ByteArray(18)
+
+        /** Tasks that only ever run when the build was actually asked for an app bundle. */
+        val BUNDLE_PIPELINE_TASKS =
+            listOf(":packageReleaseBundle", ":signReleaseBundle", ":produceReleaseBundleIdeListingFile")
     }
 
 }

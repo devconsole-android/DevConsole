@@ -42,6 +42,18 @@ import java.util.zip.ZipInputStream
 
 enum class DevConsoleVariantPolicy { ENABLED, DISABLED, PROTECTED }
 
+/**
+ * One protected variant's packaged-artifact scans, split by the lifecycle task that produces each
+ * format so neither ever drags the other's packaging pipeline into the build.
+ *
+ * @property assembled scans what `assemble<Variant>` produces -- the APK, or the AAR on a library.
+ * @property bundled scans what `bundle<Variant>` produces. Null on a library, which has no bundle.
+ */
+internal data class VariantPackagedScans(
+    val assembled: TaskProvider<VerifyDevConsolePackagedArtifactTask>,
+    val bundled: TaskProvider<VerifyDevConsolePackagedArtifactTask>?,
+)
+
 abstract class DevConsoleExtension {
     /**
      * Variants that are allowed to carry the real DevConsole runtime. Defaults to `["debug"]`, which
@@ -85,6 +97,22 @@ abstract class DevConsoleExtension {
      */
     abstract val defaultPolicy: Property<DevConsoleVariantPolicy>
     abstract val failBuildOnUnsafeVariant: Property<Boolean>
+
+    /**
+     * Whether verification runs as part of `assemble<Variant>` / `bundle<Variant>`. Defaults to true,
+     * and to the `devconsole.verification.enabled` Gradle property when a host sets one.
+     *
+     * The kill switch exists because this plugin sits directly on the release path, and a plugin that
+     * can stop a release from being built is a worse problem than the one it was written to prevent.
+     * If it ever misbehaves, `-Pdevconsole.verification.enabled=false` gets a build out the door
+     * without editing build files -- which matters when the build is being run from Android Studio's
+     * signing wizard rather than a command line. It logs a warning every time, and the verification
+     * tasks stay registered so `verifyDevConsoleProtectedArtifacts` still runs them on demand.
+     *
+     * Turning it off does not make a release safe to ship: it makes it unverified. Use it to unblock,
+     * then put it back.
+     */
+    abstract val verificationEnabled: Property<Boolean>
 
     /**
      * Adds the right DevConsole artifact per variant so hosts do not hand-write the debug/release
@@ -159,6 +187,18 @@ abstract class VerifyDevConsoleProtectedArtifactsTask : DefaultTask() {
     }
 }
 
+/**
+ * Scans the packages a single variant produced for DevConsole runtime content.
+ *
+ * One instance per variant *per packaging format*, never one covering both. A task's
+ * [packagedArtifacts] naming an artifact its own lifecycle task does not build pulls that artifact's
+ * whole production pipeline into the graph, and the plugin has no business deciding that
+ * `assembleRelease` should also build an AAB. See `registerPackagedArtifactScans`.
+ *
+ * This task only ever fails a build over an actual policy violation. A missing or unreadable
+ * artifact is reported as a warning: the point of the plugin is to keep the debugging runtime out of
+ * release packages, and it fails at that job just as badly if it stops a release from being built.
+ */
 @DisableCachingByDefault(
     because = "its report embeds absolute file paths from packagedArtifacts, which are not reproducible " +
         "across machines/checkouts and would make a cached result misleading",
@@ -179,10 +219,20 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
         val artifacts =
             packagedArtifacts.files
                 .flatMap { artifact ->
-                    if (artifact.isDirectory) {
-                        artifact.walkTopDown().filter(File::isFile).toList()
-                    } else {
-                        listOf(artifact)
+                    when {
+                        artifact.isDirectory -> artifact.walkTopDown().filter(File::isFile).toList()
+                        // An artifact this task was pointed at but that the build never produced is a
+                        // task-graph problem, not a policy violation, and must never take a release
+                        // build down with it -- see the class KDoc. Skipping it here keeps the scan
+                        // reporting on what actually got packaged.
+                        artifact.isFile -> listOf(artifact)
+                        else -> {
+                            logger.warn(
+                                "DevConsole: skipping ${artifact.absolutePath} while verifying " +
+                                    "${variantName.get()} -- it was not produced by this build.",
+                            )
+                            emptyList()
+                        }
                     }
                 }.distinctBy(File::getAbsolutePath)
                 .sortedBy(File::getAbsolutePath)
@@ -194,10 +244,22 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
                     sha256 = artifact.sha256(),
                 )
             }
-        val violations = artifacts.flatMap(::scanArtifact).distinct().sorted()
+        val findings = artifacts.flatMap(::scanArtifactSafely).distinct().sorted()
+        // An entry too big to read to the end is a hole in the scan's coverage, not evidence that
+        // anything leaked. Reporting it as a violation failed release builds over the size of R8's
+        // mapping file -- a build artifact that is not even delivered to a device. It stays in the
+        // report and in the log so the gap is visible, but it never fails a build on its own.
+        val (unscannable, violations) = findings.partition { it.contains(SCAN_LIMIT_MARKER) }
         val report = jsonReport.get()
         report.parentFile.mkdirs()
-        report.writeText(reportJson(inspected, violations))
+        report.writeText(reportJson(inspected, violations, unscannable))
+        if (unscannable.isNotEmpty()) {
+            logger.warn(
+                "DevConsole: could not scan ${unscannable.size} oversized entr" +
+                    "${if (unscannable.size == 1) "y" else "ies"} in ${variantName.get()} " +
+                    "-- ${unscannable.joinToString()}",
+            )
+        }
         if (violations.isNotEmpty()) {
             val message =
                 "Protected variant ${variantName.get()} contains forbidden DevConsole packaged content: " +
@@ -206,14 +268,51 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
         }
     }
 
+    /**
+     * Reads one artifact, downgrading an I/O failure to a warning. A truncated, locked or otherwise
+     * unreadable package is an environment problem; failing the build over it would block a release
+     * for a reason that has nothing to do with whether DevConsole leaked into it.
+     */
+    private fun scanArtifactSafely(artifact: File): List<String> =
+        runCatching { scanArtifact(artifact) }.getOrElse { failure ->
+            logger.warn(
+                "DevConsole: could not read ${artifact.absolutePath} while verifying " +
+                    "${variantName.get()} -- ${failure.message}. Skipping it.",
+            )
+            emptyList()
+        }
+
+    /**
+     * Forbidden path prefixes matching [entryName], anchored at any path segment rather than only at
+     * the start.
+     *
+     * An APK carries the dashboard at `assets/devconsole-web/`, but an app bundle nests every module
+     * under its own directory and carries the same files at `base/assets/devconsole-web/`. A plain
+     * `startsWith` therefore matched inside APKs and silently never matched inside AABs -- a gap that
+     * stayed hidden only while one task scanned both formats and the APK caught the leak first.
+     */
+    private fun forbiddenPathsIn(entryName: String): List<String> =
+        FORBIDDEN_ENTRY_PREFIXES.filter { prefix ->
+            entryName.startsWith(prefix) || entryName.contains("/$prefix")
+        }
+
+    /**
+     * Whether an entry is app-bundle build metadata rather than shipped content.
+     *
+     * `BUNDLE-METADATA/` holds R8's `proguard.map` and the dependency manifest. Play strips it, so
+     * nothing under it can carry DevConsole onto a device -- and reading it is actively harmful: the
+     * mapping file for a large app runs past this scanner's read limit, and it names every class the
+     * build ever saw, so scanning it invites failures that say nothing about what shipped.
+     */
+    private fun isBuildMetadata(entryName: String): Boolean = entryName.startsWith("BUNDLE-METADATA/")
+
     private fun scanArtifact(artifact: File): List<String> =
         when (artifact.extension.lowercase()) {
             "apk", "aab", "aar", "jar", "zip" ->
                 ZipFile(artifact).use { zip ->
-                    zip.entries().asSequence().flatMap { entry ->
+                    zip.entries().asSequence().filterNot { isBuildMetadata(it.name) }.flatMap { entry ->
                         val pathMatches =
-                            FORBIDDEN_ENTRY_PREFIXES
-                                .filter { entry.name.startsWith(it) }
+                            forbiddenPathsIn(entry.name)
                                 .map { signature -> "${artifact.name}!/${entry.name} [$signature]" }
                         if (entry.isDirectory) {
                             pathMatches.asSequence()
@@ -247,9 +346,7 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
                             val entry = nested.nextEntry ?: break
                             if (!entry.isDirectory) {
                                 val nestedLocation = "$location!/${entry.name}"
-                                FORBIDDEN_ENTRY_PREFIXES
-                                    .filter { entry.name.startsWith(it) }
-                                    .forEach { add("$nestedLocation [$it]") }
+                                forbiddenPathsIn(entry.name).forEach { add("$nestedLocation [$it]") }
                                 addAll(scanBounded(nested, MAX_NESTED_ENTRY_BYTES, nestedLocation))
                             }
                             nested.closeEntry()
@@ -268,7 +365,7 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
     ): List<String> {
         val bounded = input.readBytesBounded(limit)
         return scanBytes(bounded.bytes, location) +
-            if (bounded.limitExceeded) listOf("$location [scan-limit-exceeded:$limit]") else emptyList()
+            if (bounded.limitExceeded) listOf("$location [$SCAN_LIMIT_MARKER$limit]") else emptyList()
     }
 
     private fun scanBytes(
@@ -323,6 +420,7 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
     private fun reportJson(
         inspected: List<InspectedArtifact>,
         violations: List<String>,
+        unscannable: List<String>,
     ): String =
         buildString {
             append("{\n  \"variant\":\"").append(variantName.get().jsonEscape()).append("\",\n")
@@ -344,6 +442,12 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
                 append("\n    \"").append(violation.jsonEscape()).append('"')
             }
             if (violations.isNotEmpty()) append('\n').append("  ")
+            append("],\n  \"unscannable\":[")
+            unscannable.forEachIndexed { index, entry ->
+                if (index > 0) append(',')
+                append("\n    \"").append(entry.jsonEscape()).append('"')
+            }
+            if (unscannable.isNotEmpty()) append('\n').append("  ")
             append("]\n}\n")
         }
 
@@ -373,6 +477,9 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
     )
 
     private companion object {
+        /** Tags an entry the scanner could not read to the end. Never a violation -- see `verify`. */
+        const val SCAN_LIMIT_MARKER = "scan-limit-exceeded:"
+
         const val MAX_SCANNED_ENTRY_BYTES = 64 * 1024 * 1024
         const val MAX_NESTED_ENTRY_BYTES = 16 * 1024 * 1024
 
@@ -403,6 +510,9 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
 // Bump in step with SDK_VERSION in convention-publishing; the tag must exist before this resolves.
 private const val DEFAULT_SDK_VERSION = "1.3.1"
 
+/** Gradle property backing [DevConsoleExtension.verificationEnabled]. */
+private const val VERIFICATION_ENABLED_PROPERTY = "devconsole.verification.enabled"
+
 /** JitPack's group for this repo — what auto-wiring declares. */
 private const val DEVCONSOLE_GROUP = "com.github.devconsole-android.DevConsole"
 
@@ -418,7 +528,7 @@ private val CORE_RUNTIME_COORDINATE_NAMES = setOf("devconsole", "devconsole-noop
 
 class DevConsoleVariantPolicyPlugin : Plugin<Project> {
     override fun apply(target: Project) = with(target) {
-        val packagedVerificationTasks = linkedMapOf<String, TaskProvider<VerifyDevConsolePackagedArtifactTask>>()
+        val packagedVerificationTasks = linkedMapOf<String, VariantPackagedScans>()
         // variant name -> AGP build type name (e.g. "productionDebug" -> "debug"). Populated by the
         // AndroidComponentsExtension#onVariants callbacks in registerPackagedArtifactScans below. The
         // build type is what lets a flavored variant like "productionDebug" resolve against
@@ -451,6 +561,9 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
             // restore the old release-pattern-only behavior.
             defaultPolicy.convention(DevConsoleVariantPolicy.PROTECTED)
             failBuildOnUnsafeVariant.convention(true)
+            verificationEnabled.convention(
+                providers.gradleProperty(VERIFICATION_ENABLED_PROPERTY).map(String::toBoolean).orElse(true),
+            )
             autoWireDependencies.convention(true)
             sdkVersion.convention(DEFAULT_SDK_VERSION)
         }
@@ -512,9 +625,25 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
         }
     }
 
+    /**
+     * Registers the packaged-artifact scans for every protected variant, **one task per packaging
+     * format**, and records them in [scans] so `registerProtectedVerifier` can hang each one off the
+     * lifecycle task that actually produces its format.
+     *
+     * A task's inputs decide what Gradle builds. When a single task named both `SingleArtifact.APK`
+     * and `SingleArtifact.BUNDLE` and hung off `assemble<Variant>`, asking for a release APK also
+     * built the AAB -- `packageReleaseBundle`, `signReleaseBundle` and
+     * `produce<Variant>BundleIdeListingFile` all joined an APK-only graph. Besides the wasted build
+     * time, it broke Android Studio's "Generate Signed APK" wizard outright: the wizard passes
+     * `-Pandroid.injected.apk.location`, which puts AGP's final AAB path *inside*
+     * `package<Variant>`'s output directory, and Gradle then rejects
+     * `produce<Variant>BundleIdeListingFile` for consuming that directory without declaring a
+     * dependency on `package<Variant>`. Keeping each format on its own task means the plugin only
+     * ever asks for artifacts the build was already going to produce.
+     */
     private fun Project.registerPackagedArtifactScans(
         extension: DevConsoleExtension,
-        scans: MutableMap<String, TaskProvider<VerifyDevConsolePackagedArtifactTask>>,
+        scans: MutableMap<String, VariantPackagedScans>,
         actualVariantBuildTypes: MutableMap<String, String?>,
     ) {
         plugins.withId("com.android.application") {
@@ -525,22 +654,27 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
                     if (variantPolicy(variant.name, variant.buildType, extension) != DevConsoleVariantPolicy.PROTECTED) {
                         return@onVariants
                     }
-                    scans[variant.name] =
-                        tasks.register<VerifyDevConsolePackagedArtifactTask>(
-                            "verify${variant.name.capitalized()}DevConsolePackagedArtifact",
+                    scans[variant.name] = VariantPackagedScans(
+                        // Keeps the historical task name: this is the scan on the assemble path, the
+                        // one hosts and CI already invoke.
+                        assembled = registerPackagedScan(
+                            extension = extension,
+                            taskName = "verify${variant.name.capitalized()}DevConsolePackagedArtifact",
+                            variantName = variant.name,
+                            reportName = "${variant.name}-artifacts",
                         ) {
-                            group = "verification"
-                            variantName.set(variant.name)
-                            failOnUnsafeVariant.set(extension.failBuildOnUnsafeVariant)
-                            packagedArtifacts.from(variant.artifacts.get(SingleArtifact.APK))
-                            packagedArtifacts.from(variant.artifacts.get(SingleArtifact.BUNDLE))
-                            packagedArtifacts.from(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
-                            jsonReport.set(
-                                layout.buildDirectory.file(
-                                    "reports/devconsole/${variant.name}-artifacts.json",
-                                ).map { it.asFile },
-                            )
-                        }
+                            it.from(variant.artifacts.get(SingleArtifact.APK))
+                            it.from(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                        },
+                        bundled = registerPackagedScan(
+                            extension = extension,
+                            taskName = "verify${variant.name.capitalized()}DevConsolePackagedBundle",
+                            variantName = variant.name,
+                            reportName = "${variant.name}-bundle",
+                        ) {
+                            it.from(variant.artifacts.get(SingleArtifact.BUNDLE))
+                        },
+                    )
                 }
         }
         plugins.withId("com.android.library") {
@@ -551,24 +685,39 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
                     if (variantPolicy(variant.name, variant.buildType, extension) != DevConsoleVariantPolicy.PROTECTED) {
                         return@onVariants
                     }
-                    scans[variant.name] =
-                        tasks.register<VerifyDevConsolePackagedArtifactTask>(
-                            "verify${variant.name.capitalized()}DevConsolePackagedArtifact",
+                    // A library has no bundle task, so there is no second format to scan.
+                    scans[variant.name] = VariantPackagedScans(
+                        assembled = registerPackagedScan(
+                            extension = extension,
+                            taskName = "verify${variant.name.capitalized()}DevConsolePackagedArtifact",
+                            variantName = variant.name,
+                            reportName = "${variant.name}-artifacts",
                         ) {
-                            group = "verification"
-                            variantName.set(variant.name)
-                            failOnUnsafeVariant.set(extension.failBuildOnUnsafeVariant)
-                            packagedArtifacts.from(variant.artifacts.get(SingleArtifact.AAR))
-                            packagedArtifacts.from(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
-                            jsonReport.set(
-                                layout.buildDirectory.file(
-                                    "reports/devconsole/${variant.name}-artifacts.json",
-                                ).map { it.asFile },
-                            )
-                        }
+                            it.from(variant.artifacts.get(SingleArtifact.AAR))
+                            it.from(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                        },
+                        bundled = null,
+                    )
                 }
         }
     }
+
+    private fun Project.registerPackagedScan(
+        extension: DevConsoleExtension,
+        taskName: String,
+        variantName: String,
+        reportName: String,
+        artifacts: (ConfigurableFileCollection) -> Unit,
+    ): TaskProvider<VerifyDevConsolePackagedArtifactTask> =
+        tasks.register<VerifyDevConsolePackagedArtifactTask>(taskName) {
+            group = "verification"
+            this.variantName.set(variantName)
+            failOnUnsafeVariant.set(extension.failBuildOnUnsafeVariant)
+            artifacts(packagedArtifacts)
+            jsonReport.set(
+                layout.buildDirectory.file("reports/devconsole/$reportName.json").map { it.asFile },
+            )
+        }
 
     /**
      * Resolves a variant's policy. [buildType] is the AGP build-type name backing this variant (e.g.
@@ -677,23 +826,33 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
         policies: Map<String, DevConsoleVariantPolicy>,
         report: TaskProvider<DevConsoleVariantReportTask>,
         extension: DevConsoleExtension,
-        packagedVerificationTasks: Map<String, TaskProvider<VerifyDevConsolePackagedArtifactTask>>,
+        packagedScans: Map<String, VariantPackagedScans>,
     ) {
         val protectedPaths = extension.protectedDependencyPaths.get()
         val protectedVariants = policies.filterValues { it == DevConsoleVariantPolicy.PROTECTED }.keys
+        val wireOntoLifecycleTasks = extension.verificationEnabled.get()
+        if (!wireOntoLifecycleTasks) {
+            logger.warn(
+                "DevConsole: verification is switched off for project '$path' via " +
+                    "$VERIFICATION_ENABLED_PROPERTY, so assemble/bundle will not check that the " +
+                    "DevConsole runtime stayed out of ${protectedVariants.joinToString()}. Anything " +
+                    "built this way is unverified -- switch it back on before shipping.",
+            )
+        }
         // One verifier task per protected variant, never a single shared one. A shared task carries
         // every protected variant's runtime classpath and packaged artifact as its own inputs, so
         // wiring it onto assemble<Variant> made building one variant resolve -- and on a flavored
         // project fully build -- every other protected variant too: `assembleProductionRelease`
         // dragged `dexBuilderStagingRelease`, `bundleStagingRelease` and every other flavor's
         // dependency download into the graph. Per-variant tasks keep each variant's inputs to itself.
-        val verifiers = protectedVariants.map { variant ->
+        val verifiers = protectedVariants.flatMap { variant ->
+            // Dependency-graph checks only: no packaged artifact among its inputs, so it is safe to
+            // hang off both lifecycle tasks without deciding anything about what gets packaged.
             val verifier = tasks.register<VerifyDevConsoleProtectedArtifactsTask>(
                 "verify${variant.capitalized()}DevConsoleProtectedArtifacts",
             ) {
                 group = "verification"
                 dependsOn(report)
-                packagedVerificationTasks[variant]?.let { packaged -> dependsOn(packaged) }
                 violations.set(declaredViolations(variant, protectedPaths))
                 resolvedRuntimeComponents.put(variant, resolvedRuntimeComponents(variant))
                 protectedProjectPaths.set(protectedPaths)
@@ -706,14 +865,28 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
             // lazy and safe even when a task name does not exist for this project type (e.g.
             // bundle<Variant> on a library module, which has no bundle task) -- it never forces the task
             // to be created, it just configures it if and when it is.
+            //
+            // Each packaged scan goes on the lifecycle task that produces its format, and nowhere else.
+            // Hanging the AAB scan off assemble<Variant> is what made a release APK build an AAB it was
+            // never asked for -- see registerPackagedArtifactScans for what that broke.
+            val scans = packagedScans[variant]
             val capitalized = variant.capitalized()
-            tasks.matching { it.name == "assemble$capitalized" }.configureEach { it.dependsOn(verifier) }
-            tasks.matching { it.name == "bundle$capitalized" }.configureEach { it.dependsOn(verifier) }
-            verifier
+            if (wireOntoLifecycleTasks) {
+                tasks.matching { it.name == "assemble$capitalized" }.configureEach { assemble ->
+                    assemble.dependsOn(verifier)
+                    scans?.assembled?.let { scan -> assemble.dependsOn(scan) }
+                }
+                tasks.matching { it.name == "bundle$capitalized" }.configureEach { bundle ->
+                    bundle.dependsOn(verifier)
+                    scans?.bundled?.let { scan -> bundle.dependsOn(scan) }
+                }
+            }
+            listOfNotNull(verifier, scans?.assembled, scans?.bundled)
         }
         // Aggregate lifecycle task: the name hosts and CI already invoke, and what `check` hangs off.
         // Asking for it explicitly still verifies every protected variant -- it just is no longer on
-        // any single variant's build path.
+        // any single variant's build path. This one deliberately covers every format, so `check` on a
+        // flavored app does build the AABs; that is the price of asking for full verification by name.
         val aggregate = tasks.register("verifyDevConsoleProtectedArtifacts") { task ->
             task.group = "verification"
             task.description = "Verifies every protected variant excludes the full DevConsole runtime."
