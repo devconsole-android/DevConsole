@@ -8,6 +8,6 @@ android { namespace = "io.devconsole.mocks.okhttp.noop" }
 
 dependencies {
     implementation(project(":sdk:mocks"))
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:5.5.0")
 }
