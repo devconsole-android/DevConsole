@@ -1075,7 +1075,7 @@ private fun networkTransaction(
         startedAtEpochMs = startedAtEpochMs,
         completedAtEpochMs = completedAtEpochMs,
         capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput("GET", "https://api.test/orders"),
                 NetworkResponseInput(status),
             ),

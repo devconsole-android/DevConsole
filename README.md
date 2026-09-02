@@ -420,10 +420,11 @@ Not using Firebase? Implement `RemoteConfigProvider` for any other service — t
 vendor-neutral, and [docs/REMOTE_CONFIG.md](docs/REMOTE_CONFIG.md) has a worked example. The
 inspector is read-only: DevConsole never sets overrides and never triggers `fetch()` or `activate()`.
 
-Values are redacted by key name before either surface sees them, matched separator-insensitively so
-`api_key` and `apiKey` are caught as well as `api-key`. It is still an allowlist, so a secret under
-a name nobody listed is shown in full — extend `RedactionPolicy.sensitiveFieldNames` if you keep
-anything sensitive in Remote Config.
+With `RedactionPolicy.strict()` configured, values are redacted by key name before either surface
+sees them, matched separator-insensitively so `api_key` and `apiKey` are caught as well as
+`api-key`. It is still an allowlist, so a secret under a name nobody listed is shown in full — extend
+`RedactionPolicy.sensitiveFieldNames` if you keep anything sensitive in Remote Config. The default
+policy redacts nothing.
 
 ## Artifacts
 
@@ -548,6 +549,33 @@ aggregate. If you worked around this by excluding the verifier (`-x verifyDevCon
 or by narrowing `protectedVariantPatterns` to one flavor, undo it: those workarounds bought speed by
 dropping enforcement, and you no longer have to pay for one with the other.
 
+### Upgrading from 1.3.1 or earlier: redaction is now opt-in
+
+Up to and including 1.3.1, `RedactionPolicy.default()` masked about 25 credential field names and
+`Bearer` tokens on every capture path. From the next release the default masks nothing, so a
+developer inspecting their own traffic sees the real token instead of `<redacted>`.
+
+If you relied on that masking, for example because you expose the dashboard on a shared network or
+attach exported HAR/ZIP bundles to bug reports, restore it explicitly:
+
+```kotlin
+DevConsole.initialize(
+    this,
+    DevConsoleConfig(redactionPolicy = RedactionPolicy.strict()),
+)
+```
+
+`RedactionPolicy.strict()` is byte-for-byte the previous default, so a host that had extended the
+default list should build on `strict()` instead:
+
+```kotlin
+val policy = RedactionPolicy.strict().let {
+    it.copy(sensitiveFieldNames = it.sensitiveFieldNames + "x-company-session")
+}
+```
+
+Hosts that never configured redaction and only use DevConsole on a trusted machine need no change.
+
 ### Narrowing what gets protected
 
 If you genuinely want fewer protected variants — a flavor whose release build is never distributed,
@@ -580,8 +608,11 @@ safety for a working first run. Know where the edges are:
   creates a session, with no approval step on the device. Codes are single-use and expire in five
   minutes; sessions last 30. Treat that URL like a password. You can revoke sessions from the More
   screen.
-- **Redaction is an allowlist.** About 25 well-known field names and `Bearer` tokens get masked.
-  Custom header names, signed-URL query params, and PII inside bodies pass through verbatim. See
+- **Redaction is off by default.** `RedactionPolicy.default()` masks nothing, so the developer
+  sees their own `Authorization` token and every other captured value verbatim. Before exposing the
+  dashboard on a shared network, opt into `RedactionPolicy.strict()`, which masks about 25
+  well-known field names and `Bearer` tokens. Even then it is an allowlist: custom header names,
+  signed-URL query params, and PII inside bodies still pass through verbatim. See
   [docs/SECURITY_AND_REDACTION.md](docs/SECURITY_AND_REDACTION.md).
 - **Screenshots cannot be redacted.** Pixels don't have field names. Capture is **off by default**
   and everything it produces is marked `UNREDACTED`.

@@ -165,11 +165,17 @@ a remedy, not a proof of control.
 
 ## Redaction is an allowlist, and allowlists miss things
 
-`RedactionPolicy.default()` matches a fixed set of ~25 field names (case-insensitively) against
-header names, JSON keys, and form/query field names, plus one regex for `Bearer <token>` text. See
-[SECURITY_AND_REDACTION.md](SECURITY_AND_REDACTION.md) for the exact list.
+`RedactionPolicy.default()` redacts **nothing**: every captured value is transmitted and stored
+verbatim. `RedactionPolicy.strict()` is the opt-in policy; it matches a fixed set of ~25 field names
+(case-insensitively) against header names, JSON keys, and form/query field names, plus one regex for
+`Bearer <token>` text. See [SECURITY_AND_REDACTION.md](SECURITY_AND_REDACTION.md) for the exact list.
 
-Everything not on that list is transmitted and stored **verbatim**. In practice that means:
+This is a change from 1.3.1 and earlier, where the strict list was the default. A host that upgrades
+without setting `redactionPolicy` loses credential masking on every capture path, export bundle and
+dashboard view at once; set `RedactionPolicy.strict()` before exposing the dashboard beyond a trusted
+machine.
+
+Even under the strict policy, everything not on that list is transmitted and stored **verbatim**. In practice that means:
 
 - **Custom auth headers.** `X-Company-Session`, `X-Tenant-Key`, `X-Signature` — not on the list, not
   redacted. Extend the policy with your own names.

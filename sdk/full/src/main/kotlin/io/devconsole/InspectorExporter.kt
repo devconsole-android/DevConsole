@@ -93,8 +93,8 @@ internal class AndroidInspectorExporter(
     internal var maxSessionZipBytes: Long = DEFAULT_EXPORT_LIMIT_BYTES
 
     /**
-     * When set, exported HAR/Postman bodies are re-redacted with the current policy at export time;
-     * null keeps only the capture-time redaction. A `var` (like [maxSessionZipBytes]) so the
+     * When set, exported timeline, HAR and Postman content is re-redacted with the current policy at
+     * export time; null keeps only the capture-time redaction. A `var` (like [maxSessionZipBytes]) so the
      * constructor stays under the parameter-count threshold.
      */
     internal var exportRedaction: RedactionEngine? = null
@@ -135,7 +135,7 @@ internal class AndroidInspectorExporter(
             val timelineResult =
                 runBlocking {
                     val annotations = sessionExportSources.annotationsSupplier()
-                    EventExportWriter().writeAsync(
+                    (exportRedaction?.let(::EventExportWriter) ?: EventExportWriter()).writeAsync(
                         ExportRequest(sessionId = sessionId, events = events, destination = timelinePart)
                             .withAnnotations(events.associate { it.id to annotations.get(it.id) })
                             .withAttachments(collectAttachments(events)),

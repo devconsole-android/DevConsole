@@ -7185,13 +7185,42 @@
     mockPendingHighlightId = id;
     await show('mocks');
   }
-  async function copyToClipboard(text, label) {
+  // navigator.clipboard only exists in a secure context (https or localhost). The dashboard is
+  // usually opened over plain http on a LAN address, so fall back to a hidden textarea plus
+  // execCommand('copy'), which still works everywhere the dashboard runs.
+  function copyViaExecCommand(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.left = '0';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    let ok = false;
     try {
-      await navigator.clipboard.writeText(text);
-      toast(label + ' copied to clipboard.');
+      ok = document.execCommand('copy');
     } catch {
-      toast('Clipboard access was denied.', 'error');
+      ok = false;
     }
+    ta.remove();
+    return ok;
+  }
+  async function copyToClipboard(text, label) {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast(label + ' copied to clipboard.');
+        return;
+      } catch {
+        // fall through to the execCommand path
+      }
+    }
+    if (copyViaExecCommand(text)) toast(label + ' copied to clipboard.');
+    else toast('Clipboard access was denied.', 'error');
   }
   async function copyNetworkCurl() {
     if (!token || !selectedTransactionId) return;

@@ -32,7 +32,7 @@ class DevConsolePahoMqttTest {
     @Test
     fun `received message with a secret is stored redacted, tagged mqtt, and the topic round-trips`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store)
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.strict()), store)
         val client = FakeMqttAsyncClient()
         val delivered = mutableListOf<String>()
         val hostDelegate =
@@ -73,7 +73,7 @@ class DevConsolePahoMqttTest {
     @Test
     fun `publish stores exactly one sent message and returns the delegate token`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store)
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.strict()), store)
         val client = FakeMqttAsyncClient()
         val publisher = DevConsolePahoMqtt.install(client, recorder)
 
@@ -88,7 +88,7 @@ class DevConsolePahoMqttTest {
     @Test
     fun `host callbacks fire for connect complete, connection lost and delivery complete`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store)
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.strict()), store)
         val client = FakeMqttAsyncClient()
         var connectCompleteCalls = 0
         var connectionLostCalls = 0

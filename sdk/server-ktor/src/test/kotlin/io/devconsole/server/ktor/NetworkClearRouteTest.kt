@@ -188,7 +188,7 @@ private fun networkStore(vararg ids: String): InMemoryNetworkTransactionStore =
                     startedAtEpochMs = index.toLong() + 1,
                     completedAtEpochMs = index.toLong() + 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput("GET", "https://api.test/$id"),
                             NetworkResponseInput(200),
                         ),

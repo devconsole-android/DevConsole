@@ -48,7 +48,7 @@ import java.net.URLEncoder
  * multi-dimension combination, and cursor pagination.
  */
 class NetworkTransactionQueryEquivalenceTest {
-    private val captureFactory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+    private val captureFactory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
 
     private fun store(): InMemoryNetworkTransactionStore =
         InMemoryNetworkTransactionStore(NetworkCursorCodec("query-equivalence-key".encodeToByteArray())).apply {

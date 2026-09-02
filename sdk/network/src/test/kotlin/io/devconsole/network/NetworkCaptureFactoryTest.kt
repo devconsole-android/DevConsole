@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NetworkCaptureFactoryTest {
-    private val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+    private val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
 
     @Test
     fun `redacts headers query and textual body before producing capture`() {
@@ -142,7 +142,7 @@ class NetworkCaptureFactoryTest {
     fun `aggregate capture limit omits previews before exceeding the event budget`() {
         val constrained =
             NetworkCaptureFactory(
-                RedactionEngine(RedactionPolicy.default()),
+                RedactionEngine(RedactionPolicy.strict()),
                 NetworkCaptureLimits(totalCaptureBytes = 1_024),
             )
 

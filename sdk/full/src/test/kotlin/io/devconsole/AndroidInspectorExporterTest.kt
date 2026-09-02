@@ -43,7 +43,7 @@ private const val PRUNE_TEST_BASE_TIME_MS = 1_700_000_000_000L
 @Config(sdk = [34])
 class AndroidInspectorExporterTest {
     private val application: Application = ApplicationProvider.getApplicationContext()
-    private val captureFactory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+    private val captureFactory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
 
     private fun networkStore(): InMemoryNetworkTransactionStore =
         InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
@@ -201,7 +201,7 @@ class AndroidInspectorExporterTest {
                 metadataSupplier = {
                     ServerMetadata(appDisplayName = "Sample App", appPackageName = "com.example.sample")
                 },
-            )
+            ).apply { exportRedaction = RedactionEngine(RedactionPolicy.strict()) }
 
         val outcome = exporter.exportSessionZip()
 

@@ -11,7 +11,7 @@ class NetworkExportTest {
     @Test
     fun `curl and har use only redacted capture fields`() {
         val capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput(
                     method = "POST",
                     url = "https://example.test/orders?access_token=query-secret",
@@ -36,7 +36,7 @@ class NetworkExportTest {
     @Test
     fun `curl export emits the captured request body via data-raw`() {
         val capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput(
                     method = "POST",
                     url = "https://example.test/orders",
@@ -54,7 +54,7 @@ class NetworkExportTest {
     @Test
     fun `curl export shell-escapes single quotes in the body`() {
         val capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput(
                     method = "POST",
                     url = "https://example.test/orders",
@@ -123,7 +123,7 @@ class NetworkExportTest {
         // header value is already replaced with the redaction marker before NetworkExport ever sees
         // it. Cookie parsing must format whatever that redacted string is, not crash or fabricate.
         val capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput(
                     method = "GET",
                     url = "https://example.test/orders",
@@ -142,7 +142,7 @@ class NetworkExportTest {
     @Test
     fun `har request cookies parsing skips a fully-redacted Cookie header instead of fabricating an entry`() {
         val capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput(
                     method = "GET",
                     url = "https://example.test/orders",
@@ -166,7 +166,7 @@ class NetworkExportTest {
                 "tx-1",
                 1_000,
                 1_010,
-                NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                     NetworkRequestInput("GET", "https://example.test/orders"),
                     NetworkResponseInput(statusCode = 404, error = "socket timeout"),
                 ),
@@ -185,7 +185,7 @@ class NetworkExportTest {
     @Test
     fun `har content object includes the response body size`() {
         val capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput("GET", "https://example.test/orders"),
                 NetworkResponseInput(
                     statusCode = 200,
@@ -203,12 +203,12 @@ class NetworkExportTest {
     @Test
     fun `har redirectURL is populated from the Location header on a redirect and stays empty otherwise`() {
         val redirect =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput("GET", "https://example.test/old"),
                 NetworkResponseInput(statusCode = 302, headers = mapOf("Location" to "https://example.test/new")),
             )
         val nonRedirect =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput("GET", "https://example.test/orders"),
                 NetworkResponseInput(statusCode = 200, headers = mapOf("Location" to "https://example.test/ignored")),
             )
@@ -242,7 +242,7 @@ class NetworkExportTest {
                 .contains("still-raw-secret"),
         )
         val transaction = NetworkTransaction("tx-1", 1_000, 1_010, capture)
-        val stricter = RedactionEngine(RedactionPolicy.default())
+        val stricter = RedactionEngine(RedactionPolicy.strict())
 
         val unredactedHar = NetworkExport.toHarTransactions(listOf(transaction))
         val redactedHar = NetworkExport.toHarTransactions(listOf(transaction), stricter)
@@ -258,7 +258,7 @@ class NetworkExportTest {
     @Test
     fun `transaction HAR uses real start duration and timing phases`() {
         val capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput("GET", "https://example.test/orders"),
                 NetworkResponseInput(200, protocol = "h2")
                     .withMetadata(
@@ -282,7 +282,7 @@ class NetworkExportTest {
     @Test
     fun `postman export includes request and response bodies with no raw secret`() {
         val capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput(
                     method = "POST",
                     url = "https://example.test/orders",
@@ -314,7 +314,7 @@ class NetworkExportTest {
 
     @Test
     fun `postman export deduplicates identical repeated requests`() {
-        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
 
         fun capture() =
             factory.capture(
@@ -335,7 +335,7 @@ class NetworkExportTest {
 
     @Test
     fun `postman export keeps a 200 and a 401 for the same request separate`() {
-        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
 
         fun capture(statusCode: Int) =
             factory.capture(
@@ -357,7 +357,7 @@ class NetworkExportTest {
 
     @Test
     fun `postman export still collapses the same request repeated with the same status`() {
-        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
 
         fun capture() =
             factory.capture(
@@ -377,7 +377,7 @@ class NetworkExportTest {
 
     @Test
     fun `postman export keeps distinct requests separate`() {
-        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
         val transactions =
             listOf(
                 NetworkTransaction(
@@ -412,7 +412,7 @@ class NetworkExportTest {
         // unescaped quote in a URL, header, or body value) could defeat -- the substring might
         // still be present while the surrounding document is corrupted. Parsing the whole output
         // as JSON is the only way to catch that class of bug.
-        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
         val hostile =
             factory.capture(
                 NetworkRequestInput(
@@ -438,7 +438,7 @@ class NetworkExportTest {
 
     @Test
     fun `postman export of quote- and backslash-laden values is still one well-formed json document`() {
-        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
         val hostile =
             factory.capture(
                 NetworkRequestInput(

@@ -26,7 +26,7 @@ class DevConsoleOkHttpWebSocketListenerTest {
         val store = InMemorySocketStore()
         val listener =
             DevConsoleOkHttpWebSocketListener(
-                SocketRecorder(RedactionEngine(RedactionPolicy.default()), store),
+                SocketRecorder(RedactionEngine(RedactionPolicy.strict()), store),
                 connectionIdProvider = { "socket-1" },
             )
         val socket = FakeWebSocket()
@@ -48,7 +48,7 @@ class DevConsoleOkHttpWebSocketListenerTest {
     @Test
     fun `recording socket preserves delegate results and records accepted sends and closing`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store)
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.strict()), store)
         val delegate = FakeWebSocket()
         val socket = DevConsoleRecordingWebSocket.wrap(delegate, recorder) { "socket-1" }
 
@@ -68,7 +68,7 @@ class DevConsoleOkHttpWebSocketListenerTest {
     fun `wrap after the listener already opened the socket keeps OPEN state and preserves openedAtEpochMs`() {
         val store = InMemorySocketStore()
         var time = 100L
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { time })
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.strict()), store, clock = { time })
         val listener = DevConsoleOkHttpWebSocketListener(recorder, connectionIdProvider = { "socket-1" })
         val socket = FakeWebSocket()
 
@@ -92,7 +92,7 @@ class DevConsoleOkHttpWebSocketListenerTest {
     @Test
     fun `delegate receives every callback after it has been recorded`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store)
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.strict()), store)
         val hostDelegate = RecordingWebSocketListener()
         val listener =
             DevConsoleOkHttpWebSocketListener(
@@ -117,7 +117,7 @@ class DevConsoleOkHttpWebSocketListenerTest {
     @Test
     fun `cancel records a non-error CANCELLED lifecycle instead of FAILED`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store)
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.strict()), store)
         val socket = DevConsoleRecordingWebSocket.wrap(FakeWebSocket(), recorder) { "socket-1" }
 
         socket.cancel()

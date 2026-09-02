@@ -23,7 +23,7 @@ import org.robolectric.annotation.Config
 class AndroidPreferencesInspectorTest {
     private val application: Application = ApplicationProvider.getApplicationContext()
     private val inspector =
-        AndroidPreferencesInspector(application, RedactionEngine(RedactionPolicy.default()))
+        AndroidPreferencesInspector(application, RedactionEngine(RedactionPolicy.strict()))
 
     @Test
     fun `files lists typed entries from the app shared preferences`() {

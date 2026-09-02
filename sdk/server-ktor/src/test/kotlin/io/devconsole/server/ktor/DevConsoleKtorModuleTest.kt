@@ -190,6 +190,7 @@ class DevConsoleKtorModuleTest {
                     composerEnabled = true
                     commandAuditLog = audit
                     composerCollections = collections
+                    redactionPolicy = RedactionPolicy.strict()
                 }
             }
             val writer = client.exchangeSession(sessions, sessionCodes, "Writer")
@@ -501,7 +502,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { devConsoleModule(sessions, sessionCodes) { redactionPolicy = RedactionPolicy.strict() } }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val metadata =
@@ -514,7 +515,7 @@ class DevConsoleKtorModuleTest {
             val body = metadata.bodyAsText()
             assertTrue(body.contains("\"endpoint\":null"))
             assertTrue(body.contains("\"sensitiveFieldNames\""))
-            assertTrue(RedactionPolicy.default().sensitiveFieldNames.any { body.contains("\"$it\"") })
+            assertTrue(RedactionPolicy.strict().sensitiveFieldNames.any { body.contains("\"$it\"") })
         }
         testApplication {
             val sessions = SessionAuthority()
@@ -545,7 +546,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { devConsoleModule(sessions, sessionCodes) { redactionPolicy = RedactionPolicy.strict() } }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val metadata =
@@ -765,7 +766,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput(
                                 "GET",
                                 "https://api.test/orders?access_token=raw-secret",
@@ -785,14 +786,14 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 3,
                     completedAtEpochMs = 4,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput("GET", "https://api.test/not-selected"),
                             NetworkResponseInput(200),
                         ),
                 ),
             )
             NetworkTransactionRecorder(
-                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                 store = store,
                 idProvider = { "transaction-attachment" },
                 executor = java.util.concurrent.Executor(Runnable::run),
@@ -888,7 +889,7 @@ class DevConsoleKtorModuleTest {
                         startedAtEpochMs = index.toLong(),
                         completedAtEpochMs = index.toLong() + 1,
                         capture =
-                            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                                 NetworkRequestInput("GET", "https://api.test/item/$index"),
                                 NetworkResponseInput(200),
                             ),
@@ -953,7 +954,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput(
                                 "GET",
                                 "https://api.test/orders",
@@ -969,7 +970,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 3,
                     completedAtEpochMs = 4,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput("GET", "https://api.test/not-selected"),
                             NetworkResponseInput(200),
                         ),
@@ -1040,7 +1041,7 @@ class DevConsoleKtorModuleTest {
                         startedAtEpochMs = index.toLong(),
                         completedAtEpochMs = index.toLong() + 1,
                         capture =
-                            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                                 NetworkRequestInput("GET", "https://api.test/health"),
                                 NetworkResponseInput(200),
                             ),
@@ -1088,7 +1089,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 100,
                     completedAtEpochMs = 120,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput("GET", "https://api.test/orders", correlationId = "corr-1"),
                             NetworkResponseInput(200),
                         ),
@@ -1146,7 +1147,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput("GET", "https://api.test/orders"),
                             NetworkResponseInput(200),
                         ),
@@ -1237,7 +1238,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { devConsoleModule(sessions, sessionCodes) { redactionPolicy = RedactionPolicy.strict() } }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val metadata =
@@ -2178,7 +2179,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput("GET", "https://api.example.test/orders"),
                             NetworkResponseInput(200),
                         ),
@@ -2213,7 +2214,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput("GET", "https://not-allowed.test/orders"),
                             NetworkResponseInput(200),
                         ),
@@ -2253,7 +2254,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput(
                                 "POST",
                                 "https://api.example.test/orders",
@@ -2539,7 +2540,7 @@ class DevConsoleKtorModuleTest {
             val simulator =
                 PushSimulator(
                     PushSimulationCallback { PushLifecycle.DISPLAYED },
-                    PushRecorder(RedactionEngine(RedactionPolicy.default()), store),
+                    PushRecorder(RedactionEngine(RedactionPolicy.strict()), store),
                 )
             val audit = InMemoryCommandAuditLog()
             application {
@@ -2901,6 +2902,7 @@ class DevConsoleKtorModuleTest {
                     this.timeline = timeline
                     this.exportDirectory = exportDirectory
                     commandAuditLog = audit
+                    redactionPolicy = RedactionPolicy.strict()
                     attachmentReader = { id ->
                         if (id == "attachment-2") "token=attachment-secret".encodeToByteArray() else null
                     }
@@ -3439,7 +3441,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput("GET", "https://api.test/full-timings"),
                             NetworkResponseInput(200).withMetadata(
                                 NetworkResponseMetadata(
@@ -3490,7 +3492,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput("GET", "https://api.test/no-timings"),
                             NetworkResponseInput(200),
                         ),
@@ -3530,7 +3532,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                             NetworkRequestInput("GET", "https://api.test/pooled-connection"),
                             // A reused pooled connection performs no DNS/connect/TLS handshake, so
                             // those phases are legitimately absent -- only wait/receive are measured.

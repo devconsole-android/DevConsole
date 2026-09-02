@@ -80,7 +80,7 @@ import org.junit.Test
 
 @Suppress("LargeClass", "LongParameterList") // Exhaustive adapter coverage; configWith mirrors the capability flags.
 class FullInspectorDataSourceTest {
-    private val captureFactory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+    private val captureFactory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
 
     private fun networkStore(): InMemoryNetworkTransactionStore =
         InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))

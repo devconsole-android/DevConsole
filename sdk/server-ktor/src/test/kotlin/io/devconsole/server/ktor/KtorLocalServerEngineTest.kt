@@ -270,7 +270,7 @@ class KtorLocalServerEngineTest {
                     sessionAuthority = authority,
                     composerEnabled = true,
                     composerAllowedHosts = setOf("api.example.test"),
-                    redactionPolicy = RedactionPolicy.default().copy(sensitiveFieldNames = setOf("x-tenant-secret")),
+                    redactionPolicy = RedactionPolicy.strict().copy(sensitiveFieldNames = setOf("x-tenant-secret")),
                     commandAuditLog = audit,
                     composerCollections = collections,
                     composerExecutor =
@@ -337,7 +337,7 @@ class KtorLocalServerEngineTest {
                     pushSimulator =
                         PushSimulator(
                             PushSimulationCallback { PushLifecycle.DISPLAYED },
-                            PushRecorder(RedactionEngine(RedactionPolicy.default()), pushes),
+                            PushRecorder(RedactionEngine(RedactionPolicy.strict()), pushes),
                         ),
                     annotations = annotations,
                 )

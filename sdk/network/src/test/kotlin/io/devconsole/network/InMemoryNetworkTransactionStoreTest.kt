@@ -16,7 +16,7 @@ class InMemoryNetworkTransactionStoreTest {
                 NetworkCursorCodec("network-cursor-key".encodeToByteArray()),
                 maxTransactions = 10,
             ).withByteCapacity(700)
-        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
 
         repeat(3) { index ->
             store.record(
@@ -195,7 +195,7 @@ class InMemoryNetworkTransactionStoreTest {
                 NetworkCursorCodec("network-cursor-key".encodeToByteArray()),
                 maxTransactions = 10,
             ).withByteCapacity(700)
-        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
         val bulky = { id: String ->
             NetworkTransaction(
                 id = id,

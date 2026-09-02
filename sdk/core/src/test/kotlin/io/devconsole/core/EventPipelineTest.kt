@@ -5,6 +5,8 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import io.devconsole.security.RedactionEngine
+import io.devconsole.security.RedactionPolicy
 import org.junit.Test
 import java.util.UUID
 
@@ -37,7 +39,12 @@ class EventPipelineTest {
     @Test
     fun `redacts event content before it reaches the observable bus`() =
         runTest {
-            val pipeline = EventPipeline(UUID.randomUUID(), capacity = 2)
+            val pipeline =
+                EventPipeline(
+                    UUID.randomUUID(),
+                    capacity = 2,
+                    redactionEngine = RedactionEngine(RedactionPolicy.strict()),
+                )
 
             pipeline.publish(
                 EventDraft(

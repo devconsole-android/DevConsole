@@ -195,10 +195,11 @@ class FeatureFlagAndExportBundleRoutesTest {
                 ).withSessionId("current"),
             )
             application {
-                // redactionPolicy defaults to RedactionPolicy.default(), which masks the
-                // Authorization header the permissive capture-time policy above let through.
+                // RedactionPolicy.strict() masks the Authorization header the permissive
+                // capture-time policy above let through.
                 devConsoleModule(sessions, sessionCodes) {
                     this.networkTransactions = networkStore
+                    redactionPolicy = RedactionPolicy.strict()
                 }
             }
             val session = approvedSession(sessions, sessionCodes)
@@ -223,7 +224,7 @@ private fun networkTransaction(id: String): NetworkTransaction =
         startedAtEpochMs = 1,
         completedAtEpochMs = 2,
         capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput("GET", "https://api.test/orders"),
                 NetworkResponseInput(200),
             ),

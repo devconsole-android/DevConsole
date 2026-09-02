@@ -56,7 +56,7 @@ class CrashCaptureTest {
     private fun capture() =
         CrashCapture(
             sessionId = "session",
-            redaction = RedactionEngine(RedactionPolicy.default()),
+            redaction = RedactionEngine(RedactionPolicy.strict()),
             appender = { appender },
             store = { store },
         )
@@ -122,7 +122,7 @@ class CrashCaptureTest {
         val capture =
             CrashCapture(
                 sessionId = { "session" },
-                redaction = RedactionEngine(RedactionPolicy.default()),
+                redaction = RedactionEngine(RedactionPolicy.strict()),
                 appender = { appender },
                 store = { store },
                 sessionStore = { null },
@@ -149,7 +149,7 @@ class CrashCaptureTest {
         val capture =
             CrashCapture(
                 sessionId = { "session" },
-                redaction = RedactionEngine(RedactionPolicy.default()),
+                redaction = RedactionEngine(RedactionPolicy.strict()),
                 appender = { appender },
                 store = { store },
                 sessionStore = { null },
@@ -166,7 +166,7 @@ class CrashCaptureTest {
         val capture =
             CrashCapture(
                 sessionId = { "session" },
-                redaction = RedactionEngine(RedactionPolicy.default()),
+                redaction = RedactionEngine(RedactionPolicy.strict()),
                 appender = { appender },
                 store = { store },
                 sessionStore = { null },
@@ -189,7 +189,7 @@ class CrashCaptureTest {
         val capture =
             CrashCapture(
                 sessionId = { "session" },
-                redaction = RedactionEngine(RedactionPolicy.default()),
+                redaction = RedactionEngine(RedactionPolicy.strict()),
                 appender = { appender },
                 store = { store },
                 sessionStore = { null },
@@ -217,7 +217,7 @@ class CrashCaptureTest {
         val capture =
             CrashCapture(
                 sessionId = { "session" },
-                redaction = RedactionEngine(RedactionPolicy.default()),
+                redaction = RedactionEngine(RedactionPolicy.strict()),
                 appender = { appender },
                 store = { store },
                 sessionStore = { null },
@@ -244,7 +244,7 @@ class CrashCaptureTest {
         val capture =
             CrashCapture(
                 sessionId = { "session" },
-                redaction = RedactionEngine(RedactionPolicy.default()),
+                redaction = RedactionEngine(RedactionPolicy.strict()),
                 appender = { appender },
                 store = { store },
                 sessionStore = { null },
@@ -263,7 +263,7 @@ class CrashCaptureTest {
         val capture =
             CrashCapture(
                 sessionId = { "session" },
-                redaction = RedactionEngine(RedactionPolicy.default()),
+                redaction = RedactionEngine(RedactionPolicy.strict()),
                 appender = { appender },
                 store = { store },
                 sessionStore = { null },
@@ -304,7 +304,7 @@ class CrashCaptureTest {
         val capture =
             CrashCapture(
                 sessionId = { "session" },
-                redaction = RedactionEngine(RedactionPolicy.default()),
+                redaction = RedactionEngine(RedactionPolicy.strict()),
                 appender = { appender },
                 store = { neverReturningStore },
                 sessionStore = { null },
@@ -387,7 +387,7 @@ class CrashCaptureTest {
         val capture =
             CrashCapture(
                 sessionId = { "session" },
-                redaction = RedactionEngine(RedactionPolicy.default()),
+                redaction = RedactionEngine(RedactionPolicy.strict()),
                 appender = { appender },
                 store = { neverReturningStore },
                 sessionStore = { neverReturningSessions },
@@ -428,7 +428,7 @@ class CrashCaptureTest {
         val capture =
             CrashCapture(
                 sessionId = { "session" },
-                redaction = RedactionEngine(RedactionPolicy.default()),
+                redaction = RedactionEngine(RedactionPolicy.strict()),
                 appender = { throwingAppender },
                 store = { store },
                 sessionStore = { null },
@@ -484,7 +484,7 @@ class CrashCaptureTest {
         val capture =
             CrashCapture(
                 sessionId = "session",
-                redaction = RedactionEngine(RedactionPolicy.default()),
+                redaction = RedactionEngine(RedactionPolicy.strict()),
                 appender = { appender },
                 store = { store },
             )

@@ -31,5 +31,6 @@ public final class io/devconsole/security/RedactionPolicy {
 
 public final class io/devconsole/security/RedactionPolicy$Companion {
 	public final fun default ()Lio/devconsole/security/RedactionPolicy;
+	public final fun strict ()Lio/devconsole/security/RedactionPolicy;
 }
 

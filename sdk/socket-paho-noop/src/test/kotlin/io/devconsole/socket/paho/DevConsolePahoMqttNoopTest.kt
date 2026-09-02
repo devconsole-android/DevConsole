@@ -26,7 +26,7 @@ class DevConsolePahoMqttNoopTest {
     @Test
     fun `wrap and install never touch the client's identity, connect, or subscribe surface`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store)
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.strict()), store)
         val client = FakeMqttAsyncClient()
         var identityReads = 0
 
@@ -44,7 +44,7 @@ class DevConsolePahoMqttNoopTest {
     @Test
     fun `install wires the callback through and publish still delegates without recording`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store)
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.strict()), store)
         val client = FakeMqttAsyncClient()
         val delivered = mutableListOf<String>()
         var connectCompleteCalls = 0

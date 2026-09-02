@@ -742,7 +742,8 @@ private fun seedSampleData(context: Context) {
         .putBoolean("darkModeEnabled", true)
         .putFloat("checkoutProgress", 0.65f)
         // Two non-secret values that together show how key-based redaction actually behaves.
-        // "access_token" is on RedactionPolicy.default()'s name list, so the inspector masks it.
+        // "access_token" is on RedactionPolicy.strict()'s name list, so the inspector masks it
+        // when the host opts into that policy; RedactionPolicy.default() shows it verbatim.
         .putString("access_token", "sample-not-a-real-token-4f9c2b")
         // "authToken" is NOT on that list. Redaction matches field names exactly, so this one is
         // shown verbatim -- the allowlist blind spot docs/THREAT_MODEL.md warns about, made

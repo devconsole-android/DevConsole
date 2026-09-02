@@ -42,7 +42,7 @@ class DevConsoleOkHttpInstallerTest {
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("installer-test-key-1".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     transactions,
                 )
             val client =
@@ -79,7 +79,7 @@ class DevConsoleOkHttpInstallerTest {
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("installer-test-key-2".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     transactions,
                 )
             val client =
@@ -113,7 +113,7 @@ class DevConsoleOkHttpInstallerTest {
                 InMemoryNetworkTransactionStore(NetworkCursorCodec("installer-test-key-3".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     transactions,
                 )
             val hostListener = RecordingEventListenerFactory()

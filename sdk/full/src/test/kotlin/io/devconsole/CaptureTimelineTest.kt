@@ -48,7 +48,7 @@ class CaptureTimelineTest {
                 bridge,
             )
         val capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
                 .capture(
                     NetworkRequestInput(
                         "GET",
@@ -96,7 +96,7 @@ class CaptureTimelineTest {
     @Test
     fun `socket recorder mirrors each lifecycle and frame once`() {
         val store = TeeingSocketStore(InMemorySocketStore(), bridge)
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 10L })
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.strict()), store, clock = { 10L })
 
         recorder.onCreated("c1", "wss://echo.test/raw")
         recorder.onOpen("c1", "wss://echo.test/raw")
@@ -129,7 +129,7 @@ class CaptureTimelineTest {
             )
         val push = TeeingPushStore(InMemoryPushStore(), bridge)
         val capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict()))
                 .capture(NetworkRequestInput("GET", "https://api.test/a"), null)
 
         network.record(NetworkTransaction("tx-1", 0, 1, capture))

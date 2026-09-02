@@ -575,7 +575,7 @@ class DevConsoleOkHttpInterceptorTest {
                     .addInterceptor(
                         DevConsoleOkHttpInterceptor(
                             NetworkTransactionRecorder(
-                                NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                                NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                                 transactions,
                             ),
                             listenerFactory,
@@ -626,7 +626,7 @@ class DevConsoleOkHttpInterceptorTest {
             .addInterceptor(
                 DevConsoleOkHttpInterceptor(
                     NetworkTransactionRecorder(
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                         transactions,
                     ),
                 ),

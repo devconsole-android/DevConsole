@@ -18,7 +18,7 @@ class DevConsoleOkHttpWebSocketListenerNoopTest {
         var identityReads = 0
         val listener =
             DevConsoleOkHttpWebSocketListener(
-                SocketRecorder(RedactionEngine(RedactionPolicy.default()), store),
+                SocketRecorder(RedactionEngine(RedactionPolicy.strict()), store),
                 connectionIdProvider = {
                     identityReads += 1
                     "must-not-be-used"

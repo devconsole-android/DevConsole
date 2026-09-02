@@ -53,7 +53,7 @@ class CaptureCategoryGatingTest {
         val store =
             InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key-1234567890".encodeToByteArray()))
         val capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())).capture(
                 NetworkRequestInput(method = "GET", url = "https://api.example.test/orders"),
                 NetworkResponseInput(statusCode = 200),
             )

@@ -25,7 +25,7 @@ import java.io.File
 class AndroidFileInspectorTest {
     private val application: Application = ApplicationProvider.getApplicationContext()
     private val inspector =
-        AndroidFileInspector(application, RedactionEngine(RedactionPolicy.default()))
+        AndroidFileInspector(application, RedactionEngine(RedactionPolicy.strict()))
 
     @Test
     fun `roots expose only app-owned storage`() {

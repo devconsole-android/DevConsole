@@ -8,6 +8,8 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import io.devconsole.security.RedactionEngine
+import io.devconsole.security.RedactionPolicy
 import org.junit.Test
 import java.util.UUID
 
@@ -106,7 +108,7 @@ class EventBatchWriterTest {
     private fun event(
         summary: String,
         severity: EventSeverity = EventSeverity.INFO,
-    ) = EventPipeline(UUID.randomUUID(), 2)
+    ) = EventPipeline(UUID.randomUUID(), 2, RedactionEngine(RedactionPolicy.strict()))
         .publish(EventDraft("network", "request", severity, summary))
 
     private class RecordingEventStore : EventStore {

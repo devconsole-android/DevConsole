@@ -18,7 +18,7 @@ class PushSimulatorTest {
                         callbackReceived = input.simulated
                         PushLifecycle.DISPLAYED
                     },
-                recorder = PushRecorder(RedactionEngine(RedactionPolicy.default()), store),
+                recorder = PushRecorder(RedactionEngine(RedactionPolicy.strict()), store),
             )
 
         val event = simulator.simulate(PushInput(provider = "local", data = mapOf("id" to "42")))

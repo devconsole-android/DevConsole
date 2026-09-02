@@ -21,15 +21,31 @@ data class RedactionPolicy(
 
     companion object {
         /**
+         * The default policy redacts nothing: every captured header, query parameter, body field
+         * and text value is shown as-is. This is a local developer tool, and hiding a request's
+         * own authorization token from the developer who sent it was the most common complaint.
+         * Hosts that expose the dashboard beyond a trusted machine should opt in to [strict].
+         *
          * Memoized so every `default()` caller shares one instance. [textPatterns] holds [Regex]
          * values, which compare by reference, so a fresh policy per call would make two otherwise
          * identical configs (e.g. [io.devconsole.api.DevConsoleConfig]) unequal.
          */
-        private val DEFAULT: RedactionPolicy by lazy { buildDefault() }
+        private val DEFAULT: RedactionPolicy by lazy {
+            RedactionPolicy(sensitiveFieldNames = emptySet(), textPatterns = emptyList())
+        }
+
+        private val STRICT: RedactionPolicy by lazy { buildStrict() }
 
         fun default(): RedactionPolicy = DEFAULT
 
-        private fun buildDefault(): RedactionPolicy =
+        /**
+         * The opt-in credential-scrubbing policy: 25 common credential field names (case-insensitive,
+         * matched against header names, JSON keys and form fields) plus a `Bearer <token>` text
+         * pattern. Pass it as `DevConsoleConfig(redactionPolicy = RedactionPolicy.strict())`.
+         */
+        fun strict(): RedactionPolicy = STRICT
+
+        private fun buildStrict(): RedactionPolicy =
             RedactionPolicy(
                 sensitiveFieldNames =
                     setOf(

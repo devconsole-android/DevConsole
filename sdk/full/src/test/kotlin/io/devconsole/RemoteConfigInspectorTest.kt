@@ -61,7 +61,8 @@ class RemoteConfigInspectorTest {
         remoteConfigRegistry = registry,
     )
 
-    private fun enabledConfig() = DevConsoleConfig().withCaptureCategories(CaptureCategory.all())
+    private fun enabledConfig() =
+        DevConsoleConfig(redactionPolicy = RedactionPolicy.strict()).withCaptureCategories(CaptureCategory.all())
 
     @Test
     fun `exposes remote config entries with their source`() {
@@ -106,7 +107,7 @@ class RemoteConfigInspectorTest {
                 .single()
                 .entries
                 .single()
-        assertEquals(RedactionPolicy.default().replacement, redacted.value)
+        assertEquals(RedactionPolicy.strict().replacement, redacted.value)
         assertTrue(redacted.redacted)
     }
 
@@ -177,7 +178,7 @@ class RemoteConfigInspectorTest {
                 listOf(entry("access_token", "raw"), entry("checkout_v2", "true")),
             )
 
-        assertEquals(RedactionPolicy.default().replacement, entries.first().value)
+        assertEquals(RedactionPolicy.strict().replacement, entries.first().value)
         assertTrue(entries.first().redacted)
         assertEquals("true", entries.last().value)
         assertFalse(entries.last().redacted)
@@ -203,7 +204,7 @@ class RemoteConfigInspectorTest {
             )
 
         assertTrue(entries.all { it.redacted })
-        assertTrue(entries.all { it.value == RedactionPolicy.default().replacement })
+        assertTrue(entries.all { it.value == RedactionPolicy.strict().replacement })
     }
 
     @Test
@@ -222,5 +223,5 @@ class RemoteConfigInspectorTest {
     }
 
     private fun redactingBoundary() =
-        RedactingRemoteConfig(RedactionEngine(RedactionPolicy.default()), RedactionPolicy.default())
+        RedactingRemoteConfig(RedactionEngine(RedactionPolicy.strict()), RedactionPolicy.strict())
 }

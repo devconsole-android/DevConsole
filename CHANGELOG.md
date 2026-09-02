@@ -18,6 +18,32 @@ before it can reach a release. (There was briefly a separate `sdk:plugin-api` mo
 third-party plugin framework; it was removed before ever shipping — see Removed, below — so it never
 joined this list.)
 
+## Unreleased
+
+### Changed
+
+- **`RedactionPolicy.default()` now redacts nothing.** Every request and response header, query
+  parameter and body field is shown as captured, so a developer inspecting their own traffic sees
+  the real `Authorization` token instead of `<redacted>`. The previous 25-name credential list plus
+  the `Bearer <token>` pattern lives on as the opt-in `RedactionPolicy.strict()`; pass it as
+  `DevConsoleConfig(redactionPolicy = RedactionPolicy.strict())` before exposing the dashboard
+  beyond a trusted machine.
+
+  **Migration.** This changes behaviour for every host that never set `redactionPolicy`: on
+  upgrade, credentials that used to appear as `<redacted>` in the inspector, the dashboard and
+  exported HAR/Postman/ZIP bundles are shown in full. Hosts that relied on the old masking must
+  opt into `strict()` explicitly; hosts that built a custom policy by extending the old default
+  list should extend `strict()` instead. See the README section "Upgrading from 1.3.1 or earlier:
+  redaction is now opt-in".
+
+### Fixed
+
+- **Web dashboard copy buttons work over plain http.** `navigator.clipboard` only exists in a secure
+  context (https or localhost), so on the usual LAN address every copy action reported "Clipboard
+  access was denied". The dashboard now falls back to a hidden textarea plus `execCommand('copy')`.
+- The session ZIP exporter's timeline part now re-redacts with the host's configured policy, the
+  same way its HAR and Postman parts already did.
+
 ## 1.3.1 — 2026-08-24
 
 ### Changed

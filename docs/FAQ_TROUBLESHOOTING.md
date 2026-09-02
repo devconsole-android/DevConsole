@@ -6,6 +6,17 @@ More screen. This is intended for trusted local development. If the server is re
 people or devices, opt into `BrowserSecurity.SESSION_CODE` with
 `DevConsoleConfig.default().withBrowserSecurity(BrowserSecurity.SESSION_CODE)`.
 
+**The inspector shows my real Authorization token. Is that a bug?** No, it is the default since
+the release after 1.3.1. `RedactionPolicy.default()` masks nothing so you can see the exact request
+you sent. Up to 1.3.1 the default masked about 25 credential names and `Bearer` tokens; that policy
+is now `RedactionPolicy.strict()`. Pass `DevConsoleConfig(redactionPolicy = RedactionPolicy.strict())`
+to get the old behaviour back, and do so before exposing the dashboard on a shared network or sharing
+exported bundles. See [SECURITY_AND_REDACTION.md](SECURITY_AND_REDACTION.md).
+
+**The dashboard's copy buttons say "Clipboard access was denied".** Update the SDK. Browsers only
+expose `navigator.clipboard` on https or localhost, and the dashboard usually runs over plain http on
+a LAN address; releases after 1.3.1 fall back to a selection-based copy that works there too.
+
 **Can I connect from another machine on the same network?** Usually with no setup at all — the
 default `BindingMode.AUTO` binds your device's network address whenever there is one, so the connect
 URL and its QR code already work from another device. If you got a `127.0.0.1` URL, AUTO fell back

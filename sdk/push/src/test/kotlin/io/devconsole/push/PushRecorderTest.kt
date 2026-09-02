@@ -8,7 +8,7 @@ import org.junit.Test
 class PushRecorderTest {
     @Test
     fun `redacts push data before recording`() {
-        val recorder = PushRecorder(RedactionEngine(RedactionPolicy.default()))
+        val recorder = PushRecorder(RedactionEngine(RedactionPolicy.strict()))
         val event = recorder.record(PushInput("fcm", mapOf("access_token" to "raw")))
         assertEquals("<redacted>", event.data.getValue("access_token"))
     }
@@ -16,7 +16,7 @@ class PushRecorderTest {
     @Test
     fun `disabled recorder never redacts or stores an event`() {
         val store = InMemoryPushStore()
-        val recorder = PushRecorder(RedactionEngine(RedactionPolicy.default()), store, enabled = false)
+        val recorder = PushRecorder(RedactionEngine(RedactionPolicy.strict()), store, enabled = false)
 
         recorder.record(PushInput("fcm", mapOf("access_token" to "raw")))
 

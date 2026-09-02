@@ -11,8 +11,28 @@ regardless of which inspector captured it.
 
 ## Default policy
 
-`RedactionPolicy.default()`'s 25 sensitive field names (case-insensitive, matched against header
-names, JSON keys, and form field names):
+**`RedactionPolicy.default()` redacts nothing.** Every request and response header, query
+parameter, body field and text value is shown exactly as captured, on both the on-device inspector
+and the web dashboard. DevConsole is a local developer tool, and hiding a request's own
+`Authorization` token from the developer who sent it was the most common complaint about the
+previous default.
+
+### Upgrading from 1.3.1 or earlier
+
+Up to and including 1.3.1 the default policy was what is now `RedactionPolicy.strict()`. If your
+host never set `redactionPolicy`, it silently went from masking credentials to masking nothing on
+upgrade. Set `DevConsoleConfig(redactionPolicy = RedactionPolicy.strict())` to restore the previous
+behaviour, and treat it as required wherever the dashboard is reachable by other people or exported
+bundles leave the developer's machine. A custom policy that was built by extending the old default
+list should extend `RedactionPolicy.strict()` instead. See the README's "Upgrading from 1.3.1 or
+earlier" section for the code.
+
+## Strict policy
+
+`RedactionPolicy.strict()` is the opt-in credential-scrubbing policy. Pass it as
+`DevConsoleConfig(redactionPolicy = RedactionPolicy.strict())` before exposing the dashboard beyond
+a trusted machine. Its 25 sensitive field names (case-insensitive, matched against header names,
+JSON keys, and form field names):
 
 ```text
 authorization      proxy-authorization  www-authenticate    authentication
@@ -24,8 +44,8 @@ passphrase         secret               client_secret       private_key
 session_id
 ```
 
-A matched value is replaced wholesale with `<redacted>`. Independently of the field-name list, any
-`Bearer <token>` text pattern is redacted wherever it appears (e.g. inside a body that isn't valid
+A matched value is replaced wholesale with `<redacted>`. Independently of the field-name list, the
+strict policy also redacts any `Bearer <token>` text pattern wherever it appears (e.g. inside a body that isn't valid
 JSON/form data), so a leaked bearer token in a non-standard location is still caught.
 
 ## Redaction strategies beyond removal
@@ -44,8 +64,8 @@ secret shapes (e.g. an internal token format), and pass it as `DevConsoleConfig(
 ...)` (or `DevConsoleConfig.Builder.redactionPolicy(...)` from Java). `PlatformFacadeProvider`
 applies it to the shared capture engine on every `initialize()` call
 (`redaction.updatePolicy(config.redactionPolicy)`), so every recorder — network, WebSocket, push —
-redacts by whatever policy the host supplied, not just the default. `RedactionPolicy.default()` is
-only what you get if you don't override it.
+redacts by whatever policy the host supplied. `RedactionPolicy.default()` (no redaction) is only
+what you get if you don't override it; `RedactionPolicy.strict()` is the ready-made alternative.
 
 ## Bounds, not just redaction
 

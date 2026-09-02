@@ -13,7 +13,7 @@ class NetworkTransactionRecorderTest {
         val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
         val recorder =
             NetworkTransactionRecorder(
-                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                 store = store,
                 idProvider = { "transaction-1" },
             )
@@ -38,7 +38,7 @@ class NetworkTransactionRecorderTest {
         val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
         val recorder =
             NetworkTransactionRecorder(
-                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                 store = store,
                 enabled = false,
                 idProvider = { "transaction-1" },
@@ -69,7 +69,7 @@ class NetworkTransactionRecorderTest {
 
         val recorder =
             NetworkTransactionRecorder(
-                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                 store = store,
                 idProvider = { "transaction-blocked" },
                 executor = customExecutor,
@@ -107,7 +107,7 @@ class NetworkTransactionRecorderTest {
 
         val recorder =
             NetworkTransactionRecorder(
-                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                 store = store,
                 maxQueueSize = 2,
                 executor = customExecutor,
@@ -142,7 +142,7 @@ class NetworkTransactionRecorderTest {
         // force an eviction here, mirroring EventBatchWriter's dual count+byte queue budget.
         val recorder =
             NetworkTransactionRecorder(
-                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                 store = store,
                 maxQueueSize = 100,
                 maxQueuedBytes = 150_000L,
@@ -178,7 +178,7 @@ class NetworkTransactionRecorderTest {
         val attachments = CopyOnWriteArrayList<NetworkAttachmentPayload>()
         val recorder =
             NetworkTransactionRecorder(
-                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                 store = store,
                 idProvider = { "transaction-attachments" },
             ).withAttachmentSink { payload ->

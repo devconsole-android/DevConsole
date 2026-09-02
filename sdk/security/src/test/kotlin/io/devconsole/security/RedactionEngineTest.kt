@@ -6,10 +6,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RedactionEngineTest {
-    private val engine = RedactionEngine(RedactionPolicy.default())
+    private val engine = RedactionEngine(RedactionPolicy.strict())
 
     @Test
-    fun `redacts default sensitive headers case insensitively`() {
+    fun `default policy shows every field and text value as captured`() {
+        val open = RedactionEngine(RedactionPolicy.default())
+        val fields = mapOf("Authorization" to "Bearer secret", "access_token" to "abc")
+        assertEquals(fields, open.redactFields(fields))
+        assertEquals("Bearer very-secret-token", open.redactText("Bearer very-secret-token"))
+    }
+
+    @Test
+    fun `strict policy redacts sensitive headers case insensitively`() {
         val redacted = engine.redactFields(mapOf("Authorization" to "Bearer secret", "Accept" to "application/json"))
         assertEquals("<redacted>", redacted["Authorization"])
         assertEquals("application/json", redacted["Accept"])
@@ -43,7 +51,7 @@ class RedactionEngineTest {
 
     @Test
     fun `redacts newly covered auth header names`() {
-        val engine = RedactionEngine(RedactionPolicy.default())
+        val engine = RedactionEngine(RedactionPolicy.strict())
         val redacted =
             engine.redactFields(
                 mapOf(

@@ -25,7 +25,7 @@ import org.robolectric.annotation.Config
 class AndroidDatabaseInspectorTest {
     private val application: Application = ApplicationProvider.getApplicationContext()
     private val inspector =
-        AndroidDatabaseInspector(application, RedactionEngine(RedactionPolicy.default()))
+        AndroidDatabaseInspector(application, RedactionEngine(RedactionPolicy.strict()))
 
     @Before
     fun createDemoDatabase() {

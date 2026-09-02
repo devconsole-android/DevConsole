@@ -30,6 +30,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import io.devconsole.security.RedactionPolicy
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -232,7 +233,11 @@ class FullFacadeTest {
                 InitResult.Initialized,
                 provider.initialize(
                     ApplicationProvider.getApplicationContext(),
-                    DevConsoleConfig(stateProviders = listOf(provided), featureFlags = listOf(flag)),
+                    DevConsoleConfig(
+                        stateProviders = listOf(provided),
+                        featureFlags = listOf(flag),
+                        redactionPolicy = RedactionPolicy.strict(),
+                    ),
                 ),
             )
 

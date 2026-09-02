@@ -61,7 +61,7 @@ class ComposerRequestTest {
 
     @Test
     fun `redacted projection removes secrets from every persisted composer field`() {
-        val engine = RedactionEngine(RedactionPolicy.default())
+        val engine = RedactionEngine(RedactionPolicy.strict())
         val request =
             ComposerRequest(
                 method = "POST",

@@ -10,7 +10,7 @@ class PushEventStoreTest {
     @Test
     fun `records generic lifecycle payloads with redaction and explicit simulation labeling`() {
         val store = InMemoryPushStore(capacity = 2)
-        val recorder = PushRecorder(RedactionEngine(RedactionPolicy.default()), store)
+        val recorder = PushRecorder(RedactionEngine(RedactionPolicy.strict()), store)
 
         val event =
             recorder.record(

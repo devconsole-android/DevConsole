@@ -45,7 +45,7 @@ class DevConsoleKtorClientPluginTest {
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     store = store,
                 )
 
@@ -89,7 +89,7 @@ class DevConsoleKtorClientPluginTest {
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     store = store,
                 )
             val mockEngine = MockEngine { _ -> respond(content = "ok", status = HttpStatusCode.OK) }
@@ -117,7 +117,7 @@ class DevConsoleKtorClientPluginTest {
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     store = store,
                 )
             val mockEngine = MockEngine { _ -> respond(content = "ok", status = HttpStatusCode.OK) }
@@ -141,7 +141,7 @@ class DevConsoleKtorClientPluginTest {
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     store = store,
                 )
             val mockEngine = MockEngine { _ -> respond(content = "response body", status = HttpStatusCode.OK) }
@@ -182,7 +182,7 @@ class DevConsoleKtorClientPluginTest {
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     store = store,
                 )
             val payload = "{\"status\":\"ok\",\"items\":[1,2,3]}"
@@ -219,7 +219,7 @@ class DevConsoleKtorClientPluginTest {
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     store = store,
                 )
             val payload = "{\"status\":\"ok\"}"
@@ -255,7 +255,7 @@ class DevConsoleKtorClientPluginTest {
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     store = store,
                 )
             val originBody = ByteChannel()
@@ -299,7 +299,7 @@ class DevConsoleKtorClientPluginTest {
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     store = store,
                 )
             val mockEngine =
@@ -333,7 +333,7 @@ class DevConsoleKtorClientPluginTest {
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     store = store,
                 )
             val bigBody = "a".repeat(300 * 1024)
@@ -369,7 +369,7 @@ class DevConsoleKtorClientPluginTest {
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     store = store,
                 )
             val bigBody = "b".repeat(300 * 1024)
@@ -403,7 +403,7 @@ class DevConsoleKtorClientPluginTest {
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("1234567890123456".encodeToByteArray()))
             val recorder =
                 NetworkTransactionRecorder(
-                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.strict())),
                     store = store,
                 )
             val binaryBody = ByteArray(64) { it.toByte() }

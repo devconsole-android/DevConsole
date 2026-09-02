@@ -13,7 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RedactingBoundariesTest {
-    private val redaction = RedactionEngine(RedactionPolicy.default())
+    private val redaction = RedactionEngine(RedactionPolicy.strict())
 
     @Test
     fun `audit read boundary sanitizes legacy raw records`() {
