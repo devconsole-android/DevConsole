@@ -54,7 +54,7 @@ class DevConsolePahoMqttTest {
 
         callback.messageArrived(
             "devconsole/demo/hello",
-            MqttMessage("Bearer socket-secret".toByteArray()).apply { qos = 1 },
+            MqttMessage("{\"token\":\"socket-secret\"}".toByteArray()).apply { qos = 1 },
         )
 
         val connection = requireNotNull(store.connection(publisher.connectionId))

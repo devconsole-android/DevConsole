@@ -771,7 +771,7 @@ class DevConsoleKtorModuleTest {
                                 "https://api.test/orders?access_token=raw-secret",
                                 headers =
                                     mapOf(
-                                        "Authorization" to "Bearer header-secret",
+                                        "Cookie" to "session=header-secret",
                                     ),
                                 contentType = "application/json",
                             ).withMetadata(NetworkRequestMetadata(tags = mapOf("source" to "composer"))),
@@ -957,7 +957,7 @@ class DevConsoleKtorModuleTest {
                             NetworkRequestInput(
                                 "GET",
                                 "https://api.test/orders",
-                                headers = mapOf("Authorization" to "Bearer header-secret"),
+                                headers = mapOf("Cookie" to "session=header-secret"),
                             ),
                             NetworkResponseInput(200),
                         ),
@@ -2889,7 +2889,7 @@ class DevConsoleKtorModuleTest {
                             2,
                             2,
                             1,
-                            "Bearer export-secret",
+                            "password=export-secret",
                             attachmentId = "attachment-2",
                         ),
                     ),

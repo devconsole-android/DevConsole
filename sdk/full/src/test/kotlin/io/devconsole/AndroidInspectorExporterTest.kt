@@ -59,7 +59,7 @@ class AndroidInspectorExporterTest {
                 NetworkRequestInput(
                     method = "GET",
                     url = "https://api.example.test$path",
-                    headers = mapOf("Authorization" to "Bearer $SECRET_TOKEN"),
+                    headers = mapOf("Cookie" to "session=$SECRET_TOKEN"),
                 ),
                 NetworkResponseInput(
                     statusCode = 200,
@@ -187,7 +187,7 @@ class AndroidInspectorExporterTest {
                 wallTimeMs = 10,
                 monoTimeNs = 10,
                 severity = 3,
-                summary = "Checkout failed: Authorization Bearer $SECRET_TOKEN",
+                summary = "password=$SECRET_TOKEN",
                 tagsJson = "{}",
                 payloadJson = null,
             ),

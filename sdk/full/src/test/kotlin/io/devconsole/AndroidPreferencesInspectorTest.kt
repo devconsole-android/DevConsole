@@ -49,12 +49,12 @@ class AndroidPreferencesInspectorTest {
         application
             .getSharedPreferences("secret_prefs", Context.MODE_PRIVATE)
             .edit()
-            .putString("auth_token", "Bearer sk-super-secret-value-1234567890")
+            .putString("access_token", "sk-super-secret-value-1234567890")
             .putInt("count", 3)
             .commit()
 
         val file = inspector.files().first { it.name == "secret_prefs" }
-        val tokenEntry = file.entries.first { it.key == "auth_token" }
+        val tokenEntry = file.entries.first { it.key == "access_token" }
 
         assertFalse(tokenEntry.value.contains("sk-super-secret-value-1234567890"))
         assertTrue(tokenEntry.redacted)

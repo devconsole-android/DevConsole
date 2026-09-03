@@ -10,9 +10,15 @@ class RedactionEngineTest {
 
     @Test
     fun `redacts default sensitive headers case insensitively`() {
-        val redacted = engine.redactFields(mapOf("Authorization" to "Bearer secret", "Accept" to "application/json"))
-        assertEquals("<redacted>", redacted["Authorization"])
+        val redacted = engine.redactFields(mapOf("Cookie" to "session=secret", "Accept" to "application/json"))
+        assertEquals("<redacted>", redacted["Cookie"])
         assertEquals("application/json", redacted["Accept"])
+    }
+
+    @Test
+    fun `preserves authorization header unredacted by default`() {
+        val fields = engine.redactFields(mapOf("Authorization" to "Bearer secret-token-123"))
+        assertEquals("Bearer secret-token-123", fields["Authorization"])
     }
 
     @Test
@@ -22,13 +28,27 @@ class RedactionEngineTest {
 
     @Test
     fun `bounds text before applying regex rules`() {
-        val result = engine.redactText("Bearer abc.def", maxLength = 8)
+        val regexEngine =
+            RedactionEngine(
+                RedactionPolicy(
+                    sensitiveFieldNames = emptySet(),
+                    textPatterns = listOf(Regex("Bearer\\s+[A-Za-z0-9._~-]+", RegexOption.IGNORE_CASE)),
+                ),
+            )
+        val result = regexEngine.redactText("Bearer abc.def", maxLength = 8)
         assertFalse(result.contains("abc.def"))
     }
 
     @Test
     fun `applies redaction before enforcing preview limit`() {
-        val result = engine.redactText("Bearer very-secret-token", maxLength = 10)
+        val regexEngine =
+            RedactionEngine(
+                RedactionPolicy(
+                    sensitiveFieldNames = emptySet(),
+                    textPatterns = listOf(Regex("Bearer\\s+[A-Za-z0-9._~-]+", RegexOption.IGNORE_CASE)),
+                ),
+            )
+        val result = regexEngine.redactText("Bearer very-secret-token", maxLength = 10)
 
         assertFalse(result.contains("very-secret-token"))
         assertEquals("<redacted>", result)
@@ -49,7 +69,7 @@ class RedactionEngineTest {
                 mapOf(
                     "X-Auth-Token" to "abc123",
                     "x-access-token" to "def456",
-                    "Authentication" to "ghi789",
+                    "x-api-key" to "ghi789",
                     "jwt" to "eyJhbGciOi",
                     "token" to "opaque",
                 ),

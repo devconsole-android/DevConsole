@@ -271,4 +271,21 @@ class DashboardAssetsTest {
         assertTrue(fn.contains("indexOf(needle"))
         assertFalse("query must never reach RegExp", fn.contains("RegExp"))
     }
+
+    /**
+     * Regression for issue #40 ("Do not have access to copy from console"). In non-secure contexts
+     * (e.g. accessing DevConsole over plain HTTP via LAN), `navigator.clipboard` is unavailable.
+     * `copyToClipboard` must provide a fallback via `document.execCommand('copy')`.
+     */
+    @Test
+    fun `copyToClipboard provides document execCommand copy fallback for insecure contexts`() {
+        val script = DashboardAssets.js()
+        val fn =
+            script
+                .substringAfter("async function copyToClipboard(")
+                .substringBefore("async function copyNetworkCurl()")
+
+        assertTrue(fn.contains("execCommand('copy')"))
+        assertTrue(fn.contains("isSecureContext"))
+    }
 }

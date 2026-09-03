@@ -27,7 +27,8 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class CrashPolicyGatingTest {
-    private fun anrWatchdogThreadRunning(): Boolean = Thread.getAllStackTraces().keys.any { it.name == ANR_THREAD_NAME }
+    private fun anrWatchdogThreadRunning(): Boolean =
+        Thread.getAllStackTraces().keys.any { it.name == ANR_THREAD_NAME && it.isAlive }
 
     /**
      * Thread start/interrupt-triggered exit are asynchronous relative to the call that triggers
@@ -89,6 +90,7 @@ class CrashPolicyGatingTest {
     @Test
     fun `anrWatchdogEnabled = false never starts the watchdog thread`() =
         runTest {
+            awaitThreadState(expectedRunning = false, timeoutMs = 2_000L)
             val provider = PlatformFacadeProvider()
             val config = DevConsoleConfig.default().withCrashPolicy(CrashPolicy(anrWatchdogEnabled = false))
             provider.initialize(ApplicationProvider.getApplicationContext(), config)

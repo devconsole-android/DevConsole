@@ -66,7 +66,7 @@ class ComposerRequestTest {
             ComposerRequest(
                 method = "POST",
                 url = "https://api.test/orders?access_token=url-canary",
-                headers = mapOf("Authorization" to "Bearer header-canary", "Accept" to "application/json"),
+                headers = mapOf("Cookie" to "session=header-canary", "Accept" to "application/json"),
                 body = """{"password":"body-canary","keep":"visible"}""",
                 query = listOf(ComposerQueryParameter("token", "query-canary")),
                 formFields = mapOf("client_secret" to "form-canary"),

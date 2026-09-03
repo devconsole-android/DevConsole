@@ -4456,7 +4456,7 @@
   }
   function copyStateJson() {
     if (selectedStateValue === undefined || selectedStateValue === null) return;
-    navigator.clipboard?.writeText(JSON.stringify(selectedStateValue, null, 2)).then(() => toast('State copied.'));
+    copyToClipboard(JSON.stringify(selectedStateValue, null, 2), 'State');
   }
   /** The command body is raw text, not JSON — inputSchema only tells us how to *shape* the
    * control (a boolean picker, an enum select, a number field, or a free-text/JSON textarea for
@@ -5055,7 +5055,7 @@
     const lines = [dbLastRows.columns.map(esc2).join(',')].concat(
       dbLastRows.rows.map((row) => dbLastRows.columns.map((c, i) => esc2(Array.isArray(row) ? row[i] : row[c])).join(',')),
     );
-    navigator.clipboard?.writeText(lines.join('\n')).then(() => toast((dbSelectedTable || 'Table') + ' copied as CSV'));
+    copyToClipboard(lines.join('\n'), (dbSelectedTable || 'Table') + ' as CSV');
   }
 
   // ================================================================
@@ -7186,10 +7186,36 @@
     await show('mocks');
   }
   async function copyToClipboard(text, label) {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast(label + ' copied to clipboard.');
-    } catch {
+    let copied = false;
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+    if (!copied) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '-9999px';
+        textarea.style.opacity = '0';
+        textarea.setAttribute('readonly', '');
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        copied = false;
+      }
+    }
+    if (copied) {
+      toast(label ? label + ' copied to clipboard.' : 'Copied to clipboard.');
+    } else {
       toast('Clipboard access was denied.', 'error');
     }
   }
