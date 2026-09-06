@@ -15,7 +15,12 @@ class SocketRecorderTest {
         val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
         recorder.onOpen("connection", "wss://api.test/socket")
 
-        recorder.onMessage("connection", SocketDirection.RECEIVED, "Bearer socket-secret", "application/json")
+        recorder.onMessage(
+            "connection",
+            SocketDirection.RECEIVED,
+            "{\"password\":\"socket-secret\"}",
+            "application/json",
+        )
 
         val preview =
             (
@@ -35,7 +40,12 @@ class SocketRecorderTest {
             SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, enabled = false, clock = { 100L })
 
         recorder.onOpen("connection", "wss://api.test/socket")
-        recorder.onMessage("connection", SocketDirection.RECEIVED, "Bearer socket-secret", "application/json")
+        recorder.onMessage(
+            "connection",
+            SocketDirection.RECEIVED,
+            "{\"password\":\"socket-secret\"}",
+            "application/json",
+        )
 
         assertNull(store.connection("connection"))
     }
@@ -155,7 +165,7 @@ class SocketRecorderTest {
         val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
         recorder.onOpen("connection", "tcp://broker.test:1883")
 
-        val contentType = MqttFrameMetadata.format("devices/Bearer socket-secret/status", qos = 1, retained = true)
+        val contentType = MqttFrameMetadata.format("devices/?password=socket-secret/status", qos = 1, retained = true)
         recorder.onMessage("connection", SocketDirection.RECEIVED, "payload", contentType)
 
         val storedContentType =

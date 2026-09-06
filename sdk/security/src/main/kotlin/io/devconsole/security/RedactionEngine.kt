@@ -33,10 +33,6 @@ data class RedactionPolicy(
             RedactionPolicy(
                 sensitiveFieldNames =
                     setOf(
-                        "authorization",
-                        "proxy-authorization",
-                        "www-authenticate",
-                        "authentication",
                         "cookie",
                         "set-cookie",
                         "x-api-key",
@@ -59,7 +55,7 @@ data class RedactionPolicy(
                         "private_key",
                         "session_id",
                     ),
-                textPatterns = listOf(Regex("Bearer\\s+[A-Za-z0-9._~-]+", RegexOption.IGNORE_CASE)),
+                textPatterns = emptyList(),
             )
     }
 }

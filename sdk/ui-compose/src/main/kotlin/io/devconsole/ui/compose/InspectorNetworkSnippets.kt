@@ -102,7 +102,7 @@ internal fun InspectorTransactionUi.toJsonSnippet(): String =
     }
 
 /** [InspectorTransactionUi.url] is empty for adapters that predate that field. */
-private fun InspectorTransactionUi.displayUrl(): String = url.ifBlank { "https://$host$path" }
+private fun InspectorTransactionUi.displayUrl(): String = url.ifBlank { "https://$host${pathWithQuery()}" }
 
 private fun Map<String, String>.jsonObject(): String =
     if (isEmpty()) {

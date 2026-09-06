@@ -22,7 +22,7 @@ class PushEventStoreTest {
                     sentAtEpochMs = 10,
                     receivedAtEpochMs = 20,
                     notification = PushNotification(title = "New order", body = "Order #42"),
-                    rawMetadata = mapOf("authorization" to "Bearer raw-secret"),
+                    rawMetadata = mapOf("password" to "raw-secret"),
                     lifecycle = PushLifecycle.OPENED,
                     simulated = true,
                 ),
@@ -31,7 +31,7 @@ class PushEventStoreTest {
         assertEquals(PushLifecycle.OPENED, event.lifecycle)
         assertTrue(event.simulated)
         assertEquals("<redacted>", event.data.getValue("access_token"))
-        assertEquals("<redacted>", event.rawMetadata.getValue("authorization"))
+        assertEquals("<redacted>", event.rawMetadata.getValue("password"))
         assertEquals(listOf(event), store.events())
     }
 }

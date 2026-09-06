@@ -16,6 +16,21 @@ class DashboardAssetsTest {
         assertTrue(dashboard.contains("<script src=\"/assets/dashboard.js\"></script>"))
     }
 
+    /**
+     * A Network row used to print `t.path` alone, so `/orders?status=open` and `/orders?status=all`
+     * were two identical-looking rows -- the query is often the only thing that differs between
+     * captures of the same endpoint. It rides along as a dimmed suffix rather than replacing the
+     * main text, so the endpoint is still what survives the row's ellipsis.
+     */
+    @Test
+    fun `network rows print the query string after the path`() {
+        val script = DashboardAssets.js()
+
+        assertTrue(script.contains("mainSub: t.query ? '?' + t.query : ''"))
+        assertTrue(script.contains("class=\"row-main-sub\""))
+        assertTrue(DashboardAssets.css().contains(".row-main-sub"))
+    }
+
     @Test
     fun `socket message formatting does not require the structured clone browser API`() {
         val script = DashboardAssets.js()
@@ -270,5 +285,22 @@ class DashboardAssetsTest {
 
         assertTrue(fn.contains("indexOf(needle"))
         assertFalse("query must never reach RegExp", fn.contains("RegExp"))
+    }
+
+    /**
+     * Regression for issue #40 ("Do not have access to copy from console"). In non-secure contexts
+     * (e.g. accessing DevConsole over plain HTTP via LAN), `navigator.clipboard` is unavailable.
+     * `copyToClipboard` must provide a fallback via `document.execCommand('copy')`.
+     */
+    @Test
+    fun `copyToClipboard provides document execCommand copy fallback for insecure contexts`() {
+        val script = DashboardAssets.js()
+        val fn =
+            script
+                .substringAfter("async function copyToClipboard(")
+                .substringBefore("async function copyNetworkCurl()")
+
+        assertTrue(fn.contains("execCommand('copy')"))
+        assertTrue(fn.contains("isSecureContext"))
     }
 }
