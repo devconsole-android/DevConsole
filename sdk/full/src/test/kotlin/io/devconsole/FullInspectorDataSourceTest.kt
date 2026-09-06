@@ -90,12 +90,13 @@ class FullInspectorDataSourceTest {
         id: String,
         startedAtEpochMs: Long,
         completedAtEpochMs: Long?,
+        url: String = "https://api.example.test/orders",
     ) {
         val capture =
             captureFactory.capture(
                 NetworkRequestInput(
                     method = "GET",
-                    url = "https://api.example.test/orders",
+                    url = url,
                     headers = mapOf("X-Request-Id" to id),
                 ),
                 NetworkResponseInput(
@@ -727,6 +728,29 @@ class FullInspectorDataSourceTest {
             assertTrue(result is InspectorCommandResult.Invalid)
             assertTrue(evidence.items("session-1").isEmpty())
         }
+
+    /**
+     * The traffic list row shows path + query, and it reads that query back off `url` -- so the
+     * mapping has to carry the query across there, while `path` stays the bare endpoint that
+     * mock-rule prefill escapes into a regex.
+     */
+    @Test
+    fun `snapshot carries a transaction's query string on the url, not folded into the path`() {
+        val store = networkStore()
+        recordTransaction(
+            store,
+            "tx-query",
+            startedAtEpochMs = 0,
+            completedAtEpochMs = 5,
+            url = "https://api.example.test/orders?status=open&page=2",
+        )
+        val source = FullInspectorDataSource(store, MockEngine(emptyList()), configSupplier = { null })
+
+        val transaction = source.snapshot().transactions.single()
+
+        assertEquals("/orders", transaction.path)
+        assertEquals("https://api.example.test/orders?status=open&page=2", transaction.url)
+    }
 
     @Test
     fun `snapshot maps transactions, mock rules, and capabilities from the underlying engines`() {

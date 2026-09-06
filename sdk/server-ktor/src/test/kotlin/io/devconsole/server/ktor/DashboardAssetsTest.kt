@@ -16,6 +16,21 @@ class DashboardAssetsTest {
         assertTrue(dashboard.contains("<script src=\"/assets/dashboard.js\"></script>"))
     }
 
+    /**
+     * A Network row used to print `t.path` alone, so `/orders?status=open` and `/orders?status=all`
+     * were two identical-looking rows -- the query is often the only thing that differs between
+     * captures of the same endpoint. It rides along as a dimmed suffix rather than replacing the
+     * main text, so the endpoint is still what survives the row's ellipsis.
+     */
+    @Test
+    fun `network rows print the query string after the path`() {
+        val script = DashboardAssets.js()
+
+        assertTrue(script.contains("mainSub: t.query ? '?' + t.query : ''"))
+        assertTrue(script.contains("class=\"row-main-sub\""))
+        assertTrue(DashboardAssets.css().contains(".row-main-sub"))
+    }
+
     @Test
     fun `socket message formatting does not require the structured clone browser API`() {
         val script = DashboardAssets.js()

@@ -781,6 +781,8 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
   font-family: var(--font-mono); font-size: var(--d-row-main-font); color: var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Query string trailing a Network row's path: present and readable, but never louder than the endpoint. */
+.row-main-sub { color: var(--text-3); }
 .row-tag {
   flex: 0 0 auto; font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
   padding: 1px 4px; border-radius: 99px; border: 1px solid var(--border-strong);

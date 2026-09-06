@@ -338,7 +338,7 @@
    * `checkbox: true` opts a row into the export-selection checkbox (Network only); `checked`
    * reflects whether `id` is currently in that selection. */
   function rowHtml(opts) {
-    const { id, selected, badgeText, badgeTone, mainText, mainRtl, tagText, tagTone, duration, statusText, sTone, flagKind, flagLabel, checkbox, checked, posinset, setsize } = opts;
+    const { id, selected, badgeText, badgeTone, mainText, mainSub, mainRtl, tagText, tagTone, duration, statusText, sTone, flagKind, flagLabel, checkbox, checked, posinset, setsize } = opts;
     const flagId = opts.flagId ?? id; // selection id and evidence id may differ (socket frames)
     const flagged = flagKind ? isFlagged(flagKind, flagId) : false;
     // aria-posinset/aria-setsize: with the list virtualized, only a window of `role="option"`
@@ -354,7 +354,7 @@
       }
       <span class="row-badge badge-${badgeTone}">${esc(badgeText)}</span>
       <span class="row-main">
-        <span class="row-main-text"${mainRtl ? ' style="direction:rtl;text-align:left"' : ''}>${esc(mainText)}</span>
+        <span class="row-main-text"${mainRtl ? ' style="direction:rtl;text-align:left"' : ''}${mainSub ? ` title="${esc(mainText + mainSub)}"` : ''}>${esc(mainText)}${mainSub ? `<span class="row-main-sub">${esc(mainSub)}</span>` : ''}</span>
         ${tagText ? `<span class="row-tag tone-text-${tagTone || 'muted'}">${esc(tagText)}</span>` : ''}
       </span>
       <span class="row-duration">${esc(duration ?? '')}</span>
@@ -3461,6 +3461,9 @@
           checkbox: true, checked: networkSelectedIds.has(t.id),
           badgeText: t.method, badgeTone: methodTone(t.method),
           mainText: t.path,
+          // The query is what separates two rows on the same endpoint, so it belongs in the row --
+          // dimmed and after the path, which stays the part that survives the ellipsis.
+          mainSub: t.query ? '?' + t.query : '',
           // Single row-tag slot: a pinned diff baseline always wins over the mocked marker.
           tagText: networkPinnedId === t.id ? 'BASE' : t.tags?.mocked === 'true' ? 'MOCK' : false,
           tagTone: 'put',

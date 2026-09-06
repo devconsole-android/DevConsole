@@ -174,7 +174,7 @@ private fun netGeneralEntries(
     mockDiff: JsonMockDiffResult?,
 ): List<InspectorKeyValue> =
     buildList {
-        val url = transaction.url.ifBlank { "https://${transaction.host}${transaction.path}" }
+        val url = transaction.url.ifBlank { "https://${transaction.host}${transaction.pathWithQuery()}" }
         add(InspectorKeyValue("url", url))
         add(InspectorKeyValue("method", transaction.method))
         add(InspectorKeyValue("status", transaction.statusCode?.toString() ?: "no response received", statusColor))
