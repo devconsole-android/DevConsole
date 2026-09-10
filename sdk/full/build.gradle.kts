@@ -29,7 +29,7 @@ dependencies {
     // to be a declared dependency rather than one inherited by luck through ui-compose's Compose
     // graph. A manifest-referenced provider whose class goes missing fails in the host app at
     // instantiation, not here.
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.19.0")
     // OkHttp adapters stay on the umbrella: OkHttp (and Retrofit, which delegates to it) is the
     // integration the overwhelming majority of hosts need, so it belongs in the two-coordinate story.
     api(project(":sdk:network-okhttp"))
@@ -50,10 +50,10 @@ dependencies {
     implementation(project(":sdk:server-ktor"))
     implementation(project(":sdk:push"))
     implementation(project(":sdk:state"))
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("org.robolectric:robolectric:4.16.1")
-    testImplementation("androidx.test:core:1.6.1")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test:core:1.6.1")
+    testImplementation("androidx.test:core:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test:core:1.7.0")
 }

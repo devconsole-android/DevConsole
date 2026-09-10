@@ -1,9 +1,9 @@
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "2.2.20"
+    id("org.jetbrains.kotlin.jvm") version "2.4.10"
     id("java-gradle-plugin")
     id("maven-publish")
     // Latest 1.x release: 2.x raises the minimum Gradle version this repo isn't ready to require yet.
-    id("com.gradle.plugin-publish") version "1.3.1"
+    id("com.gradle.plugin-publish") version "2.1.1"
 }
 
 // Must share a top-level namespace with the plugin ID (a Plugin Portal requirement) and match
@@ -30,7 +30,7 @@ dependencies {
     // the plain kotlin.jvm plugin doesn't pull this in the way build-logic's
     // `kotlin-dsl` plugin does.
     compileOnly(gradleKotlinDsl())
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.2.20")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.10")
     testImplementation(gradleTestKit())
 }
 
