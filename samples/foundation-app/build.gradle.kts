@@ -13,7 +13,7 @@ dependencies {
     releaseImplementation(project(":sdk:mocks-okhttp-noop"))
     debugImplementation(project(":sdk:socket-okhttp"))
     releaseImplementation(project(":sdk:socket-okhttp-noop"))
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.0")
 }
 
 // No devConsole {} override here: this sample has no product flavors, so the plugin's own
