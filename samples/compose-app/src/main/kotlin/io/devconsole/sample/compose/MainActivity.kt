@@ -963,7 +963,12 @@ private fun ConnectUrlPanel(
             TextButton(
                 onClick = {
                     clipboard.setText(AnnotatedString(connectUrl))
-                    val message = if (usesSessionCode) "Session code copied -- keep it private" else "Dashboard URL copied"
+                    val message =
+                        if (usesSessionCode) {
+                            "Session code copied -- keep it private"
+                        } else {
+                            "Dashboard URL copied"
+                        }
                     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.align(Alignment.End),

@@ -19,8 +19,8 @@ class EventBatchWriterTest {
             val writer = EventBatchWriter(store, this, capacity = 2, maxBatchSize = 2, flushIntervalMs = 1000)
             writer.start()
 
-            writer.submit(event("Bearer first-secret"))
-            writer.submit(event("Bearer second-secret"))
+            writer.submit(event("password=first-secret"))
+            writer.submit(event("password=second-secret"))
             testScheduler.runCurrent()
 
             assertEquals(1, store.batches.size)

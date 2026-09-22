@@ -11,11 +11,10 @@ regardless of which inspector captured it.
 
 ## Default policy
 
-`RedactionPolicy.default()`'s 25 sensitive field names (case-insensitive, matched against header
+`RedactionPolicy.default()`'s sensitive field names (case-insensitive, matched against header
 names, JSON keys, and form field names):
 
 ```text
-authorization      proxy-authorization  www-authenticate    authentication
 cookie             set-cookie           x-api-key           api-key
 apikey             x-auth-token         x-access-token      x-csrf-token
 x-xsrf-token       access_token         refresh_token       id_token
@@ -24,9 +23,7 @@ passphrase         secret               client_secret       private_key
 session_id
 ```
 
-A matched value is replaced wholesale with `<redacted>`. Independently of the field-name list, any
-`Bearer <token>` text pattern is redacted wherever it appears (e.g. inside a body that isn't valid
-JSON/form data), so a leaked bearer token in a non-standard location is still caught.
+A matched value is replaced wholesale with `<redacted>`. `Authorization` headers and Bearer tokens are kept unredacted by default to allow developers to inspect and copy tokens during debugging; custom `textPatterns` and additional `sensitiveFieldNames` can be configured via `RedactionPolicy` if further redaction is desired.
 
 ## Redaction strategies beyond removal
 

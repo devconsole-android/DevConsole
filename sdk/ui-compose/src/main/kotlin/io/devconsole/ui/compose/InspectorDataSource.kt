@@ -57,6 +57,25 @@ data class InspectorTransactionUi(
 )
 
 /**
+ * The already-redacted query string, without its leading `?`; empty when the request carried none.
+ *
+ * Read back off [InspectorTransactionUi.url] rather than carried as a field of its own: the query is
+ * already in there, and widening the data class would change its constructor and `copy` signatures --
+ * a binary break for every compiled caller. Adapters that predate `url` leave it blank and so report
+ * no query, exactly as they do today.
+ */
+internal fun InspectorTransactionUi.queryString(): String = url.substringAfter('?', "")
+
+/**
+ * The endpoint as a list row should show it -- `/v1/orders?status=open`. The query is often the only
+ * thing telling two captures of one endpoint apart, so a row printing [InspectorTransactionUi.path]
+ * alone shows the operator two identical lines. [InspectorTransactionUi.path] itself stays bare: it
+ * is what mock-rule prefill escapes into a regex and what the path facets group on.
+ */
+internal fun InspectorTransactionUi.pathWithQuery(): String =
+    queryString().let { if (it.isEmpty()) path else path + "?" + it }
+
+/**
  * Shape of a captured body preview, mirroring `io.devconsole.network.BodyPreview` without a
  * `sdk:network` dependency.
  */

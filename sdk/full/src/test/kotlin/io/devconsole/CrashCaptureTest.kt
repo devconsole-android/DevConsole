@@ -96,10 +96,10 @@ class CrashCaptureTest {
 
     @Test
     fun `the crash payload is redacted`() {
-        capture().recordAnr("main", "called with Authorization: Bearer topsecret123")
+        capture().recordAnr("main", "password=topsecret123")
 
         assertTrue(
-            "expected the token to be redacted: ${appended.single().payloadJson}",
+            "expected the password to be redacted: ${appended.single().payloadJson}",
             "topsecret123" !in appended.single().payloadJson.orEmpty(),
         )
     }

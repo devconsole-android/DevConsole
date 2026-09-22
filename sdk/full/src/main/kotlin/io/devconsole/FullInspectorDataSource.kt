@@ -1336,6 +1336,11 @@ private fun NetworkTransaction.evidenceDetailJson(): String =
                 capture.request.url.path
                     .escapeJson(),
             ).append('"')
+        append(",\"query\":\"")
+            .append(
+                capture.request.url.queryString
+                    .escapeJson(),
+            ).append('"')
         append(",\"status\":").append(capture.response?.statusCode ?: "null")
         val contentType = (capture.response?.contentType ?: capture.request.contentType).orEmpty()
         append(",\"contentType\":\"").append(contentType.escapeJson()).append('"')

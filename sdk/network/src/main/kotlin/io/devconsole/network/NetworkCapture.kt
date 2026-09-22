@@ -80,10 +80,17 @@ data class NetworkUrl(
     val path: String,
     val query: Map<String, String>,
 ) {
+    /**
+     * The already-redacted query in `a=1&b=2` form, empty when the request carried no parameters.
+     * Split out of [display] so a list row can show the query beside the path without having to
+     * re-parse a full URL string.
+     */
+    val queryString: String get() = query.entries.joinToString("&") { "${it.key}=${it.value}" }
+
     val display: String get() =
         buildString {
             append("$scheme://$host$path")
-            if (query.isNotEmpty()) append('?').append(query.entries.joinToString("&") { "${it.key}=${it.value}" })
+            if (query.isNotEmpty()) append('?').append(queryString)
         }
 }
 

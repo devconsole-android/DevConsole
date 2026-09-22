@@ -771,7 +771,7 @@ class DevConsoleKtorModuleTest {
                                 "https://api.test/orders?access_token=raw-secret",
                                 headers =
                                     mapOf(
-                                        "Authorization" to "Bearer header-secret",
+                                        "Cookie" to "session=header-secret",
                                     ),
                                 contentType = "application/json",
                             ).withMetadata(NetworkRequestMetadata(tags = mapOf("source" to "composer"))),
@@ -957,7 +957,7 @@ class DevConsoleKtorModuleTest {
                             NetworkRequestInput(
                                 "GET",
                                 "https://api.test/orders",
-                                headers = mapOf("Authorization" to "Bearer header-secret"),
+                                headers = mapOf("Cookie" to "session=header-secret"),
                             ),
                             NetworkResponseInput(200),
                         ),
@@ -1075,6 +1075,48 @@ class DevConsoleKtorModuleTest {
         }
         return count
     }
+
+    /**
+     * The list row is the only place an operator sees before opening a capture, and two calls to the
+     * same endpoint are told apart by their query alone -- so the summary carries it. It stays a
+     * field of its own rather than being folded into `path`, which the path facet, the `path=`
+     * filter and mock-rule prefill all still match on as the bare endpoint.
+     */
+    @Test
+    fun `network transaction summary carries the redacted query string beside the path`() =
+        testApplication {
+            val sessions = SessionAuthority()
+            val sessionCodes = SessionCodeAuthority(sessions)
+            val network = InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
+            network.record(
+                NetworkTransaction(
+                    id = "transaction-query",
+                    startedAtEpochMs = 100,
+                    completedAtEpochMs = 120,
+                    capture =
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                            NetworkRequestInput("GET", "https://api.test/orders?status=open&page=2"),
+                            NetworkResponseInput(200),
+                        ),
+                ),
+            )
+            application {
+                devConsoleModule(sessions, sessionCodes) {
+                    networkTransactions = network
+                }
+            }
+            val session = client.exchangeSession(sessions, sessionCodes)
+
+            val response =
+                client.get("/api/v1/network/transactions") {
+                    header(HttpHeaders.Host, "localhost")
+                    header(HttpHeaders.Authorization, "Bearer ${session.token}")
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.bodyAsText().contains("\"path\":\"/orders\""))
+            assertTrue(response.bodyAsText().contains("\"query\":\"status=open&page=2\""))
+        }
 
     @Test
     fun `network transaction links correlated and time-window timeline events`() =
@@ -2889,7 +2931,7 @@ class DevConsoleKtorModuleTest {
                             2,
                             2,
                             1,
-                            "Bearer export-secret",
+                            "password=export-secret",
                             attachmentId = "attachment-2",
                         ),
                     ),

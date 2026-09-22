@@ -32,7 +32,7 @@ class DevConsoleOkHttpWebSocketListenerTest {
         val socket = FakeWebSocket()
         listener.recordOpen(socket)
 
-        listener.onMessage(socket, "Bearer socket-secret")
+        listener.onMessage(socket, "{\"password\":\"socket-secret\"}")
 
         val preview =
             (

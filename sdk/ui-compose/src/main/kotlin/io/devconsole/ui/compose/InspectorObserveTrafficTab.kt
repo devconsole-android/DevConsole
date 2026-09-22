@@ -58,13 +58,14 @@ private data class TrafficStats(
     val rowsNewestFirst: List<InspectorTransactionUi>,
 )
 
-private fun List<InspectorTransactionUi>.matchesTrafficSearch(query: String): List<InspectorTransactionUi> {
-    if (query.isEmpty()) return this
+private fun List<InspectorTransactionUi>.matchesTrafficSearch(search: String): List<InspectorTransactionUi> {
+    if (search.isEmpty()) return this
     return filter { tx ->
-        tx.path.lowercase(Locale.US).contains(query) ||
-            tx.host.lowercase(Locale.US).contains(query) ||
-            tx.requestPreview?.lowercase(Locale.US)?.contains(query) == true ||
-            tx.responsePreview?.lowercase(Locale.US)?.contains(query) == true
+        tx.path.lowercase(Locale.US).contains(search) ||
+            tx.queryString().lowercase(Locale.US).contains(search) ||
+            tx.host.lowercase(Locale.US).contains(search) ||
+            tx.requestPreview?.lowercase(Locale.US)?.contains(search) == true ||
+            tx.responsePreview?.lowercase(Locale.US)?.contains(search) == true
     }
 }
 
@@ -378,7 +379,7 @@ private fun TrafficRow(
             leadText = methodLeadText(transaction.method),
             leadColor = leadColor,
             leadContainerColor = leadBg,
-            title = transaction.path.substringBefore('?'),
+            title = transaction.pathWithQuery(),
             titleMaxLines = 2,
             subtitle = "${transaction.host} · ${formatCaptureClockTime(transaction.startedAtEpochMs)}$mockedSuffix",
             trailValue = transaction.statusCode?.toString() ?: "ERR",
