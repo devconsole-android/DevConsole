@@ -1886,9 +1886,16 @@
       for (let index = from; index < upto; index++) {
         const [key, val] = entries[index];
         const line = document.createElement('div');
-        const keySpan = document.createElement('span');
-        keySpan.className = 'json-key';
-        keySpan.textContent = JSON.stringify(key) + ': ';
+        // An array child's `key` is its index (jsonNode hands entries over as `[String(i), v]`),
+        // carried only so diff paths stay addressable — it is a position, not a field name, so it
+        // is never printed. Rendering it the object way put `"0": ` in front of every element,
+        // which reads as an object whose key happens to be the string "0". The Compose tree makes
+        // the same distinction by passing `keyLabel = null` for array items (InspectorBodyFormat).
+        const keySpan = isArray ? null : document.createElement('span');
+        if (keySpan) {
+          keySpan.className = 'json-key';
+          keySpan.textContent = JSON.stringify(key) + ': ';
+        }
         // diffInfo is only ever set for the one mocked-response body viewer that requests it
         // (see diffMockBody) — every other jsonNode/jsonContainer call in the app passes nothing,
         // so childPath stays undefined and this is just an extra falsy check per row.
@@ -1901,7 +1908,8 @@
         // subtree, so it keeps the row-level highlight on `line` itself.
         const isContainerVal = val !== null && typeof val === 'object';
         if (diffInfo && !isContainerVal && diffInfo.hits.has(pathKey(childPath))) line.classList.add('json-diff-hit');
-        line.append(keySpan, jsonNode(val, depth + 1, diffInfo, childPath));
+        if (keySpan) line.append(keySpan);
+        line.append(jsonNode(val, depth + 1, diffInfo, childPath));
         if (index < entries.length - 1) line.append(document.createTextNode(','));
         children.append(line);
       }
