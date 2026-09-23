@@ -89,6 +89,12 @@ private const val WORD_JOINER = '\u2060'
 private val URL_BREAK_CHARS = "/?&=.-_,;:+%~@".toSet()
 
 /**
+ * Roughly one joiner per four characters of a typical URL, so the builder rarely has to grow. Only
+ * a capacity hint -- a URL denser in punctuation than that is still correct, just reallocated once.
+ */
+private const val JOINER_HEADROOM_DIVISOR = 4
+
+/**
  * Renders a URL as a single unbreakable run, so a row wrapping it fills every line to its edge
  * instead of leaving a ragged tail.
  *
@@ -103,7 +109,7 @@ private val URL_BREAK_CHARS = "/?&=.-_,;:+%~@".toSet()
  */
 internal fun String.breakingAnywhere(): String {
     if (isEmpty()) return this
-    val out = StringBuilder(length + length / 4)
+    val out = StringBuilder(length + length / JOINER_HEADROOM_DIVISOR)
     forEach { ch ->
         out.append(ch)
         if (ch in URL_BREAK_CHARS) out.append(WORD_JOINER)

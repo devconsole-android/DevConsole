@@ -25,7 +25,8 @@ class InspectorDataSourceTest {
         assertTrue(joined.contains('\u2060'))
         assertEquals(url, joined.replace("\u2060", ""))
         // Every break character carries a joiner, and nothing else does.
-        assertEquals("/?&=.-_,;:+%~@".toSet().let { breaks -> url.count { it in breaks } }, joined.count { it == '\u2060' })
+        val breakChars = "/?&=.-_,;:+%~@".toSet()
+        assertEquals(url.count { it in breakChars }, joined.count { it == '\u2060' })
     }
 
     @Test

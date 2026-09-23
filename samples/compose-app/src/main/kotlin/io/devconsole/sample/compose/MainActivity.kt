@@ -112,34 +112,32 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.eclipse.paho.client.mqttv3.MqttAsyncClient
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
+/** Public read endpoint: answers gzipped and chunked, which is what the capture tee is built for. */
+private const val SAMPLE_GET_URL = "https://jsonplaceholder.typicode.com/todos/1"
+
 /**
- * TESTING AID -- remove before this branch merges.
+ * Public write endpoint. It echoes the posted object back with an `id`, so one tap produces a
+ * capture carrying a real request body *and* a real response body -- the pair every other sample
+ * action leaves half empty, and the only way to exercise the request side of the inspector
+ * (payload viewer, cURL/fetch reproduction, mock-from-request) against live traffic.
  *
- * The plain `/todos/1` this button used to send fits on one row of either inspector, so neither
- * list's path column ever has to cope with a real-world URL. jsonplaceholder ignores unknown query
- * parameters and still answers 200, so the response is unchanged; this only makes the capture wide
- * enough to exercise the Network list's path wrapping (four lines, then ellipsis).
- *
- * Deliberately no `session_id`, `token` or any other name on RedactionPolicy.default()'s sensitive
- * list: a `<redacted>` value is both shorter and less representative than the real one it stands in
- * for, which is the opposite of what this URL is for.
+ * Nothing is persisted: jsonplaceholder fakes the write and always answers 201 with id 101.
  */
-private const val LONG_QUERY_URL =
-    "https://jsonplaceholder.typicode.com/todos/1?user_id=9912837" +
-        "&request_id=7f3c9a12-55de-4a7f-9b0c-2c6f1b8e44aa" +
-        "&device_id=a91f0c33-2b7e-49d8-9f21-0c7e5b6a1d44&app_version=1.3.1&platform=android" +
-        "&locale=en-BD&currency=BDT&tz=Asia%2FDhaka&include=items%2Cpayments%2Cratings%2Cphotos" +
-        "&filters=open_now%2Cfree_delivery%2Caccepts_card&sort=relevance&page=1&limit=50" +
-        "&campaign_id=778291&experiment_bucket=list_wrap_v1&trace=verbose&debug=1" +
-        "&cursor=eyJwYWdlIjoxLCJvZmZzZXQiOjAsInNvcnQiOiJyZWxldmFuY2UifQ%3D%3D"
+private const val SAMPLE_POST_URL = "https://jsonplaceholder.typicode.com/posts"
+
+/** Sent by [SampleActivity.sendJsonPost]; small enough to read whole in either inspector. */
+private const val SAMPLE_POST_BODY =
+    """{"title":"DevConsole sample","body":"Posted from the compose sample app","userId":9912837}"""
 
 private const val SHOW_ORDER_HISTORY_FLAG = "compose_sample.show_order_history"
 private const val MOCK_RULE_ID = "compose-sample-orders"
@@ -272,7 +270,12 @@ private fun devConsoleStatusText(
  * owns the server lifecycle and builds its own launch surface on top of [DevConsole.state], but can
  * also drop into the SDK's own in-app inspector (More screen QR, Data rail, exports) via
  * [DevConsole.open].
+ *
+ * Carries one private method per capability it demonstrates (GET, POST, Ktor, MQTT, screenshot,
+ * push, ...), which is what the `TooManyFunctions` suppression below covers: splitting them across
+ * helper classes would put each demonstration somewhere other than the screen that offers it.
  */
+@Suppress("TooManyFunctions") // One private method per capability demonstrated; see the class doc.
 class MainActivity : ComponentActivity() {
     private val socketClient = OkHttpClient()
 
@@ -526,14 +529,19 @@ class MainActivity : ComponentActivity() {
 
                 SectionLabel("Exercise the SDK")
                 CapabilityCard(
-                    title = "Send network request",
+                    title = "Send GET request",
                     subtitle = "OkHttp interceptor -- chunked response, body captured via the tee",
                     onClick = {
                         scope.launch {
-                            lastResponse = sendRequest(LONG_QUERY_URL, "Network response")
+                            lastResponse = sendRequest(SAMPLE_GET_URL, "GET response")
                             showOrderHistory = DevConsole.featureFlagValue(SHOW_ORDER_HISTORY_FLAG)
                         }
                     },
+                )
+                CapabilityCard(
+                    title = "Send POST request",
+                    subtitle = "JSON request body and JSON response body -- both captured on the same transaction",
+                    onClick = { scope.launch { lastResponse = sendJsonPost() } },
                 )
                 CapabilityCard(
                     title = "Send Ktor request",
@@ -647,6 +655,37 @@ class MainActivity : ComponentActivity() {
                 // error.message can be null (e.g. some IOExceptions), which would otherwise leave
                 // LAST RESULT rendering nothing under its label -- always fall back to a class name.
                 "Request failed: ${error.message ?: error.javaClass.simpleName}"
+            }
+        }
+
+    /**
+     * Posts [SAMPLE_POST_BODY] to [SAMPLE_POST_URL] through the same instrumented client the GET
+     * card uses, so the capture carries both bodies.
+     *
+     * The request body goes through OkHttp's own `RequestBody`, not a pre-serialized string handed
+     * to the recorder: the capture interceptor reads what OkHttp actually writes to the wire, so
+     * what the inspector shows is the request as sent rather than as intended. `Content-Type` comes
+     * from the media type here (not a manual header) for the same reason -- it is the one the call
+     * really carries.
+     */
+    private suspend fun sendJsonPost(): String =
+        withContext(Dispatchers.IO) {
+            requestCount.incrementAndGet()
+            try {
+                val request =
+                    Request
+                        .Builder()
+                        .url(SAMPLE_POST_URL)
+                        .post(SAMPLE_POST_BODY.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                        .build()
+                instrumentedClient.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    "POST response: ${response.code} (${body.length} chars)"
+                }
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                "POST failed: ${error.message ?: error.javaClass.simpleName}"
             }
         }
 

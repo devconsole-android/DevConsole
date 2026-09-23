@@ -2,6 +2,8 @@
  * @author Shakib
  * @since 02/08/26
  */
+@file:Suppress("TooManyFunctions") // One small builder per share format, plus their shared quoting helpers.
+
 package io.devconsole.ui.compose
 
 private const val RADIX_HEX = 16
@@ -94,9 +96,9 @@ internal fun InspectorTransactionUi.toJsonSnippet(): String =
         append("  \"status\": ").append(statusCode?.toString() ?: "null").append(",\n")
         append("  \"durationMs\": ").append(durationMs?.toString() ?: "null").append(",\n")
         append("  \"requestHeaders\": ").append(requestHeaders.jsonObject()).append(",\n")
-        append("  \"requestBody\": ").append(requestPreview.jsonQuotedOrNull()).append(",\n")
+        append("  \"requestBody\": ").append(requestPreview.jsonEmbeddedOrQuoted()).append(",\n")
         append("  \"responseHeaders\": ").append(responseHeaders.jsonObject()).append(",\n")
-        append("  \"responseBody\": ").append(responsePreview.jsonQuotedOrNull()).append(",\n")
+        append("  \"responseBody\": ").append(responsePreview.jsonEmbeddedOrQuoted()).append(",\n")
         append("  \"error\": ").append(error.jsonQuotedOrNull()).append('\n')
         append('}')
     }
@@ -114,6 +116,34 @@ private fun Map<String, String>.jsonObject(): String =
     }
 
 internal fun String?.jsonQuotedOrNull(): String = this?.jsonQuoted() ?: "null"
+
+/**
+ * A captured payload, embedded as JSON when it is JSON and as a quoted string when it is not.
+ *
+ * A JSON body quoted into a JSON document comes out as one long line of `\"` -- valid, but the
+ * thing you pasted it somewhere to read is now unreadable. Embedding it instead makes the shared
+ * snippet a single document: the body nests under its key and pretty-prints with everything else.
+ * [level] is the key's own depth, so the body's closing brace lines up under it.
+ *
+ * Only objects and arrays are embedded. A bare scalar parses as valid JSON too, so a plain-text
+ * body reading `null`, `false` or `12` would otherwise turn into a JSON literal and stop being the
+ * text that was captured. Anything that fails to parse -- a truncated capture, HTML, a
+ * `[binary, N bytes]` placeholder -- falls back to [jsonQuoted], which is what every one of these
+ * snippets did before.
+ */
+internal fun String?.jsonEmbeddedOrQuoted(level: Int = 1): String {
+    if (this == null) return "null"
+    val parsed =
+        try {
+            MinimalJsonParser(this).parseDocument()
+        } catch (_: JsonSyntaxException) {
+            null
+        }
+    return when (parsed) {
+        is JsonValue.Obj, is JsonValue.Arr -> parsed.prettyPrint(level = level)
+        else -> jsonQuoted()
+    }
+}
 
 /** Shared with the frame/push/log "share as JSON" snippets in InspectorObserve{Frame,Push,Log}Detail.kt. */
 internal fun String.jsonQuoted(): String =

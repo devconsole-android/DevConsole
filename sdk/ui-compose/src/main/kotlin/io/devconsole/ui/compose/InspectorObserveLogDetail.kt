@@ -14,7 +14,7 @@ private fun logToJsonSnippet(log: InspectorLogUi): String =
         append("  \"source\": ").append(log.source.jsonQuoted()).append(",\n")
         append("  \"summary\": ").append(log.summary.jsonQuoted()).append(",\n")
         append("  \"timestampEpochMs\": ").append(log.timestampEpochMs.toString()).append(",\n")
-        append("  \"detail\": ").append(log.detail.jsonQuotedOrNull()).append('\n')
+        append("  \"detail\": ").append(log.detail.jsonEmbeddedOrQuoted()).append('\n')
         append('}')
     }
 
