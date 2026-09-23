@@ -76,6 +76,42 @@ internal fun InspectorTransactionUi.pathWithQuery(): String =
     queryString().let { if (it.isEmpty()) path else path + "?" + it }
 
 /**
+ * U+2060 WORD JOINER: "no line break here". Zero-width, so it changes layout without changing
+ * what is drawn, measured, or read aloud.
+ */
+private const val WORD_JOINER = '\u2060'
+
+/**
+ * Characters Android's line breaker treats as a break opportunity inside a URL. `/`, `?`, `&` and
+ * `=` are the ones a query string is full of; the rest are the punctuation that shows up in ids,
+ * hosts and encoded values.
+ */
+private val URL_BREAK_CHARS = "/?&=.-_,;:+%~@".toSet()
+
+/**
+ * Renders a URL as a single unbreakable run, so a row wrapping it fills every line to its edge
+ * instead of leaving a ragged tail.
+ *
+ * Android breaks a long URL at its punctuation, and because a break opportunity is only *taken*
+ * when the chunk that follows does not fit, `/todos/1?` ends up alone on a line with most of its
+ * width unused while the query moves down whole. Suppressing those opportunities leaves the layout
+ * no break to take, so it falls back to breaking between characters -- the same result the web
+ * list gets from `word-break: break-all`, which this mirrors.
+ *
+ * Display only: the joiners are not in [pathWithQuery]'s own output, so search, mock-rule prefill
+ * and every copy path keep seeing the plain string.
+ */
+internal fun String.breakingAnywhere(): String {
+    if (isEmpty()) return this
+    val out = StringBuilder(length + length / 4)
+    forEach { ch ->
+        out.append(ch)
+        if (ch in URL_BREAK_CHARS) out.append(WORD_JOINER)
+    }
+    return out.toString()
+}
+
+/**
  * Shape of a captured body preview, mirroring `io.devconsole.network.BodyPreview` without a
  * `sdk:network` dependency.
  */

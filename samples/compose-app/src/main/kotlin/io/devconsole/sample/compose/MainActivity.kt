@@ -120,6 +120,27 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
+/**
+ * TESTING AID -- remove before this branch merges.
+ *
+ * The plain `/todos/1` this button used to send fits on one row of either inspector, so neither
+ * list's path column ever has to cope with a real-world URL. jsonplaceholder ignores unknown query
+ * parameters and still answers 200, so the response is unchanged; this only makes the capture wide
+ * enough to exercise the Network list's path wrapping (four lines, then ellipsis).
+ *
+ * Deliberately no `session_id`, `token` or any other name on RedactionPolicy.default()'s sensitive
+ * list: a `<redacted>` value is both shorter and less representative than the real one it stands in
+ * for, which is the opposite of what this URL is for.
+ */
+private const val LONG_QUERY_URL =
+    "https://jsonplaceholder.typicode.com/todos/1?user_id=9912837" +
+        "&request_id=7f3c9a12-55de-4a7f-9b0c-2c6f1b8e44aa" +
+        "&device_id=a91f0c33-2b7e-49d8-9f21-0c7e5b6a1d44&app_version=1.3.1&platform=android" +
+        "&locale=en-BD&currency=BDT&tz=Asia%2FDhaka&include=items%2Cpayments%2Cratings%2Cphotos" +
+        "&filters=open_now%2Cfree_delivery%2Caccepts_card&sort=relevance&page=1&limit=50" +
+        "&campaign_id=778291&experiment_bucket=list_wrap_v1&trace=verbose&debug=1" +
+        "&cursor=eyJwYWdlIjoxLCJvZmZzZXQiOjAsInNvcnQiOiJyZWxldmFuY2UifQ%3D%3D"
+
 private const val SHOW_ORDER_HISTORY_FLAG = "compose_sample.show_order_history"
 private const val MOCK_RULE_ID = "compose-sample-orders"
 
@@ -509,8 +530,7 @@ class MainActivity : ComponentActivity() {
                     subtitle = "OkHttp interceptor -- chunked response, body captured via the tee",
                     onClick = {
                         scope.launch {
-                            lastResponse =
-                                sendRequest("https://jsonplaceholder.typicode.com/todos/1", "Network response")
+                            lastResponse = sendRequest(LONG_QUERY_URL, "Network response")
                             showOrderHistory = DevConsole.featureFlagValue(SHOW_ORDER_HISTORY_FLAG)
                         }
                     },

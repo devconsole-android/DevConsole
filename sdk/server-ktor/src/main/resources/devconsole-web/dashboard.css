@@ -741,6 +741,8 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .col-status { flex: 0 0 62px; text-align: right; }
 .col-flag { flex: 0 0 24px; text-align: right; }
 @media (max-width: 620px) { .col-duration { display: none; } }
+/* The stacked pair keeps both values at every width — it costs one column, not two, and Network's
+   list head is sr-only anyway, so there is no header to drift out of step with it. */
 
 /* Export-selection checkbox (Network list only): header "select all visible" + one per row.
    Same 24x24/6px-radius footprint as .row-flag so the row height and header never shift when a
@@ -765,9 +767,14 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .detail-pane-v2 { min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--ground); }
 
 /* ---- List rows ---- */
+/* `min-height`, not `height`: a row with a path too long for one line grows to fit it (up to the
+   four-line clamp on .row-main-text below). The virtualizer measures each painted row rather than
+   multiplying by --d-row-h, so a taller row costs nothing but its own pixels — see
+   createVirtualList's `heights` cache. Vertical padding is what keeps a grown row off its own
+   borders; a one-line row still lands on exactly --d-row-h. */
 .row {
-  position: relative; display: flex; align-items: center; gap: 8px; width: 100%; height: var(--d-row-h);
-  padding: 0 8px 0 12px; text-align: left; cursor: pointer; border-radius: 0; border-inline: 0; border-top: 0; border-bottom: 1px solid var(--line);
+  position: relative; display: flex; align-items: center; gap: 8px; width: 100%; min-height: var(--d-row-h);
+  padding: 4px 8px 4px 12px; text-align: left; cursor: pointer; border-radius: 0; border-inline: 0; border-top: 0; border-bottom: 1px solid var(--line);
   background: transparent; color: var(--ink); font: inherit; font-size: var(--d-row-font);
 }
 .row:hover { background: var(--surface-2); }
@@ -781,12 +788,38 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
   font-family: var(--font-mono); font-size: var(--d-row-main-font); color: var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Opt-in (rowHtml's `wrapMain`, Network only): a long path wraps instead of being cut at the first
+   line, then ellipsises once past four — enough for the query-string-heavy endpoints that were
+   losing everything after the host, without letting one pathological URL own the whole viewport.
+   `word-break: break-all`, not `overflow-wrap`: a query string is one unbreakable token, and
+   overflow-wrap only breaks a token that cannot fit on a line of its own, so it pushed the whole
+   query to line two and left the rest of line one blank. break-all fills every line to the edge,
+   which is what a URL wants — and what prose does not, which is why this is opt-in rather than the
+   rule for every list. The line clamp supplies its own ellipsis, so the single-line
+   `text-overflow` above is turned back off here. */
+.row-main-text.row-main-wrap {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4;
+  white-space: normal; text-overflow: clip; word-break: break-all;
+}
 /* Query string trailing a Network row's path: present and readable, but never louder than the endpoint. */
 .row-main-sub { color: var(--text-3); }
 .row-tag {
   flex: 0 0 auto; font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
   padding: 1px 4px; border-radius: 99px; border: 1px solid var(--border-strong);
 }
+/* Network stacks its status over its duration in one column (rowHtml's `stackMetrics`), the way
+   the Android row reads them; the widths below still apply to the side-by-side lists. Right-
+   aligned and baseline-free so the pair reads as one block however tall the path beside it is. */
+/* `line-height: 1` on the pair, not the default ~1.2: stacked, the two values would otherwise
+   total more than --d-row-h and push every Network row ~12px taller than the other lists' — the
+   opposite of the space this layout is meant to hand back. At 1 they fit the plain row height, and
+   only a wrapped path grows the row. */
+/* `flex: 0 0 auto`, not the 74px the side-by-side lists reserve: stacked, the pair is at most as
+   wide as "1931 ms", and a fixed track just parked that slack to the left of a short "200" — read
+   as a gap between the path and the status roughly four times the row's own 8px one. Auto-sizing
+   hands those pixels back to the path and leaves exactly that 8px. */
+.row-metrics { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 2px; line-height: 1; }
+.row-metrics .row-duration, .row-metrics .row-status { flex: 0 0 auto; }
 /* Sized for the longest consumers: Timeline puts an event type here, not Network's "198 ms". */
 .row-duration { flex: 0 0 74px; font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; color: var(--text-3); }
 .row-status { flex: 0 0 62px; font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }

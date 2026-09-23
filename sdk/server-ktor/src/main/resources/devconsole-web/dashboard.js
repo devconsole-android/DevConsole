@@ -340,8 +340,20 @@
    * · main col (flex) · duration col (74px, hidden <620px) · status col (62px) · 24x24 flag button.
    * `checkbox: true` opts a row into the export-selection checkbox (Network only); `checked`
    * reflects whether `id` is currently in that selection. */
+  /** `stackMetrics` puts the status over the duration in one right-hand column instead of two
+   * side-by-side ones, which is how the Android row has always read them (TonalListRow's
+   * trailValue/trailSubtitle). Opt-in, because only Network's pair is a status and its timing:
+   * Timeline, Push and Crashes spend those two slots on unrelated facts (type/time,
+   * lifecycle/time, thread/time) that stacking would imply a relationship between. Stacking also
+   * hands ~70px back to the path, which is the column that actually runs out of room.
+   *
+   * `wrapMain` is the other half of the Network row's shape: it lets the path wrap over as many as
+   * four lines (`.row-main-wrap`) instead of being cut at one. Separate flag, because the two are
+   * independent — a list could want either without the other — and because every other list's main
+   * text is prose (a log summary, a crash reason), which `word-break: break-all` would chop
+   * mid-word. Both are opt-in, so those lists keep the single-line row they always had. */
   function rowHtml(opts) {
-    const { id, selected, badgeText, badgeTone, mainText, mainSub, mainRtl, tagText, tagTone, duration, statusText, sTone, flagKind, flagLabel, checkbox, checked, posinset, setsize } = opts;
+    const { id, selected, badgeText, badgeTone, mainText, mainSub, mainRtl, tagText, tagTone, duration, statusText, sTone, flagKind, flagLabel, checkbox, checked, posinset, setsize, stackMetrics, wrapMain } = opts;
     const flagId = opts.flagId ?? id; // selection id and evidence id may differ (socket frames)
     const flagged = flagKind ? isFlagged(flagKind, flagId) : false;
     // aria-posinset/aria-setsize: with the list virtualized, only a window of `role="option"`
@@ -357,11 +369,18 @@
       }
       <span class="row-badge badge-${badgeTone}">${esc(badgeText)}</span>
       <span class="row-main">
-        <span class="row-main-text"${mainRtl ? ' style="direction:rtl;text-align:left"' : ''}${mainSub ? ` title="${esc(mainText + mainSub)}"` : ''}>${esc(mainText)}${mainSub ? `<span class="row-main-sub">${esc(mainSub)}</span>` : ''}</span>
+        <span class="row-main-text${wrapMain ? ' row-main-wrap' : ''}"${mainRtl ? ' style="direction:rtl;text-align:left"' : ''}${mainSub ? ` title="${esc(mainText + mainSub)}"` : ''}>${esc(mainText)}${mainSub ? `<span class="row-main-sub">${esc(mainSub)}</span>` : ''}</span>
         ${tagText ? `<span class="row-tag tone-text-${tagTone || 'muted'}">${esc(tagText)}</span>` : ''}
       </span>
-      <span class="row-duration">${esc(duration ?? '')}</span>
-      <span class="row-status tone-text-${sTone || 'muted'}">${esc(statusText ?? '')}</span>
+      ${
+        stackMetrics
+          ? `<span class="row-metrics">
+        <span class="row-status tone-text-${sTone || 'muted'}">${esc(statusText ?? '')}</span>
+        <span class="row-duration">${esc(duration ?? '')}</span>
+      </span>`
+          : `<span class="row-duration">${esc(duration ?? '')}</span>
+      <span class="row-status tone-text-${sTone || 'muted'}">${esc(statusText ?? '')}</span>`
+      }
       ${
         flagKind
           ? `<button type="button" class="row-flag" data-flag-kind="${esc(flagKind)}" data-flag-id="${esc(flagId)}" data-flag-label="${esc(
@@ -456,11 +475,14 @@
   // `rowHtml()`/row-template strings they always did, just for a window of indices instead of the
   // whole array.
   //
-  // Row height is not a constant: body.mode-simple/advanced scale `--d-row-h`
+  // Row height is a floor, not a constant. body.mode-simple/advanced scale `--d-row-h`
   // (44px/34px) and `--d-trace-h` (54px/44px), so every repaint re-measures the real computed
   // value off the container rather than trusting a cached number, and `remeasure()` (wired to the
   // mode toggle below) keeps the row at the top of the viewport stable across a height change
-  // instead of jumping to an unrelated scroll position.
+  // instead of jumping to an unrelated scroll position. On top of that a single row can outgrow
+  // that floor on its own — a path too long for one line wraps over as many as four — so the
+  // window, the spacers and the scrollbar run on per-row measured heights (see `heights`), with
+  // the CSS value serving as the estimate for rows that have never been painted.
   // ================================================================
   const virtualLists = new Map();
 
@@ -473,6 +495,21 @@
     let renderRow = () => '';
     let emptyHtml = '';
     let rowH = 32;
+    // Rows are no longer all one height: `.row-main-text` wraps a long path over up to four lines
+    // (see the line clamp in dashboard.css), so a list mixes one-line and four-line rows freely.
+    // `heights` caches what each index actually measured once it has been painted; every index
+    // that has never been on screen falls back to `rowH`, the mode's CSS row height, which is
+    // also exactly what a single-line row measures. `offsets` is the prefix sum over that,
+    // rebuilt lazily because the window math, the spacers and the scrollbar all need absolute
+    // pixel positions rather than `index * rowH`.
+    let heights = [];
+    let offsets = null;
+    // Bounds the corrective repaints measurePaintedRows can trigger. More than one is worth
+    // allowing: a jump into never-painted territory can need a second pass before the window it
+    // paints actually covers the viewport (the first pass only learns the heights it just wrote).
+    // Small and finite, so a row whose height never settles can't loop.
+    let measurePasses = 0;
+    const MAX_MEASURE_PASSES = 3;
     let windowStart = -1;
     let windowEnd = -1;
     let rafId = 0;
@@ -485,22 +522,76 @@
       const n = parseFloat(getComputedStyle(el).getPropertyValue(heightVar()));
       return Number.isFinite(n) && n > 0 ? n : rowH;
     }
+    /** A never-painted row is assumed to be a plain, unwrapped one — the common case, since only a
+     * path long enough to wrap is taller. `estimate` starts as the CSS row height and is corrected
+     * to the shortest row actually measured, because the CSS value is a `min-height` that a row's
+     * own content (the stacked status/duration column, a badge) can exceed: guessing 34px for rows
+     * that really render at 46px makes every offset below the window wrong by a third, which is
+     * enough for a fast scroll to paint a window that misses the viewport entirely. */
+    let estimate = 0;
+    function heightAt(i) {
+      const h = heights[i];
+      if (h > 0) return h;
+      return estimate > 0 ? estimate : rowH;
+    }
+    function ensureOffsets() {
+      if (offsets && offsets.length === count + 1) return offsets;
+      offsets = new Float64Array(count + 1);
+      for (let i = 0; i < count; i++) offsets[i + 1] = offsets[i] + heightAt(i);
+      return offsets;
+    }
+    /** The last index whose top edge is at or above `y` — the variable-height replacement for
+     * `Math.floor(scrollTop / rowH)`. */
+    function indexAtOffset(y) {
+      if (!count) return 0;
+      const o = ensureOffsets();
+      let lo = 0;
+      let hi = count - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (o[mid + 1] <= y) lo = mid + 1;
+        else hi = mid;
+      }
+      return lo;
+    }
+    /** Folds the freshly painted window's real heights into the cache. Returns true when anything
+     * moved, which is the caller's cue that its spacers (and the scroll position they hold up)
+     * are now stale. */
+    function measurePaintedRows(start) {
+      const painted = el.querySelectorAll('[role="option"]');
+      let dirty = false;
+      for (let n = 0; n < painted.length; n++) {
+        const h = painted[n].offsetHeight;
+        const i = start + n;
+        // The shortest row anyone has seen is a row with nothing wrapped, which is exactly what an
+        // unpainted row should be assumed to be.
+        if (h > 0 && (estimate === 0 || h < estimate)) {
+          estimate = h;
+          dirty = true;
+        }
+        if (!h || heights[i] === h) continue;
+        heights[i] = h;
+        dirty = true;
+      }
+      if (dirty) offsets = null;
+      return dirty;
+    }
     function computeWindow() {
       const viewport = el.clientHeight || 400; // 400: a reasonable guess for the one tick where a
       // just-shown view hasn't been laid out yet — the render that follows navigation's class
       // toggle always repaints once real layout exists, so this only ever affects a single frame.
-      const visibleRows = Math.ceil(viewport / rowH) + overscan * 2;
       // `start` must also be clamped against `count`, not just against 0: if the list shrinks
       // (a filter applied while scrolled deep into a longer list) `el.scrollTop` is still the old,
       // large value until the browser gets a chance to re-clamp it on the next layout, so the
-      // naive `start` can land past `count`. That makes `end = Math.min(count, start + visibleRows)`
-      // less than `start`, the row loop below never runs, and the list renders as blank even though
-      // it has matching rows — the top spacer alone still reports the old scrollHeight, so native
-      // scroll clamping never kicks in to fix it either. Capping `start` at `count - visibleRows`
-      // (never below 0) guarantees `start <= count` and that the window always reaches `count`.
-      const maxStart = Math.max(0, count - visibleRows);
-      const start = Math.min(maxStart, Math.max(0, Math.floor(el.scrollTop / rowH) - overscan));
-      return { start, end: Math.min(count, start + visibleRows) };
+      // naive `start` can land past `count`. That makes the row loop below never run and the list
+      // render as blank even though it has matching rows — the top spacer alone still reports the
+      // old scrollHeight, so native scroll clamping never kicks in to fix it either. Deriving
+      // both edges from indexAtOffset (which clamps to `count - 1`) keeps `start <= end <= count`
+      // however stale scrollTop is.
+      const first = indexAtOffset(el.scrollTop);
+      const last = indexAtOffset(el.scrollTop + viewport);
+      const start = Math.max(0, first - overscan);
+      return { start, end: Math.min(count, last + 1 + overscan) };
     }
     function paint(force) {
       rowH = measureRowHeight();
@@ -520,10 +611,15 @@
       if (!force && start === windowStart && end === windowEnd) return;
       windowStart = start;
       windowEnd = end;
+      // Which row the viewport's top edge currently sits in, and how far into it — the anchor the
+      // corrective pass below restores once measuring has changed the geometry underneath it.
+      const anchorIndex = indexAtOffset(el.scrollTop);
+      const anchorDelta = el.scrollTop - ensureOffsets()[anchorIndex];
       const focusSnap = captureFocus(el);
-      let html = start > 0 ? `<div class="virt-spacer" style="height:${start * rowH}px"></div>` : '';
+      const offs = ensureOffsets();
+      let html = start > 0 ? `<div class="virt-spacer" style="height:${offs[start]}px"></div>` : '';
       for (let i = start; i < end; i++) html += renderRow(i, count);
-      if (end < count) html += `<div class="virt-spacer" style="height:${(count - end) * rowH}px"></div>`;
+      if (end < count) html += `<div class="virt-spacer" style="height:${offs[count] - offs[end]}px"></div>`;
       el.innerHTML = html;
       restoreFocus(focusSnap, el);
       // Roving tabindex meets virtualization: the selected row is normally the list's only tab
@@ -531,8 +627,19 @@
       // then carries tabindex="-1" and Tab skips the whole listbox. Promote the first painted row
       // whenever no tab stop survived the repaint, so the list always stays in the Tab order.
       if (!el.querySelector('[tabindex="0"]')) {
-        const first = el.querySelector('[role="option"]');
-        if (first) first.setAttribute('tabindex', '0');
+        const firstRow = el.querySelector('[role="option"]');
+        if (firstRow) firstRow.setAttribute('tabindex', '0');
+      }
+      // Heights are only knowable after the write, and correcting one moves every row below it —
+      // including, when the correction is above the viewport, the rows the reader is looking at.
+      // So: fold the measurements in, put the anchor row back where it was, and repaint once with
+      // spacers that match. `measuring` keeps that to a single extra pass; the second pass
+      // measures the same rows it just painted, finds them unchanged, and stops.
+      if (count && measurePasses < MAX_MEASURE_PASSES && measurePaintedRows(start)) {
+        measurePasses++;
+        el.scrollTop = Math.max(0, ensureOffsets()[anchorIndex] + anchorDelta);
+        paint(true);
+        measurePasses--;
       }
     }
     function onScroll() {
@@ -569,9 +676,10 @@
        * stepper so keyboard navigation reaches rows virtualization hasn't painted yet. */
       focusIndex(index) {
         if (index < 0 || index >= count) return;
-        const target = index * rowH;
-        if (target < el.scrollTop || target + rowH > el.scrollTop + el.clientHeight) {
-          el.scrollTop = Math.max(0, target - el.clientHeight / 2 + rowH / 2);
+        const target = ensureOffsets()[index];
+        const h = heightAt(index);
+        if (target < el.scrollTop || target + h > el.scrollTop + el.clientHeight) {
+          el.scrollTop = Math.max(0, target - el.clientHeight / 2 + h / 2);
         }
         paint(false);
       },
@@ -579,10 +687,14 @@
        * *row* sits at the top of the viewport (index-based, not pixel-based, so a 44px→34px mode
        * switch doesn't jump to an unrelated scroll position). */
       remeasure() {
-        const prevRowH = rowH || 1;
-        const topIndex = Math.round(el.scrollTop / prevRowH);
+        const topIndex = indexAtOffset(el.scrollTop);
         rowH = measureRowHeight();
-        el.scrollTop = topIndex * rowH;
+        // A mode switch rescales every row, wrapped ones included, so nothing in the cache
+        // survives it — drop the lot and let the repaint below measure the new window.
+        heights = [];
+        estimate = 0;
+        offsets = null;
+        el.scrollTop = ensureOffsets()[Math.min(topIndex, count)];
         paint(true);
       },
       /** Viewport size changed (window resize) without the row height changing. */
@@ -3488,6 +3600,7 @@
           tagTone: 'put',
           duration: t.durationMs != null ? t.durationMs + ' ms' : t.error ? 'failed' : '—',
           statusText: t.status != null ? String(t.status) : t.error ? 'ERR' : '—', sTone: statusTone(t.status),
+          stackMetrics: true, wrapMain: true,
           flagKind: 'network', flagLabel: t.method + ' ' + t.path,
           posinset: i + 1, setsize: total,
         });

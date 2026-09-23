@@ -13,6 +13,28 @@ class InspectorDataSourceTest {
     }
 
     /**
+     * The joiners are what stop Android's line breaker from taking a break at the URL punctuation
+     * and leaving the rest of that line unused; they are zero-width, so stripping them back out
+     * has to return the original string exactly.
+     */
+    @Test
+    fun `breakingAnywhere suppresses url break opportunities without changing the visible text`() {
+        val url = "/todos/1?user_id=9912837&request_id=7f3c9a12-55de"
+        val joined = url.breakingAnywhere()
+
+        assertTrue(joined.contains('\u2060'))
+        assertEquals(url, joined.replace("\u2060", ""))
+        // Every break character carries a joiner, and nothing else does.
+        assertEquals("/?&=.-_,;:+%~@".toSet().let { breaks -> url.count { it in breaks } }, joined.count { it == '\u2060' })
+    }
+
+    @Test
+    fun `breakingAnywhere leaves a plain path and an empty string untouched`() {
+        assertEquals("", "".breakingAnywhere())
+        assertEquals("orders", "orders".breakingAnywhere())
+    }
+
+    /**
      * A traffic row that printed `path` alone rendered `/orders?status=open` and `/orders?status=all`
      * as two identical lines. The query rides along from `url`, and `path` stays bare.
      */
