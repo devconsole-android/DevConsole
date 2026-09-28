@@ -1,9 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <!--
+          windowSoftInputMode=adjustResize: the activity is edge-to-edge (enableEdgeToEdge in
+          DevConsoleActivity) and its scaffolds react to the keyboard with imePadding(), which only
+          works when the window reports the IME as an inset. Without this the window defaults to
+          adjust=pan, so the system slides the whole window up (header off-screen, content under the
+          status bar) AND imePadding() adds a second keyboard's worth of padding inside it, leaving
+          the mock editor's footer stranded above a keyboard-sized gap.
+        -->
         <activity
             android:name="io.devconsole.ui.compose.DevConsoleActivity"
             android:exported="false"
-            android:theme="@style/Theme.DevConsole" />
+            android:theme="@style/Theme.DevConsole"
+            android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>

@@ -298,9 +298,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         DevConsole.initialize(application, buildConfig())
-        // Mock rules are SESSION-scoped and dropped whenever the embedded server restarts (fresh
-        // session), so the rule is (re)installed from the Running-state observer below rather than
-        // once here -- a one-shot install here would silently stop mocking after any restart.
+        // Installed here AND re-installed from the Running-state observer below. Both are needed:
+        // mock rules are SESSION-scoped and DevConsole's stop sequence calls clearSessionRules(),
+        // so a one-shot install would silently stop mocking after any restart -- but installing
+        // *only* on Running left the rule missing until the embedded server was first started,
+        // which made a fresh launch show an empty Mocks list and send "Send mocked request"
+        // to the real network. Mocking is in-process and needs no server, so it should not wait
+        // for one.
+        installMockRule()
         seedSampleData(applicationContext)
 
         setContent {
@@ -423,7 +428,7 @@ class MainActivity : ComponentActivity() {
             if (state is DevConsoleState.Running) {
                 endpoint = DevConsole.endpoint()
                 // Re-seed on every Running transition (first start AND every restart) -- see the
-                // comment in onCreate for why a one-shot install at init isn't enough.
+                // comment in onCreate for why the install there isn't enough on its own.
                 installMockRule()
                 // Poll while running so either access mode updates the displayed URL after a restart;
                 // SESSION_CODE also re-issues the code after a browser consumes it.

@@ -2,7 +2,10 @@
  * @author Shakib
  * @since 05/08/26
  */
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+)
 @file:Suppress("FunctionNaming", "MagicNumber", "TooManyFunctions", "UnusedPrivateMember", "MatchingDeclarationName")
 
 package io.devconsole.ui.compose
@@ -11,20 +14,30 @@ import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,7 +50,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -51,6 +69,53 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import java.util.Locale
+
+/**
+ * The response body field's own state -- find query, stepped match, caret and the last FORMAT
+ * error -- hoisted out of the field so the inline field and the full-screen editor are two views
+ * of one editing session. Rendering the full-screen editor composes a second field; without this
+ * the query you typed and the match you stepped to would reset the moment you expanded.
+ *
+ * The body text itself is deliberately NOT here: it lives in [MockRuleFormFields] as the form's
+ * single source of truth, so an edit made full-screen is already in the rule when you collapse.
+ */
+@androidx.compose.runtime.Stable
+internal class MockRuleBodyEditorState {
+    var fullScreen by mutableStateOf(false)
+    var searchExpanded by mutableStateOf(false)
+    var query by mutableStateOf("")
+    var activeIndex by mutableStateOf(0)
+    var selection by mutableStateOf(TextRange.Zero)
+    var formatError by mutableStateOf<String?>(null)
+
+    /**
+     * Whether the body field currently holds focus, which is what reveals the DONE pill. Not
+     * saved: focus is restored by the field itself after a configuration change, and a stale
+     * `true` would show a pill for a keyboard that is not up.
+     */
+    var bodyFocused by mutableStateOf(false)
+}
+
+/**
+ * Only the three flags a rotation should survive are saved. The caret and the format error are
+ * derived from text that is itself restored, and a stale offset into a rebuilt body is worse than
+ * starting from the top.
+ */
+private val MockRuleBodyEditorStateSaver: Saver<MockRuleBodyEditorState, Any> =
+    listSaver(
+        save = { listOf(it.fullScreen, it.searchExpanded, it.query) },
+        restore = { saved ->
+            MockRuleBodyEditorState().apply {
+                fullScreen = saved[0] as Boolean
+                searchExpanded = saved[1] as Boolean
+                query = saved[2] as String
+            }
+        },
+    )
+
+@Composable
+internal fun rememberMockRuleBodyEditorState(): MockRuleBodyEditorState =
+    rememberSaveable(saver = MockRuleBodyEditorStateSaver) { MockRuleBodyEditorState() }
 
 /**
  * Which rule the create/edit sheet is showing; [InspectorMockRuleUi.id] is disabled for [Edit].
@@ -185,7 +250,15 @@ internal fun MockRuleEditorScreen(
     // pushed status/body off-screen. A blank rule opens expanded: nothing to hide, and the field is
     // where a new rule's Content-Type gets typed.
     var headersExpanded by rememberSaveable(target.formSourceKey()) { mutableStateOf(initial.headers.isEmpty()) }
+    // Owned here, not in the body field: the full-screen editor has to render outside the
+    // scaffold's scrolling column (inside it, a fillMaxSize Surface would be clipped to the
+    // column's own bounds and scroll with the form), so the flag that opens it has to live where
+    // that sibling can be composed.
+    val bodyState = rememberMockRuleBodyEditorState()
+    val keyboardOpen = WindowInsets.isImeVisible
 
+    // The editor's own back gesture closes the full-screen body first; the overlay installs its
+    // own BackHandler while it is open, so this one only ever sees the form.
     BackHandler(onBack = onCancel)
 
     InspectorDetailScaffold(
@@ -198,25 +271,34 @@ internal fun MockRuleEditorScreen(
                 colors = colors,
             )
         },
-        footer = {
-            Column {
-                // Save is never a silent no-op: the delay field lives inside the collapsed
-                // Advanced expander, so a delay-only error would otherwise be invisible at the
-                // point of interaction (the footer is pinned while content scrolls).
-                if (showErrors && !errors.isValid) {
-                    MockRuleSaveErrorSummary(errors, colors)
+        // Null while the keyboard is up: pinned there the bar eats a third of what is left of the
+        // screen to offer Save at the one moment nobody is trying to save, and the field being
+        // typed into gets that much less room. Dismissing the keyboard (the Done key on every
+        // single-line field, or back) brings it straight back.
+        footer =
+            if (keyboardOpen) {
+                null
+            } else {
+                {
+                    Column {
+                        // Save is never a silent no-op: the delay field lives inside the collapsed
+                        // Advanced expander, so a delay-only error would otherwise be invisible at
+                        // the point of interaction (the footer is pinned while content scrolls).
+                        if (showErrors && !errors.isValid) {
+                            MockRuleSaveErrorSummary(errors, colors)
+                        }
+                        MockRuleEditorFooter(
+                            colors = colors,
+                            onCancel = onCancel,
+                            onSaveClick = {
+                                showErrors = true
+                                if (errors.delay != null) advancedExpanded = true
+                                if (errors.isValid) onSave(form.toMockRule(initial))
+                            },
+                        )
+                    }
                 }
-                MockRuleEditorFooter(
-                    colors = colors,
-                    onCancel = onCancel,
-                    onSaveClick = {
-                        showErrors = true
-                        if (errors.delay != null) advancedExpanded = true
-                        if (errors.isValid) onSave(form.toMockRule(initial))
-                    },
-                )
-            }
-        },
+            },
     ) {
         MockRuleEditorPrimaryFields(form, colors, isNew, errors, showErrors)
         MockRuleEditorBodyFields(
@@ -227,8 +309,20 @@ internal fun MockRuleEditorScreen(
             advancedExpanded = advancedExpanded,
             onAdvancedExpandedChange = { advancedExpanded = it },
             prefillNote = (target as? MockRuleEditorTarget.New)?.prefillNote,
+            bodyState = bodyState,
             headersExpanded = headersExpanded,
             onHeadersExpandedChange = { headersExpanded = it },
+        )
+    }
+    // Sibling of the scaffold, not a child: it covers the form while open, and the form keeps its
+    // scroll position and every other field's state underneath.
+    if (bodyState.fullScreen) {
+        MockRuleBodyFullScreenEditor(
+            value = form.bodyText.value,
+            onValueChange = { form.bodyText.value = it },
+            colors = colors,
+            state = bodyState,
+            onDismiss = { bodyState.fullScreen = false },
         )
     }
 }
@@ -341,6 +435,7 @@ private fun MockRuleEditorBodyFields(
     prefillNote: String?,
     headersExpanded: Boolean,
     onHeadersExpandedChange: (Boolean) -> Unit,
+    bodyState: MockRuleBodyEditorState,
 ) {
     MockRuleHeadersSection(
         form = form,
@@ -352,6 +447,7 @@ private fun MockRuleEditorBodyFields(
         value = form.bodyText.value,
         onValueChange = { form.bodyText.value = it },
         colors = colors,
+        state = bodyState,
     )
     if (prefillNote != null) {
         WarnNote(prefillNote, modifier = Modifier.padding(bottom = 16.dp))
@@ -438,6 +534,13 @@ private fun MockRuleEditorHeader(
             androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
                 containerColor = Color.Transparent,
             ),
+        // The workspace Scaffold already pads its content by the status-bar inset, and this editor
+        // renders inside that padding -- TopAppBar's default windowInsets would add it a second
+        // time, which is the blank strip above the title. Same zeroing InspectorTopArea does for
+        // every other screen's header.
+        windowInsets =
+            androidx.compose.foundation.layout
+                .WindowInsets(0.dp),
     )
 }
 
@@ -570,19 +673,112 @@ private fun MockRuleBodyField(
     value: String,
     onValueChange: (String) -> Unit,
     colors: DevConsoleColors,
+    state: MockRuleBodyEditorState,
 ) {
-    // Search state is this field's own business: nothing above it saves, validates or reads a query.
-    var searchExpanded by rememberSaveable { mutableStateOf(false) }
-    var query by rememberSaveable { mutableStateOf("") }
-    val matches = remember(value, query) { bodySearchMatches(value, query) }
+    MockRuleBodyEditor(
+        value = value,
+        onValueChange = onValueChange,
+        colors = colors,
+        state = state,
+        modifier = Modifier.padding(bottom = 16.dp),
+        expandLabel = "EXPAND",
+        expandDescription = "Edit response body full screen",
+        onToggleFullScreen = { state.fullScreen = true },
+    )
+}
+
+/**
+ * The response body, edited on its own screen.
+ *
+ * A mocked payload is routinely hundreds of lines, and inline the field is a 140dp window sitting
+ * under a sticky Save bar -- with the keyboard up, roughly one line of what you are typing is
+ * visible. This is the same editor given the whole viewport: same [state], same form-backed text,
+ * so it is a bigger window onto one editing session rather than a separate draft with its own
+ * save/discard semantics to get wrong. `imePadding` here (not in the caller) because this Surface
+ * covers the scaffold that would otherwise provide it.
+ */
+@Composable
+private fun MockRuleBodyFullScreenEditor(
+    value: String,
+    onValueChange: (String) -> Unit,
+    colors: DevConsoleColors,
+    state: MockRuleBodyEditorState,
+    onDismiss: () -> Unit,
+) {
+    BackHandler(onBack = onDismiss)
+    Surface(modifier = Modifier.fillMaxSize(), color = colors.ground) {
+        Column(modifier = Modifier.fillMaxSize().imePadding()) {
+            MockRuleEditorHeader(
+                title = "Response body",
+                subtitle = "Edits apply to the rule as you type",
+                onBack = onDismiss,
+                colors = colors,
+            )
+            MockRuleBodyEditor(
+                value = value,
+                onValueChange = onValueChange,
+                colors = colors,
+                state = state,
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 8.dp),
+                showLabel = false,
+                fillHeight = true,
+                expandLabel = "COLLAPSE",
+                expandDescription = "Return to the rule form",
+                onToggleFullScreen = onDismiss,
+            )
+            // Same rule as the form's own footer: while the keyboard is up the body gets the
+            // space, and "Done" would be offering to finish an edit still being typed. The body is
+            // multi-line, so its Enter key inserts a newline rather than confirming -- dismissing
+            // the keyboard is back (or the toolbar's own key), and the bar returns with it.
+            if (!WindowInsets.isImeVisible) {
+                InspectorDetailFooterBar(
+                    listOf(
+                        InspectorFooterAction(
+                            label = "Done",
+                            onClick = onDismiss,
+                            weight = 1f,
+                            supportingText = "Edits are already in the rule",
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Response body editor: a non-blocking JSON Format action, a FIND toggle that reveals a key search
+ * (matching keys get the same wash the read-only viewer uses, with the count in the search field),
+ * and an expand/collapse action. Collapsed search by default -- most rules are small enough to
+ * read.
+ *
+ * Rendered twice against one [state]: inline in the form ([fillHeight] false, so the field keeps a
+ * 140dp floor inside the scrolling column) and full screen ([fillHeight] true, so it takes the
+ * viewport that is left). Everything that is per-session -- query, stepped match, caret, format
+ * error -- lives in [state] rather than here, so switching between the two keeps it.
+ */
+@Suppress("LongParameterList") // Two renderings of one editor; each difference is its own flag.
+@Composable
+private fun MockRuleBodyEditor(
+    value: String,
+    onValueChange: (String) -> Unit,
+    colors: DevConsoleColors,
+    state: MockRuleBodyEditorState,
+    expandLabel: String,
+    expandDescription: String,
+    onToggleFullScreen: () -> Unit,
+    modifier: Modifier = Modifier,
+    showLabel: Boolean = true,
+    fillHeight: Boolean = false,
+) {
+    val matches = remember(value, state.query) { bodySearchMatches(value, state.query) }
     // Editing the body or the query re-keys this, so the arrows always restart from the first hit
     // rather than pointing at an ordinal that no longer means the same match.
-    var activeIndex by remember(matches) { mutableStateOf(0) }
-    // The caret lives here (not in the form) because only the arrows need to move it. Coerced on
-    // read: FORMAT rewrites the body underneath us, which can leave a stale range past its end.
-    var selection by remember { mutableStateOf(TextRange.Zero) }
-    val activeMatch = matches.getOrNull(activeIndex)
-    val fieldValue = TextFieldValue(text = value, selection = selection.within(value.length))
+    LaunchedEffect(matches) { state.activeIndex = 0 }
+    val activeMatch = matches.getOrNull(state.activeIndex)
+    // Coerced on read: FORMAT rewrites the body underneath us, which can leave a stale range past
+    // its end.
+    val fieldValue = TextFieldValue(text = value, selection = state.selection.within(value.length))
 
     // Scroll-to-match without focus: a FocusRequester would work too, but focusing a text field
     // summons the keyboard (hide() loses the race against the IME's own show), which both covers the
@@ -590,13 +786,12 @@ private fun MockRuleBodyField(
     val bringMatchIntoView = remember { BringIntoViewRequester() }
     var bodyTextLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val scope = rememberCoroutineScope()
-
-    // Lives here rather than in the parent so FORMAT can share the caret and scroll the arrows use.
-    var formatError by remember { mutableStateOf<String?>(null) }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
 
     fun revealOffset(offset: Int) {
         val at = offset.coerceIn(0, (value.length - 1).coerceAtLeast(0))
-        selection = TextRange(at, (at + 1).coerceAtMost(value.length))
+        state.selection = TextRange(at, (at + 1).coerceAtMost(value.length))
         val layout = bodyTextLayout ?: return
         scope.launch { bringMatchIntoView.bringIntoView(layout.getBoundingBox(at)) }
     }
@@ -604,10 +799,10 @@ private fun MockRuleBodyField(
     // Wraps in both directions -- "next" off the last hit lands on the first, same as any find bar.
     fun jumpToMatch(step: Int) {
         if (matches.isEmpty()) return
-        val next = (activeIndex + step).mod(matches.size)
-        activeIndex = next
+        val next = (state.activeIndex + step).mod(matches.size)
+        state.activeIndex = next
         revealOffset(matches[next].first)
-        selection = TextRange(matches[next].first, matches[next].last + 1)
+        state.selection = TextRange(matches[next].first, matches[next].last + 1)
     }
 
     // Re-indenting valid-but-mangled JSON is the whole job here. Broken JSON can't be reformatted --
@@ -617,25 +812,25 @@ private fun MockRuleBodyField(
         when (val result = formatMockRuleBodyJson(value)) {
             is JsonFormatResult.Formatted -> {
                 onValueChange(result.text)
-                formatError = null
+                state.formatError = null
             }
             is JsonFormatResult.Error -> {
-                formatError = "Not valid JSON: ${result.message}"
+                state.formatError = "Not valid JSON: ${result.message}"
                 revealOffset(result.offset)
             }
         }
     }
 
-    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+    Column(modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MockRuleFieldLabel("Response body", colors)
+            if (showLabel) MockRuleFieldLabel("Response body", colors)
             MockRuleBodyActions(
                 colors = colors,
-                searchExpanded = searchExpanded,
+                searchExpanded = state.searchExpanded,
                 // Collapsing clears the query: a hidden find that still filters nothing but is
                 // secretly holding "aut" is a surprise waiting for the next time it opens. It also
                 // collapses the selection the arrows left behind -- otherwise the match you stepped
@@ -643,54 +838,48 @@ private fun MockRuleBodyField(
                 // search looks like it kept one hit selected for no reason. Caret stays where the
                 // match was, so typing carries on from there.
                 onToggleSearch = {
-                    searchExpanded = !searchExpanded
-                    if (!searchExpanded) {
-                        query = ""
-                        selection = TextRange(selection.start)
+                    state.searchExpanded = !state.searchExpanded
+                    if (!state.searchExpanded) {
+                        state.query = ""
+                        state.selection = TextRange(state.selection.start)
                     }
                 },
                 onFormat = { formatBody() },
+                expandLabel = expandLabel,
+                expandDescription = expandDescription,
+                onToggleFullScreen = onToggleFullScreen,
+                showDone = state.bodyFocused,
+                // Focus goes first: dropping it is what hides this pill and brings the Save bar
+                // back, and hide() alone would leave a focused field with no keyboard.
+                onDone = {
+                    focusManager.clearFocus()
+                    keyboard?.hide()
+                },
             )
         }
-        if (searchExpanded) {
+        if (state.searchExpanded) {
             MockRuleBodySearchRow(
-                query = query,
-                onQueryChange = { query = it },
-                activeIndex = activeIndex,
+                query = state.query,
+                onQueryChange = { state.query = it },
+                activeIndex = state.activeIndex,
                 matchCount = matches.size,
                 colors = colors,
                 onStep = ::jumpToMatch,
             )
         }
-        val bodyDescription = if (formatError != null) "Response body, error: $formatError" else "Response body"
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 140.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(colors.codeBg)
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .semantics(mergeDescendants = true) { contentDescription = bodyDescription },
-        ) {
-            InspectorMultilineTextField(
-                fieldValue,
-                { edited ->
-                    selection = edited.selection
-                    if (edited.text != value) {
-                        formatError = null
-                        onValueChange(edited.text)
-                    }
-                },
-                "{ }",
-                colors.ink,
-                colors.text3,
-                modifier = Modifier.bringIntoViewRequester(bringMatchIntoView),
-                onTextLayout = { bodyTextLayout = it },
-                visualTransformation = rememberJsonSyntaxTransformation(colors, query, activeMatch),
-            )
-        }
-        formatError?.let { message ->
+        MockRuleBodyTextArea(
+            value = value,
+            onValueChange = onValueChange,
+            fieldValue = fieldValue,
+            colors = colors,
+            state = state,
+            activeMatch = activeMatch,
+            bringMatchIntoView = bringMatchIntoView,
+            onTextLayout = { bodyTextLayout = it },
+            modifier = if (fillHeight) Modifier.weight(1f) else Modifier.heightIn(min = 140.dp),
+            fillHeight = fillHeight,
+        )
+        state.formatError?.let { message ->
             Text(
                 message,
                 color = colors.warn,
@@ -698,6 +887,79 @@ private fun MockRuleBodyField(
                 modifier = Modifier.padding(top = 4.dp, start = 4.dp),
             )
         }
+    }
+}
+
+/**
+ * The code-styled box the body is typed into. Extracted from [MockRuleBodyEditor] so that
+ * composable stays under detekt's complexity budget, and so the one real difference between the
+ * inline and full-screen renderings -- who scrolls -- is stated in one place.
+ */
+@Suppress("LongParameterList") // Field plumbing (value, caret, highlight, layout) has no natural grouping.
+@Composable
+private fun MockRuleBodyTextArea(
+    value: String,
+    onValueChange: (String) -> Unit,
+    fieldValue: TextFieldValue,
+    colors: DevConsoleColors,
+    state: MockRuleBodyEditorState,
+    activeMatch: IntRange?,
+    bringMatchIntoView: BringIntoViewRequester,
+    onTextLayout: (TextLayoutResult) -> Unit,
+    modifier: Modifier = Modifier,
+    fillHeight: Boolean = false,
+) {
+    val bodyDescription = state.formatError?.let { "Response body, error: $it" } ?: "Response body"
+    // Full screen the field owns the box, so it has to scroll its own overflow; inline it is the
+    // scaffold's column that scrolls, and a nested scroller there would trap the gesture.
+    val fieldModifier =
+        if (fillHeight) {
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+        } else {
+            Modifier
+        }
+    // A BasicTextField is only as tall as its text, and sizing it to the box cannot fix that: the
+    // box has a minimum height and no maximum, so fillMaxSize has nothing bounded to fill. Tapping
+    // the empty space under a one-line body therefore hit the box and focused nothing. Routing the
+    // box's own taps to the field makes the whole code-coloured area behave like the field it
+    // looks like. Taps that land on the text itself are consumed by the field first, so this never
+    // steals caret placement.
+    val fieldFocus = remember { FocusRequester() }
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(colors.codeBg)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    // No ripple: this is a text field's dead space, not a button.
+                    indication = null,
+                    onClick = { fieldFocus.requestFocus() },
+                ).padding(horizontal = 16.dp, vertical = 12.dp)
+                .semantics(mergeDescendants = true) { contentDescription = bodyDescription },
+    ) {
+        InspectorMultilineTextField(
+            fieldValue,
+            { edited ->
+                state.selection = edited.selection
+                if (edited.text != value) {
+                    state.formatError = null
+                    onValueChange(edited.text)
+                }
+            },
+            "{ }",
+            colors.ink,
+            colors.text3,
+            modifier =
+                Modifier
+                    .focusRequester(fieldFocus)
+                    .bringIntoViewRequester(bringMatchIntoView)
+                    .onFocusChanged { state.bodyFocused = it.isFocused }
+                    .then(fieldModifier),
+            onTextLayout = onTextLayout,
+            visualTransformation = rememberJsonSyntaxTransformation(colors, state.query, activeMatch),
+        )
     }
 }
 
@@ -726,15 +988,31 @@ private fun MockRuleBodySearchRow(
 /** Keeps a caret from pointing past the end of a body that FORMAT just rewrote shorter. */
 private fun TextRange.within(length: Int): TextRange = TextRange(start.coerceIn(0, length), end.coerceIn(0, length))
 
-/** The body field's FIND (filled while open) and FORMAT pills. */
+/**
+ * FIND / FORMAT / EXPAND, plus a DONE pill while the body holds focus.
+ *
+ * DONE exists because the body is multi-line: its Enter key inserts a newline (JSON needs it), so
+ * unlike every single-line field here it cannot carry `ImeAction.Done`. Without this the only way
+ * back from the keyboard is the system's own hide key, which is a different shape on every OEM and
+ * absent on gesture-nav setups -- and the Save bar stays hidden until the keyboard goes.
+ *
+ * [FlowRow] rather than [Row]: four pills plus the "Response body" label is close to the full width
+ * on a 1080px phone, so they wrap instead of clipping on anything narrower.
+ */
+@Suppress("LongParameterList") // Four pills, each with its own label/description/handler.
 @Composable
 private fun MockRuleBodyActions(
     colors: DevConsoleColors,
     searchExpanded: Boolean,
     onToggleSearch: () -> Unit,
     onFormat: () -> Unit,
+    expandLabel: String,
+    expandDescription: String,
+    onToggleFullScreen: () -> Unit,
+    showDone: Boolean,
+    onDone: () -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         MockRuleBodyAction(
             label = "FIND",
             color = if (searchExpanded) colors.signalInk else colors.signal,
@@ -749,6 +1027,22 @@ private fun MockRuleBodyActions(
             description = "Format response body as JSON",
             onClick = onFormat,
         )
+        MockRuleBodyAction(
+            label = expandLabel,
+            color = colors.muted,
+            container = colors.surface2,
+            description = expandDescription,
+            onClick = onToggleFullScreen,
+        )
+        if (showDone) {
+            MockRuleBodyAction(
+                label = "DONE",
+                color = colors.signalInk,
+                container = colors.signal,
+                description = "Finish editing the body and close the keyboard",
+                onClick = onDone,
+            )
+        }
     }
 }
 
