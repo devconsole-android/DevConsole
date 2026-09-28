@@ -58,13 +58,14 @@ private data class TrafficStats(
     val rowsNewestFirst: List<InspectorTransactionUi>,
 )
 
-private fun List<InspectorTransactionUi>.matchesTrafficSearch(query: String): List<InspectorTransactionUi> {
-    if (query.isEmpty()) return this
+private fun List<InspectorTransactionUi>.matchesTrafficSearch(search: String): List<InspectorTransactionUi> {
+    if (search.isEmpty()) return this
     return filter { tx ->
-        tx.path.lowercase(Locale.US).contains(query) ||
-            tx.host.lowercase(Locale.US).contains(query) ||
-            tx.requestPreview?.lowercase(Locale.US)?.contains(query) == true ||
-            tx.responsePreview?.lowercase(Locale.US)?.contains(query) == true
+        tx.path.lowercase(Locale.US).contains(search) ||
+            tx.queryString().lowercase(Locale.US).contains(search) ||
+            tx.host.lowercase(Locale.US).contains(search) ||
+            tx.requestPreview?.lowercase(Locale.US)?.contains(search) == true ||
+            tx.responsePreview?.lowercase(Locale.US)?.contains(search) == true
     }
 }
 
@@ -378,8 +379,13 @@ private fun TrafficRow(
             leadText = methodLeadText(transaction.method),
             leadColor = leadColor,
             leadContainerColor = leadBg,
-            title = transaction.path.substringBefore('?'),
-            titleMaxLines = 2,
+            // breakingAnywhere: without it the line breaker leaves the first line half empty and
+            // moves the whole query down (see the helper's own note).
+            title = transaction.pathWithQuery().breakingAnywhere(),
+            // Four lines, matching the web list's clamp: a path plus its query string routinely
+            // runs past two on a phone, and the part that gets cut is the query -- the very thing
+            // that tells two captures of the same endpoint apart.
+            titleMaxLines = 4,
             subtitle = "${transaction.host} · ${formatCaptureClockTime(transaction.startedAtEpochMs)}$mockedSuffix",
             trailValue = transaction.statusCode?.toString() ?: "ERR",
             trailValueColor = statusTint(transaction.statusCode, colors),

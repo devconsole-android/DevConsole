@@ -40,7 +40,7 @@ private fun frameToJsonSnippet(
         append("{\n")
         append("  \"direction\": ").append(frame.direction.jsonQuoted()).append(",\n")
         append("  \"frameType\": ").append(frame.frameType.jsonQuoted()).append(",\n")
-        append("  \"preview\": ").append(frame.preview.jsonQuotedOrNull()).append(",\n")
+        append("  \"preview\": ").append(frame.preview.jsonEmbeddedOrQuoted()).append(",\n")
         append("  \"timestampEpochMs\": ").append(frame.timestampEpochMs.toString()).append(",\n")
         append("  \"socketUrl\": ").append(socket.url.jsonQuoted()).append('\n')
         append('}')

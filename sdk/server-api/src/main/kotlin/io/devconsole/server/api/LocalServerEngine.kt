@@ -202,6 +202,7 @@ sealed interface SessionCodeExchangeResult {
  * host's `EditingCapabilities` flags instead of a session-level role. [SessionCodeAuthority] is the
  * sole way a session gets minted, via [createSession].
  */
+@Suppress("TooManyFunctions")
 class SessionAuthority(
     private val nowEpochMs: () -> Long = System::currentTimeMillis,
     private val sessionTtlMs: Long = DEFAULT_SESSION_TTL_MS,

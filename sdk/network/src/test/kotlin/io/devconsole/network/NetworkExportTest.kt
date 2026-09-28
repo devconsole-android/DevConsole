@@ -15,8 +15,8 @@ class NetworkExportTest {
                 NetworkRequestInput(
                     method = "POST",
                     url = "https://example.test/orders?access_token=query-secret",
-                    headers = mapOf("Authorization" to "Bearer header-secret"),
-                    body = "Bearer body-secret".encodeToByteArray(),
+                    headers = mapOf("Cookie" to "session=header-secret"),
+                    body = "{\"password\":\"body-secret\"}".encodeToByteArray(),
                     contentType = "application/json",
                 ),
                 NetworkResponseInput(statusCode = 201),
@@ -286,7 +286,7 @@ class NetworkExportTest {
                 NetworkRequestInput(
                     method = "POST",
                     url = "https://example.test/orders",
-                    headers = mapOf("Authorization" to "Bearer header-secret"),
+                    headers = mapOf("Cookie" to "session=header-secret"),
                     body = "{\"token\":\"body-secret\"}".encodeToByteArray(),
                     contentType = "application/json",
                 ),

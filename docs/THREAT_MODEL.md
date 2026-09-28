@@ -165,8 +165,8 @@ a remedy, not a proof of control.
 
 ## Redaction is an allowlist, and allowlists miss things
 
-`RedactionPolicy.default()` matches a fixed set of ~25 field names (case-insensitively) against
-header names, JSON keys, and form/query field names, plus one regex for `Bearer <token>` text. See
+`RedactionPolicy.default()` matches a set of sensitive field names (case-insensitively) against
+header names, JSON keys, and form/query field names. See
 [SECURITY_AND_REDACTION.md](SECURITY_AND_REDACTION.md) for the exact list.
 
 Everything not on that list is transmitted and stored **verbatim**. In practice that means:

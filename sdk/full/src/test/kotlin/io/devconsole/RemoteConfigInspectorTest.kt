@@ -207,11 +207,18 @@ class RemoteConfigInspectorTest {
     }
 
     @Test
-    fun `a bearer token inside an ordinary value is still scrubbed`() {
-        val entries = redactingBoundary().apply(listOf(entry("welcome_banner", "Bearer abc123def")))
+    fun `a secret inside an ordinary value is still scrubbed when policy specifies pattern`() {
+        val policy =
+            RedactionPolicy(
+                sensitiveFieldNames = emptySet(),
+                textPatterns = listOf(Regex("secret-[0-9]+")),
+            )
+        val entries =
+            RedactingRemoteConfig(RedactionEngine(policy), policy)
+                .apply(listOf(entry("welcome_banner", "secret-12345")))
 
         assertTrue(entries.single().redacted)
-        assertFalse(entries.single().value.contains("abc123def"))
+        assertFalse(entries.single().value.contains("secret-12345"))
     }
 
     @Test

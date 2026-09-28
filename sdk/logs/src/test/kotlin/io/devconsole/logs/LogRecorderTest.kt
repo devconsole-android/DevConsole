@@ -15,13 +15,13 @@ class LogRecorderTest {
     @Test
     fun `records a redacted entry`() {
         LogRecorder(redaction, sink, nowEpochMs = { 42L })
-            .record(LogLevel.INFO, "Checkout", "calling with Authorization: Bearer abc123def")
+            .record(LogLevel.INFO, "Checkout", "password=abc123def")
 
         val entry = emitted.single()
         assertEquals(LogLevel.INFO, entry.level)
         assertEquals("Checkout", entry.tag)
         assertEquals(42L, entry.timestampEpochMs)
-        assertTrue("expected the bearer token to be redacted, got: ${entry.message}", "abc123def" !in entry.message)
+        assertTrue("expected the password to be redacted, got: ${entry.message}", "abc123def" !in entry.message)
         assertNull(entry.stackTrace)
     }
 

@@ -188,7 +188,7 @@ class FeatureFlagAndExportBundleRoutesTest {
                             NetworkRequestInput(
                                 "GET",
                                 "https://api.test/orders",
-                                headers = mapOf("Authorization" to "Bearer super-secret-token"),
+                                headers = mapOf("Cookie" to "session=super-secret-token"),
                             ),
                             NetworkResponseInput(200),
                         ),
@@ -196,7 +196,7 @@ class FeatureFlagAndExportBundleRoutesTest {
             )
             application {
                 // redactionPolicy defaults to RedactionPolicy.default(), which masks the
-                // Authorization header the permissive capture-time policy above let through.
+                // Cookie header the permissive capture-time policy above let through.
                 devConsoleModule(sessions, sessionCodes) {
                     this.networkTransactions = networkStore
                 }

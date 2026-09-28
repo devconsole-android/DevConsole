@@ -18,6 +18,50 @@ before it can reach a release. (There was briefly a separate `sdk:plugin-api` mo
 third-party plugin framework; it was removed before ever shipping — see Removed, below — so it never
 joined this list.)
 
+## Unreleased
+
+Nothing this plugin does should ever be the reason a release cannot be built. Everything below comes
+from one release APK build that the plugin stopped for reasons that had nothing to do with whether
+the DevConsole runtime leaked.
+
+### Fixed
+
+- **A release APK build no longer builds an app bundle nobody asked for — or fails trying.** The
+  packaged-artifact scan named `SingleArtifact.APK` and `SingleArtifact.BUNDLE` on one task and hung
+  it off `assemble<Variant>`, so every release APK build also ran `package<Variant>Bundle`,
+  `sign<Variant>Bundle` and `produce<Variant>BundleIdeListingFile`. From Android Studio's "Generate
+  Signed APK" wizard that was fatal: the wizard passes `-Pandroid.injected.apk.location`, which puts
+  AGP's final AAB path *inside* `package<Variant>`'s output directory, and Gradle then rejects
+  `produce<Variant>BundleIdeListingFile` for consuming that directory without declaring a dependency
+  on `package<Variant>`. The scan is now one task per packaging format —
+  `verify<Variant>DevConsolePackagedArtifact` for the APK/AAR on the assemble path, and a new
+  `verify<Variant>DevConsolePackagedBundle` for the AAB on the bundle path — so the plugin only ever
+  asks for artifacts the build was already going to produce.
+- **A truncated read is no longer reported as a leak.** An entry too large to read to the end was
+  recorded as a `scan-limit-exceeded` violation, which failed release builds over the size of R8's
+  mapping file. Not finishing a read says nothing about what shipped: it is now a warning and an
+  `unscannable` list in the JSON report, and never fails a build on its own.
+- **App-bundle build metadata is left out of the scan.** `BUNDLE-METADATA/` holds R8's `proguard.map`
+  and the dependency manifest; Play strips it, so nothing under it can carry DevConsole onto a
+  device. Reading it was the trigger for the false positive above, and the mapping file names every
+  class the build ever saw.
+- **A missing or unreadable package is a warning, not a failed build.** Scanning an artifact the
+  build never produced threw `FileNotFoundException` out of the task. Whatever leaves an expected
+  artifact missing is a task-graph or environment problem, and must not stop a release.
+- **Path-based detection now works inside app bundles.** An APK carries the dashboard at
+  `assets/devconsole-web/`, but a bundle nests every module under its own directory and carries it at
+  `base/assets/devconsole-web/`. Prefix matching was anchored at the start of the entry name, so it
+  matched in APKs and silently never matched in AABs — a gap that stayed hidden only while one task
+  scanned both formats and the APK caught the leak first.
+
+### Added
+
+- **`devConsole.verificationEnabled`**, also settable as `-Pdevconsole.verification.enabled=false`.
+  Takes verification off `assemble`/`bundle` so a build can always get out the door, warning loudly
+  every time and leaving `verifyDevConsoleProtectedArtifacts` runnable by name. A plugin that can
+  block a release needs a way past it that does not involve editing build files — the signing wizard
+  has no command line. Turning it off does not make a release safe to ship; it makes it unverified.
+
 ## 1.3.1 — 2026-08-24
 
 ### Changed

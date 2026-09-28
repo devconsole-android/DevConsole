@@ -12,6 +12,69 @@ class InspectorDataSourceTest {
         DevConsoleInspectorBridge.reset()
     }
 
+    /**
+     * The joiners are what stop Android's line breaker from taking a break at the URL punctuation
+     * and leaving the rest of that line unused; they are zero-width, so stripping them back out
+     * has to return the original string exactly.
+     */
+    @Test
+    fun `breakingAnywhere suppresses url break opportunities without changing the visible text`() {
+        val url = "/todos/1?user_id=9912837&request_id=7f3c9a12-55de"
+        val joined = url.breakingAnywhere()
+
+        assertTrue(joined.contains('\u2060'))
+        assertEquals(url, joined.replace("\u2060", ""))
+        // Every break character carries a joiner, and nothing else does.
+        val breakChars = "/?&=.-_,;:+%~@".toSet()
+        assertEquals(url.count { it in breakChars }, joined.count { it == '\u2060' })
+    }
+
+    @Test
+    fun `breakingAnywhere leaves a plain path and an empty string untouched`() {
+        assertEquals("", "".breakingAnywhere())
+        assertEquals("orders", "orders".breakingAnywhere())
+    }
+
+    /**
+     * A traffic row that printed `path` alone rendered `/orders?status=open` and `/orders?status=all`
+     * as two identical lines. The query rides along from `url`, and `path` stays bare.
+     */
+    @Test
+    fun `pathWithQuery appends the query a transaction's url carries`() {
+        val transaction =
+            InspectorTransactionUi(
+                id = "tx-1",
+                method = "GET",
+                host = "api.example.test",
+                path = "/orders",
+                statusCode = 200,
+                durationMs = 42,
+                url = "https://api.example.test/orders?status=open&page=2",
+            )
+
+        assertEquals("status=open&page=2", transaction.queryString())
+        assertEquals("/orders?status=open&page=2", transaction.pathWithQuery())
+    }
+
+    @Test
+    fun `pathWithQuery is the bare path for a query-less capture and for a url-less adapter`() {
+        val noQuery =
+            InspectorTransactionUi(
+                id = "tx-1",
+                method = "GET",
+                host = "api.example.test",
+                path = "/orders",
+                statusCode = 200,
+                durationMs = 42,
+                url = "https://api.example.test/orders",
+            )
+        val noUrl = noQuery.copy(url = "")
+
+        assertEquals("", noQuery.queryString())
+        assertEquals("/orders", noQuery.pathWithQuery())
+        assertEquals("/orders", noUrl.pathWithQuery())
+    }
+
     @Test
     fun `bridge is safely unavailable before full runtime installation`() {
         val snapshot = DevConsoleInspectorBridge.source().snapshot()

@@ -571,6 +571,7 @@ public final class io/devconsole/network/NetworkUrl {
 	public final fun getHost ()Ljava/lang/String;
 	public final fun getPath ()Ljava/lang/String;
 	public final fun getQuery ()Ljava/util/Map;
+	public final fun getQueryString ()Ljava/lang/String;
 	public final fun getScheme ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;

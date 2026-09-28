@@ -5347,7 +5347,9 @@ private fun NetworkTransaction.summaryJson(): String {
         "\"completedAtEpochMs\":${completedAtEpochMs ?: "null"},\"durationMs\":${durationMs ?: "null"}," +
         "\"method\":\"${capture.request.method.escapeJson()}\"," +
         "\"host\":\"${capture.request.url.host.escapeJson()}\"," +
-        "\"path\":\"${capture.request.url.path.escapeJson()}\",\"status\":${capture.response?.statusCode ?: "null"}," +
+        "\"path\":\"${capture.request.url.path.escapeJson()}\"," +
+        "\"query\":\"${capture.request.url.queryString.escapeJson()}\"," +
+        "\"status\":${capture.response?.statusCode ?: "null"}," +
         "\"contentType\":\"$contentType\"," +
         "\"error\":$error,\"tags\":$tags,\"correlationId\":$correlationId}"
 }

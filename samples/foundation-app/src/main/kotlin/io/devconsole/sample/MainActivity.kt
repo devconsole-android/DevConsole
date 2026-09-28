@@ -332,7 +332,12 @@ class MainActivity : Activity() {
                 val url = connectUrl ?: return@setOnClickListener
                 val clipboard = getSystemService(ClipboardManager::class.java)
                 clipboard.setPrimaryClip(ClipData.newPlainText("DevConsole dashboard URL", url))
-                val message = if (url.contains("#code=")) "Session code copied -- keep it private" else "Dashboard URL copied"
+                val message =
+                    if (url.contains("#code=")) {
+                        "Session code copied -- keep it private"
+                    } else {
+                        "Dashboard URL copied"
+                    }
                 Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
             }
         }
@@ -501,7 +506,7 @@ class MainActivity : Activity() {
                     "No session code is required in the default open mode. Use SESSION_CODE before sharing " +
                     "a LAN-bound dashboard on an untrusted network.\n\n"
             } +
-            "This debugging session uses local-network HTTP. Other participants on an untrusted network " +
+                "This debugging session uses local-network HTTP. Other participants on an untrusted network " +
                 "may observe or modify traffic. Use ADB localhost mode or a trusted isolated network " +
                 "for sensitive testing."
         statusView.text = message

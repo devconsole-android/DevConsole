@@ -23,7 +23,7 @@ class EventExportWriterTest {
                     ExportRequest(
                         sessionId = "session-1",
                         destination = destination,
-                        events = listOf(event(summary = "request Bearer export-secret")),
+                        events = listOf(event(summary = "password=export-secret")),
                     ),
                 )
 
@@ -122,7 +122,7 @@ class EventExportWriterTest {
                         "event-1" to
                             TimelineAnnotation(
                                 bookmarked = true,
-                                note = "Authorization: Bearer note-secret",
+                                note = "password=note-secret",
                             ),
                     ),
                 )
@@ -131,7 +131,7 @@ class EventExportWriterTest {
             ZipFile(destination).use { zip ->
                 val timeline = zip.getInputStream(zip.getEntry("timeline.jsonl")).bufferedReader().readText()
                 assertTrue(timeline.contains("\"bookmarked\":true"))
-                assertTrue(timeline.contains("\"note\":\"Authorization: <redacted>\""))
+                assertTrue(timeline.contains("\"note\":\"password=<redacted>\""))
                 assertFalse(timeline.contains("note-secret"))
             }
         } finally {
@@ -316,7 +316,7 @@ class EventExportWriterTest {
             val request =
                 evidenceRequest(destination).withEvidenceBundle(
                     baseEvidenceBundle().copy(
-                        reportMarkdown = "Summary: Authorization: Bearer report-secret",
+                        reportMarkdown = "password=report-secret",
                     ),
                 )
 

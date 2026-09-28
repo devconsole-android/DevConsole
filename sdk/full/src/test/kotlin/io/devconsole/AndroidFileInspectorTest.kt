@@ -50,7 +50,7 @@ class AndroidFileInspectorTest {
     @Test
     fun `preview redacts text file contents`() {
         File(application.filesDir, "secret.txt")
-            .writeText("authorization: Bearer sk-super-secret-value-1234567890")
+            .writeText("password=sk-super-secret-value-1234567890")
 
         val preview = inspector.preview("files", "secret.txt")
 

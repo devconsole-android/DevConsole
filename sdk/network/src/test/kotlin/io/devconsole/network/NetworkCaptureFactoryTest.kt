@@ -11,21 +11,22 @@ class NetworkCaptureFactoryTest {
     private val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
 
     @Test
-    fun `redacts headers query and textual body before producing capture`() {
+    fun `redacts headers query and textual body before producing capture while preserving authorization`() {
         val capture =
             factory.capture(
                 request =
                     NetworkRequestInput(
                         method = "POST",
                         url = "https://example.test/orders?access_token=raw-secret",
-                        headers = mapOf("Authorization" to "Bearer header-secret"),
-                        body = "Bearer body-secret".encodeToByteArray(),
+                        headers = mapOf("Authorization" to "Bearer header-token", "Cookie" to "session=header-secret"),
+                        body = "{\"password\":\"body-secret\"}".encodeToByteArray(),
                         contentType = "application/json",
                     ),
                 response = null,
             )
 
-        assertEquals("<redacted>", capture.request.headers.getValue("Authorization"))
+        assertEquals("Bearer header-token", capture.request.headers.getValue("Authorization"))
+        assertEquals("<redacted>", capture.request.headers.getValue("Cookie"))
         assertFalse(
             capture.request.url.display
                 .contains("raw-secret"),

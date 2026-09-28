@@ -44,14 +44,14 @@ class EventPipelineTest {
                     pluginId = "network",
                     type = "network.request",
                     severity = EventSeverity.INFO,
-                    summary = "Authorization: Bearer raw-token",
-                    tags = mapOf("Authorization" to "Bearer another-token", "route" to "/orders"),
+                    summary = "password=raw-token",
+                    tags = mapOf("Cookie" to "session=another-token", "route" to "/orders"),
                 ),
             )
 
             val event = pipeline.snapshot().single()
             assertFalse(event.summary.contains("raw-token"))
-            assertEquals("<redacted>", event.tags.getValue("Authorization"))
+            assertEquals("<redacted>", event.tags.getValue("Cookie"))
             assertEquals("/orders", event.tags.getValue("route"))
         }
 
