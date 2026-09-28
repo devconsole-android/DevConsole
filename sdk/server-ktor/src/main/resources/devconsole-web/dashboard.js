@@ -1484,31 +1484,110 @@
   // overlay clones the already-escaped .code-block markup rather than re-deriving it from data.
   // ================================================================
   let codeFullscreenOpenerEl = null;
-  // Only ever one focusable in this modal (the close button — the cloned .code-block markup
-  // carries no interactive elements), so the trap just keeps Tab/Shift+Tab pinned there instead
-  // of leaking out to the page underneath.
+  // The body a fullscreen view was opened for, so its Pretty/Raw toggle can rebuild either mode
+  // without reaching back into the pane underneath (which a re-render may have replaced).
+  let codeFullscreenBody = null;
+  // The raw block's markup, captured when the overlay opens. Raw mode clones what the pane is
+  // already showing rather than re-deriving it, so the two can never disagree.
+  let codeFullscreenRawHtml = '';
+  // The modal used to hold exactly one focusable (close), because it only ever showed cloned
+  // .code-block markup. A body opens with a Pretty/Raw toggle too, so the trap now cycles the
+  // real focusables instead of pinning Tab to one button.
   function codeFullscreenKeydown(e) {
     if (e.key !== 'Tab') return;
+    const focusables = [...$('codeFullscreenModal').querySelectorAll('button:not([hidden])')].filter(
+      (el) => el.offsetParent !== null,
+    );
+    if (!focusables.length) return;
     e.preventDefault();
-    $('codeFullscreenClose').focus();
+    const at = focusables.indexOf(document.activeElement);
+    const next = e.shiftKey ? at - 1 : at + 1;
+    focusables[(next + focusables.length) % focusables.length].focus();
   }
   function openCodeFullscreen(sourceBlock, title) {
     const overlay = $('codeFullscreenModal');
     if (!overlay || !sourceBlock) return;
     $('codeFullscreenTitle').textContent = title || 'JSON body';
+    codeFullscreenBody = null;
+    $('codeFullscreenSeg').hidden = true;
     // Clones the already-escaped markup rather than re-deriving it from data, so this cannot
     // disagree with what the page underneath is showing.
     $('codeFullscreenBody').innerHTML = `<div class="code-block code-block-lg">${sourceBlock.innerHTML}</div>`;
+    showCodeFullscreen(overlay);
+  }
+
+  /**
+   * Fullscreen for a body viewer, which unlike a plain code block has both renderings available:
+   * the collapsible tree and the raw text. The expand button used to hand the overlay the *raw*
+   * block unconditionally, so a body being read as a tree lost its structure — and its collapse
+   * arrows — at exactly the size where they matter most.
+   *
+   * `mode` is whatever the inline viewer was showing, so expanding enlarges what you were already
+   * reading instead of switching the view under you.
+   */
+  function openBodyFullscreen(mountKey, title, mode, rawBlock) {
+    const overlay = $('codeFullscreenModal');
+    const entry = pendingBodyViewers.get(mountKey);
+    if (!overlay || !entry) return;
+    $('codeFullscreenTitle').textContent = title || 'JSON body';
+    codeFullscreenBody = entry;
+    codeFullscreenRawHtml = rawBlock?.innerHTML || '';
+    // Raw is always available; Pretty only for something the tree can actually be built from.
+    const canPretty = entry.kind === 'json' || entry.kind === 'xml';
+    $('codeFullscreenSeg').hidden = !canPretty;
+    renderCodeFullscreenBody(canPretty ? mode || 'pretty' : 'raw');
+    showCodeFullscreen(overlay);
+  }
+
+  function showCodeFullscreen(overlay) {
     codeFullscreenOpenerEl = document.activeElement;
     overlay.hidden = false;
     document.addEventListener('keydown', codeFullscreenKeydown);
     $('codeFullscreenClose').focus();
+  }
+
+  /** Paints one mode into the overlay from `codeFullscreenBody`'s original raw text. */
+  function renderCodeFullscreenBody(mode) {
+    const entry = codeFullscreenBody;
+    const host = $('codeFullscreenBody');
+    if (!entry || !host) return;
+    $('codeFullscreenSeg')
+      .querySelectorAll('[data-fs-mode]')
+      .forEach((b) => b.classList.toggle('active', b.dataset.fsMode === mode));
+    host.innerHTML = '';
+    if (mode === 'raw') {
+      host.innerHTML = `<div class="code-block code-block-lg">${codeFullscreenRawHtml}</div>`;
+      return;
+    }
+    // Its own cache key ('fs:'): a cached tree is a live DOM node, and reusing the inline one
+    // would MOVE it out of the pane underneath, leaving that body blank once the overlay closes.
+    try {
+      const built = buildOrReuseBodyViewerTree('fs:' + entry.groupKey, entry.kind, entry.raw, entry.diffSig, () => {
+        if (entry.kind === 'xml') {
+          const pre = document.createElement('pre');
+          pre.className = 'body-viewer-xml';
+          pre.textContent = prettyPrintXml(entry.raw) ?? entry.raw;
+          return pre;
+        }
+        const w = document.createElement('div');
+        w.className = 'json-tree';
+        w.appendChild(jsonNode(JSON.parse(entry.raw), 0, entry.diffInfo));
+        return w;
+      });
+      host.appendChild(built);
+    } catch {
+      // Same fallback the inline mount makes: a body that no longer parses shows as its own text
+      // rather than an empty pane.
+      host.textContent = entry.raw;
+    }
   }
   function closeCodeFullscreen() {
     const overlay = $('codeFullscreenModal');
     if (!overlay || overlay.hidden) return;
     overlay.hidden = true;
     $('codeFullscreenBody').innerHTML = '';
+    codeFullscreenBody = null;
+    codeFullscreenRawHtml = '';
     document.removeEventListener('keydown', codeFullscreenKeydown);
     codeFullscreenOpenerEl?.focus?.();
     codeFullscreenOpenerEl = null;
@@ -7763,10 +7842,18 @@
         if (entry) copyToClipboard(entry.raw, 'Body');
         return;
       }
+      const fsModeBtn = e.target.closest('[data-fs-mode]');
+      if (fsModeBtn) {
+        renderCodeFullscreenBody(fsModeBtn.dataset.fsMode);
+        return;
+      }
       const fsBtn = e.target.closest('[data-body-fullscreen]');
       if (fsBtn) {
-        const rawBlock = fsBtn.closest('.body-viewer')?.querySelector('.body-viewer-raw .code-block');
-        openCodeFullscreen(rawBlock, fsBtn.dataset.bodyTitle);
+        const viewer = fsBtn.closest('.body-viewer');
+        const rawBlock = viewer?.querySelector('.body-viewer-raw .code-block');
+        // Open in whichever mode the pane is showing, so expanding never switches the view.
+        const mode = viewer?.querySelector('[data-body-mode].active')?.dataset.bodyMode || 'pretty';
+        openBodyFullscreen(fsBtn.dataset.bodyFullscreen, fsBtn.dataset.bodyTitle, mode, rawBlock);
         return;
       }
     });

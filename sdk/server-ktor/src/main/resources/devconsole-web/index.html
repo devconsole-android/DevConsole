@@ -739,6 +739,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <div class="modal modal-fullscreen" role="dialog" aria-modal="true" aria-labelledby="codeFullscreenTitle">
     <div class="modal-header">
       <span class="modal-title" id="codeFullscreenTitle">JSON body</span>
+      <!-- Shown only for a body that parses: a plain code block (mock preview, evidence step,
+           remote config value) has no tree to switch to, so the toggle stays hidden there. -->
+      <div class="seg body-viewer-seg" id="codeFullscreenSeg" role="group" aria-label="Body format" hidden>
+        <button type="button" class="active" data-fs-mode="pretty">Pretty</button>
+        <button type="button" data-fs-mode="raw">Raw</button>
+      </div>
       <button type="button" class="modal-close" id="codeFullscreenClose" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body modal-body-code" id="codeFullscreenBody"></div>
