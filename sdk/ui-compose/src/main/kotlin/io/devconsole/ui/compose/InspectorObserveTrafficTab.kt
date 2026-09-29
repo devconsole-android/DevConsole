@@ -379,8 +379,13 @@ private fun TrafficRow(
             leadText = methodLeadText(transaction.method),
             leadColor = leadColor,
             leadContainerColor = leadBg,
-            title = transaction.pathWithQuery(),
-            titleMaxLines = 2,
+            // breakingAnywhere: without it the line breaker leaves the first line half empty and
+            // moves the whole query down (see the helper's own note).
+            title = transaction.pathWithQuery().breakingAnywhere(),
+            // Four lines, matching the web list's clamp: a path plus its query string routinely
+            // runs past two on a phone, and the part that gets cut is the query -- the very thing
+            // that tells two captures of the same endpoint apart.
+            titleMaxLines = 4,
             subtitle = "${transaction.host} · ${formatCaptureClockTime(transaction.startedAtEpochMs)}$mockedSuffix",
             trailValue = transaction.statusCode?.toString() ?: "ERR",
             trailValueColor = statusTint(transaction.statusCode, colors),

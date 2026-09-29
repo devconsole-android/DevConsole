@@ -8,14 +8,19 @@ package io.devconsole.ui.compose
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,12 +44,26 @@ internal fun InspectorPlainTextField(
     modifier: Modifier = Modifier,
     fontSize: TextUnit = 14.sp,
 ) {
+    // A single-line field's Enter key does nothing by default, which on the mock editor left the
+    // keyboard covering the Save bar with no obvious way back. Done both commits the edit and
+    // drops focus, so the keyboard closes and the footer is reachable again. Only single-line
+    // fields get this: the body/header fields below need Enter to insert a newline.
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
         textStyle = TextStyle(color = textColor, fontSize = fontSize),
         singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions =
+            KeyboardActions(
+                onDone = {
+                    focusManager.clearFocus()
+                    keyboard?.hide()
+                },
+            ),
         cursorBrush = SolidColor(textColor),
         decorationBox = { innerTextField ->
             if (value.isEmpty()) {
