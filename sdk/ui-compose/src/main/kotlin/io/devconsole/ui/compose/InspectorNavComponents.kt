@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -49,6 +50,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -141,6 +143,8 @@ internal fun themeToggleTopAction(onToggleTheme: () -> Unit): InspectorTopAction
 internal data class InspectorTab(
     val label: String,
     val selected: Boolean,
+    /** A short count shown in a signal pill after [label], e.g. search matches on that tab. */
+    val badge: String? = null,
     val onClick: () -> Unit,
 )
 
@@ -209,13 +213,42 @@ internal fun InspectorTabRow(
                         .semantics(mergeDescendants = true) { selected = tab.selected },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    tab.label,
-                    color = labelColor,
-                    style = MaterialTheme.typography.titleSmall,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        tab.label,
+                        color = labelColor,
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    tab.badge?.let { badge -> TabBadge(badge) }
+                }
             }
         }
+    }
+}
+
+/** The signal count pill after a tab label -- solid, so a match count reads even on an unselected tab. */
+@Composable
+private fun TabBadge(text: String) {
+    val colors = DevConsoleTheme.colors
+    Box(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(50))
+                .background(colors.signal)
+                .padding(horizontal = 6.dp, vertical = 1.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            color = colors.signalInk,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
     }
 }
 

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -53,8 +54,12 @@ import androidx.compose.ui.unit.sp
  * [InspectorCodeBlock]): a Raw/Formatted toggle when formatting is available, a size-guard notice
  * when it isn't (body too large), and either the raw redaction-aware lines, a pretty-printed XML
  * code block, or -- for JSON -- the collapsible tree ([flattenJsonTree]). [onExpandFullScreen], when
- * given, shows the same top-right expand button [InspectorCodeBlock] does.
+ * given, shows the same top-right expand button [InspectorCodeBlock] does. [fillHeight] drops the
+ * inline height cap so the code fills whatever height [modifier] gives it -- the tabbed detail's
+ * body chip, which is the only thing on screen. The caller must then bound the height (no
+ * vertically scrolling parent).
  */
+@Suppress("LongParameterList") // Search, toggle and layout state are each set independently per call site.
 @Composable
 internal fun InspectorFormattableBody(
     body: InspectorDetailSectionBody.Formattable,
@@ -65,6 +70,7 @@ internal fun InspectorFormattableBody(
     searchMatches: List<InspectorDetailSearchMatch> = emptyList(),
     currentMatchOrdinal: Int? = null,
     onExpandFullScreen: (() -> Unit)? = null,
+    fillHeight: Boolean = false,
 ) {
     val colors = DevConsoleTheme.colors
     var localShowRaw by rememberSaveable(body.rawText) { mutableStateOf(body.formatted == null) }
@@ -100,8 +106,9 @@ internal fun InspectorFormattableBody(
                 // InspectorDetailEmptyText each apply themselves for a CollapsibleSection's content --
                 // FilterChipRow carries no inset of its own (its other callers sit inside a parent
                 // that already pads), so without this the chip row alone sat flush against the
-                // section/card edge while every sibling body stayed inset.
-                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                // section/card edge while every sibling body stayed inset. A filled body has no
+                // section around it: it lines up with the find field and code block above and below.
+                modifier = Modifier.padding(horizontal = if (fillHeight) 0.dp else 16.dp).padding(bottom = 8.dp),
             )
         }
         if (body.tooLarge) {
@@ -116,7 +123,7 @@ internal fun InspectorFormattableBody(
                 modifier = Modifier.padding(bottom = 8.dp),
             )
         }
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = if (fillHeight) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth()) {
             LazyColumn(
                 state = listState,
                 modifier =
@@ -124,7 +131,15 @@ internal fun InspectorFormattableBody(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(colors.codeBg)
-                        .heightIn(max = InlineCodeBlockMaxHeight)
+                        .then(
+                            if (fillHeight) {
+                                Modifier.fillMaxHeight()
+                            } else {
+                                Modifier.heightIn(
+                                    max = InlineCodeBlockMaxHeight,
+                                )
+                            },
+                        )
                         // Same known tradeoff as InspectorCodeBlock's own horizontalScroll: a
                         // LazyColumn only measures composed rows, so the scrollable width can
                         // under-report and jump as wider not-yet-composed rows virtualize in --

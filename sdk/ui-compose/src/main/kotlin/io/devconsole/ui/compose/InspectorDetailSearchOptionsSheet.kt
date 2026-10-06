@@ -51,6 +51,8 @@ internal fun InspectorDetailSearchOptionsSheet(
     mode: InspectorSearchMode,
     onDismiss: () -> Unit,
     onApply: (Set<String>, InspectorSearchMode) -> Unit,
+    /** False on a tabbed detail, where the tab and chip on screen already scope the search. */
+    showSectionPicker: Boolean = true,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -64,6 +66,7 @@ internal fun InspectorDetailSearchOptionsSheet(
             mode = mode,
             onDismiss = onDismiss,
             onApply = onApply,
+            showSectionPicker = showSectionPicker,
         )
     }
 }
@@ -77,6 +80,7 @@ private fun InspectorDetailSearchOptionsSheetContent(
     onDismiss: () -> Unit,
     onApply: (Set<String>, InspectorSearchMode) -> Unit,
     modifier: Modifier = Modifier,
+    showSectionPicker: Boolean = true,
 ) {
     var draftSectionKeys by remember(selectedSectionKeys) { mutableStateOf(selectedSectionKeys) }
     var draftMode by remember(mode) { mutableStateOf(mode) }
@@ -89,7 +93,7 @@ private fun InspectorDetailSearchOptionsSheetContent(
                 .navigationBarsPadding(),
     ) {
         SearchOptionsHeader(
-            applyEnabled = draftSectionKeys.isNotEmpty(),
+            applyEnabled = !showSectionPicker || draftSectionKeys.isNotEmpty(),
             onDismiss = onDismiss,
             onApply = { onApply(draftSectionKeys, draftMode) },
         )
@@ -103,11 +107,13 @@ private fun InspectorDetailSearchOptionsSheetContent(
                     .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            SearchSectionPicker(
-                sections = options.sections,
-                selectedKeys = draftSectionKeys,
-                onSelectionChange = { draftSectionKeys = it },
-            )
+            if (showSectionPicker) {
+                SearchSectionPicker(
+                    sections = options.sections,
+                    selectedKeys = draftSectionKeys,
+                    onSelectionChange = { draftSectionKeys = it },
+                )
+            }
             SearchOptionsGroupLabel("Match on")
             FilterChipRow(
                 chips =

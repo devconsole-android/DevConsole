@@ -915,6 +915,19 @@ private fun ObserveDetailFromContent(
     content: ObserveDetailContent,
     onBack: () -> Unit,
 ) {
+    val tabs = content.tabs
+    if (tabs != null) {
+        InspectorObserveTabbedDetailScreen(
+            resetKey = resetKey,
+            header = content.header,
+            sections = content.sections,
+            tabs = tabs,
+            footerActions = content.footerActions,
+            onBack = onBack,
+            searchOptions = content.searchOptions,
+        )
+        return
+    }
     InspectorObserveDetailScreen(
         resetKey = resetKey,
         header = content.header,

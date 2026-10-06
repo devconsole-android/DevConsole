@@ -8,51 +8,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
- * Share-as-JSON and flag-as-evidence header actions.
- *
- * Evidence flagging sits here and mocking sits in the footer ([netFooterActions]) -- the reverse of
- * every other detail screen, and deliberate: mocking is the consequential act on this screen, since
- * it changes what the host app receives on the next call, while flagging only files the capture for
- * a report. The footer's labelled primary slot goes to the one with consequences.
- *
- * The flag still reads its armed state at a glance: signal on a signal-soft container once flagged,
- * muted on transparent before, with the same wording the footer button used carried on the content
- * description so TalkBack announces the state rather than just "flag".
- *
- * Copy-as-cURL is deliberately *not* here, though every other detail screen does put a copy action
- * in the header: this one already carries a labelled "cURL" button in its footer bar running the
- * identical `copyText(transaction.toCurlCommand())`. Two controls, same Copy glyph, same effect,
- * one of them unlabelled -- so the header icon goes and the footer button, which says what it
- * copies, stays.
- *
- * "Pin as diff baseline" is dropped for the same no-dead-chrome reason: nothing in [InspectorState]
- * tracks a pinned baseline or renders a diff view.
- */
-private fun netHeaderActions(
-    transaction: InspectorTransactionUi,
-    colors: DevConsoleColors,
-    shareText: (String, String) -> Unit,
-    isFlagged: Boolean,
-    onToggleFlag: () -> Unit,
-): List<InspectorTopAction> =
-    listOf(
-        InspectorTopAction(
-            contentDescription = "Share transaction as JSON",
-            onClick = { shareText(transaction.toJsonSnippet(), "Share transaction JSON") },
-            icon = shareIconAction(colors.muted),
-        ),
-        InspectorTopAction(
-            contentDescription = if (isFlagged) "Flagged as evidence" else "Flag as evidence",
-            onClick = onToggleFlag,
-            icon = {
-                val tint = if (isFlagged) colors.signal else colors.muted
-                InspectorGlyphIcon(InspectorGlyph.Flag, contentDescription = null, tint = tint, size = 18.dp)
-            },
-            containerColor = if (isFlagged) colors.signalSoft else Color.Transparent,
-        ),
-    )
-
-/**
  * One [InspectorProgressStat] per captured phase, in wire order. A null phase is legitimately
  * absent (a pooled connection does no DNS/connect, a plaintext request has no TLS, a cached
  * response does no network work at all) and is skipped rather than rendered as a fabricated
@@ -122,7 +77,7 @@ private fun netTimingSection(
             { copyText(stats.joinToString("\n") { "${it.label}: ${it.valueText}" }) }
         }
     return InspectorDetailSectionSpec(
-        "timing",
+        NET_TIMING_KEY,
         "Timing",
         body,
         copyDescription = "Copy timing breakdown",
@@ -152,7 +107,7 @@ private fun netRedactionsSection(
             InspectorDetailSectionBody.KeyValues(redacted)
         }
     return InspectorDetailSectionSpec(
-        "redact",
+        NET_REDACTIONS_KEY,
         "Redactions",
         body,
         copyDescription = "Copy redactions",
@@ -178,6 +133,7 @@ private fun netGeneralEntries(
         add(InspectorKeyValue("url", url))
         add(InspectorKeyValue("method", transaction.method))
         add(InspectorKeyValue("status", transaction.statusCode?.toString() ?: "no response received", statusColor))
+        transaction.durationMs?.let { add(InspectorKeyValue("duration", "$it ms")) }
         if (transaction.isMocked) {
             val ruleId = transaction.mockRuleId ?: "unknown"
             val diffSuffix = mockDiffNoticeSuffix(mockDiff).orEmpty()
@@ -242,7 +198,7 @@ private fun netSections(
     val responseHeadersBody = headerRowsBody(transaction.responseHeaders, colors)
     return listOf(
         InspectorDetailSectionSpec(
-            "general",
+            NET_GENERAL_KEY,
             "General",
             InspectorDetailSectionBody.KeyValues(generalEntries),
             copyDescription = "Copy general info",
@@ -270,33 +226,80 @@ private fun netSections(
 }
 
 /**
- * Mock-from-capture as the primary action, cURL beside it.
+ * Every action on the transaction in one bottom bar: share and flag as icon buttons, cURL, and
+ * mock-from-capture as the labelled primary on the right.
  *
- * Mocking takes the labelled 2:1 slot because it is the one action here that changes what the host
- * app receives on its next call; flagging, which only files the capture, moved to the header. An
- * already-mocked transaction shows the armed treatment (signal-soft on signal, "Unmock this
- * response") the flag button used to carry, so the state stays readable from the button itself.
+ * The top bar used to carry share and flag while the footer carried mock and cURL. The tabbed
+ * layout clears the top bar so the header is one row, and a single action row is easier to scan
+ * than two half-rows at opposite ends of the screen. Mocking keeps the filled primary slot because
+ * it is the one action that changes what the host app receives on its next call; flagging only
+ * files the capture for a report.
  *
- * "Mock this response" is shown regardless of the mocks capability for an unmocked transaction --
- * Save on the sheet it opens dispatches UpsertMockRule, which already gates and shows a blocked
- * toast, the same pattern the Control screen's own mock affordances use. [onMockAction] is `null`
- * entirely when this transaction is already mocked but its rule id is unknown: a mock/unmock button
- * with no rule to act on would be dead chrome, and the footer falls back to cURL alone rather than
- * showing a disabled primary.
+ * The flag still reads its armed state at a glance: signal on a signal-soft container once
+ * flagged, and its content description says "Flagged as evidence" so TalkBack announces the state
+ * rather than just "flag". An already-mocked transaction gets the same armed treatment on its
+ * "Unmock response" button.
+ *
+ * "Mock response" is shown regardless of the mocks capability for an unmocked transaction -- Save
+ * on the sheet it opens dispatches UpsertMockRule, which already gates and shows a blocked toast,
+ * the same pattern the Control screen's own mock affordances use. [onMockAction] is `null` when
+ * this transaction is already mocked but its rule id is unknown: a mock/unmock button with no rule
+ * to act on would be dead chrome, so it is dropped rather than shown disabled.
  */
+@Suppress("LongParameterList") // Each action needs its own callback and state.
 private fun netFooterActions(
     transaction: InspectorTransactionUi,
     colors: DevConsoleColors,
+    isFlagged: Boolean,
+    onToggleFlag: () -> Unit,
+    shareText: (String, String) -> Unit,
     onMockAction: (() -> Unit)?,
     copyText: (String) -> Unit,
 ): List<InspectorFooterAction> =
     buildList {
+        add(
+            InspectorFooterAction(
+                label = "",
+                contentDescription = "Share transaction as JSON",
+                onClick = { shareText(transaction.toJsonSnippet(), "Share transaction JSON") },
+                icon = shareIconAction(colors.ink),
+                containerColor = colors.surface3,
+                contentColor = colors.ink,
+            ),
+        )
+        add(
+            InspectorFooterAction(
+                label = "",
+                contentDescription = if (isFlagged) "Flagged as evidence" else "Flag as evidence",
+                onClick = onToggleFlag,
+                icon = {
+                    val tint = if (isFlagged) colors.signal else colors.ink
+                    InspectorGlyphIcon(InspectorGlyph.Flag, contentDescription = null, tint = tint, size = 18.dp)
+                },
+                containerColor = if (isFlagged) colors.signalSoft else colors.surface3,
+                contentColor = if (isFlagged) colors.signal else colors.ink,
+            ),
+        )
+        add(
+            InspectorFooterAction(
+                label = "cURL",
+                onClick = { copyText(transaction.toCurlCommand()) },
+                // Sized to its label so the mock pill takes the rest of the bar.
+                weight = null,
+                icon = {
+                    InspectorGlyphIcon(InspectorGlyph.Copy, contentDescription = null, tint = colors.ink, size = 18.dp)
+                },
+                containerColor = colors.surface3,
+                contentColor = colors.ink,
+            ),
+        )
         if (onMockAction != null) {
             add(
                 InspectorFooterAction(
-                    label = if (transaction.isMocked) "Unmock this response" else "Mock this response",
+                    label = if (transaction.isMocked) "Unmock response" else "Mock response",
+                    compactLabel = if (transaction.isMocked) "Unmock" else "Mock",
                     onClick = onMockAction,
-                    weight = 2f,
+                    weight = 1f,
                     icon = {
                         val tint = if (transaction.isMocked) colors.signal else colors.signalInk
                         ObserveGlyphIcon(ObserveGlyph.Tag, contentDescription = null, tint = tint, size = 18.dp)
@@ -306,19 +309,53 @@ private fun netFooterActions(
                 ),
             )
         }
-        add(
-            InspectorFooterAction(
-                label = "cURL",
-                onClick = { copyText(transaction.toCurlCommand()) },
-                weight = 1f,
-                icon = {
-                    InspectorGlyphIcon(InspectorGlyph.Copy, contentDescription = null, tint = colors.ink, size = 18.dp)
-                },
-                containerColor = colors.surface3,
-                contentColor = colors.ink,
+    }
+
+/**
+ * Overview / Request / Response. The overview holds the short reads (General, Timing, and
+ * Redactions only when something was actually masked -- "nothing redacted" is not worth a panel),
+ * while each side of the exchange gets Body and Headers chips so the body on screen has the full
+ * height. A transaction that failed before any response opens on the overview, where General
+ * carries its error; every other one opens on the response body, the thing most often inspected.
+ */
+private fun netDetailTabs(
+    transaction: InspectorTransactionUi,
+    sections: List<InspectorDetailSectionSpec>,
+): InspectorDetailTabs {
+    val redactions = sections.firstOrNull { it.key == NET_REDACTIONS_KEY }
+    val overviewKeys =
+        listOfNotNull(
+            NET_GENERAL_KEY,
+            NET_TIMING_KEY,
+            redactions?.takeIf { it.body !is InspectorDetailSectionBody.Empty }?.key,
+        )
+    val tabs =
+        listOf(
+            InspectorDetailTabSpec(NET_OVERVIEW_TAB, "Overview", InspectorDetailTabLayout.Stacked(overviewKeys)),
+            InspectorDetailTabSpec(
+                NET_REQUEST_TAB,
+                "Request",
+                InspectorDetailTabLayout.Chips(
+                    listOf(
+                        InspectorDetailTabChip(InspectorExchangeSection.PRIMARY_BODY.key, "Body"),
+                        InspectorDetailTabChip(InspectorExchangeSection.PRIMARY_HEADERS.key, "Headers"),
+                    ),
+                ),
+            ),
+            InspectorDetailTabSpec(
+                NET_RESPONSE_TAB,
+                "Response",
+                InspectorDetailTabLayout.Chips(
+                    listOf(
+                        InspectorDetailTabChip(InspectorExchangeSection.SECONDARY_BODY.key, "Body"),
+                        InspectorDetailTabChip(InspectorExchangeSection.SECONDARY_HEADERS.key, "Headers"),
+                    ),
+                ),
             ),
         )
-    }
+    val initialTab = if (transaction.statusCode == null) NET_OVERVIEW_TAB else NET_RESPONSE_TAB
+    return InspectorDetailTabs(tabs, initialTab)
+}
 
 /**
  * Builds the full net (HTTP transaction) capture detail, degraded to real fields only. [mockDiff] is
@@ -350,20 +387,10 @@ internal fun netDetailContent(
         }
     val (leadColor, leadBg) = methodTint(transaction.method, colors)
     val statusColor = statusTint(transaction.statusCode, colors)
-    val timingSubtitle =
-        when {
-            transaction.statusCode == null -> "timeout"
-            transaction.durationMs != null -> "${transaction.durationMs} ms"
-            else -> transaction.host
-        }
-    // Promoted to the header rather than requiring "General" to be expanded to notice a capture was
+    // Promoted to the header rather than requiring "General" to be opened to notice a capture was
     // mocked -- parity with the web dashboard's header-level "MOCK RULE …".
-    val subtitle =
-        if (transaction.isMocked) {
-            "$timingSubtitle · MOCK RULE ${transaction.mockRuleId ?: "unknown"}"
-        } else {
-            timingSubtitle
-        }
+    val mockNote = if (transaction.isMocked) "MOCK RULE ${transaction.mockRuleId ?: "unknown"}" else null
+    val sections = netSections(transaction, colors, statusColor, copyText, mockDiff)
     return ObserveDetailContent(
         header =
             InspectorObserveDetailHeaderSpec(
@@ -371,17 +398,28 @@ internal fun netDetailContent(
                 leadText = methodLeadText(transaction.method),
                 leadColor = leadColor,
                 leadContainerColor = leadBg,
-                title = transaction.host + transaction.path,
-                subtitle = subtitle,
+                title = transaction.path,
+                // The duration lives on the overview (General + Timing); the header keeps to identity.
+                subtitle = "",
                 status = transaction.statusCode?.toString() ?: "ERR",
                 statusColor = statusColor,
-                actions = netHeaderActions(transaction, colors, shareText, isFlagged, onToggleFlag),
+                titleOverline = transaction.host,
+                note = mockNote,
             ),
-        sections = netSections(transaction, colors, statusColor, copyText, mockDiff),
+        sections = sections,
         // Request payload + Response body both open by default --
         // an operator debugging a transaction usually needs to compare both sides at a glance.
         initiallyOpenSectionKeys = InspectorExchangeSection.keysOf(InspectorExchangeSection.defaultSearchScope),
-        footerActions = netFooterActions(transaction, colors, onMockAction, copyText),
+        footerActions =
+            netFooterActions(transaction, colors, isFlagged, onToggleFlag, shareText, onMockAction, copyText),
         searchOptions = NetworkDetailSearchOptions,
+        tabs = netDetailTabs(transaction, sections),
     )
 }
+
+private const val NET_GENERAL_KEY = "general"
+private const val NET_TIMING_KEY = "timing"
+private const val NET_REDACTIONS_KEY = "redact"
+private const val NET_OVERVIEW_TAB = "overview"
+private const val NET_REQUEST_TAB = "request"
+private const val NET_RESPONSE_TAB = "response"

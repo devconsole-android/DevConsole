@@ -85,6 +85,10 @@ internal data class InspectorObserveDetailHeaderSpec(
     val status: String,
     val statusColor: Color,
     val actions: List<InspectorTopAction> = emptyList(),
+    /** A small line above [title] -- the tabbed header's host over its path. Null leaves [title] alone. */
+    val titleOverline: String? = null,
+    /** A signal-tinted note beside [subtitle], e.g. the mock rule that answered a transaction. */
+    val note: String? = null,
 )
 
 private data class ResolvedDetailSection(
@@ -715,6 +719,12 @@ internal data class ObserveDetailContent(
      */
     val searchPlaceholder: String = DEFAULT_DETAIL_SEARCH_PLACEHOLDER,
     val searchOptions: InspectorDetailSearchOptions? = null,
+    /**
+     * Non-null lays [sections] out as tabs under a compact header instead of one scrolling list of
+     * collapsible sections. Only the HTTP transaction detail sets it today: its bodies are the long
+     * read, and a stacked list left them a sliver of the screen below four headers' worth of chrome.
+     */
+    val tabs: InspectorDetailTabs? = null,
 )
 
 /** Matches [InspectorDetailSearchField]'s own default; named here so callers can opt out of it. */
