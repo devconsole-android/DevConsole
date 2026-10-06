@@ -581,7 +581,10 @@ class SocketRecorder(
         reconnectAttempt: Int = 0,
     ) {
         guarded {
-            if (store.connection(connectionId) == null) onCreated(connectionId, url, reconnectAttempt)
+            val existing = store.connection(connectionId)
+            if (existing == null || existing.url == implicitUrl(connectionId)) {
+                onCreated(connectionId, url, reconnectAttempt)
+            }
             val timestamp = clock()
             store.transition(connectionId, SocketConnectionState.OPEN, timestamp)
             store.appendLifecycle(SocketLifecycleEvent(connectionId, SocketLifecycleType.OPENED, timestamp))
@@ -595,7 +598,7 @@ class SocketRecorder(
         contentType: String? = null,
     ) {
         guarded {
-            store.append(
+            appendFrame(
                 SocketMessage(
                     connectionId,
                     direction,
@@ -622,7 +625,7 @@ class SocketRecorder(
         contentType: String? = null,
     ) {
         guarded {
-            store.append(
+            appendFrame(
                 SocketMessage(
                     connectionId,
                     direction,
@@ -641,7 +644,7 @@ class SocketRecorder(
         contentType: String? = null,
     ) {
         guarded {
-            store.append(
+            appendFrame(
                 SocketMessage(
                     connectionId,
                     direction,
@@ -730,6 +733,29 @@ class SocketRecorder(
     }
 
     /**
+     * The store drops a frame for a connection it does not know, so a host that records frames
+     * without [onCreated]/[onOpen] -- or keeps recording after the store was cleared or the
+     * connection evicted -- would silently lose every frame. Register such a connection as already
+     * open instead, labelled by its id until a real [onCreated]/[onOpen] supplies the URL.
+     */
+    private fun appendFrame(message: SocketMessage) {
+        if (store.connection(message.connectionId) == null) {
+            store.open(
+                SocketConnection(
+                    message.connectionId,
+                    implicitUrl(message.connectionId),
+                    message.timestampEpochMs,
+                    state = SocketConnectionState.OPEN,
+                    protocol = protocol,
+                ),
+            )
+        }
+        store.append(message)
+    }
+
+    private fun implicitUrl(connectionId: String): String = redaction.redactText(connectionId)
+
+    /**
      * Redacts the MQTT topic embedded in an `application/mqtt` [contentType] (see
      * [MqttFrameMetadata]) so a sensitive topic segment (e.g. a device token) doesn't bypass
      * redaction just because it travels in this field instead of the message body. Non-MQTT
@@ -750,7 +776,7 @@ class SocketRecorder(
         type: SocketFrameType,
     ) {
         guarded {
-            store.append(
+            appendFrame(
                 SocketMessage(
                     connectionId,
                     direction,

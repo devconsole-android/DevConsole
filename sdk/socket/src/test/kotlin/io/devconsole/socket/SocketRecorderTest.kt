@@ -180,6 +180,79 @@ class SocketRecorderTest {
     }
 
     @Test
+    fun `a frame for a connection that was never opened registers that connection instead of being dropped`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+
+        recorder.onMessage("connection", SocketDirection.SENT, "{\"type\":\"register\"}")
+
+        val connection = store.connection("connection")!!
+        assertEquals(SocketConnectionState.OPEN, connection.state)
+        assertEquals("connection", connection.url)
+        assertEquals(100L, connection.openedAtEpochMs)
+        assertEquals(SocketProtocol.WEBSOCKET, connection.protocol)
+        assertEquals(SocketDirection.SENT, connection.messages.single().direction)
+        assertTrue(connection.lifecycleEvents.isEmpty())
+    }
+
+    @Test
+    fun `binary and control frames for an unknown connection are kept too`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+
+        recorder.onBinaryMessage("binary-bytes", SocketDirection.RECEIVED, byteArrayOf(1, 2))
+        recorder.onBinaryMessage("binary-length", SocketDirection.RECEIVED, 12L)
+        recorder.onPing("ping", SocketDirection.SENT)
+
+        assertEquals(1, store.messages("binary-bytes").size)
+        assertEquals(1, store.messages("binary-length").size)
+        assertEquals(
+            SocketFrameType.PING,
+            store
+                .messages("ping")
+                .single()
+                .metadata.frameType,
+        )
+    }
+
+    @Test
+    fun `frames after the store is cleared mid-connection are still recorded`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+        recorder.onOpen("connection", "wss://api.test/socket")
+
+        store.clear()
+        recorder.onMessage("connection", SocketDirection.RECEIVED, "after clear")
+
+        assertEquals("after clear", (store.messages("connection").single().payload as SocketPayload.Text).preview)
+    }
+
+    @Test
+    fun `an implicit registration does not replace a url set by a later onOpen`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+
+        recorder.onMessage("connection", SocketDirection.RECEIVED, "early frame")
+        recorder.onOpen("connection", "wss://api.test/socket")
+
+        val connection = store.connection("connection")!!
+        assertEquals("wss://api.test/socket", connection.url)
+        assertEquals(1, connection.messages.size)
+    }
+
+    @Test
+    fun `a gated-off recorder never registers a connection from a frame`() {
+        val store = InMemorySocketStore()
+        val recorder =
+            SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+                .withProtocolGate { false }
+
+        recorder.onMessage("connection", SocketDirection.RECEIVED, "frame")
+
+        assertNull(store.connection("connection"))
+    }
+
+    @Test
     fun `a throwing protocol gate still records -- fail-open`() {
         val store = InMemorySocketStore()
         val recorder =

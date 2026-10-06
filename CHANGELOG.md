@@ -26,6 +26,13 @@ the DevConsole runtime leaked.
 
 ### Fixed
 
+- **Socket frames recorded before (or without) `onOpen` are no longer thrown away.** The store
+  silently dropped any frame whose `connectionId` it did not know, so a host driving
+  `SocketRecorder` by hand that called `onMessage` without first calling `onCreated`/`onOpen` got an
+  empty WebSockets page with no hint why — as did any frame arriving after the store was cleared or
+  the connection evicted. `onMessage`, `onBinaryMessage`, `onPing` and `onPong` now register an
+  unknown connection as open, labelled by its `connectionId` until a later `onCreated`/`onOpen`
+  supplies the real URL. Disabled, gated-off and stale-session recorders still record nothing.
 - **A release APK build no longer builds an app bundle nobody asked for — or fails trying.** The
   packaged-artifact scan named `SingleArtifact.APK` and `SingleArtifact.BUNDLE` on one task and hung
   it off `assemble<Variant>`, so every release APK build also ran `package<Variant>Bundle`,
