@@ -8,7 +8,7 @@ android { namespace = "io.devconsole.export" }
 
 dependencies {
     api(project(":sdk:timeline"))
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
     implementation(project(":sdk:security"))
     implementation(project(":sdk:storage-api"))
 }
