@@ -39,6 +39,9 @@ data class DevConsoleConfig(
     var storagePolicy: StoragePolicy = StoragePolicy()
         private set
 
+    var composerHostsEditable: Boolean = false
+        private set
+
     var sessionPolicy: SessionPolicy = SessionPolicy()
         private set
 
@@ -96,6 +99,9 @@ data class DevConsoleConfig(
                     maxAgeMs = value.maxAgeMs,
                 )
         }
+
+    fun withComposerHostsEditable(value: Boolean): DevConsoleConfig =
+        duplicate().also { it.composerHostsEditable = value }
 
     fun withSessionPolicy(value: SessionPolicy): DevConsoleConfig = duplicate().also { it.sessionPolicy = value }
 
@@ -174,6 +180,7 @@ data class DevConsoleConfig(
 
     fun runtimeEquivalentTo(other: DevConsoleConfig): Boolean =
         this == other &&
+            composerHostsEditable == other.composerHostsEditable &&
             storagePolicy == other.storagePolicy &&
             sessionPolicy == other.sessionPolicy &&
             editingCapabilities == other.editingCapabilities &&
@@ -188,6 +195,7 @@ data class DevConsoleConfig(
 
     private fun duplicate(): DevConsoleConfig =
         copy().also {
+            it.composerHostsEditable = composerHostsEditable
             it.storagePolicy = storagePolicy
             it.sessionPolicy = sessionPolicy
             it.editingCapabilities = editingCapabilities
@@ -209,6 +217,7 @@ data class DevConsoleConfig(
         private val featureFlags = mutableListOf<FeatureFlag>()
         private var composerEnabled: Boolean = false
         private var composerAllowedHosts: Set<String> = emptySet()
+        private var composerHostsEditable: Boolean = false
         private var stateMutationsEnabled: Boolean = false
         private var redactionPolicy: RedactionPolicy = RedactionPolicy.default()
         private var storagePolicy: StoragePolicy = StoragePolicy()
@@ -232,6 +241,8 @@ data class DevConsoleConfig(
         fun composerEnabled(value: Boolean) = apply { composerEnabled = value }
 
         fun composerAllowedHosts(value: Set<String>) = apply { composerAllowedHosts = value }
+
+        fun composerHostsEditable(value: Boolean) = apply { composerHostsEditable = value }
 
         fun stateMutationsEnabled(value: Boolean) = apply { stateMutationsEnabled = value }
 
@@ -271,7 +282,8 @@ data class DevConsoleConfig(
                     composerAllowedHosts = composerAllowedHosts,
                     stateMutationsEnabled = stateMutationsEnabled,
                     redactionPolicy = redactionPolicy,
-                ).withStoragePolicy(storagePolicy)
+                ).withComposerHostsEditable(composerHostsEditable)
+                    .withStoragePolicy(storagePolicy)
                     .withSessionPolicy(sessionPolicy)
                     .withEditingCapabilities(editingCapabilities)
                     .withBrowserConfig(browserConfig)

@@ -261,6 +261,7 @@ public final class io/devconsole/api/DevConsoleConfig {
 	public final fun getCaptureCategories ()Ljava/util/Set;
 	public final fun getComposerAllowedHosts ()Ljava/util/Set;
 	public final fun getComposerEnabled ()Z
+	public final fun getComposerHostsEditable ()Z
 	public final fun getCrashPolicy ()Lio/devconsole/api/CrashPolicy;
 	public final fun getEditingCapabilities ()Lio/devconsole/api/EditingCapabilities;
 	public final fun getEventBufferCapacity ()I
@@ -284,6 +285,7 @@ public final class io/devconsole/api/DevConsoleConfig {
 	public final fun withBrowserSecurity (Lio/devconsole/api/BrowserSecurity;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withCaptureCategories (Ljava/util/Set;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withCaptureCategories ([Lio/devconsole/api/CaptureCategory;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withComposerHostsEditable (Z)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withCrashPolicy (Lio/devconsole/api/CrashPolicy;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withEditingCapabilities (Lio/devconsole/api/EditingCapabilities;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withOpenTriggers (Lio/devconsole/api/OpenTriggers;)Lio/devconsole/api/DevConsoleConfig;
@@ -306,6 +308,7 @@ public final class io/devconsole/api/DevConsoleConfig$Builder {
 	public final fun captureCategories (Ljava/util/Set;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun composerAllowedHosts (Ljava/util/Set;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun composerEnabled (Z)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun composerHostsEditable (Z)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun crashPolicy (Lio/devconsole/api/CrashPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun editingCapabilities (Lio/devconsole/api/EditingCapabilities;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun eventBufferCapacity (I)Lio/devconsole/api/DevConsoleConfig$Builder;
