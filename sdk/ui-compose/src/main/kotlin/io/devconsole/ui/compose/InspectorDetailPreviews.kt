@@ -43,6 +43,46 @@ private fun InspectorDetailHeaderPreview() {
     }
 }
 
+@Preview(name = "Network tabs · Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, widthDp = 390, heightDp = 840)
+@Preview(name = "Network tabs · Light", uiMode = Configuration.UI_MODE_NIGHT_NO, widthDp = 390, heightDp = 840)
+@Composable
+private fun InspectorNetworkDetailTabsPreview() {
+    DevConsoleTheme(darkTheme = isSystemInDarkTheme()) {
+        val transaction =
+            InspectorTransactionUi(
+                id = "detail-tabs-preview",
+                method = "DELETE",
+                host = "api.example.test",
+                path = "/todos/1",
+                statusCode = 500,
+                durationMs = 612,
+                requestHeaders = mapOf("accept" to "application/json"),
+                responseHeaders = mapOf("content-type" to "application/json", "content-length" to "1434"),
+                responsePreview = """{"error":"internal","traceId":"a91f3e2c-5b8a-4c21"}""",
+            )
+        val content =
+            netDetailContent(
+                transaction = transaction,
+                colors = DevConsoleTheme.colors,
+                isFlagged = false,
+                onToggleFlag = {},
+                copyText = {},
+                shareText = { _, _ -> },
+                onMockThisResponse = {},
+                onUnmockThisResponse = {},
+            )
+        InspectorObserveDetailScreen(
+            resetKey = transaction.id,
+            header = content.header,
+            sections = content.sections,
+            initiallyOpenSectionKeys = content.initiallyOpenSectionKeys,
+            footerActions = content.footerActions,
+            onBack = {},
+            searchOptions = content.searchOptions,
+        )
+    }
+}
+
 @Preview(name = "Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, backgroundColor = 0xFF0B0E0D)
 @Preview(name = "Light", uiMode = Configuration.UI_MODE_NIGHT_NO, showBackground = true, backgroundColor = 0xFFF3F6EE)
 @Composable

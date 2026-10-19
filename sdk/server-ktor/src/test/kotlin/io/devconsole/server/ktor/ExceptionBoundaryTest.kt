@@ -56,7 +56,7 @@ class ExceptionBoundaryTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val secretMarker = "sqlite disk I/O error at offset 0xDEADBEEF"
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     databaseInspector = ThrowingDatabaseInspector(secretMarker)
                 }
             }
@@ -82,7 +82,7 @@ class ExceptionBoundaryTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val secretMarker = "column 'hunter2_api_key' does not exist"
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     databaseInspector = ThrowingDatabaseInspector(secretMarker)
                     databaseEditable = true
                 }
@@ -108,7 +108,7 @@ class ExceptionBoundaryTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val secretMarker = "/private/var/mobile/Containers/Data/host-only-path"
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = ThrowingFileInspector(secretMarker)
                 }
             }
@@ -140,7 +140,7 @@ class ExceptionBoundaryTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val secretMarker = "audit-sink-unavailable: replica lease lost at 0xFEEDFACE"
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     commandAuditLog = ThrowingCommandAuditLog(secretMarker)
                 }
             }
@@ -168,7 +168,7 @@ class ExceptionBoundaryTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = approvedSession(sessions, sessionCodes)
 
             val response =
@@ -193,7 +193,7 @@ class ExceptionBoundaryTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = approvedSession(sessions, sessionCodes)
 
             val response =
@@ -211,7 +211,7 @@ class ExceptionBoundaryTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
 
             val response =
                 client.get("/health") {

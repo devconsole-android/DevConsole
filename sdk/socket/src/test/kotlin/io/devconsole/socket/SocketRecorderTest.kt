@@ -12,7 +12,7 @@ class SocketRecorderTest {
     @Test
     fun `redacts textual messages before storing a bounded preview`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, clock = { 100L })
         recorder.onOpen("connection", "wss://api.test/socket")
 
         recorder.onMessage(
@@ -37,7 +37,7 @@ class SocketRecorderTest {
     fun `disabled recorder never opens a connection or stores a message`() {
         val store = InMemorySocketStore()
         val recorder =
-            SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, enabled = false, clock = { 100L })
+            SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, enabled = false, clock = { 100L })
 
         recorder.onOpen("connection", "wss://api.test/socket")
         recorder.onMessage(
@@ -54,7 +54,7 @@ class SocketRecorderTest {
     fun `records the complete lifecycle plus ping and pong frames`() {
         var time = 0L
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { ++time })
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, clock = { ++time })
 
         recorder.onCreated("connection", "wss://api.test/socket")
         recorder.onOpen("connection", "wss://api.test/socket")
@@ -84,12 +84,12 @@ class SocketRecorderTest {
         val metadataOnly = InMemorySocketStore()
         val preview = InMemorySocketStore()
         val bytes = byteArrayOf(0, 15, -1, 16)
-        SocketRecorder(RedactionEngine(RedactionPolicy.default()), metadataOnly).apply {
+        SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), metadataOnly).apply {
             onOpen("connection", "wss://api.test/socket")
             onBinaryMessage("connection", SocketDirection.RECEIVED, bytes)
         }
         SocketRecorder(
-            RedactionEngine(RedactionPolicy.default()),
+            RedactionEngine(RedactionPolicy.recommended()),
             preview,
             true,
             System::currentTimeMillis,
@@ -110,7 +110,7 @@ class SocketRecorderTest {
     @Test
     fun `withProtocol returns a configured copy without mutating the original`() {
         val store = InMemorySocketStore()
-        val base = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+        val base = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, clock = { 100L })
         val mqtt = base.withProtocol(SocketProtocol.MQTT)
 
         mqtt.onOpen("mqtt-conn", "tcp://broker.test:1883")
@@ -126,7 +126,7 @@ class SocketRecorderTest {
     fun `protocol gate drops the disallowed protocol and keeps the other`() {
         val store = InMemorySocketStore()
         val base =
-            SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+            SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, clock = { 100L })
                 .withProtocolGate { it != SocketProtocol.MQTT }
         val mqtt = base.withProtocol(SocketProtocol.MQTT)
 
@@ -141,7 +141,7 @@ class SocketRecorderTest {
     fun `onCreated after onOpen keeps OPEN state and openedAtEpochMs with no duplicate CREATED event`() {
         var time = 0L
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { ++time })
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, clock = { ++time })
 
         recorder.onOpen("connection", "wss://api.test/socket")
         val openedAt = store.connection("connection")!!.openedAtEpochMs
@@ -162,7 +162,7 @@ class SocketRecorderTest {
     @Test
     fun `redacts the MQTT topic embedded in an application-mqtt content type`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, clock = { 100L })
         recorder.onOpen("connection", "tcp://broker.test:1883")
 
         val contentType = MqttFrameMetadata.format("devices/?password=socket-secret/status", qos = 1, retained = true)
@@ -182,7 +182,7 @@ class SocketRecorderTest {
     @Test
     fun `a frame for a connection that was never opened registers that connection instead of being dropped`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, clock = { 100L })
 
         recorder.onMessage("connection", SocketDirection.SENT, "{\"type\":\"register\"}")
 
@@ -198,7 +198,7 @@ class SocketRecorderTest {
     @Test
     fun `binary and control frames for an unknown connection are kept too`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, clock = { 100L })
 
         recorder.onBinaryMessage("binary-bytes", SocketDirection.RECEIVED, byteArrayOf(1, 2))
         recorder.onBinaryMessage("binary-length", SocketDirection.RECEIVED, 12L)
@@ -218,7 +218,7 @@ class SocketRecorderTest {
     @Test
     fun `frames after the store is cleared mid-connection are still recorded`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, clock = { 100L })
         recorder.onOpen("connection", "wss://api.test/socket")
 
         store.clear()
@@ -230,7 +230,7 @@ class SocketRecorderTest {
     @Test
     fun `an implicit registration does not replace a url set by a later onOpen`() {
         val store = InMemorySocketStore()
-        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, clock = { 100L })
 
         recorder.onMessage("connection", SocketDirection.RECEIVED, "early frame")
         recorder.onOpen("connection", "wss://api.test/socket")
@@ -244,7 +244,7 @@ class SocketRecorderTest {
     fun `a gated-off recorder never registers a connection from a frame`() {
         val store = InMemorySocketStore()
         val recorder =
-            SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+            SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, clock = { 100L })
                 .withProtocolGate { false }
 
         recorder.onMessage("connection", SocketDirection.RECEIVED, "frame")
@@ -256,7 +256,7 @@ class SocketRecorderTest {
     fun `a throwing protocol gate still records -- fail-open`() {
         val store = InMemorySocketStore()
         val recorder =
-            SocketRecorder(RedactionEngine(RedactionPolicy.default()), store, clock = { 100L })
+            SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store, clock = { 100L })
                 .withProtocolGate { throw IllegalStateException("boom") }
 
         recorder.onOpen("connection", "wss://api.test/socket")

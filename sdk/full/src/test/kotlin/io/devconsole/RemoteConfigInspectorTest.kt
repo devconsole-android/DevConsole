@@ -61,7 +61,21 @@ class RemoteConfigInspectorTest {
         remoteConfigRegistry = registry,
     )
 
-    private fun enabledConfig() = DevConsoleConfig().withCaptureCategories(CaptureCategory.all())
+    private fun enabledConfig() =
+        DevConsoleConfig(redactionPolicy = RedactionPolicy.recommended()).withCaptureCategories(CaptureCategory.all())
+
+    @Test
+    fun `default config preserves token looking remote config values`() {
+        val snapshot = source(DevConsoleConfig(), registryWith(entry("api_key", "raw-key"))).snapshot()
+        val entry =
+            snapshot.remoteConfig
+                .single()
+                .entries
+                .single()
+
+        assertEquals("raw-key", entry.value)
+        assertFalse(entry.redacted)
+    }
 
     @Test
     fun `exposes remote config entries with their source`() {
@@ -106,7 +120,7 @@ class RemoteConfigInspectorTest {
                 .single()
                 .entries
                 .single()
-        assertEquals(RedactionPolicy.default().replacement, redacted.value)
+        assertEquals(RedactionPolicy.recommended().replacement, redacted.value)
         assertTrue(redacted.redacted)
     }
 
@@ -177,7 +191,7 @@ class RemoteConfigInspectorTest {
                 listOf(entry("access_token", "raw"), entry("checkout_v2", "true")),
             )
 
-        assertEquals(RedactionPolicy.default().replacement, entries.first().value)
+        assertEquals(RedactionPolicy.recommended().replacement, entries.first().value)
         assertTrue(entries.first().redacted)
         assertEquals("true", entries.last().value)
         assertFalse(entries.last().redacted)
@@ -203,7 +217,7 @@ class RemoteConfigInspectorTest {
             )
 
         assertTrue(entries.all { it.redacted })
-        assertTrue(entries.all { it.value == RedactionPolicy.default().replacement })
+        assertTrue(entries.all { it.value == RedactionPolicy.recommended().replacement })
     }
 
     @Test
@@ -229,5 +243,5 @@ class RemoteConfigInspectorTest {
     }
 
     private fun redactingBoundary() =
-        RedactingRemoteConfig(RedactionEngine(RedactionPolicy.default()), RedactionPolicy.default())
+        RedactingRemoteConfig(RedactionEngine(RedactionPolicy.recommended()), RedactionPolicy.recommended())
 }

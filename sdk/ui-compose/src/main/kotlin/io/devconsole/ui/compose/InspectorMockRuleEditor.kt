@@ -13,7 +13,9 @@ package io.devconsole.ui.compose
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -234,6 +236,7 @@ internal fun MockRuleEditorScreen(
     onSave: (InspectorMockRuleUi) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    onDelete: (() -> Unit)? = null,
 ) {
     val initial =
         when (target) {
@@ -313,6 +316,28 @@ internal fun MockRuleEditorScreen(
             headersExpanded = headersExpanded,
             onHeadersExpandedChange = { headersExpanded = it },
         )
+        if (!isNew && onDelete != null) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, bottom = 24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Delete rule",
+                    color = colors.error,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier =
+                        Modifier
+                            .clickable(onClick = onDelete, role = Role.Button)
+                            .semantics { contentDescription = "Delete mock rule ${initial.id}" }
+                            .heightIn(min = 48.dp)
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                )
+            }
+        }
     }
     // Sibling of the scaffold, not a child: it covers the form while open, and the form keeps its
     // scroll position and every other field's state underneath.
@@ -360,8 +385,9 @@ private fun MockRuleEditorFooter(
                 label = "Cancel",
                 onClick = onCancel,
                 weight = 1f,
-                containerColor = colors.surface3,
+                containerColor = colors.panel,
                 contentColor = colors.ink,
+                outlined = true,
             ),
             InspectorFooterAction(label = "Save rule", onClick = onSaveClick, weight = 2f),
         ),
@@ -407,10 +433,11 @@ private fun MockRuleEditorPrimaryFields(
         errorText = if (showErrors) errors.id else null,
     )
     MockRuleFieldLabel("Method", colors)
-    FilterChipRow(
-        chips = form.methodChips.map { method -> InspectorFilterChip(method, method, form.method.value == method) },
-        onChipClick = { chip -> form.method.value = chip.id },
-        modifier = Modifier.padding(bottom = 16.dp),
+    InspectorSegmentedControl(
+        options = form.methodChips,
+        selectedIndex = form.methodChips.indexOf(form.method.value),
+        onSelect = { form.method.value = form.methodChips[it] },
+        modifier = Modifier.padding(bottom = 16.dp).horizontalScroll(rememberScrollState()),
     )
     MockRuleTextField("Path regex", form.pathPattern.value, { form.pathPattern.value = it }, colors, placeholder = ".*")
     MockRuleTextField(
@@ -477,10 +504,11 @@ private fun MockRuleAdvancedFields(
             colors,
         )
         MockRuleFieldLabel("Scope", colors)
-        FilterChipRow(
-            chips = form.scopeChips.map { s -> InspectorFilterChip(s, s, form.scope.value == s) },
-            onChipClick = { chip -> form.scope.value = chip.id },
-            modifier = Modifier.padding(bottom = 16.dp),
+        InspectorSegmentedControl(
+            options = form.scopeChips,
+            selectedIndex = form.scopeChips.indexOf(form.scope.value),
+            onSelect = { form.scope.value = form.scopeChips[it] },
+            modifier = Modifier.padding(bottom = 16.dp).horizontalScroll(rememberScrollState()),
         )
         MockRuleTextField("Scheme", form.scheme.value, { form.scheme.value = it }, colors, placeholder = "https")
         MockRuleTextField("Host", form.host.value, { form.host.value = it }, colors, placeholder = "api.example.test")
@@ -550,8 +578,8 @@ private fun MockRuleFieldLabel(
     colors: DevConsoleColors,
 ) {
     Text(
-        text.uppercase(Locale.US),
-        color = colors.text3,
+        text,
+        color = colors.muted,
         style = DevConsoleType.groupLabel,
         modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
     )
@@ -572,6 +600,7 @@ private fun MockRuleTextField(
     // The field's own accessible name, announced on the actual editable/value node (not merged with
     // the sibling label Text) so its edit action stays reachable.
     val fieldDescription = if (errorText != null) "$label, error: $errorText" else label
+    var focused by remember { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxWidth().padding(bottom = 16.dp)) {
         MockRuleFieldLabel(label, colors)
         Row(
@@ -579,8 +608,10 @@ private fun MockRuleTextField(
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(if (enabled) colors.surface2 else colors.surface3)
+                    .onFocusChanged { focused = it.hasFocus }
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.dp, if (focused) colors.signal else colors.line, RoundedCornerShape(12.dp))
+                    .background(if (enabled) colors.panel else colors.surface3)
                     .padding(horizontal = 16.dp)
                     .semantics(mergeDescendants = true) { contentDescription = fieldDescription },
             verticalAlignment = Alignment.CenterVertically,
@@ -621,6 +652,7 @@ private fun MockRuleHeadersSection(
     onToggle: () -> Unit,
 ) {
     val parsed = remember(form.headersText.value) { parseMockRuleHeaderLines(form.headersText.value) }
+    var focused by remember { mutableStateOf(false) }
     CollapsibleSection(
         label = "Response headers",
         expanded = expanded,
@@ -635,8 +667,10 @@ private fun MockRuleHeadersSection(
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
                     .heightIn(min = 90.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(colors.surface2)
+                    .onFocusChanged { focused = it.hasFocus }
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.dp, if (focused) colors.signal else colors.line, RoundedCornerShape(12.dp))
+                    .background(colors.panel)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
                     .semantics(mergeDescendants = true) { contentDescription = "Response headers" },
         ) {
@@ -929,8 +963,9 @@ private fun MockRuleBodyTextArea(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(colors.codeBg)
+                .clip(RoundedCornerShape(12.dp))
+                .border(1.dp, if (state.bodyFocused) colors.signal else colors.line, RoundedCornerShape(12.dp))
+                .background(colors.panel)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     // No ripple: this is a text field's dead space, not a button.
@@ -1015,22 +1050,22 @@ private fun MockRuleBodyActions(
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         MockRuleBodyAction(
             label = "FIND",
-            color = if (searchExpanded) colors.signalInk else colors.signal,
-            container = if (searchExpanded) colors.signal else colors.signalSoft,
+            color = if (searchExpanded) colors.ink else colors.muted,
+            container = if (searchExpanded) colors.surface3 else colors.panel,
             description = if (searchExpanded) "Hide body search" else "Search response body",
             onClick = onToggleSearch,
         )
         MockRuleBodyAction(
             label = "FORMAT",
-            color = colors.put,
-            container = colors.putSoft,
+            color = colors.muted,
+            container = colors.panel,
             description = "Format response body as JSON",
             onClick = onFormat,
         )
         MockRuleBodyAction(
             label = expandLabel,
             color = colors.muted,
-            container = colors.surface2,
+            container = colors.panel,
             description = expandDescription,
             onClick = onToggleFullScreen,
         )
@@ -1055,6 +1090,7 @@ private fun MockRuleBodyAction(
     description: String,
     onClick: () -> Unit,
 ) {
+    val colors = DevConsoleTheme.colors
     Text(
         label,
         color = color,
@@ -1064,7 +1100,8 @@ private fun MockRuleBodyAction(
         modifier =
             Modifier
                 .minimumInteractiveComponentSize()
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(50))
+                .border(1.dp, if (container == colors.signal) colors.signal else colors.line, RoundedCornerShape(50))
                 .background(container)
                 .clickable(onClick = onClick, role = Role.Button)
                 .padding(horizontal = 10.dp, vertical = 6.dp)

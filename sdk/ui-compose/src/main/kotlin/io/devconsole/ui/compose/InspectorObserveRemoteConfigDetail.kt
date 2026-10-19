@@ -43,6 +43,7 @@ internal fun remoteConfigDetailContent(
                     valueBody,
                     copyDescription = "Copy value",
                     onCopy = if (entry.redacted) null else ({ copyText(entry.value) }),
+                    tab = InspectorDetailTab.VALUE,
                 ),
                 InspectorDetailSectionSpec(
                     "details",

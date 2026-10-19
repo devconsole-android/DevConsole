@@ -43,7 +43,39 @@ The Gradle plugin itself is unaffected: it still comes from the Gradle Plugin Po
 `io.github.devconsole-android` library group, so a module you have not migrated yet keeps its
 release-build protection.
 
-## Upgrading from 1.2.0
+## Security layers are now opt-in
+
+DevConsole remains debug-only. Constructor and Java Builder defaults now favor inspection:
+
+| Setting | Previous default | New default | Restore previous behavior |
+|---|---|---|---|
+| Redaction | Built-in field rules | None | `DevConsoleConfig(redactionPolicy = RedactionPolicy.recommended())` |
+| Editing capabilities | All false except mocks | All true | `.withEditingCapabilities(EditingCapabilities.readOnly().copy(mocks = true))` |
+| Composer | Disabled | Enabled | `DevConsoleConfig(composerEnabled = false)` |
+| Composer hosts | Empty denies every host | Empty permits any host | Disable Composer, or supply an explicit non-empty host set |
+| Composer host editing (new) | — | On, once hosts are listed | `.withComposerHostsEditable(false)` |
+| State mutations | Disabled | Enabled | `DevConsoleConfig(stateMutationsEnabled = false)` |
+| Screenshots | Disabled | Enabled | `.withScreenshotPolicy(ScreenshotPolicy(enabled = false))` |
+| Rate limits | Enabled | Disabled | `.withNetworkProtection(NetworkProtection(rateLimiting = true))` |
+| Host/Origin checks | Enabled | Disabled | `.withNetworkProtection(NetworkProtection(hostAndOriginChecks = true))` |
+| Public browser authentication | NONE | NONE (unchanged) | `.withBrowserSecurity(BrowserSecurity.SESSION_CODE)` opts in |
+
+Use `NetworkProtection.recommended()` to enable both network switches together. Network protection
+is an additive policy, preserved by other `with...` methods and supported by
+`DevConsoleConfig.builder().networkProtection(...)` for Java. `RedactionPolicy.default()` now returns
+`none()`. `recommended()` preserves the exact previous built-in set, including its intentional
+preservation of Authorization headers and Bearer text. Add rules for those if required.
+
+The standalone Ktor module and engine now also default to `BrowserSecurity.NONE` and editable
+capabilities. Direct callers testing authentication must explicitly select SESSION_CODE. It always
+retains bearer/CSRF validation, expiry, and code-attempt limits, independently of network protection.
+Static response headers and the release/noop guard are unchanged.
+
+`/api/v1/meta.redaction` keeps its shape and gains `enabled` (false by default);
+`sensitiveFieldNames` is unchanged. The new `networkProtection` object reports both effective switches.
+Other metadata fields remain. See [security defaults and the hardening checklist](SECURITY_AND_REDACTION.md).
+
+## Upgrading from 1.2.0 (historical changes)
 
 Three defaults changed. No API was removed and nothing has to be rewritten — but two of these change
 behaviour on a build you do not otherwise touch, so read them before upgrading.

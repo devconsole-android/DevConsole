@@ -186,18 +186,19 @@ class DashboardAssetsTest {
     }
 
     @Test
-    fun `dashboard uses the graphite cobalt design tokens`() {
+    fun `dashboard uses the graphite signal green design tokens`() {
         val css = DashboardAssets.css().lowercase()
 
         listOf(
-            "--ground: #111317",
-            "--panel: #171a20",
-            "--surface-2: #1d2129",
-            "--ink: #eceef2",
-            "--signal: #72a7ff",
+            "--ground: #111413",
+            "--panel: #181c1a",
+            "--surface-2: #1e2320",
+            "--ink: #ecebe4",
+            "--signal: #b7ed65",
+            "--signal: #2f7a1f",
         ).forEach { token -> assertTrue("missing $token", css.contains(token)) }
 
-        listOf("#b7ed65", "#427526", "terminal-green", "instrument panel").forEach { legacy ->
+        listOf("#72a7ff", "#245da8", "#111317", "terminal-green", "instrument panel").forEach { legacy ->
             assertFalse("legacy design value remains: $legacy", css.contains(legacy))
         }
     }

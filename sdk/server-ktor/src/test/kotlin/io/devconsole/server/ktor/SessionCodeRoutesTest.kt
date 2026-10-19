@@ -22,7 +22,7 @@ import org.junit.Test
 
 /**
  * SESSION_CODE is the only browser-access flow -- there is no more `AccessMode` to gate on, so
- * every test here exercises `devConsoleModule(sessionAuthority, sessionCodeAuthority)` directly
+ * every test here exercises `protectedDevConsoleModule(sessionAuthority, sessionCodeAuthority)` directly
  * rather than opting into a mode.
  */
 class SessionCodeRoutesTest {
@@ -32,7 +32,7 @@ class SessionCodeRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val info = sessionCodes.issueCode()
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
 
             val response =
                 client.post("/api/v1/auth/session-code/exchange") {
@@ -61,7 +61,7 @@ class SessionCodeRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val info = sessionCodes.issueCode()
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
 
             suspend fun exchange() =
                 client.post("/api/v1/auth/session-code/exchange") {
@@ -84,7 +84,7 @@ class SessionCodeRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             sessionCodes.issueCode()
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
 
             val response =
                 client.post("/api/v1/auth/session-code/exchange") {
@@ -104,7 +104,7 @@ class SessionCodeRoutesTest {
             val sessions = SessionAuthority(nowEpochMs = { now })
             val sessionCodes = SessionCodeAuthority(sessions, nowEpochMs = { now }, codeTtlMs = 10L)
             val info = sessionCodes.issueCode()
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             now = 11L
 
             val response =
@@ -123,7 +123,7 @@ class SessionCodeRoutesTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
 
             suspend fun attempt() =
                 client.post("/api/v1/auth/session-code/exchange") {
@@ -145,7 +145,7 @@ class SessionCodeRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val info = sessionCodes.issueCode()
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val exchanged =
                 client.post("/api/v1/auth/session-code/exchange") {
                     header(HttpHeaders.Host, "localhost")
@@ -178,7 +178,7 @@ class SessionCodeRoutesTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val exchanged =
                 client.post("/api/v1/auth/session-code/exchange") {
                     header(HttpHeaders.Host, "localhost")
@@ -221,7 +221,7 @@ class SessionCodeRoutesTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val exchanged =
                 client.post("/api/v1/auth/session-code/exchange") {
                     header(HttpHeaders.Host, "localhost")
@@ -268,7 +268,7 @@ class SessionCodeRoutesTest {
             assertTrue(sessions.configurePolicy(SessionPolicy(maxAuthenticatedSessions = 1)))
             val sessionCodes = SessionCodeAuthority(sessions)
             val first = sessionCodes.issueCode()
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             client.post("/api/v1/auth/session-code/exchange") {
                 header(HttpHeaders.Host, "localhost")
                 header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded)

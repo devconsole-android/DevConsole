@@ -1,5 +1,7 @@
 package io.devconsole.export
 
+import io.devconsole.security.RedactionEngine
+import io.devconsole.security.RedactionPolicy
 import io.devconsole.storage.api.RedactionApplicability
 import io.devconsole.storage.api.StoredEvent
 import io.devconsole.timeline.TimelineAnnotation
@@ -19,7 +21,7 @@ class EventExportWriterTest {
         try {
             val destination = File(directory, "export.zip")
             val result =
-                EventExportWriter().write(
+                EventExportWriter(RedactionEngine(RedactionPolicy.recommended())).write(
                     ExportRequest(
                         sessionId = "session-1",
                         destination = destination,
@@ -43,7 +45,7 @@ class EventExportWriterTest {
         val directory = Files.createTempDirectory("devconsole-export-limit-test").toFile()
         try {
             val result =
-                EventExportWriter().write(
+                EventExportWriter(RedactionEngine(RedactionPolicy.recommended())).write(
                     ExportRequest(
                         sessionId = "session-1",
                         destination = File(directory, "export.zip"),
@@ -68,7 +70,7 @@ class EventExportWriterTest {
                     destination = File(directory, "export.zip"),
                     events = listOf(event(summary = "request")),
                 )
-            val writer = EventExportWriter()
+            val writer = EventExportWriter(RedactionEngine(RedactionPolicy.recommended()))
 
             val estimated = writer.estimateBytes(request)
             assertTrue(directory.listFiles().isNullOrEmpty())
@@ -97,7 +99,7 @@ class EventExportWriterTest {
         val withAttachment =
             withoutAttachment.withAttachments(mapOf("attachment-1" to ByteArray(4_096)))
         val metadataOnly = withAttachment.withMetadataOnly()
-        val writer = EventExportWriter()
+        val writer = EventExportWriter(RedactionEngine(RedactionPolicy.recommended()))
 
         val baseline = writer.estimateBytes(withoutAttachment)
         val withBytes = writer.estimateBytes(withAttachment)
@@ -127,7 +129,11 @@ class EventExportWriterTest {
                     ),
                 )
 
-            assertTrue(EventExportWriter().write(request) is ExportResult.Success)
+            assertTrue(
+                EventExportWriter(
+                    RedactionEngine(RedactionPolicy.recommended()),
+                ).write(request) is ExportResult.Success,
+            )
             ZipFile(destination).use { zip ->
                 val timeline = zip.getInputStream(zip.getEntry("timeline.jsonl")).bufferedReader().readText()
                 assertTrue(timeline.contains("\"bookmarked\":true"))
@@ -152,11 +158,11 @@ class EventExportWriterTest {
                     event(id = "event-3", wallTimeMs = 300, summary = "third"),
                 )
 
-            EventExportWriter().write(
+            EventExportWriter(RedactionEngine(RedactionPolicy.recommended())).write(
                 ExportRequest("session-1", events, selectedDestination)
                     .withScope(ExportScope.EventIds(setOf("event-2"))),
             )
-            EventExportWriter().write(
+            EventExportWriter(RedactionEngine(RedactionPolicy.recommended())).write(
                 ExportRequest("session-1", events, rangedDestination)
                     .withScope(ExportScope.TimeRange(fromEpochMs = 100, toEpochMs = 200)),
             )
@@ -175,7 +181,7 @@ class EventExportWriterTest {
             val destination = File(directory, "export.zip")
 
             assertTrue(
-                EventExportWriter().write(
+                EventExportWriter(RedactionEngine(RedactionPolicy.recommended())).write(
                     ExportRequest(
                         "session-1",
                         listOf(event(summary = "integrity")),
@@ -220,13 +226,13 @@ class EventExportWriterTest {
                     attachmentId = "capture/body",
                 )
             val metadataResult =
-                EventExportWriter().write(
+                EventExportWriter(RedactionEngine(RedactionPolicy.recommended())).write(
                     ExportRequest("session-1", listOf(attached), metadataDestination)
                         .withMetadataOnly()
                         .withAttachments(mapOf("capture/body" to "binary-secret".encodeToByteArray())),
                 )
             val rejected =
-                EventExportWriter().write(
+                EventExportWriter(RedactionEngine(RedactionPolicy.recommended())).write(
                     ExportRequest("session-1", listOf(attached), destination, maxBytes = 1),
                 )
 
@@ -255,7 +261,11 @@ class EventExportWriterTest {
             val destination = File(directory, "evidence.zip")
             val request = evidenceRequest(destination)
 
-            assertTrue(EventExportWriter().write(request) is ExportResult.Success)
+            assertTrue(
+                EventExportWriter(
+                    RedactionEngine(RedactionPolicy.recommended()),
+                ).write(request) is ExportResult.Success,
+            )
             ZipFile(destination).use { zip ->
                 assertTrue(zip.readText("report.md").contains("QA Evidence Report"))
                 assertTrue(zip.readText("report.json").contains("\"items\""))
@@ -275,7 +285,11 @@ class EventExportWriterTest {
         val directory = Files.createTempDirectory("devconsole-evidence-manifest-test").toFile()
         try {
             val destination = File(directory, "evidence.zip")
-            assertTrue(EventExportWriter().write(evidenceRequest(destination)) is ExportResult.Success)
+            assertTrue(
+                EventExportWriter(
+                    RedactionEngine(RedactionPolicy.recommended()),
+                ).write(evidenceRequest(destination)) is ExportResult.Success,
+            )
 
             ZipFile(destination).use { zip ->
                 val manifest = zip.readText("manifest.json")
@@ -320,7 +334,11 @@ class EventExportWriterTest {
                     ),
                 )
 
-            assertTrue(EventExportWriter().write(request) is ExportResult.Success)
+            assertTrue(
+                EventExportWriter(
+                    RedactionEngine(RedactionPolicy.recommended()),
+                ).write(request) is ExportResult.Success,
+            )
             ZipFile(destination).use { zip ->
                 val reportMd = zip.readText("report.md")
                 assertFalse(reportMd.contains("report-secret"))
@@ -343,8 +361,14 @@ class EventExportWriterTest {
                 ).withScope(ExportScope.Evidence)
             val oversized = evidenceRequest(File(directory, "oversized.zip"), maxBytes = 1)
 
-            assertEquals(ExportResult.Unavailable, EventExportWriter().write(missingBundle))
-            assertEquals(ExportResult.ExceedsSizeLimit, EventExportWriter().write(oversized))
+            assertEquals(
+                ExportResult.Unavailable,
+                EventExportWriter(RedactionEngine(RedactionPolicy.recommended())).write(missingBundle),
+            )
+            assertEquals(
+                ExportResult.ExceedsSizeLimit,
+                EventExportWriter(RedactionEngine(RedactionPolicy.recommended())).write(oversized),
+            )
             assertTrue(directory.listFiles().orEmpty().none { it.name.endsWith(".tmp") })
         } finally {
             directory.deleteRecursively()
@@ -371,7 +395,7 @@ class EventExportWriterTest {
                 evidenceRequest(File(directory, "oversized.zip"), maxBytes = 1_000_000L)
                     .withEvidenceBundle(baseEvidenceBundle().copy(attachments = listOf(hugeAttachment)))
 
-            val result = EventExportWriter().write(request)
+            val result = EventExportWriter(RedactionEngine(RedactionPolicy.recommended())).write(request)
 
             assertEquals(ExportResult.ExceedsSizeLimit, result)
             assertFalse("the size gate must reject using metadata alone, never opening the attachment", opened)
@@ -385,13 +409,24 @@ class EventExportWriterTest {
     fun `evidence estimateBytes matches what write() gates on, without touching disk`() {
         val directory = Files.createTempDirectory("devconsole-evidence-estimate-test").toFile()
         try {
-            val estimated = EventExportWriter().estimateBytes(evidenceRequest(File(directory, "unused.zip")))
+            val estimated =
+                EventExportWriter(
+                    RedactionEngine(RedactionPolicy.recommended()),
+                ).estimateBytes(evidenceRequest(File(directory, "unused.zip")))
             assertTrue(directory.listFiles().isNullOrEmpty())
 
             val refused =
-                EventExportWriter().write(evidenceRequest(File(directory, "refused.zip"), maxBytes = estimated - 1))
+                EventExportWriter(RedactionEngine(RedactionPolicy.recommended())).write(
+                    evidenceRequest(
+                        File(directory, "refused.zip"),
+                        maxBytes =
+                            estimated - 1,
+                    ),
+                )
             val accepted =
-                EventExportWriter().write(evidenceRequest(File(directory, "accepted.zip"), maxBytes = estimated))
+                EventExportWriter(
+                    RedactionEngine(RedactionPolicy.recommended()),
+                ).write(evidenceRequest(File(directory, "accepted.zip"), maxBytes = estimated))
 
             assertTrue(estimated > 0)
             assertEquals(ExportResult.ExceedsSizeLimit, refused)

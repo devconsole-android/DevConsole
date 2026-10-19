@@ -110,7 +110,7 @@ class DevConsoleKtorModuleTest {
     fun `open browser mode exposes data and mutations without credentials`() =
         testApplication {
             application {
-                devConsoleModule(SessionAuthority()) {
+                protectedDevConsoleModule(SessionAuthority()) {
                     browserSecurity = BrowserSecurity.NONE
                 }
             }
@@ -132,7 +132,7 @@ class DevConsoleKtorModuleTest {
     fun `open browser mode rejects cross-site mutations without requiring credentials`() =
         testApplication {
             application {
-                devConsoleModule(SessionAuthority()) {
+                protectedDevConsoleModule(SessionAuthority()) {
                     browserSecurity = BrowserSecurity.NONE
                 }
             }
@@ -157,7 +157,7 @@ class DevConsoleKtorModuleTest {
     fun `unauthenticated health exposes only auth status protocol and display name`() =
         testApplication {
             application {
-                devConsoleModule(SessionAuthority()) {
+                protectedDevConsoleModule(SessionAuthority()) {
                     metadata =
                         ServerMetadata(
                             protocolVersion = 7,
@@ -186,7 +186,7 @@ class DevConsoleKtorModuleTest {
             val audit = InMemoryCommandAuditLog()
             val collections = InMemoryComposerCollectionStore()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     commandAuditLog = audit
                     composerCollections = collections
@@ -245,7 +245,7 @@ class DevConsoleKtorModuleTest {
     @Test
     fun `health and dashboard are available without credentials`() =
         testApplication {
-            application { devConsoleModule(SessionAuthority()) }
+            application { protectedDevConsoleModule(SessionAuthority()) }
 
             assertEquals(HttpStatusCode.OK, client.get("/health") { header(HttpHeaders.Host, "localhost") }.status)
             val dashboardResponse = client.get("/") { header(HttpHeaders.Host, "localhost") }
@@ -286,7 +286,7 @@ class DevConsoleKtorModuleTest {
     @Test
     fun `dashboard css and js assets are available without credentials and cache disabled`() =
         testApplication {
-            application { devConsoleModule(SessionAuthority()) }
+            application { protectedDevConsoleModule(SessionAuthority()) }
 
             val cssResponse = client.get("/assets/dashboard.css") { header(HttpHeaders.Host, "localhost") }
             assertEquals(HttpStatusCode.OK, cssResponse.status)
@@ -315,7 +315,7 @@ class DevConsoleKtorModuleTest {
     @Test
     fun `favicon is served unauthenticated as webp`() =
         testApplication {
-            application { devConsoleModule(SessionAuthority()) }
+            application { protectedDevConsoleModule(SessionAuthority()) }
 
             val response = client.get("/assets/favicon.webp") { header(HttpHeaders.Host, "localhost") }
 
@@ -336,7 +336,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             repeat(10) {
@@ -364,7 +364,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             repeat(120) {
@@ -392,7 +392,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val poll =
@@ -426,7 +426,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes, "Chrome")
 
             val refresh =
@@ -470,7 +470,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val unauthenticated = client.get("/api/v1/meta") { header(HttpHeaders.Host, "localhost") }
@@ -501,7 +501,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val metadata =
@@ -514,13 +514,13 @@ class DevConsoleKtorModuleTest {
             val body = metadata.bodyAsText()
             assertTrue(body.contains("\"endpoint\":null"))
             assertTrue(body.contains("\"sensitiveFieldNames\""))
-            assertTrue(RedactionPolicy.default().sensitiveFieldNames.any { body.contains("\"$it\"") })
+            assertTrue(RedactionPolicy.recommended().sensitiveFieldNames.any { body.contains("\"$it\"") })
         }
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     boundEndpoint = { Endpoint("127.0.0.1", 8080, BindingMode.LOOPBACK) }
                 }
             }
@@ -545,7 +545,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val metadata =
@@ -564,7 +564,7 @@ class DevConsoleKtorModuleTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("auth.example.test", "api.example.test")
                 }
@@ -590,7 +590,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
             val streamClient = createClient { install(WebSockets) }
 
@@ -624,7 +624,7 @@ class DevConsoleKtorModuleTest {
                 val sessionCodes = SessionCodeAuthority(sessions)
                 val testStreamHub = EventStreamHub()
                 application {
-                    devConsoleModule(sessions, sessionCodes) {
+                    protectedDevConsoleModule(sessions, sessionCodes) {
                         streamHub = testStreamHub
                     }
                 }
@@ -670,7 +670,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
             val streamClient = createClient { install(WebSockets) }
 
@@ -705,7 +705,7 @@ class DevConsoleKtorModuleTest {
                     CursorCodec("timeline-cursor-key".encodeToByteArray()),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     timeline = testTimeline
                 }
             }
@@ -734,7 +734,7 @@ class DevConsoleKtorModuleTest {
                 )
             val testAnnotations = InMemoryTimelineAnnotations()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     timeline = testTimeline
                     annotations = testAnnotations
                 }
@@ -765,7 +765,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput(
                                 "GET",
                                 "https://api.test/orders?access_token=raw-secret",
@@ -785,14 +785,14 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 3,
                     completedAtEpochMs = 4,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput("GET", "https://api.test/not-selected"),
                             NetworkResponseInput(200),
                         ),
                 ),
             )
             NetworkTransactionRecorder(
-                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())),
                 store = store,
                 idProvider = { "transaction-attachment" },
                 executor = java.util.concurrent.Executor(Runnable::run),
@@ -808,7 +808,7 @@ class DevConsoleKtorModuleTest {
                     completedAtEpochMs = 6,
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = store
                 }
             }
@@ -888,7 +888,7 @@ class DevConsoleKtorModuleTest {
                         startedAtEpochMs = index.toLong(),
                         completedAtEpochMs = index.toLong() + 1,
                         capture =
-                            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                                 NetworkRequestInput("GET", "https://api.test/item/$index"),
                                 NetworkResponseInput(200),
                             ),
@@ -896,7 +896,7 @@ class DevConsoleKtorModuleTest {
                 )
             }
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = store
                 }
             }
@@ -953,7 +953,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput(
                                 "GET",
                                 "https://api.test/orders",
@@ -969,14 +969,14 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 3,
                     completedAtEpochMs = 4,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput("GET", "https://api.test/not-selected"),
                             NetworkResponseInput(200),
                         ),
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = store
                 }
             }
@@ -1040,7 +1040,7 @@ class DevConsoleKtorModuleTest {
                         startedAtEpochMs = index.toLong(),
                         completedAtEpochMs = index.toLong() + 1,
                         capture =
-                            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                                 NetworkRequestInput("GET", "https://api.test/health"),
                                 NetworkResponseInput(200),
                             ),
@@ -1048,7 +1048,7 @@ class DevConsoleKtorModuleTest {
                 )
             }
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = store
                 }
             }
@@ -1094,14 +1094,14 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 100,
                     completedAtEpochMs = 120,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput("GET", "https://api.test/orders?status=open&page=2"),
                             NetworkResponseInput(200),
                         ),
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = network
                 }
             }
@@ -1130,7 +1130,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 100,
                     completedAtEpochMs = 120,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput("GET", "https://api.test/orders", correlationId = "corr-1"),
                             NetworkResponseInput(200),
                         ),
@@ -1157,7 +1157,7 @@ class DevConsoleKtorModuleTest {
                     CursorCodec("timeline-cursor-key".encodeToByteArray()),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = network
                     this.timeline = timeline
                 }
@@ -1188,14 +1188,14 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput("GET", "https://api.test/orders"),
                             NetworkResponseInput(200),
                         ),
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = store
                 }
             }
@@ -1237,7 +1237,7 @@ class DevConsoleKtorModuleTest {
                 error = "boom",
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     socketStore = sockets
                 }
             }
@@ -1279,7 +1279,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val metadata =
@@ -1303,7 +1303,7 @@ class DevConsoleKtorModuleTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     metadata = ServerMetadata(captureCategories = listOf("socket", "mqtt"))
                 }
             }
@@ -1349,7 +1349,7 @@ class DevConsoleKtorModuleTest {
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     socketStore = sockets
                 }
             }
@@ -1389,7 +1389,7 @@ class DevConsoleKtorModuleTest {
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     socketStore = sockets
                 }
             }
@@ -1415,7 +1415,7 @@ class DevConsoleKtorModuleTest {
             val mocks = MockEngine(listOf(MockRule("orders", 1, path = "/orders")))
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     mockEngine = mocks
                     commandAuditLog = audit
                 }
@@ -1449,7 +1449,7 @@ class DevConsoleKtorModuleTest {
             val mocks = MockEngine(listOf(MockRule("orders", 1, path = "/orders")))
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     mockEngine = mocks
                     mocksEditable = true
                     commandAuditLog = audit
@@ -1486,7 +1486,7 @@ class DevConsoleKtorModuleTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val mocks = MockEngine(listOf(MockRule("orders", 1, path = "/orders")))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     mockEngine = mocks
                     mocksEditable = false
                 }
@@ -1513,7 +1513,7 @@ class DevConsoleKtorModuleTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     mockEngine = MockEngine(emptyList())
                     mocksEditable = true
                 }
@@ -1554,7 +1554,7 @@ class DevConsoleKtorModuleTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val mocks = MockEngine(emptyList())
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     mockEngine = mocks
                     mocksEditable = true
                 }
@@ -1609,7 +1609,7 @@ class DevConsoleKtorModuleTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val mocks = MockEngine(emptyList())
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     mockEngine = mocks
                     mocksEditable = true
                 }
@@ -1645,7 +1645,7 @@ class DevConsoleKtorModuleTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val mocks = MockEngine(emptyList())
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     mockEngine = mocks
                     mocksEditable = true
                 }
@@ -1704,7 +1704,7 @@ class DevConsoleKtorModuleTest {
                     ),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) { mockEngine = mocks }
+                protectedDevConsoleModule(sessions, sessionCodes) { mockEngine = mocks }
             }
             val session = client.exchangeSession(sessions, sessionCodes)
 
@@ -1726,7 +1726,7 @@ class DevConsoleKtorModuleTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     mockEngine = MockEngine(emptyList())
                     mocksEditable = true
                 }
@@ -1758,7 +1758,7 @@ class DevConsoleKtorModuleTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     mockEngine = MockEngine(emptyList())
                     mocksEditable = true
                 }
@@ -1813,7 +1813,7 @@ class DevConsoleKtorModuleTest {
                     ),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     mockEngine = mocks
                 }
             }
@@ -1844,7 +1844,7 @@ class DevConsoleKtorModuleTest {
             val audit = InMemoryCommandAuditLog()
             val testTimeline = InMemoryTimeline(emptyList(), CursorCodec("timeline-test-key".encodeToByteArray()))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     featureFlags = flags
                     featureFlagsEditable = true
                     commandAuditLog = audit
@@ -1903,7 +1903,7 @@ class DevConsoleKtorModuleTest {
                     )
                 }
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     stateRegistry = states
                 }
             }
@@ -1951,7 +1951,7 @@ class DevConsoleKtorModuleTest {
                         },
                     )
                 }
-            application { devConsoleModule(sessions, sessionCodes) { stateRegistry = states } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { stateRegistry = states } }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val listing =
@@ -2013,7 +2013,7 @@ class DevConsoleKtorModuleTest {
                 }
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     stateRegistry = states
                     stateMutationsEnabled = true
                     commandAuditLog = audit
@@ -2051,7 +2051,7 @@ class DevConsoleKtorModuleTest {
                 )
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.example.test")
                     composerExecutor = executor
@@ -2097,7 +2097,7 @@ class DevConsoleKtorModuleTest {
                     },
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.example.test")
                     composerExecutor = executor
@@ -2156,7 +2156,7 @@ class DevConsoleKtorModuleTest {
                 )
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.example.test")
                     composerExecutor = executor
@@ -2187,7 +2187,7 @@ class DevConsoleKtorModuleTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) { composerEnabled = true }
+                protectedDevConsoleModule(sessions, sessionCodes) { composerEnabled = true }
             }
             val noAuth =
                 client.post("/api/v1/network/transactions/any/resend") {
@@ -2220,14 +2220,14 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput("GET", "https://api.example.test/orders"),
                             NetworkResponseInput(200),
                         ),
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = false
                     networkTransactions = store
                 }
@@ -2255,7 +2255,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput("GET", "https://not-allowed.test/orders"),
                             NetworkResponseInput(200),
                         ),
@@ -2263,7 +2263,7 @@ class DevConsoleKtorModuleTest {
             )
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.example.test")
                     networkTransactions = store
@@ -2295,7 +2295,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput(
                                 "POST",
                                 "https://api.example.test/orders",
@@ -2318,7 +2318,7 @@ class DevConsoleKtorModuleTest {
             val timeline = InMemoryTimeline(emptyList(), CursorCodec("timeline-cursor-key".encodeToByteArray()))
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.example.test")
                     composerExecutor = executor
@@ -2355,7 +2355,7 @@ class DevConsoleKtorModuleTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     commandAuditLog = audit
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.example.test")
@@ -2432,7 +2432,7 @@ class DevConsoleKtorModuleTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val audit = InMemoryCommandAuditLog()
-            application { devConsoleModule(sessions, sessionCodes) { commandAuditLog = audit } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { commandAuditLog = audit } }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val response =
@@ -2454,7 +2454,7 @@ class DevConsoleKtorModuleTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     commandAuditLog = audit
                     composerEnabled = true
                 }
@@ -2504,7 +2504,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) { composerEnabled = true } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { composerEnabled = true } }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val imported =
@@ -2554,7 +2554,7 @@ class DevConsoleKtorModuleTest {
                     )
                 }
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     pushStore = pushes
                 }
             }
@@ -2581,11 +2581,11 @@ class DevConsoleKtorModuleTest {
             val simulator =
                 PushSimulator(
                     PushSimulationCallback { PushLifecycle.DISPLAYED },
-                    PushRecorder(RedactionEngine(RedactionPolicy.default()), store),
+                    PushRecorder(RedactionEngine(RedactionPolicy.recommended()), store),
                 )
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     pushSimulator = simulator
                     commandAuditLog = audit
                 }
@@ -2643,7 +2643,7 @@ class DevConsoleKtorModuleTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes)
+                protectedDevConsoleModule(sessions, sessionCodes)
             }
             val session =
                 client.exchangeSession(
@@ -2670,7 +2670,7 @@ class DevConsoleKtorModuleTest {
     fun `origin rejection returns single 403 Forbidden without pipeline exception`() =
         testApplication {
             application {
-                devConsoleModule(SessionAuthority()) {
+                protectedDevConsoleModule(SessionAuthority()) {
                     allowedHosts = setOf("localhost")
                 }
             }
@@ -2688,7 +2688,7 @@ class DevConsoleKtorModuleTest {
     fun `emits security headers on dashboard and api responses`() =
         testApplication {
             application {
-                devConsoleModule(SessionAuthority())
+                protectedDevConsoleModule(SessionAuthority())
             }
 
             val result =
@@ -2726,7 +2726,7 @@ class DevConsoleKtorModuleTest {
             // server, and dashboard.js's `location.host` (what it actually dials over ws://) is
             // whichever one the browser tab is currently using. Pinning to a fixed bind address
             // instead of the request's Host would silently block the alias that wasn't picked.
-            application { devConsoleModule(SessionAuthority()) { allowedHosts = setOf("localhost") } }
+            application { protectedDevConsoleModule(SessionAuthority()) { allowedHosts = setOf("localhost") } }
 
             val result = client.get("/") { header(HttpHeaders.Host, "localhost:4321") }
 
@@ -2742,7 +2742,7 @@ class DevConsoleKtorModuleTest {
             // below) -- its Host value must never be reflected into the CSP on the way there, or an
             // attacker-chosen Host header would land in a response header of the very request that's
             // supposed to be refused.
-            application { devConsoleModule(SessionAuthority()) { allowedHosts = setOf("localhost") } }
+            application { protectedDevConsoleModule(SessionAuthority()) { allowedHosts = setOf("localhost") } }
 
             val result = client.get("/") { header(HttpHeaders.Host, "evil.example.com:1234") }
 
@@ -2765,7 +2765,7 @@ class DevConsoleKtorModuleTest {
             // legitimately always carries its own `frame-ancestors 'none'` directive (see S7), so this
             // asserts the attacker's *value* ('self' https://evil.example.com) never appears rather
             // than asserting the directive name is absent altogether.
-            application { devConsoleModule(SessionAuthority()) { allowedHosts = setOf("localhost") } }
+            application { protectedDevConsoleModule(SessionAuthority()) { allowedHosts = setOf("localhost") } }
             val maliciousHost = "localhost:4321; frame-ancestors 'self' https://evil.example.com"
 
             val result = client.get("/") { header(HttpHeaders.Host, maliciousHost) }
@@ -2794,7 +2794,7 @@ class DevConsoleKtorModuleTest {
             // Application.
             lateinit var webSockets: ServerWebSockets
             application {
-                devConsoleModule(SessionAuthority())
+                protectedDevConsoleModule(SessionAuthority())
                 webSockets = plugin(ServerWebSockets)
             }
             // The plugin instance is only installed once the application has actually started;
@@ -2810,7 +2810,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val response =
@@ -2833,7 +2833,7 @@ class DevConsoleKtorModuleTest {
             val flags = SessionFeatureFlags(listOf(FeatureFlag("checkout_v2", defaultValue = false)))
             val mocks = MockEngine(emptyList())
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     featureFlags = flags
                     mockEngine = mocks
                 }
@@ -2879,7 +2879,7 @@ class DevConsoleKtorModuleTest {
             val flags = SessionFeatureFlags(listOf(FeatureFlag("checkout_v2", defaultValue = false)))
             flags.override("checkout_v2", "true")
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     featureFlags = flags
                     metadata = ServerMetadata(appDisplayName = "Sample", appPackageName = "io.sample")
                 }
@@ -2939,7 +2939,7 @@ class DevConsoleKtorModuleTest {
                 )
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.timeline = timeline
                     this.exportDirectory = exportDirectory
                     commandAuditLog = audit
@@ -2989,7 +2989,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val unauthenticated =
@@ -3029,7 +3029,7 @@ class DevConsoleKtorModuleTest {
                     CursorCodec("estimate-cursor-secret".encodeToByteArray()),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.timeline = timeline
                     this.exportDirectory = exportDirectory
                 }
@@ -3069,7 +3069,7 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             // exportLimiter allows 5 per 10 minutes -- far tighter than readQueryLimiter's 120/min the
@@ -3102,7 +3102,7 @@ class DevConsoleKtorModuleTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     commandAuditLog = audit
                     attachmentReader = { id ->
                         when (id) {
@@ -3144,7 +3144,7 @@ class DevConsoleKtorModuleTest {
             val bytes = byteArrayOf(1, 2, 3, 4)
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     commandAuditLog = audit
                     attachmentReader = { id -> if (id == "attachment-1") bytes else null }
                 }
@@ -3185,7 +3185,7 @@ class DevConsoleKtorModuleTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val bytes = byteArrayOf(9)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     attachmentReader = { bytes }
                     attachmentMetadataReader = { id ->
                         when (id) {
@@ -3219,7 +3219,7 @@ class DevConsoleKtorModuleTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     attachmentReader = { byteArrayOf(1) }
                     // attachmentMetadataReader left at its default ({ null }) -- absent, not defaulted.
                 }
@@ -3249,7 +3249,7 @@ class DevConsoleKtorModuleTest {
                     retainedTestEvent("no-attachment", 3, "logs", "No attachment"),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     retainedCaptures = RetainedCaptureQuery({ FakeEventStore(events) }, { "current" })
                     attachmentMetadataReader = { id ->
                         when (id) {
@@ -3307,7 +3307,7 @@ class DevConsoleKtorModuleTest {
                 // *new* session is live, exactly like the dashboard reconnecting post-crash. The
                 // crash itself lives only under "previous-run", a session id nothing in this
                 // request ever names.
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     retainedCaptures = RetainedCaptureQuery({ FakeEventStore(events) }, { "current" })
                 }
             }
@@ -3343,7 +3343,7 @@ class DevConsoleKtorModuleTest {
                     retainedTestEvent("crash-b", 3, "crash", "Crash in run B").copy(sessionId = "run-b"),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     retainedCaptures = RetainedCaptureQuery({ FakeEventStore(events) }, { "run-a" })
                 }
             }
@@ -3369,7 +3369,7 @@ class DevConsoleKtorModuleTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val events = listOf(retainedTestEvent("log-event", 1, "logs", "just a log"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     retainedCaptures = RetainedCaptureQuery({ FakeEventStore(events) }, { "current" })
                 }
             }
@@ -3408,7 +3408,7 @@ class DevConsoleKtorModuleTest {
     @Test
     fun `runs requires authentication`() =
         testApplication {
-            application { devConsoleModule(SessionAuthority()) }
+            application { protectedDevConsoleModule(SessionAuthority()) }
 
             val response = client.get("/api/v1/runs") { header(HttpHeaders.Host, "localhost") }
 
@@ -3438,7 +3438,10 @@ class DevConsoleKtorModuleTest {
             val active = testSession(id = "run-active", status = StoredSessionStatus.ACTIVE, startedAtMs = 2_000)
             application {
                 // Deliberately out of order -- the route must sort, not trust the provider.
-                devConsoleModule(sessions, sessionCodes) { sessionsProvider = { listOf(older, active, crashed) } }
+                protectedDevConsoleModule(sessions, sessionCodes) {
+                    sessionsProvider =
+                        { listOf(older, active, crashed) }
+                }
             }
             val session = client.exchangeSession(sessions, sessionCodes)
 
@@ -3462,7 +3465,7 @@ class DevConsoleKtorModuleTest {
     @Test
     fun `a bug report requires authentication`() =
         testApplication {
-            application { devConsoleModule(SessionAuthority()) }
+            application { protectedDevConsoleModule(SessionAuthority()) }
 
             val response = client.get("/api/v1/report") { header(HttpHeaders.Host, "localhost") }
 
@@ -3481,7 +3484,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput("GET", "https://api.test/full-timings"),
                             NetworkResponseInput(200).withMetadata(
                                 NetworkResponseMetadata(
@@ -3500,7 +3503,7 @@ class DevConsoleKtorModuleTest {
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = store
                 }
             }
@@ -3532,14 +3535,14 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput("GET", "https://api.test/no-timings"),
                             NetworkResponseInput(200),
                         ),
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = store
                 }
             }
@@ -3572,7 +3575,7 @@ class DevConsoleKtorModuleTest {
                     startedAtEpochMs = 1,
                     completedAtEpochMs = 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput("GET", "https://api.test/pooled-connection"),
                             // A reused pooled connection performs no DNS/connect/TLS handshake, so
                             // those phases are legitimately absent -- only wait/receive are measured.
@@ -3585,7 +3588,7 @@ class DevConsoleKtorModuleTest {
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = store
                 }
             }

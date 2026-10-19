@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.dp
 import io.devconsole.api.CaptureCategory
 import java.util.Locale
 
-/** Sockets tab: open-connection hero + a flattened, newest-first "Recent frames" list. */
+/** Sockets tab: an error notice and frames in one grouped panel. */
 @Composable
 internal fun SocketsTabContent(
     state: InspectorState,
@@ -38,8 +38,8 @@ internal fun SocketsTabContent(
     actions: ObserveActions,
 ) {
     val colors = DevConsoleTheme.colors
-    if (state.sockets.isEmpty()) {
-        ObserveTabEmptyState(state.socketsEmptyStateMessage())
+    if (state.sockets.isEmpty() && !ui.searchOpen) {
+        ObserveTabEmptyState(state.socketsEmptyStateMessage(), EmptySpot.Sockets)
         return
     }
     val recentFrames = rememberRecentFrames(state.sockets)
@@ -67,27 +67,30 @@ internal fun SocketsTabContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        // 16dp start/end, 12dp top, extra bottom clearance for every Observe tab's scroll container.
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
     ) {
-        stickyHeader {
-            InspectorSearchBar(
-                query = ui.socketsSearch,
-                onQueryChange = actions.onSocketsSearchChange,
-                placeholder = "Search host, path or frames",
-            )
+        if (ui.searchOpen) {
+            stickyHeader {
+                InspectorSearchBar(
+                    query = ui.socketsSearch,
+                    onQueryChange = actions.onSocketsSearchChange,
+                    placeholder = "Search host, path or frames",
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
         }
-        item { Spacer(Modifier.height(16.dp)) }
-        item { SocketsHero(state.sockets, ui, actions, colors) }
-        item { Spacer(Modifier.height(16.dp)) }
-        item { GroupLabel("Recent frames") }
-        itemsIndexed(searchedIndices, key = { _, index -> frameKeys[index] }) { _, index ->
+        if (state.sockets.any { it.error != null }) {
+            item { SocketsHero(state.sockets, ui, actions, colors) }
+            item { Spacer(Modifier.height(12.dp)) }
+        }
+        if (searchedIndices.isEmpty()) item { ObserveTabEmptyState("No matching frames.", EmptySpot.Search) }
+        itemsIndexed(searchedIndices, key = { _, index -> frameKeys[index] }) { rowIndex, index ->
             val (socket, frame) = recentFrames[index]
             SocketFrameRow(
                 socket = socket,
                 frame = frame,
                 colors = colors,
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem().groupedPanelItem(GroupPosition.of(rowIndex, searchedIndices.size)),
                 isArrival = frameKeys[index] in arrivals,
                 onClick = { actions.onOpenFrameDetail(socket, frame) },
             )
@@ -102,19 +105,18 @@ private fun SocketsHero(
     actions: ObserveActions,
     colors: DevConsoleColors,
 ) {
-    val openCount = sockets.count { it.state == "OPEN" }
+    val errorCount = sockets.count { it.error != null }
     if (ui.socketsHeroCollapsed) {
         HeroBar(
-            value = openCount.toString(),
-            label = "of ${sockets.size} connections open",
+            value = errorCount.toString(),
+            label = "connections in error",
             onExpand = actions.onToggleSocketsHero,
-            valueColor = colors.signal,
-            labelColor = colors.text3,
+            valueColor = colors.error,
+            labelColor = colors.error,
         )
         return
     }
     val loudest = sockets.maxByOrNull { it.receivedCount }
-    val errorCount = sockets.count { it.error != null }
     val sub =
         buildString {
             if (loudest != null && loudest.receivedCount > 0) {
@@ -128,12 +130,12 @@ private fun SocketsHero(
             }
         }
     HeroCard(
-        label = "Open connections",
-        value = openCount.toString(),
+        label = "Connections in error",
+        value = errorCount.toString(),
         valueSuffix = "of ${sockets.size}",
         subtitle = sub,
         labelColor = colors.text3,
-        valueColor = colors.signal,
+        valueColor = colors.error,
         onCollapse = actions.onToggleSocketsHero,
     )
 }
@@ -149,8 +151,6 @@ private fun SocketFrameRow(
     isArrival: Boolean = false,
 ) {
     val received = frame.direction == "RECEIVED"
-    val leadColor = if (received) colors.put else colors.signal
-    val leadBg = if (received) colors.putSoft else colors.signalSoft
     val protocolBadge = socket.protocolBadge()
     val path = socket.url.replace(Regex("^wss?://[^/]+"), "").ifEmpty { socket.url }
     // An MQTT frame's topic is what an operator scanning this list actually wants to see -- the
@@ -159,9 +159,9 @@ private fun SocketFrameRow(
     Column(modifier = modifier.fillMaxWidth()) {
         TonalListRow(
             isArrival = isArrival,
-            leadText = if (received) "↓" else "↑",
-            leadColor = leadColor,
-            leadContainerColor = leadBg,
+            leadText = if (received) "RECV" else "SEND",
+            leadColor = colors.muted,
+            leadContainerColor = Color.Transparent,
             title = title,
             subtitle = "$protocolBadge · ${frame.frameType} · ${frame.preview.orEmpty().take(34)}",
             trailValue = socketFrameSizeLabel(frame),
@@ -169,10 +169,6 @@ private fun SocketFrameRow(
             trailSubtitle = formatCaptureClockTime(frame.timestampEpochMs),
             containerColor = Color.Transparent,
             onClick = onClick,
-        )
-        androidx.compose.material3.HorizontalDivider(
-            modifier = Modifier.padding(start = 76.dp),
-            color = colors.line,
         )
     }
 }
@@ -192,7 +188,7 @@ private fun InspectorState.socketsEmptyStateMessage(): String =
         "No WebSocket connections captured yet."
     }
 
-/** Push tab: delivered-count hero + a lifecycle-ordered event list. */
+/** Push tab: a failure notice and delivery events in one grouped panel. */
 @Composable
 internal fun PushTabContent(
     state: InspectorState,
@@ -200,8 +196,8 @@ internal fun PushTabContent(
     actions: ObserveActions,
 ) {
     val colors = DevConsoleTheme.colors
-    if (state.pushEvents.isEmpty()) {
-        ObserveTabEmptyState("No push events captured yet.")
+    if (state.pushEvents.isEmpty() && !ui.searchOpen) {
+        ObserveTabEmptyState("No push events captured yet.", EmptySpot.Push)
         return
     }
     // Push events have no id of their own either -- key on (messageId or "no-id", receivedAt), same
@@ -228,26 +224,29 @@ internal fun PushTabContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        // 16dp start/end, 12dp top, extra bottom clearance for every Observe tab's scroll container.
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
     ) {
-        stickyHeader {
-            InspectorSearchBar(
-                query = ui.pushSearch,
-                onQueryChange = actions.onPushSearchChange,
-                placeholder = "Search provider, message id or data",
-            )
+        if (ui.searchOpen) {
+            stickyHeader {
+                InspectorSearchBar(
+                    query = ui.pushSearch,
+                    onQueryChange = actions.onPushSearchChange,
+                    placeholder = "Search provider, message id or data",
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
         }
-        item { Spacer(Modifier.height(16.dp)) }
-        item { PushHero(state.pushEvents, ui, actions, colors) }
-        item { Spacer(Modifier.height(16.dp)) }
-        item { GroupLabel("Lifecycle") }
-        itemsIndexed(searchedIndices, key = { _, index -> pushKeys[index] }) { _, index ->
+        if (state.pushEvents.any { it.hasPushFailure() }) {
+            item { PushHero(state.pushEvents, ui, actions, colors) }
+            item { Spacer(Modifier.height(12.dp)) }
+        }
+        if (searchedIndices.isEmpty()) item { ObserveTabEmptyState("No matching push events.", EmptySpot.Search) }
+        itemsIndexed(searchedIndices, key = { _, index -> pushKeys[index] }) { rowIndex, index ->
             val push = state.pushEvents[index]
             PushRow(
                 push = push,
                 colors = colors,
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem().groupedPanelItem(GroupPosition.of(rowIndex, searchedIndices.size)),
                 isArrival = pushKeys[index] in arrivals,
                 onClick = { actions.onOpenPushDetail(push) },
             )
@@ -262,34 +261,30 @@ private fun PushHero(
     actions: ObserveActions,
     colors: DevConsoleColors,
 ) {
+    val failedCount = pushEvents.count { it.hasPushFailure() }
     if (ui.pushHeroCollapsed) {
         HeroBar(
-            value = pushEvents.size.toString(),
-            label = "push events delivered",
+            value = failedCount.toString(),
+            label = "push events failed",
             onExpand = actions.onTogglePushHero,
-            valueColor = colors.ink,
-            labelColor = colors.text3,
+            valueColor = colors.error,
+            labelColor = colors.error,
         )
         return
     }
-    val simulatedCount = pushEvents.count { it.simulated }
-    val sub =
-        if (simulatedCount > 0) {
-            val pronoun = if (simulatedCount == 1) "it appears" else "they appear"
-            "$simulatedCount simulated from the dashboard — labelled everywhere $pronoun."
-        } else {
-            "All delivered from a real push provider this session."
-        }
     HeroCard(
-        label = "Delivered this session",
-        value = pushEvents.size.toString(),
+        label = "Push failures",
+        value = failedCount.toString(),
         valueSuffix = "events",
-        subtitle = sub,
-        labelColor = colors.text3,
-        valueColor = colors.ink,
+        subtitle = "push events failed",
+        labelColor = colors.error,
+        valueColor = colors.error,
         onCollapse = actions.onTogglePushHero,
     )
 }
+
+private fun InspectorPushUi.hasPushFailure(): Boolean =
+    lifecycle.contains("ERROR", ignoreCase = true) || lifecycle.contains("FAIL", ignoreCase = true)
 
 @Composable
 private fun PushRow(
@@ -299,26 +294,21 @@ private fun PushRow(
     modifier: Modifier = Modifier,
     isArrival: Boolean = false,
 ) {
-    val leadColor = if (push.simulated) colors.warn else colors.signal
-    val leadBg = if (push.simulated) colors.warnSoft else colors.signalSoft
     val title = push.dataPreview["title"] ?: push.messageId ?: "Push notification"
     Column(modifier = modifier.fillMaxWidth()) {
         TonalListRow(
             isArrival = isArrival,
-            leadText = push.provider.uppercase(Locale.US),
-            leadColor = leadColor,
-            leadContainerColor = leadBg,
+            leadText = "MSG",
+            leadColor = colors.muted,
+            leadContainerColor = Color.Transparent,
             title = title,
-            subtitle = "${push.messageId ?: "no id"} · ${if (push.simulated) "simulated" else "captured"}",
-            trailValue = pushLifecycleShortLabel(push.lifecycle),
-            trailValueColor = colors.muted,
-            trailSubtitle = formatCaptureClockTimeShort(push.receivedAtEpochMs),
+            subtitle =
+                "${push.provider} · ${pushLifecycleShortLabel(push.lifecycle)}" +
+                    if (push.simulated) " · simulated" else "",
+            trailValue = formatCaptureClockTimeShort(push.receivedAtEpochMs),
+            trailValueColor = if (push.hasPushFailure()) colors.error else colors.muted,
             containerColor = Color.Transparent,
             onClick = onClick,
-        )
-        androidx.compose.material3.HorizontalDivider(
-            modifier = Modifier.padding(start = 76.dp),
-            color = colors.line,
         )
     }
 }
@@ -331,8 +321,8 @@ internal fun LogsTabContent(
     actions: ObserveActions,
 ) {
     val colors = DevConsoleTheme.colors
-    if (state.logs.isEmpty()) {
-        ObserveTabEmptyState("No logs, crashes, or ANRs captured yet.")
+    if (state.logs.isEmpty() && !ui.searchOpen) {
+        ObserveTabEmptyState("No logs captured yet.", EmptySpot.Logs)
         return
     }
     val searched =
@@ -353,25 +343,28 @@ internal fun LogsTabContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        // 16dp start/end, 12dp top, extra bottom clearance for every Observe tab's scroll container.
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
     ) {
-        stickyHeader {
-            InspectorSearchBar(
-                query = ui.logsSearch,
-                onQueryChange = actions.onLogsSearchChange,
-                placeholder = "Search message, source or detail",
-            )
+        if (ui.searchOpen) {
+            stickyHeader {
+                InspectorSearchBar(
+                    query = ui.logsSearch,
+                    onQueryChange = actions.onLogsSearchChange,
+                    placeholder = "Search message, source or detail",
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
         }
-        item { Spacer(Modifier.height(16.dp)) }
-        item { LogsHero(state.logs, ui, actions, colors) }
-        item { Spacer(Modifier.height(16.dp)) }
-        item { GroupLabel("Newest first") }
-        itemsIndexed(rowsNewestFirst, key = { _, log -> log.id }) { _, log ->
+        if (state.logs.any { isWarnOrErrorLevel(it.kind) }) {
+            item { LogsHero(state.logs, ui, actions, colors) }
+            item { Spacer(Modifier.height(12.dp)) }
+        }
+        if (rowsNewestFirst.isEmpty()) item { ObserveTabEmptyState("No matching logs.", EmptySpot.Search) }
+        itemsIndexed(rowsNewestFirst, key = { _, log -> log.id }) { index, log ->
             LogRow(
                 log = log,
                 colors = colors,
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem().groupedPanelItem(GroupPosition.of(index, rowsNewestFirst.size)),
                 isArrival = log.id in arrivals,
                 onClick = { actions.onOpenLogDetail(log.id) },
             )
@@ -430,30 +423,28 @@ private fun LogRow(
     modifier: Modifier = Modifier,
     isArrival: Boolean = false,
 ) {
-    val (leadColor, leadBg) = logLevelTint(log.kind, colors)
     Column(modifier = modifier.fillMaxWidth()) {
         TonalListRow(
             isArrival = isArrival,
-            leadText = logLevelShortLabel(log.kind),
-            leadColor = leadColor,
-            leadContainerColor = leadBg,
+            leadText = log.kind.take(1).uppercase(Locale.US),
+            leadColor = colors.muted,
+            leadContainerColor = Color.Transparent,
             title = if (log.summary.length > 40) log.summary.take(40) + "…" else log.summary,
             subtitle = "${log.source} · ${log.kind}",
             trailValue = formatCaptureClockTime(log.timestampEpochMs),
-            trailValueColor = colors.muted,
+            trailValueColor = if (isWarnOrErrorLevel(log.kind)) logLevelTint(log.kind, colors).first else colors.muted,
             containerColor = Color.Transparent,
             onClick = onClick,
-        )
-        androidx.compose.material3.HorizontalDivider(
-            modifier = Modifier.padding(start = 76.dp),
-            color = colors.line,
         )
     }
 }
 
 @Composable
-internal fun ObserveTabEmptyState(message: String) {
+internal fun ObserveTabEmptyState(
+    message: String,
+    spot: EmptySpot? = null,
+) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(message, color = DevConsoleTheme.colors.muted)
+        if (spot != null) InspectorEmptyState(spot, message) else Text(message, color = DevConsoleTheme.colors.muted)
     }
 }

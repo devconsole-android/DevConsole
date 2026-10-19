@@ -43,7 +43,7 @@ class ComposerAgentRoutesTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) { composerEnabled = true } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { composerEnabled = true } }
             val session = client.exchangeSession(sessions, sessionCodes)
             val agentClient = createClient { install(WebSockets) }
 
@@ -69,7 +69,7 @@ class ComposerAgentRoutesTest {
             val network = InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.corp.test")
                     networkTransactions = network
@@ -129,7 +129,7 @@ class ComposerAgentRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.corp.test")
                 }
@@ -163,7 +163,7 @@ class ComposerAgentRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) { composerEnabled = true }
+                protectedDevConsoleModule(sessions, sessionCodes) { composerEnabled = true }
             }
             val session = client.exchangeSession(sessions, sessionCodes)
             val agentClient = createClient { install(WebSockets) }
@@ -191,7 +191,7 @@ class ComposerAgentRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     browserSecurity = io.devconsole.api.BrowserSecurity.SESSION_CODE
                 }
@@ -216,7 +216,7 @@ class ComposerAgentRoutesTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             val agents =
@@ -235,7 +235,7 @@ class ComposerAgentRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.corp.test")
                 }
@@ -258,7 +258,7 @@ class ComposerAgentRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.corp.test")
                 }
@@ -285,7 +285,7 @@ class ComposerAgentRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.corp.test")
                 }
@@ -313,7 +313,7 @@ class ComposerAgentRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.corp.test")
                 }
@@ -350,7 +350,7 @@ class ComposerAgentRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.corp.test")
                 }
@@ -384,7 +384,7 @@ class ComposerAgentRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.corp.test", "cdn.corp.test")
                 }
@@ -443,7 +443,7 @@ class ComposerAgentRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("api.corp.test")
                 }

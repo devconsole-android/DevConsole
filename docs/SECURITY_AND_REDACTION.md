@@ -3,15 +3,62 @@
 See [SECURITY.md](../SECURITY.md) at the repository root for the vulnerability-reporting policy.
 This document covers how redaction actually works, for anyone integrating or auditing it.
 
+## Opt-in security layers
+
+DevConsole is a debug-only developer tool. Runtime security layers are off by default, and
+development features are enabled. Configure the protections your environment needs explicitly.
+
+| Layer | Default | One-line opt-in |
+|---|---|---|
+| Redaction | Off; no field names or text patterns | `DevConsoleConfig(redactionPolicy = RedactionPolicy.recommended())` |
+| Rate limiting | Off | `.withNetworkProtection(NetworkProtection(rateLimiting = true))` |
+| Host and Origin checks | Off | `.withNetworkProtection(NetworkProtection(hostAndOriginChecks = true))` |
+| Both network protections | Off | `.withNetworkProtection(NetworkProtection.recommended())` |
+| Browser authentication | `BrowserSecurity.NONE` | `.withBrowserSecurity(BrowserSecurity.SESSION_CODE)` |
+| Read-only editing capabilities | Off; preferences, feature flags, database, files, mocks, request execution, and capture rules are all editable | `.withEditingCapabilities(EditingCapabilities.readOnly())` |
+| Composer restriction | Enabled, any host; empty allowlist permits all | `DevConsoleConfig(composerAllowedHosts = setOf("api.example.test"))` |
+| Disable Composer | Composer enabled | `DevConsoleConfig(composerEnabled = false)` |
+| Disable state mutations | State mutations enabled | `DevConsoleConfig(stateMutationsEnabled = false)` |
+| Disable screenshots | Screenshots enabled | `.withScreenshotPolicy(ScreenshotPolicy(enabled = false))` |
+
+Network settings replace the previous `NetworkProtection` value; use `recommended()` to enable
+both switches together. Java uses `DevConsoleConfig.builder().networkProtection(...)` and the other
+policy setters. Additive `with...` methods preserve the other configured policies.
+
+Static response headers (`nosniff`, X-Frame-Options, CSP, and no-store) remain enabled. The release
+build guard and noop artifact are unchanged: they are build-variant safety nets, not runtime layers.
+SESSION_CODE always keeps bearer-token validation, CSRF tokens, session expiry, and the session-code
+attempt limiter, even when network protection is off. Origin validation is controlled separately by
+`hostAndOriginChecks`.
+
+`GET /api/v1/meta` reports `redaction: { enabled, sensitiveFieldNames }` (`enabled` is true when any
+rule exists) and `networkProtection: { rateLimiting, hostAndOriginChecks }`; existing endpoint,
+composer, and capture-category fields remain.
+
+## Hardening checklist
+
+Use this checklist on shared networks or with production-like data:
+
+- Set `redactionPolicy = RedactionPolicy.recommended()` and extend its names or patterns for your data.
+- Add `.withNetworkProtection(NetworkProtection.recommended())` for budgets and Host/Origin checks.
+- Add `.withBrowserSecurity(BrowserSecurity.SESSION_CODE)` for authenticated browser sessions.
+- Add `.withEditingCapabilities(EditingCapabilities.readOnly())`; enable individual writes only as needed.
+- Set `composerEnabled = false` and `stateMutationsEnabled = false`, or explicitly restrict Composer hosts.
+- Add `.withScreenshotPolicy(ScreenshotPolicy(enabled = false))` when screen contents must stay private.
+- Bind loopback with `BrowserConfig(binding = BrowserBinding.LOOPBACK)` when LAN access is unnecessary.
+- Keep the noop artifact and release-build guard in protected variants.
+
 ## Where redaction happens
 
-Before an event reaches any store or the live dashboard stream — never after. Every capture path
+When enabled, before an event reaches any store or the live dashboard stream. Every capture path
 (network, WebSocket, push) shares one `RedactionEngine`, so the same field is redacted identically
 regardless of which inspector captured it.
 
-## Default policy
+## Default and recommended policies
 
-`RedactionPolicy.default()`'s sensitive field names (case-insensitive, matched against header
+`RedactionPolicy.default()` returns `RedactionPolicy.none()`: no names, no text patterns, nothing
+masked. `RedactionPolicy.recommended()` opts into the previous built-in sensitive field names
+(case-insensitive, matched against header
 names, JSON keys, and form field names):
 
 ```text
@@ -23,11 +70,15 @@ passphrase         secret               client_secret       private_key
 session_id
 ```
 
-A matched value is replaced wholesale with `<redacted>`. `Authorization` headers and Bearer tokens are kept unredacted by default to allow developers to inspect and copy tokens during debugging; custom `textPatterns` and additional `sensitiveFieldNames` can be configured via `RedactionPolicy` if further redaction is desired.
+A matched value is replaced wholesale with `<redacted>`. The historical recommended set preserves
+`Authorization` headers and Bearer text. Add `authorization` to `sensitiveFieldNames` or supply
+custom `textPatterns` to mask those too. Push tokens, preference values, Remote Config keys, capture
+bodies, crash breadcrumbs, and cURL/HAR/Postman exports follow the configured policy. Database
+column heuristics and Composer secret-variable masking apply only when redaction is enabled.
 
 ## Redaction strategies beyond removal
 
-The engine's default behavior is whole-value replacement. The wire-protocol design additionally
+When enabled, the engine uses whole-value replacement. The wire-protocol design additionally
 specifies `KEEP_PREFIX_SUFFIX(4, 4)` and `HASH_SHA256` strategies for cases where a partially
 visible or comparable-but-opaque value is more useful than a blank `<redacted>` — these are declared
 in the spec but not yet exposed as configuration on `RedactionPolicy` in this codebase; only
@@ -52,8 +103,8 @@ is its own resource-exhaustion risk regardless of whether it's sensitive.
 
 ## `RedactionApplicability` and the storage boundary
 
-Redaction, as described above, is a text operation: it recognizes field names and pattern-matches
-`Bearer <token>` text, then replaces the matched value. Some content this SDK stores — most notably a
+Redaction, as described above, is a text operation: configured rules recognize field names or match
+text patterns, then replace matched values. Some content this SDK stores — most notably a
 captured screenshot (see [THREAT_MODEL.md](THREAT_MODEL.md#screenshots-are-unredactable-by-construction))
 — is binary, and there is no equivalent operation for a bitmap. `RedactionApplicability` exists so the
 storage layer can tell those two situations apart honestly instead of collapsing them into the same

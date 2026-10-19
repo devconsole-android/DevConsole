@@ -7,16 +7,24 @@
 package io.devconsole.ui.compose
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -65,6 +73,19 @@ internal sealed interface InspectorDetailSectionBody {
     ) : InspectorDetailSectionBody
 }
 
+/** Display order also determines the default tab; sections without an assignment go to Overview. */
+internal enum class InspectorDetailTab(
+    val label: String,
+) {
+    RESPONSE("Response"),
+    REQUEST("Request"),
+    STACK_TRACE("Stack trace"),
+    PAYLOAD("Payload"),
+    VALUE("Value"),
+    OVERVIEW("Overview"),
+    TIMING("Timing"),
+}
+
 /** One section of a capture detail screen, mirroring one `aSec(key, label, body, copyAs)` call. */
 internal data class InspectorDetailSectionSpec(
     val key: String,
@@ -72,6 +93,7 @@ internal data class InspectorDetailSectionSpec(
     val body: InspectorDetailSectionBody,
     val copyDescription: String? = null,
     val onCopy: (() -> Unit)? = null,
+    val tab: InspectorDetailTab = InspectorDetailTab.OVERVIEW,
 )
 
 /** Bundles [InspectorDetailHeader]'s payload so [InspectorObserveDetailScreen] stays under the param-count limit. */
@@ -85,6 +107,7 @@ internal data class InspectorObserveDetailHeaderSpec(
     val status: String,
     val statusColor: Color,
     val actions: List<InspectorTopAction> = emptyList(),
+    val notices: List<String> = emptyList(),
 )
 
 private data class ResolvedDetailSection(
@@ -370,7 +393,7 @@ private fun ObserveDetailSearchBar(
                 null
             },
         navigationEnabled = matchCount > 0,
-        onOpenOptions = if (searching) onOpenOptions else null,
+        onOpenOptions = if (searching && scopeLabel != null) onOpenOptions else null,
         scopeLabel = scopeLabel,
         modifier = modifier,
         placeholder = placeholder,
@@ -476,14 +499,12 @@ private fun InspectorDetailSectionCard(
     onToggle: () -> Unit,
     onExpandCodeFullScreen: (String) -> Unit,
 ) {
-    // 12dp bottom margin per card, including the last one --
-    // InspectorDetailScaffold's own 100dp bottom content padding covers the footer clearance on top.
-    CollapsibleSection(
+    ObserveDetailPanel(
         label = spec.label,
+        keyValueGroup = spec.body is InspectorDetailSectionBody.KeyValues,
         expanded = resolved.expanded,
         onToggle = onToggle,
-        modifier = Modifier.padding(bottom = 12.dp),
-        meta = resolved.meta.ifEmpty { null },
+        meta = resolved.meta.takeIf { "match" in it },
         metaColor = resolved.metaColor,
         onCopy = spec.onCopy,
         copyContentDescription = spec.copyDescription ?: "Copy ${spec.label}",
@@ -503,6 +524,7 @@ private fun InspectorDetailSectionCard(
                     is InspectorDetailSectionBody.Code ->
                         InspectorCodeBlock(
                             lines = body.lines,
+                            modifier = Modifier.padding(horizontal = 16.dp),
                             sectionKey = spec.key,
                             searchMatches = resolved.searchMatches,
                             currentMatchOrdinal = currentMatchOrdinal,
@@ -511,6 +533,7 @@ private fun InspectorDetailSectionCard(
                     is InspectorDetailSectionBody.Formattable ->
                         InspectorFormattableBody(
                             body = body,
+                            modifier = Modifier.padding(horizontal = 16.dp),
                             showRaw = formattableShowRaw,
                             onShowRawChange = onFormattableShowRawChange,
                             sectionKey = spec.key,
@@ -518,7 +541,7 @@ private fun InspectorDetailSectionCard(
                             currentMatchOrdinal = currentMatchOrdinal,
                             onExpandFullScreen = { onExpandCodeFullScreen(spec.key) },
                         )
-                    is InspectorDetailSectionBody.Bars -> InspectorProgressBars(body.stats)
+                    is InspectorDetailSectionBody.Bars -> ObserveDetailTiming(body.stats)
                     is InspectorDetailSectionBody.Empty, null -> InspectorDetailEmptyText("Nothing captured.")
                 }
         }
@@ -526,11 +549,10 @@ private fun InspectorDetailSectionCard(
 }
 
 /**
- * The full-screen capture detail overlay for all four capture kinds: header + live find field,
- * [sections] as [CollapsibleSection]s with search-driven expand/highlight behavior, and a footer
- * action bar. [resetKey] identifies which capture is open (e.g. a transaction id) so the find query
- * and each section's manual open/closed state reset when a different capture is opened. Both the
- * header's back button and the system back gesture close it via [onBack].
+ * Capture detail overlay: fixed header, tabs and find field above scrolling grouped sections.
+ * Search resolves all [sections] before selecting the visible tab. [resetKey] identifies the item
+ * so its tab and search state reset when opening another capture. Both the header's back button
+ * and the system back gesture close it via [onBack].
  */
 @Composable
 internal fun InspectorObserveDetailScreen(
@@ -544,29 +566,38 @@ internal fun InspectorObserveDetailScreen(
     searchPlaceholder: String = DEFAULT_DETAIL_SEARCH_PLACEHOLDER,
     searchOptions: InspectorDetailSearchOptions? = null,
 ) {
+    val tabs = remember(sections) { sections.map { it.tab }.distinct().sortedBy { it.ordinal } }
+    val showTabs = tabs.size > 1
+    var selectedTab by
+        rememberSaveable(resetKey) {
+            mutableStateOf(tabs.firstOrNull() ?: InspectorDetailTab.OVERVIEW)
+        }
+    // Kinds that previously searched their whole document still do so, now with match navigation.
+    // Network keeps its existing body/header scopes and Raw/Formatted search options.
+    val availableSearchOptions =
+        remember(sections, searchOptions, showTabs) { searchOptions ?: documentSearchOptions(sections, showTabs) }
     var query by rememberSaveable(resetKey) { mutableStateOf("") }
+    var searchVisible by rememberSaveable(resetKey) { mutableStateOf(false) }
     var selectedSectionKeys by
         rememberSaveable(resetKey) {
-            mutableStateOf(searchOptions?.defaultSectionKeys?.toList().orEmpty())
+            mutableStateOf(availableSearchOptions?.defaultSectionKeys?.toList().orEmpty())
         }
     // Enums are Serializable, so the mode survives process death without a name round-trip.
     var searchMode by
         rememberSaveable(resetKey) {
-            mutableStateOf(searchOptions?.defaultMode ?: InspectorSearchMode.KEYS_AND_VALUES)
+            mutableStateOf(availableSearchOptions?.defaultMode ?: InspectorSearchMode.KEYS_AND_VALUES)
         }
     var currentMatchOrdinal by rememberSaveable(resetKey) { mutableIntStateOf(0) }
+    var lastFocusedMatch by rememberSaveable(resetKey) { mutableStateOf<List<String>?>(null) }
     var rawFormattableSectionKeys by rememberSaveable(resetKey) { mutableStateOf(emptyList<String>()) }
     var searchOptionsVisible by remember(resetKey) { mutableStateOf(false) }
-    val openState =
-        remember(resetKey) {
-            mutableStateMapOf<String, Boolean>().apply { initiallyOpenSectionKeys.forEach { key -> this[key] = true } }
-        }
+    val openState = remember(resetKey) { openSectionState(initiallyOpenSectionKeys) }
     val colors = DevConsoleTheme.colors
     val selectedKeys = remember(selectedSectionKeys) { selectedSectionKeys.toSet() }
     val rawSectionKeys = remember(rawFormattableSectionKeys) { rawFormattableSectionKeys.toSet() }
-    val searchableSectionKeys = remember(searchOptions) { searchOptions.searchableSectionKeys() }
+    val searchableSectionKeys = remember(availableSearchOptions) { availableSearchOptions.searchableSectionKeys() }
     val searchableSectionBodies = inspectorSearchSectionBodies(sections, searchableSectionKeys)
-    val searching = searchOptions != null
+    val searching = availableSearchOptions != null
     // Formattable bodies only offer the raw/formatted toggle on the kinds that carry search options.
     val onShowRawChange: ((String, Boolean) -> Unit)? =
         if (searching) {
@@ -591,24 +622,34 @@ internal fun InspectorObserveDetailScreen(
             openState = openState,
             colors = colors,
         )
-    val networkMatches = search.matches
+    val matches = search.matches
     val activeMatchOrdinal = search.activeMatchOrdinal
     val resolved = search.resolved
     val totalHits = search.totalHits
+
+    // Resolve matches against every section before filtering the rendered tab. Changing the tab
+    // mounts its body first; that body's existing BringIntoViewRequester then scrolls to the hit.
+    // Remember the focused occurrence too, so recreation preserves a manually selected tab even
+    // when the current search hit belongs to another tab.
+    val activeMatch = matches.getOrNull(activeMatchOrdinal)
+    val focusedMatch = activeMatch?.focusKey(query)
+    LaunchedEffect(resetKey, focusedMatch) {
+        if (focusedMatch != lastFocusedMatch) {
+            selectedTab = sections.tabOf(activeMatch) ?: selectedTab
+            lastFocusedMatch = focusedMatch
+        }
+    }
 
     // Which section's code block (if any) is showing full-screen.
     // Bundle-safe on its own (a String key), and the lines it needs are re-derived from `resolved`
     // above on recreation rather than saved themselves -- InspectorCodeLine carries a Color, which
     // isn't a Saveable type.
     var fullScreenSectionKey by rememberSaveable(resetKey) { mutableStateOf<String?>(null) }
-    val fullScreenSection =
-        fullScreenSectionKey?.let { key ->
-            resolved.firstOrNull { (spec, _) -> spec.key == key }
-        }
+    val fullScreenSection = resolved.fullScreenSection(fullScreenSectionKey)
 
     BackHandler(onBack = onBack)
 
-    if (fullScreenSection != null && fullScreenSection.second.body.isFullScreenCapable()) {
+    if (fullScreenSection != null) {
         val (spec, section) = fullScreenSection
         ObserveDetailFullScreenOverlay(
             spec = spec,
@@ -622,9 +663,8 @@ internal fun InspectorObserveDetailScreen(
         return
     }
 
-    InspectorDetailScaffold(
-        modifier = modifier.fillMaxSize(),
-        header = {
+    Surface(modifier = modifier.fillMaxSize(), color = colors.ground) {
+        Column(modifier = Modifier.fillMaxSize().imePadding()) {
             InspectorDetailHeader(
                 kindLabel = header.kindLabel,
                 leadText = header.leadText,
@@ -635,42 +675,58 @@ internal fun InspectorObserveDetailScreen(
                 status = header.status,
                 statusColor = header.statusColor,
                 onBack = onBack,
-                actions = header.actions,
+                actions =
+                    header.actions +
+                        detailSearchToggleAction(searchVisible, colors) {
+                            searchVisible = !searchVisible
+                            if (!searchVisible) {
+                                query = ""
+                                currentMatchOrdinal = 0
+                            }
+                        },
             )
-            ObserveDetailSearchBar(
-                query = query,
-                onQueryChange = {
-                    query = it
-                    currentMatchOrdinal = 0
-                },
-                searching = searching,
-                matchCount = networkMatches.size,
-                activeMatchOrdinal = activeMatchOrdinal,
-                totalHits = totalHits,
-                onOrdinalChange = { currentMatchOrdinal = it },
-                onOpenOptions = { searchOptionsVisible = true },
-                scopeLabel = searchOptions?.let { inspectorSearchScopeSummary(it, selectedKeys) },
-                placeholder = searchPlaceholder,
-                modifier = Modifier.padding(top = 12.dp),
-            )
-        },
-        footer = { InspectorDetailFooterBar(footerActions) },
-    ) {
-        resolved.forEach { (spec, section) ->
-            InspectorDetailSectionCard(
-                spec = spec,
-                resolved = section,
-                currentMatchOrdinal = if (searching) activeMatchOrdinal else null,
-                formattableShowRaw = formattableShowRaw(spec, searching, rawSectionKeys),
-                onFormattableShowRawChange =
-                    onShowRawChange?.let { change -> { showRaw -> change(spec.key, showRaw) } },
-                onToggle = { openState[spec.key] = !section.expanded },
-                onExpandCodeFullScreen = { key -> fullScreenSectionKey = key },
-            )
+            ObserveDetailTabs(tabs, selectedTab) { selectedTab = it }
+            if (searchVisible) {
+                ObserveDetailSearchBar(
+                    query = query,
+                    onQueryChange = {
+                        query = it
+                        currentMatchOrdinal = 0
+                    },
+                    searching = searching,
+                    matchCount = matches.size,
+                    activeMatchOrdinal = activeMatchOrdinal,
+                    totalHits = totalHits,
+                    onOrdinalChange = {
+                        currentMatchOrdinal = it
+                        // Explicitly focus even when next/previous wraps through a single match.
+                        selectedTab = sections.tabOf(matches.getOrNull(it)) ?: selectedTab
+                    },
+                    onOpenOptions = { searchOptionsVisible = true },
+                    scopeLabel = searchOptions?.let { inspectorSearchScopeSummary(it, selectedKeys) },
+                    placeholder = searchPlaceholder,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+            key(resetKey, selectedTab) {
+                ObserveDetailTabBody(
+                    showTabs = showTabs,
+                    selectedTab = selectedTab,
+                    notices = header.notices,
+                    resolved = resolved,
+                    currentMatchOrdinal = if (searching) activeMatchOrdinal else null,
+                    showRawOf = { spec -> formattableShowRaw(spec, searching, rawSectionKeys) },
+                    onShowRawChange = onShowRawChange,
+                    onToggleSection = { key, expanded -> openState[key] = !expanded },
+                    onExpandCodeFullScreen = { key -> fullScreenSectionKey = key },
+                    footerActions = footerActions,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
     ObserveDetailSearchOptionsSheet(
-        options = searchOptions.takeIf { searchOptionsVisible },
+        options = availableSearchOptions.takeIf { searchOptionsVisible },
         selectedSectionKeys = selectedKeys,
         mode = searchMode,
         onDismiss = { searchOptionsVisible = false },
@@ -681,6 +737,111 @@ internal fun InspectorObserveDetailScreen(
             searchOptionsVisible = false
         },
     )
+}
+
+private fun openSectionState(initiallyOpenSectionKeys: Set<String>): SnapshotStateMap<String, Boolean> =
+    mutableStateMapOf<String, Boolean>().apply { initiallyOpenSectionKeys.forEach { key -> this[key] = true } }
+
+/** The section showing its code full-screen, while its body can still be shown that way. */
+private fun List<Pair<InspectorDetailSectionSpec, ResolvedDetailSection>>.fullScreenSection(
+    key: String?,
+): Pair<InspectorDetailSectionSpec, ResolvedDetailSection>? =
+    key
+        ?.let {
+            firstOrNull { (spec, _) ->
+                spec.key == it
+            }
+        }?.takeIf { (_, section) -> section.body.isFullScreenCapable() }
+
+/** The tab strip appears only once a kind has more than one tab. */
+@Composable
+private fun ObserveDetailTabs(
+    tabs: List<InspectorDetailTab>,
+    selectedTab: InspectorDetailTab,
+    onSelect: (InspectorDetailTab) -> Unit,
+) {
+    if (tabs.size <= 1) return
+    InspectorTabRow(tabs = tabs.map { tab -> InspectorTab(tab.label, tab == selectedTab, onClick = { onSelect(tab) }) })
+}
+
+/** Kinds without their own search options search their whole document once they have tabs. */
+private fun documentSearchOptions(
+    sections: List<InspectorDetailSectionSpec>,
+    showTabs: Boolean,
+): InspectorDetailSearchOptions? =
+    if (showTabs) {
+        InspectorDetailSearchOptions(
+            sections = sections.map { InspectorDetailSearchSection(it.key, it.label) },
+            defaultSectionKeys = sections.mapTo(mutableSetOf()) { it.key },
+        )
+    } else {
+        null
+    }
+
+/** Identifies one focused occurrence, so recreation can tell a new hit from the one already shown. */
+private fun InspectorDetailSearchMatch.focusKey(query: String): List<String> =
+    listOf(query, sectionKey, itemId, field.name, start.toString(), ordinal.toString())
+
+private fun List<InspectorDetailSectionSpec>.tabOf(match: InspectorDetailSearchMatch?): InspectorDetailTab? =
+    match?.let { hit -> firstOrNull { it.key == hit.sectionKey }?.tab }
+
+private fun detailSearchToggleAction(
+    searchVisible: Boolean,
+    colors: DevConsoleColors,
+    onToggle: () -> Unit,
+): InspectorTopAction =
+    InspectorTopAction(
+        contentDescription = if (searchVisible) "Close detail search" else "Search detail",
+        onClick = onToggle,
+        icon = { InspectorGlyphIcon(InspectorGlyph.Search, null, tint = colors.muted, size = 20.dp) },
+    )
+
+@Composable
+private fun ObserveDetailTabBody(
+    showTabs: Boolean,
+    selectedTab: InspectorDetailTab,
+    notices: List<String>,
+    resolved: List<Pair<InspectorDetailSectionSpec, ResolvedDetailSection>>,
+    currentMatchOrdinal: Int?,
+    showRawOf: (InspectorDetailSectionSpec) -> Boolean?,
+    onShowRawChange: ((String, Boolean) -> Unit)?,
+    onToggleSection: (String, Boolean) -> Unit,
+    onExpandCodeFullScreen: (String) -> Unit,
+    footerActions: List<InspectorFooterAction>,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .verticalScroll(rememberScrollState())
+                .padding(top = if (showTabs) 8.dp else 12.dp, bottom = 24.dp),
+    ) {
+        val overviewVisible = !showTabs || selectedTab == InspectorDetailTab.OVERVIEW
+        if (overviewVisible && notices.isNotEmpty()) {
+            WarnNote(notices.joinToString(" · "), Modifier.padding(bottom = 16.dp))
+        }
+        resolved.filter { (spec, _) -> !showTabs || spec.tab == selectedTab }.forEach { (spec, section) ->
+            key(spec.key) {
+                if (spec.tab == InspectorDetailTab.TIMING &&
+                    spec.body is InspectorDetailSectionBody.Empty
+                ) {
+                    ObserveDetailNoTiming()
+                } else {
+                    InspectorDetailSectionCard(
+                        spec = spec,
+                        resolved = section,
+                        currentMatchOrdinal = currentMatchOrdinal,
+                        formattableShowRaw = showRawOf(spec),
+                        onFormattableShowRawChange =
+                            onShowRawChange?.let { change -> { showRaw -> change(spec.key, showRaw) } },
+                        onToggle = { onToggleSection(spec.key, section.expanded) },
+                        onExpandCodeFullScreen = onExpandCodeFullScreen,
+                    )
+                }
+            }
+        }
+        if (overviewVisible) ObserveDetailActionRows(footerActions)
+    }
 }
 
 /** Renders the scope/mode sheet only while [options] is non-null, i.e. while the chip has it open. */
@@ -744,7 +905,7 @@ internal fun copyIconAction(tint: Color): @Composable () -> Unit =
     { InspectorGlyphIcon(InspectorGlyph.Copy, contentDescription = null, tint = tint, size = 19.dp) }
 
 internal fun shareIconAction(tint: Color): @Composable () -> Unit =
-    { ObserveGlyphIcon(ObserveGlyph.Download, contentDescription = null, tint = tint, size = 19.dp) }
+    { DevConsoleIcon(R.drawable.devconsole_ic_share_nodes, null, Modifier, tint, 20.dp) }
 
 /**
  * A flat captured body preview rendered as an unadorned code block, one real line per line. Shared

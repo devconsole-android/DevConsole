@@ -24,7 +24,7 @@ class ExportSelectionTest {
         startedAtEpochMs = startedAt,
         completedAtEpochMs = startedAt + 5,
         capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                 NetworkRequestInput("GET", url),
                 NetworkResponseInput(200),
             ),

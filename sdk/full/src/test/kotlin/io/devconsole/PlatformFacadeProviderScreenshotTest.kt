@@ -37,10 +37,13 @@ import java.net.URLEncoder
 @Config(sdk = [34])
 class PlatformFacadeProviderScreenshotTest {
     @Test
-    fun `screenshot capture is disabled by default and captures nothing`() =
+    fun `screenshot capture can be disabled explicitly and captures nothing`() =
         runTest {
             val provider = PlatformFacadeProvider()
-            provider.initialize(ApplicationProvider.getApplicationContext(), DevConsoleConfig.default())
+            provider.initialize(
+                ApplicationProvider.getApplicationContext(),
+                DevConsoleConfig.default().withScreenshotPolicy(ScreenshotPolicy(enabled = false)),
+            )
 
             val result = provider.captureScreenshot()
 

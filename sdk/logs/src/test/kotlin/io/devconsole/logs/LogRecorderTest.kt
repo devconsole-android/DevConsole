@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LogRecorderTest {
-    private val redaction = RedactionEngine(RedactionPolicy.default())
+    private val redaction = RedactionEngine(RedactionPolicy.recommended())
     private val emitted = mutableListOf<LogEntry>()
     private val sink = LogSink(emitted::add)
 

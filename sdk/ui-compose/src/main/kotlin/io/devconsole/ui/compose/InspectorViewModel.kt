@@ -268,6 +268,7 @@ class InspectorViewModel
                         browser = snapshot.browser,
                         retention = snapshot.retention,
                         captureCategories = snapshot.captureCategories,
+                        redactionEnabled = snapshot.redactionEnabled,
                     )
                 // A category disabled mid-session (or a filter change while a now-hidden tab stayed
                 // selected) must not strand the Observe tab row on a tab [visibleObserveTabs] no

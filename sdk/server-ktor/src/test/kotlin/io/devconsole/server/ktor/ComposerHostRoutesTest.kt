@@ -37,7 +37,7 @@ class ComposerHostRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerHostsEditable = true
                     composerAllowedHosts = setOf("fixed.example.test")
@@ -74,7 +74,7 @@ class ComposerHostRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerHostsEditable = true
                     composerAllowedHosts = setOf("fixed.example.test")
@@ -95,7 +95,7 @@ class ComposerHostRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerAllowedHosts = setOf("fixed.example.test")
                     commandAuditLog = audit
@@ -119,7 +119,7 @@ class ComposerHostRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerHostsEditable = true
                 }
@@ -144,7 +144,7 @@ class ComposerHostRoutesTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) { composerHostsEditable = true } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { composerHostsEditable = true } }
             val session = client.exchangeSession(sessions, sessionCodes)
 
             assertEquals(HttpStatusCode.NotFound, client.addHost(session, "api.acme.com").status)
@@ -156,7 +156,7 @@ class ComposerHostRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     composerEnabled = true
                     composerHostsEditable = true
                     composerAllowedHosts = setOf("b.example.test")

@@ -54,7 +54,7 @@ class FeatureFlagAndExportBundleRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     featureFlags = SessionFeatureFlags(listOf(FeatureFlag.ofBoolean("newCheckout", false)))
                     // Every default category except "state" -- so the flag routes' STATE gate is the
                     // only thing standing between the caller and the flag list.
@@ -80,7 +80,7 @@ class FeatureFlagAndExportBundleRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val flags = SessionFeatureFlags(listOf(FeatureFlag.ofBoolean("newCheckout", false)))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     featureFlags = flags
                     featureFlagsEditable = false
                 }
@@ -105,7 +105,7 @@ class FeatureFlagAndExportBundleRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     featureFlags = SessionFeatureFlags(listOf(FeatureFlag.ofBoolean("newCheckout", false)))
                     featureFlagsEditable = true
                     commandAuditLog = audit
@@ -140,7 +140,7 @@ class FeatureFlagAndExportBundleRoutesTest {
             val networkStore = InMemoryNetworkTransactionStore(NetworkCursorCodec(ByteArray(16)))
             networkStore.record(networkTransaction("tx-1").withSessionId("current"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.timeline = timeline
                     this.networkTransactions = networkStore
                     this.exportDirectory = exportDirectory
@@ -195,9 +195,9 @@ class FeatureFlagAndExportBundleRoutesTest {
                 ).withSessionId("current"),
             )
             application {
-                // redactionPolicy defaults to RedactionPolicy.default(), which masks the
+                // redactionPolicy defaults to RedactionPolicy.recommended(), which masks the
                 // Cookie header the permissive capture-time policy above let through.
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.networkTransactions = networkStore
                 }
             }
@@ -223,7 +223,7 @@ private fun networkTransaction(id: String): NetworkTransaction =
         startedAtEpochMs = 1,
         completedAtEpochMs = 2,
         capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                 NetworkRequestInput("GET", "https://api.test/orders"),
                 NetworkResponseInput(200),
             ),

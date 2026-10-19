@@ -10,10 +10,12 @@ authenticated session can open the Composer page in `SESSION_CODE` mode — see
 [PROTOCOL_REFERENCE.md](PROTOCOL_REFERENCE.md#2-auth-handshake-session_code)), and either build a
 request by hand or use "Copy redacted cURL to composer" from a captured Network
 transaction (see [NETWORK_INSPECTOR.md](NETWORK_INSPECTOR.md)). The browser route
-(`POST /api/v1/composer/execute`) is off by default — the host must set
-`DevConsoleConfig.composerEnabled = true`, optionally with a `composerAllowedHosts` allowlist —
-and is independent of the in-app inspector's own composer UI, which is instead gated by the host's
-`EditingCapabilities.requestExecution` flag. See [THREAT_MODEL.md](THREAT_MODEL.md).
+(`POST /api/v1/composer/execute`) is enabled by default. An empty `composerAllowedHosts` permits
+any host; a non-empty set restricts every destination, including redirects, to those hosts.
+Set `composerEnabled = false` to disable the browser Composer. The in-app inspector also requires
+`EditingCapabilities.requestExecution`, which defaults to true. Use
+`.withEditingCapabilities(EditingCapabilities.readOnly())` to refuse all inspector writes.
+See [THREAT_MODEL.md](THREAT_MODEL.md).
 
 ### Calling an API with an access token (and why there is no CORS)
 
@@ -42,19 +44,20 @@ The result panel shows the status, timing, where it ran, the response headers an
 
 ### Adding a host without rebuilding
 
-`composerAllowedHosts` is fixed when the app is built. To try another API without a rebuild, opt in
-with `composerHostsEditable(true)`. The Composer's **Host allowlist** card then has an *Allow host*
+An empty `composerAllowedHosts` (the default) lets the Composer reach any host, so there is nothing to
+add. Once the app lists hosts, the list is fixed when the app is built; to try another API without a
+rebuild, keep `composerHostsEditable` on (the default; `composerHostsEditable(false)` locks it). The Composer's **Host allowlist** card then has an *Allow host*
 box (a pasted URL is reduced to its hostname), and a request rejected with `COMPOSER_HOST_REJECTED`
 shows an **Allow \<host\>** button. Hosts added this way last until DevConsole stops, can be removed
 from the same card, and are audited as `composer.host.add` / `composer.host.remove`. Hosts set by the
 app cannot be removed from the dashboard, wildcards are not accepted, and at most 50 can be added.
 
 The in-app Composer screen consults the same live list, so a host allowed from the dashboard also works
-there while the server runs; with the server stopped it falls back to `composerAllowedHosts`. In the
-samples, `compose-app` and `views-java-app` turn this on and `foundation-app` keeps its locked-down
-defaults, where the card reads "The app fixes this list".
+there while the server runs; with the server stopped it falls back to `composerAllowedHosts`. The
+`views-java-app` sample lists hosts, so its card shows the editor; the other samples list none and permit
+any host. With `composerHostsEditable(false)` the card reads "The app fixes this list".
 
-Leave it off for anything reachable by other people: every added host widens where the device will send
+Turn it off for anything reachable by other people: every added host widens where the device will send
 requests, and in the default open mode that is anyone who can open the dashboard.
 
 ### Run on a host computer (macOS, Linux, Windows)
@@ -89,7 +92,12 @@ second, local lock, not a bypass.
 
 Composer executions appear as first-class network events tagged `source=composer`, so they show up
 in the Timeline and Network pages like any other captured request. Imported cURL and saved
-collections never persist secret variable values by default.
+collections follow the configured redaction policy. By default, secret values remain visible;
+`DevConsoleConfig(redactionPolicy = RedactionPolicy.recommended())` opts into masking and secret
+variable removal in collections. Rate budgets and Host/Origin checks are also opt-in through
+`.withNetworkProtection(NetworkProtection.recommended())`. Browser authentication is independently
+enabled with `.withBrowserSecurity(BrowserSecurity.SESSION_CODE)`. See the full
+[layer/default table and hardening checklist](SECURITY_AND_REDACTION.md#opt-in-security-layers).
 
 ## Mocks
 

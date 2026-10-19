@@ -149,6 +149,18 @@ Run against `samples/compose-app` — the sample with every feature switched on 
 `FOREGROUND_SERVICE_SPECIAL_USE`, `POST_NOTIFICATIONS` and `INTERNET`, while its release APK lists
 only `INTERNET` (the sample's own) and the auto-generated dynamic-receiver permission.
 
+## Runtime security is opt-in
+
+The release/noop guard is unchanged. It still refuses the full runtime in non-debuggable apps and
+keeps protected variants on the noop artifact. Runtime defaults in an enabled debug build now favor
+inspection: no redaction, no rate limiting or Host/Origin checks, open browser access, all editing
+capabilities enabled, unrestricted Composer hosts, state mutations enabled, and screenshots enabled.
+Opt in with `RedactionPolicy.recommended()`, `NetworkProtection.recommended()`,
+`EditingCapabilities.readOnly()`, and `BrowserSecurity.SESSION_CODE`; set `composerEnabled = false`,
+`stateMutationsEnabled = false`, and `ScreenshotPolicy(enabled = false)` when needed. The complete
+[default/one-line configuration table](SECURITY_AND_REDACTION.md#opt-in-security-layers) and hardening
+checklist cover shared networks and production-like data.
+
 ## Publication status
 
 The artifacts are `com.github.devconsole-android.DevConsole:devconsole` (the full runtime, from `:sdk:full`) and

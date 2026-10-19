@@ -8,84 +8,110 @@
   <link rel="icon" type="image/webp" href="/assets/favicon.webp">
   <link rel="stylesheet" href="/assets/dashboard.css">
 </head>
-<body><!--
-THESIS: DevConsole is a native desktop diagnostic workbench; refuses theatrical terminal dashboard/card grid.
-OWN-WORLD: graphite/cobalt, flat separators, compact controls, table/list grammar, mono only for captured data.
-STORY: operator sees session health, opens failures, flags evidence, exports report.
-FIRST VIEWPORT: 48px topbar, 216px rail, Session overview title, four-value summary strip, dominant Needs attention table, narrow live signals column, primary action in context.
-FORM: approved Overview-led/table-first workbench, seed key d98a1e15.
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
--->
+<body>
 <a class="skip-link" href="#mainContent">Skip to inspector content</a>
 <svg class="dc-sprite" aria-hidden="true" focusable="false">
-  <symbol id="dc-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7"/></symbol>
-  <symbol id="dc-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
-  <symbol id="dc-network" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h11a4 4 0 0 1 4 4v1"/><path d="M16 21l4-4-4-4"/><path d="M20 17H9a4 4 0 0 1-4-4v-1"/></symbol>
-  <symbol id="dc-sockets" viewBox="0 0 24 24"><path d="M9 2v6M15 2v6"/><path d="M7 8h10v3a5 5 0 0 1-10 0V8Z"/><path d="M12 16v6"/></symbol>
-  <symbol id="dc-push" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.5 20a1.8 1.8 0 0 0 3 0"/></symbol>
-  <symbol id="dc-activity" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 15 2.5-9H21"/></symbol>
-  <symbol id="dc-health" viewBox="0 0 24 24"><path d="M12 21s-7-4.35-9.5-8.5C.5 8 3 4.5 6.5 4.5c2 0 3.3 1 4 2 .7-1 2-2 4-2 3.5 0 6 3.5 4 8-2.5 4.15-6.5 8.5-6.5 8.5Z"/></symbol>
-  <symbol id="dc-composer" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></symbol>
-  <symbol id="dc-mocks" viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4"/><path d="M8.5 11.5s1 1.5 3.5 1.5 3.5-1.5 3.5-1.5"/><circle cx="9" cy="8.5" r=".6" fill="currentColor" stroke="none"/><circle cx="15" cy="8.5" r=".6" fill="currentColor" stroke="none"/></symbol>
-  <symbol id="dc-funnel" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4-2v-4Z"/></symbol>
-  <symbol id="dc-flag" viewBox="0 0 24 24"><path d="M5 3v18"/><path d="M5 4h11l-2 4 2 4H5Z"/></symbol>
-  <symbol id="dc-sliders" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h13M21 18v0"/><circle cx="14" cy="6" r="2"/><circle cx="7" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
-  <symbol id="dc-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
-  <symbol id="dc-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
-  <symbol id="dc-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6Z"/></symbol>
-  <symbol id="dc-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
-  <symbol id="dc-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
-  <symbol id="dc-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/></symbol>
-  <symbol id="dc-pencil" viewBox="0 0 24 24"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
-  <symbol id="dc-check" viewBox="0 0 24 24"><path d="m5 12 5 5L20 6"/></symbol>
-  <symbol id="dc-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
-  <symbol id="dc-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
-  <symbol id="dc-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.3M21 3v5h-5"/></symbol>
-  <symbol id="dc-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 19h16"/></symbol>
-  <symbol id="dc-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
-  <symbol id="dc-star" viewBox="0 0 24 24"><path d="m12 3 2.6 5.6 6.2.6-4.6 4.2 1.3 6.1L12 16.9l-5.5 2.6 1.3-6.1L3.2 9.2l6.2-.6Z"/></symbol>
-  <symbol id="dc-keyboard" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></symbol>
-  <symbol id="dc-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
-  <symbol id="dc-moon" viewBox="0 0 24 24"><path d="M20 15A8 8 0 0 1 9 4a8 8 0 1 0 11 11Z"/></symbol>
-  <symbol id="dc-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"/></symbol>
-  <symbol id="dc-pause" viewBox="0 0 24 24"><rect x="7" y="5" width="3.5" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="3.5" height="14" rx="1" fill="currentColor" stroke="none"/></symbol>
-  <symbol id="dc-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17.5h.01"/></symbol>
-  <symbol id="dc-send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></symbol>
-  <symbol id="dc-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></symbol>
-  <symbol id="dc-sidebar" viewBox="0 0 16 16"><path stroke-width="1.4" d="M3.5 3h9A1.5 1.5 0 0 1 14 4.5v7A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-7A1.5 1.5 0 0 1 3.5 3ZM6.2 3v10"/></symbol>
-  <symbol id="dc-chevron" viewBox="0 0 16 16"><path stroke-width="1.4" d="M4 6.5 8 10.5l4-4"/></symbol>
-  <symbol id="dc-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
-  <symbol id="dc-expand" viewBox="0 0 24 24"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6"/></symbol>
-  <symbol id="dc-collapse" viewBox="0 0 24 24"><path d="M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6"/></symbol>
-  <symbol id="dc-dots" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none"/></symbol>
-  <symbol id="dc-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
-  <symbol id="dc-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></symbol>
-  <symbol id="dc-plug" viewBox="0 0 24 24"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-10 0V8Z"/><path d="M12 16v6"/></symbol>
-  <symbol id="dc-camera" viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-2h7l1 2H18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.5"/></symbol>
-  <symbol id="dc-bug" viewBox="0 0 24 24"><path d="M9 8h6M8 12h8M8 16h8"/><rect x="7" y="6" width="10" height="14" rx="4"/><path d="M12 6V4M6 9 4 7M18 9l2-2M6 15l-2 1M18 15l2 1"/></symbol>
+  <symbol id="dc-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7"/></symbol>
+  <symbol id="dc-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.75 12 C4.75 8.1 8.05 5.75 12 5.75 C15.95 5.75 19.25 8.1 21.25 12 C19.25 15.9 15.95 18.25 12 18.25 C8.05 18.25 4.75 15.9 2.75 12 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="dc-network" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.888 8.109 H19.781 M16.28 4.608 L19.781 8.109 L16.28 11.611 M15.112 15.891 H4.219 M7.72 12.389 L4.219 15.891 L7.72 19.392" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-sockets" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.621 3.136 V8.205 M15.379 3.136 V8.205 M6.086 8.205 H17.914 V11.584 C17.914 14.879 15.295 17.498 12 17.498 C8.705 17.498 6.086 14.879 6.086 11.584 V8.205 Z M12 17.498 V20.877" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-push" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.96 17.091 C6.133 15.917 6.524 15.135 6.524 13.571 V9.268 C6.524 6.241 8.973 3.793 12 3.793 C15.027 3.793 17.476 6.241 17.476 9.268 V13.571 C17.476 15.135 17.867 15.917 19.04 17.091 H4.96 Z M10.044 19.437 C11.061 20.478 12.939 20.478 13.956 19.437" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.525" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M12 7.129 V12 L15.653 14.436" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-health" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.35-9.5-8.5C.5 8 3 4.5 6.5 4.5c2 0 3.3 1 4 2 .7-1 2-2 4-2 3.5 0 6 3.5 4 8-2.5 4.15-6.5 8.5-6.5 8.5Z"/></symbol>
+  <symbol id="dc-composer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.966 14.991 l10.651 -10.651 a1.944 1.944 0 0 1 2.721 0 l1.322 1.322 a1.944 1.944 0 0 1 0 2.721 L9.009 19.034 L3.8 20.2 Z" /><path d="M14.296 5.661 l4.043 4.043" /></g></symbol>
+  <symbol id="dc-mocks" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.765 L20.773 7.29 V16.71 L12 21.235 L3.227 16.71 V7.29 Z" /><path d="M3.227 7.29 L12 12 L20.773 7.29 M12 12 V21.235" /></g></symbol>
+  <symbol id="dc-funnel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6 H20 M7 12 H17 M10 18 H14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.256 20.43 V4.413 C5.256 4.413 6.099 3.57 8.628 3.57 C11.157 3.57 12.843 5.256 15.372 5.256 C17.901 5.256 18.744 4.413 18.744 4.413 V14.529 C18.744 14.529 17.901 15.372 15.372 15.372 C12.843 15.372 11.157 13.686 8.628 13.686 C6.099 13.686 5.256 14.529 5.256 14.529" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.73 5.791 h7.089 M15.544 5.791 h4.726 M3.73 12.092 h1.378 M9.44 12.092 h5.12 M18.892 12.092 h1.378 M3.73 18.394 h4.726 M12.788 18.394 h7.483" /><circle cx="13.181" cy="5.791" r="2.363" /><circle cx="7.274" cy="12.092" r="2.166" /><circle cx="16.726" cy="12.092" r="2.166" /><circle cx="10.622" cy="18.394" r="2.166" /></g></symbol>
+  <symbol id="dc-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6.657" rx="6.987" ry="3.288" /><path d="M5.013 6.657 V17.343 C5.013 19.159 8.141 20.631 12 20.631 C15.859 20.631 18.987 19.159 18.987 17.343 V6.657 M5.013 12 C5.013 13.816 8.141 15.288 12 15.288 C15.859 15.288 18.987 13.816 18.987 12" /></g></symbol>
+  <symbol id="dc-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7 V18 C3.5 18.828 4.172 19.5 5 19.5 H19 C19.828 19.5 20.5 18.828 20.5 18 V8.5 C20.5 7.672 19.828 7 19 7 H11 L8.5 4.5 H5 C4.172 4.5 3.5 5.172 3.5 6 V7 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6Z"/></symbol>
+  <symbol id="dc-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.1 15.1 L20 20" /></g></symbol>
+  <symbol id="dc-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="dc-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7 H19.5" /><path d="M9.5 7 V4.75 H14.5 V7" /><path d="M6.5 7 L7.4 19.25 H16.6 L17.5 7" /><path d="M10.25 11 V15.5" /><path d="M13.75 11 V15.5" /></g></symbol>
+  <symbol id="dc-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.966 14.991 l10.651 -10.651 a1.944 1.944 0 0 1 2.721 0 l1.322 1.322 a1.944 1.944 0 0 1 0 2.721 L9.009 19.034 L3.8 20.2 Z" /><path d="M14.296 5.661 l4.043 4.043" /></g></symbol>
+  <symbol id="dc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 L9.5 17 L19 7.5" /></g></symbol>
+  <symbol id="dc-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 5.5 L18.5 18.5 M18.5 5.5 L5.5 18.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 16.5 H5 C4.172 16.5 3.5 15.828 3.5 15 V5 C3.5 4.172 4.172 3.5 5 3.5 H15 C15.828 3.5 16.5 4.172 16.5 5 V7.5" /><rect x="7.5" y="7.5" width="13" height="13" rx="1.5" /></g></symbol>
+  <symbol id="dc-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.25 12 A7.25 7.25 0 1 1 16.9 6.65" /><path d="M19.25 4.5 V8.5 H15.25" /></g></symbol>
+  <symbol id="dc-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 V14.5 M7.5 10 L12 14.5 L16.5 10 M4 14 V19 C4 19.828 4.672 20.5 5.5 20.5 H18.5 C19.328 20.5 20 19.828 20 19 V14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+  <symbol id="dc-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.6 5.6 6.2.6-4.6 4.2 1.3 6.1L12 16.9l-5.5 2.6 1.3-6.1L3.2 9.2l6.2-.6Z"/></symbol>
+  <symbol id="dc-keyboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></symbol>
+  <symbol id="dc-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5" /><path d="M12 3 V4.5 M12 19.5 V21 M3 12 H4.5 M19.5 12 H21 M5.636 5.636 L6.697 6.697 M17.303 17.303 L18.364 18.364 M5.636 18.364 L6.697 17.303 M17.303 6.697 L18.364 5.636" /></g></symbol>
+  <symbol id="dc-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.009 12.726 A8.029 8.029 0 1 1 11.274 3.991 A6.245 6.245 0 0 0 20.009 12.726 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-record" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="dc-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="5" width="3.5" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="3.5" height="14" rx="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="dc-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.89 4.855 C11.384 3.976 12.616 3.976 13.11 4.855 L20.343 17.801 C20.853 18.714 20.195 19.815 19.151 19.815 H4.849 C3.805 19.815 3.147 18.714 3.657 17.801 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M12 9.746 V13.856" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><circle cx="12" cy="16.733" r="0.822" fill="currentColor" /></symbol>
+  <symbol id="dc-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></symbol>
+  <symbol id="dc-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.781 3.803 H6.926 a1.561 1.561 0 0 0 -1.561 1.561 v13.271 a1.561 1.561 0 0 0 1.561 1.561 h10.148 a1.561 1.561 0 0 0 1.561 -1.561 v-9.368 Z" /><path d="M12.781 3.803 v5.464 h5.855" /></g></symbol>
+  <symbol id="dc-sidebar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g transform="scale(1.5)"><path d="M3.5 3h9A1.5 1.5 0 0 1 14 4.5v7A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-7A1.5 1.5 0 0 1 3.5 3ZM6.2 3v10"/></g></symbol>
+  <symbol id="dc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9 L12 15 L18 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.75 12 C4.75 8.1 8.05 5.75 12 5.75 C15.95 5.75 19.25 8.1 21.25 12 C19.25 15.9 15.95 18.25 12 18.25 C8.05 18.25 4.75 15.9 2.75 12 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="dc-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9 V4 H9" /><path d="M15 4 H20 V9" /><path d="M20 15 V20 H15" /><path d="M9 20 H4 V15" /></g></symbol>
+  <symbol id="dc-collapse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6"/></symbol>
+  <symbol id="dc-dots" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g fill="currentColor"><circle cx="5" cy="12" r="1.25" /><circle cx="12" cy="12" r="1.25" /><circle cx="19" cy="12" r="1.25" /></g></symbol>
+  <symbol id="dc-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="dc-arrow-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></symbol>
+  <symbol id="dc-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.621 3.136 V8.205 M15.379 3.136 V8.205 M6.086 8.205 H17.914 V11.584 C17.914 14.879 15.295 17.498 12 17.498 C8.705 17.498 6.086 14.879 6.086 11.584 V8.205 Z M12 17.498 V20.877" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-2h7l1 2H18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+  <symbol id="dc-bug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.89 4.855 C11.384 3.976 12.616 3.976 13.11 4.855 L20.343 17.801 C20.853 18.714 20.195 19.815 19.151 19.815 H4.849 C3.805 19.815 3.147 18.714 3.657 17.801 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M12 9.746 V13.856" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><circle cx="12" cy="16.733" r="0.822" fill="currentColor" /></symbol>
+  <!-- Empty-state spot illustrations: base layer takes .spot's muted colour, -accent the signal. -->
+  <symbol id="dc-spot-traffic" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="20" width="64" height="16" rx="5"/><path d="M18 28 L28 28"/><path d="M34 28 L62 28"/><rect x="10" y="42" width="64" height="16" rx="5"/><path d="M18 50 L28 50"/><path d="M34 50 L56 50"/><g stroke-opacity="0.45"><rect x="10" y="64" width="64" height="16" rx="5"/><path d="M18 72 L28 72"/><path d="M34 72 L50 72"/></g></g></symbol>
+  <symbol id="dc-spot-traffic-accent" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="84" cy="18" r="4" fill="currentColor" stroke="none"/><circle cx="84" cy="18" r="9" stroke-opacity="0.4"/></g></symbol>
+  <symbol id="dc-spot-sockets" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 34 H34 A8 8 0 0 1 42 42 V54 A8 8 0 0 1 34 62 H12 Z"/><path d="M42 41 L48 41"/><path d="M42 55 L48 55"/><path d="M4 48 L12 48"/><path d="M84 34 H64 A8 8 0 0 0 56 42 V54 A8 8 0 0 0 64 62 H84 Z"/><path d="M84 48 L92 48"/><circle cx="65" cy="41" r="2" fill="currentColor" stroke="none"/><circle cx="65" cy="55" r="2" fill="currentColor" stroke="none"/></g></symbol>
+  <symbol id="dc-spot-sockets-accent" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="51" cy="48" r="1.8" fill="currentColor" stroke="none"/><circle cx="55" cy="48" r="1.8" fill="currentColor" stroke="none"/></g></symbol>
+  <symbol id="dc-spot-crashes" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M48 14 L74 24 V46 C74 64 62 76 48 82 C34 76 22 64 22 46 V24 Z"/></g></symbol>
+  <symbol id="dc-spot-crashes-accent" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M36 48 L45 57 L61 39"/></g></symbol>
+  <symbol id="dc-spot-push" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 68 C26 64 27 61 27 55 V42 C27 30 36 21 48 21 C60 21 69 30 69 42 V55 C69 61 70 64 74 68 Z"/><path d="M40 75 C43 81 53 81 56 75"/><path d="M48 13 L48 21"/></g></symbol>
+  <symbol id="dc-spot-push-accent" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M72 10 H82 L72 21 H82"/></g></symbol>
+  <symbol id="dc-spot-logs" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M28 14 H58 L70 26 V82 H28 Z"/><path d="M58 14 V26 H70"/><path d="M36 38 L62 38"/><path d="M36 48 L62 48"/><path d="M36 58 L54 58"/></g></symbol>
+  <symbol id="dc-spot-logs-accent" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M36 66 L41 70 L36 74"/><path d="M45 74 L52 74"/></g></symbol>
+  <symbol id="dc-spot-mocks" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M48 22 L74 35 V65 L48 78 L22 65 V35 Z"/><path d="M22 35 L48 48 L74 35"/><path d="M48 48 L48 78"/></g></symbol>
+  <symbol id="dc-spot-mocks-accent" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M82 10 L82 26"/><path d="M74 18 L90 18"/></g></symbol>
+  <symbol id="dc-spot-remote-config" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M26 70 H71 A17 17 0 0 0 72.5 36.1 A26 26 0 0 0 22 34.2 A18 18 0 0 0 26 70 Z"/></g></symbol>
+  <symbol id="dc-spot-remote-config-accent" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M48 38 L48 60"/><path d="M40 52 L48 60 L56 52"/></g></symbol>
+  <symbol id="dc-spot-search" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="42" cy="42" r="20"/><path d="M56.5 56.5 L76 76"/></g></symbol>
+  <symbol id="dc-spot-search-accent" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M34 42 L50 42"/></g></symbol>
+  <symbol id="dc-spot-folder" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 30 V72 A4 4 0 0 0 18 76 H78 A4 4 0 0 0 82 72 V38 A4 4 0 0 0 78 34 H46 L38 26 H18 A4 4 0 0 0 14 30 Z"/></g></symbol>
+  <symbol id="dc-spot-folder-accent" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="40" cy="56" r="2" fill="currentColor" stroke="none"/><circle cx="48" cy="56" r="2" fill="currentColor" stroke="none"/><circle cx="56" cy="56" r="2" fill="currentColor" stroke="none"/></g></symbol>
+  <symbol id="dc-spot-database" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 28 V68 C22 74 34 78 48 78 C62 78 74 74 74 68 V28"/><path d="M22 48 C22 54 34 58 48 58 C62 58 74 54 74 48"/></g></symbol>
+  <symbol id="dc-spot-database-accent" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="48" cy="28" rx="26" ry="10"/></g></symbol>
+  <symbol id="dc-spot-connect" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="18" width="26" height="50" rx="5"/><path d="M16 25 L22 25"/><rect x="52" y="24" width="36" height="26" rx="3"/><path d="M46 56 H94 L90 62 H50 Z"/></g></symbol>
+  <symbol id="dc-spot-connect-accent" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="38" cy="40" r="2" fill="currentColor" stroke="none"/><circle cx="43" cy="40" r="2" fill="currentColor" stroke="none"/><circle cx="48" cy="40" r="2" fill="currentColor" stroke="none"/><circle cx="19" cy="58" r="2.6" fill="currentColor" stroke="none"/></g></symbol>
+  <symbol id="dc-spot-select" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="22" width="52" height="12" rx="4"/><rect x="10" y="40" width="52" height="12" rx="4"/><g stroke-opacity="0.45"><rect x="10" y="58" width="52" height="12" rx="4"/></g></g></symbol>
+  <symbol id="dc-spot-select-accent" viewBox="0 0 96 96"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M58 44 L58 70 L64.5 63.5 L69.5 74 L74.5 71.8 L69.5 61.5 L78.5 61.5 Z"/></g></symbol>
+  <symbol id="dc-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5 H17.25 A3.75 3.75 0 0 0 17.6 11.02 A5.75 5.75 0 0 0 6.4 10.6 A4 4 0 0 0 7 18.5 Z"/></symbol>
+  <symbol id="dc-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.75" y="6.75" width="18.5" height="10.5" rx="5.25"/><circle cx="16" cy="12" r="2.5" fill="currentColor" stroke="none"/></symbol>
 </svg>
 
 <header class="topbar">
   <button type="button" class="rail-toggle" id="railToggle" aria-pressed="false" title="Hide the view list and give the content full width (\)"><svg class="ic" aria-hidden="true"><use href="#dc-sidebar"/></svg></button>
   <div class="brand">
-    <span class="brand-logo"><svg class="ic brand-mark" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" stroke="currentColor" stroke-opacity=".35"/><circle cx="11" cy="11" r="6" stroke="currentColor" stroke-opacity=".6"/><circle cx="11" cy="11" r="2.4" fill="currentColor" stroke="none"/></svg></span>
+    <span class="brand-logo" aria-hidden="true"></span>
     <span class="brand-name">DevConsole</span>
   </div>
-  <span class="host-line" id="hostLine" title="The device's More screen shows the dashboard URL; SESSION_CODE also shows a single-use code">Not connected — see the device's More screen for the dashboard URL</span>
+  <span class="host-line" id="hostLine" title="The device's More screen shows the dashboard URL; SESSION_CODE also shows a single-use code"></span>
   <div class="session-pill">
     <span class="dot" id="lamp"></span>
     <span class="label" id="status" title="Open DevConsole on the device, tap More, then scan the QR or copy the link — it shows on screen, never in logcat">Open DevConsole on device → More → scan the QR</span>
   </div>
+  <button type="button" class="live-toggle" id="liveToggle" aria-pressed="false" aria-label="Resume live events" hidden><span class="live-dot" aria-hidden="true"></span><span id="liveToggleLabel">Paused</span></button>
   <div class="stream-seg" role="group" aria-label="Live tail control">
     <button type="button" id="streamLive" title="Record live events (p)" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#dc-record"/></svg><span class="stream-seg-label">Live</span></button>
     <button type="button" id="streamPaused" title="Pause the stream (p)" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#dc-pause"/></svg><span class="stream-seg-label">Paused</span></button>
   </div>
   <div class="topbar-spacer"></div>
   <div class="topbar-actions">
-    <button type="button" class="icon-btn" id="captureScreenshot" title="Capture a screenshot of the device's foreground screen — off by default; the host enables it via screenshotPolicy.enabled" aria-label="Capture screenshot" disabled><svg class="ic" aria-hidden="true"><use href="#dc-camera"/></svg></button>
-    <button type="button" class="icon-btn" id="quickExport" title="Export session ZIP" aria-label="Export session ZIP" disabled><svg class="ic" aria-hidden="true"><use href="#dc-download"/></svg></button>
-    <button type="button" class="icon-btn" id="modeToggle" title="Advanced mode on/off (a)" aria-pressed="false" aria-label="Advanced mode on/off"><svg class="ic" aria-hidden="true"><use href="#dc-expand"/></svg></button>
-    <button type="button" class="icon-btn" id="shortcutsBtn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><svg class="ic" aria-hidden="true"><use href="#dc-keyboard"/></svg></button>
+    <div class="topbar-overflow" id="topbarOverflow">
+      <button type="button" class="icon-btn" id="topbarOverflowToggle" title="More actions" aria-label="More actions" aria-haspopup="true" aria-expanded="false" aria-controls="topbarOverflowPanel"><svg class="ic" aria-hidden="true"><use href="#dc-dots"/></svg></button>
+      <div class="topbar-menu" id="topbarOverflowPanel" role="group" aria-label="More actions" hidden>
+        <button type="button" class="topbar-menu-item" id="captureScreenshot" title="Capture a screenshot of the device's foreground screen — off by default; the host enables it via screenshotPolicy.enabled" aria-label="Capture screenshot" disabled><svg class="ic" aria-hidden="true"><use href="#dc-camera"/></svg><span>Capture screenshot</span></button>
+        <button type="button" class="topbar-menu-item" id="modeToggle" title="Advanced mode on/off (a)" aria-pressed="false" aria-label="Advanced mode on/off"><svg class="ic" aria-hidden="true"><use href="#dc-expand"/></svg><span>Advanced mode</span></button>
+        <button type="button" class="topbar-menu-item" id="shortcutsBtn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><svg class="ic" aria-hidden="true"><use href="#dc-keyboard"/></svg><span>Keyboard shortcuts</span></button>
+      </div>
+    </div>
+    <button type="button" class="icon-btn" id="quickExport" title="Export session ZIP" aria-label="Export session ZIP" disabled><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3M7 8l5-5 5 5M4 13v7h16v-7"/></svg></button>
     <button type="button" class="icon-btn" id="themeToggle" title="Toggle theme" aria-label="Toggle theme"><svg class="ic" aria-hidden="true"><use href="#dc-sun"/></svg></button>
   </div>
 </header>
@@ -93,11 +119,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <div class="workspace">
   <nav class="rail" id="viewNav" aria-label="Inspector views">
     <div class="rail-group">
-      <div class="rail-group-label"><span class="text">Workbench</span><span class="rule"></span></div>
-      <button type="button" id="viewOverview" class="active" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#dc-grid"/></svg><span class="rail-name">Overview</span></button>
-    </div>
-    <div class="rail-group">
+      <div class="rail-group-label" hidden>Workbench</div>
       <div class="rail-group-label"><span class="text">Traffic</span><span class="rule"></span></div>
+      <button type="button" id="viewOverview" class="active" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#dc-grid"/></svg><span class="rail-name">Overview</span></button>
       <button type="button" id="viewNetwork"><svg class="ic" aria-hidden="true"><use href="#dc-network"/></svg><span class="rail-name">Network</span><span class="rail-count" id="navCountNetwork">0</span></button>
       <button type="button" id="viewSockets"><svg class="ic" aria-hidden="true"><use href="#dc-sockets"/></svg><span class="rail-name">WebSockets</span><span class="rail-count" id="navCountSockets">0</span></button>
     </div>
@@ -110,14 +134,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </div>
     <div class="rail-group">
       <div class="rail-group-label"><span class="text">Control</span><span class="rule"></span></div>
-      <button type="button" id="viewComposer"><svg class="ic" aria-hidden="true"><use href="#dc-composer"/></svg><span class="rail-name">Composer</span></button>
       <button type="button" id="viewMocks"><svg class="ic" aria-hidden="true"><use href="#dc-mocks"/></svg><span class="rail-name">Mocks</span></button>
+      <button type="button" id="viewComposer"><svg class="ic" aria-hidden="true"><use href="#dc-composer"/></svg><span class="rail-name">Composer</span></button>
       <button type="button" id="viewCaptureRules"><svg class="ic" aria-hidden="true"><use href="#dc-funnel"/></svg><span class="rail-name">Capture rules</span><span class="rail-count" id="navCountCaptureRules">0</span></button>
     </div>
     <div class="rail-group" id="railGroupData">
       <div class="rail-group-label"><span class="text">Data</span><span class="rule"></span></div>
-      <button type="button" id="viewState"><svg class="ic" aria-hidden="true"><use href="#dc-flag"/></svg><span class="rail-name">State &amp; flags</span></button>
-      <button type="button" id="viewRemoteConfig"><svg class="ic" aria-hidden="true"><use href="#dc-sliders"/></svg><span class="rail-name">Remote Config</span><span class="rail-count" id="navCountRemoteConfig">0</span></button>
+      <button type="button" id="viewState"><svg class="ic" aria-hidden="true"><use href="#dc-toggle"/></svg><span class="rail-name">State &amp; flags</span></button>
+      <button type="button" id="viewRemoteConfig"><svg class="ic" aria-hidden="true"><use href="#dc-cloud"/></svg><span class="rail-name">Remote Config</span><span class="rail-count" id="navCountRemoteConfig">0</span></button>
       <button type="button" id="viewPreferences"><svg class="ic" aria-hidden="true"><use href="#dc-sliders"/></svg><span class="rail-name">Preferences</span></button>
       <button type="button" id="viewDatabase"><svg class="ic" aria-hidden="true"><use href="#dc-database"/></svg><span class="rail-name">Database</span></button>
       <button type="button" id="viewFiles"><svg class="ic" aria-hidden="true"><use href="#dc-folder"/></svg><span class="rail-name">Files</span></button>
@@ -127,10 +151,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <button type="button" id="viewEvidence"><svg class="ic" aria-hidden="true"><use href="#dc-flag"/></svg><span class="rail-name">Evidence tray</span><span class="rail-count" id="navCountEvidence">0</span></button>
       <button type="button" id="viewSession"><svg class="ic" aria-hidden="true"><use href="#dc-shield"/></svg><span class="rail-name">Session &amp; security</span></button>
     </div>
-    <div class="rail-group rail-group-advanced" id="railGroupAdvanced" hidden>
-      <button type="button" class="rail-group-label rail-adv-toggle" id="railAdvancedToggle" aria-expanded="false" aria-controls="railAdvancedBody">
-        <span class="text">Advanced</span><span class="rule"></span><svg class="ic ic-sm rail-adv-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>
-      </button>
+    <!-- Retired disclosure hooks stay hidden for integrations using these ids. -->
+    <div id="railGroupAdvanced" hidden>
+      <button type="button" id="railAdvancedToggle" hidden>Advanced</button>
       <div id="railAdvancedBody" hidden></div>
     </div>
     <div class="rail-shortcuts">
@@ -148,22 +171,21 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <section class="view active" id="overviewView">
       <div class="view-head">
         <div class="view-title-row"><h1 class="view-title">Overview</h1><span class="view-badge" id="overviewBadge"></span></div>
-        <p class="view-hint">Session, traffic health, and the latest signals for this debug build.</p>
+        <p class="view-hint" id="overviewSubtitle"></p>
       </div>
       <div id="overviewCrashBanner" hidden></div>
       <div class="metric-strip" id="overviewMetrics"></div>
-      <div id="overviewCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-lock"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open the dashboard URL from DevConsole → More. Open mode loads directly; SESSION_CODE mode uses the QR or code shown there.</div></div></div>
+      <div id="overviewCards"><div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Open the dashboard URL from DevConsole → More. Open mode loads directly; SESSION_CODE mode uses the QR or code shown there.</p></div></details></div></div>
     </section>
 
     <!-- TIMELINE -->
     <section class="view" id="timelineView">
       <div class="view-head">
         <div class="view-title-row"><h1 class="view-title">Timeline</h1><span class="view-badge" id="timelineBadge"></span></div>
-        <p class="view-hint">Unified event tail across network, sockets, push, mocks, and system signals.</p>
       </div>
       <div class="metric-strip" id="timelineMetrics"></div>
       <div class="toolbar">
-        <label class="field search-field"><span>Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="search" placeholder="summary, type, source…"></span></label>
+        <label class="field search-field"><span class="visually-hidden">Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="search" placeholder="summary, type, source…"></span></label>
         <div class="toolbar-group-stack">
           <span class="toolbar-group-label">Level</span>
           <div class="seg" id="timelineSeveritySeg" role="group" aria-label="Filter by severity">
@@ -188,21 +210,19 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <span class="col-badge">Level</span><span class="col-main">Summary</span><span class="col-duration">Type</span><span class="col-status">Time</span><span class="col-flag"></span>
           </div>
           <div class="list-body" id="events" aria-label="Events"><div class="empty-state empty-connect">
-            <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-activity"/></svg>
-            <div class="empty-title">Not connected yet</div>
-            <div class="empty-sub">The unified event tail appears here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</div>
+            <svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg>
+            <div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">The unified event tail appears here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</p>
             <ul class="connect-steps">
               <li>Open mode accepts the bare <code class="inline-code">http://host:port/</code> address. In SESSION_CODE mode, the <code class="inline-code">#code=</code> fragment is the credential.</li>
               <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
               <li>Open the URL directly, or scan the QR/paste the code when SESSION_CODE is enabled.</li>
-            </ul>
-          </div></div>
+            </ul></div></details></div></div>
           <div class="list-foot"><span id="timelineFootLeft"></span><span id="timelineFootRight"></span></div>
           <div class="pager"><button type="button" id="timelineNewest">Newest</button><button type="button" id="timelineOlder" disabled>Older</button></div>
         </div>
         <div class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize list and detail panes" tabindex="0" title="Drag to resize — drag past the edge to hide a pane. Arrow keys resize (and restore a hidden pane), Home hides the list, End hides the detail, double-click resets"></div>
         <aside class="detail-pane-v2" id="eventDetail">
-          <div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-activity"/></svg><div class="empty-title">No event selected</div><div class="empty-sub">Select a timeline event from the list to inspect it.</div></div>
+          <div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-select"/><use class="spot-accent" href="#dc-spot-select-accent"/></svg><div class="empty-title">No event selected</div><div class="empty-sub">Select a timeline event from the list to inspect it.</div></div>
         </aside>
       </div>
     </section>
@@ -211,11 +231,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <section class="view" id="networkView">
       <div class="view-head">
         <div class="view-title-row"><h1 class="view-title">Network</h1><span class="view-badge" id="networkBadge"></span></div>
-        <p class="view-hint">Full request and response — headers, payload, body, timing — side by side. Search matches method, URL, headers, tags, status and content type; bodies are not indexed.</p>
       </div>
       <div class="metric-strip" id="networkMetrics"></div>
       <div class="toolbar">
-        <label class="field search-field"><span>Search captures</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="networkSearch" placeholder="host, path, method, status…"></span></label>
+        <label class="field search-field"><span class="visually-hidden">Search captures</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="networkSearch" placeholder="host, path, method, status…"></span></label>
         <div class="toolbar-group-stack">
           <span class="toolbar-group-label">Status</span>
           <div class="seg" id="networkStatusSeg" role="group" aria-label="Filter by status class">
@@ -240,9 +259,15 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         </div>
         <div class="drop" id="networkHostDrop"></div>
         <div class="toolbar-spacer"></div>
-        <button type="button" id="networkHarDownload"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-download"/></svg>HAR</button>
-        <button type="button" id="networkPostmanDownload"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-download"/></svg>Postman</button>
-        <button type="button" id="networkClear" class="danger" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-trash"/></svg>Clear captures</button>
+        <div class="topbar-overflow" id="networkExportMenu">
+          <button type="button" id="networkExportToggle" title="Export captures" aria-label="Export captures" aria-haspopup="true" aria-expanded="false" aria-controls="networkExportPanel"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-download"/></svg>Export</button>
+          <div class="topbar-menu" id="networkExportPanel" role="group" aria-label="Export captures" hidden>
+            <button type="button" class="topbar-menu-item" id="networkHarDownload"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-download"/></svg><span>HAR</span></button>
+            <button type="button" class="topbar-menu-item" id="networkPostmanDownload"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-download"/></svg><span>Postman</span></button>
+            <div class="menu-separator" role="separator"></div>
+            <button type="button" class="topbar-menu-item danger" id="networkClear" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-trash"/></svg><span>Clear captures</span></button>
+          </div>
+        </div>
       </div>
       <div class="applied-filters" id="networkChips" hidden></div>
       <div class="selection-bar" id="networkSelectionBar" hidden aria-label="Export selection"></div>
@@ -266,27 +291,25 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         </div>
       </details>
       <div class="split-shell">
-        <div class="list-pane">
-          <div class="list-head sr-only">
+        <div class="list-pane" id="networkListPane">
+          <div class="list-head network-list-head">
             <button type="button" class="col-check" id="networkSelectAllVisible" role="checkbox" aria-checked="false" title="Select all visible"></button>
-            <span class="col-badge">Method</span><span class="col-main" id="networkMainColLabel">Path</span><span class="col-duration">Duration</span><span class="col-status">Status</span><span class="col-flag"></span>
+            <span class="col-badge">Method</span><span class="col-main network-col-path"><span id="networkMainColLabel">Path</span><button type="button" id="networkFullEndpoint" aria-pressed="false">Full endpoint</button></span><span class="col-network-metrics">Status · time</span><span class="col-flag"></span>
           </div>
           <div class="list-body" id="transactions" aria-label="Transactions"><div class="empty-state empty-connect">
-            <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-network"/></svg>
-            <div class="empty-title">Not connected yet</div>
-            <div class="empty-sub">Captured HTTP transactions appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</div>
+            <svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg>
+            <div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Captured HTTP transactions appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</p>
             <ul class="connect-steps">
               <li>Open mode accepts the bare <code class="inline-code">http://host:port/</code> address. In SESSION_CODE mode, the <code class="inline-code">#code=</code> fragment is the credential.</li>
               <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
               <li>Open the URL directly, or scan the QR/paste the code when SESSION_CODE is enabled.</li>
-            </ul>
-          </div></div>
+            </ul></div></details></div></div>
           <div class="list-foot"><span id="networkFootLeft"></span><span id="networkFootRight"></span></div>
           <div class="pager"><button type="button" id="networkNewest">Newest</button><button type="button" id="networkOlder" disabled>Older</button></div>
         </div>
         <div class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize list and detail panes" tabindex="0" title="Drag to resize — drag past the edge to hide a pane. Arrow keys resize (and restore a hidden pane), Home hides the list, End hides the detail, double-click resets"></div>
         <aside class="detail-pane-v2" id="networkDetailPane">
-          <div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-network"/></svg><div class="empty-title">No transaction selected</div><div class="empty-sub">Select a transaction from the list to inspect its redacted metadata.</div></div>
+          <div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-select"/><use class="spot-accent" href="#dc-spot-select-accent"/></svg><div class="empty-title">No transaction selected</div><div class="empty-sub">Select a request to inspect it.</div></div>
         </aside>
       </div>
     </section>
@@ -295,11 +318,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <section class="view" id="socketView">
       <div class="view-head">
         <div class="view-title-row"><h1 class="view-title">WebSockets</h1><span class="view-badge" id="socketBadge"></span></div>
-        <p class="view-hint" id="socketHint">Connections and redacted frames. Binary previews appear only when the host opted in.</p>
+        <p class="view-hint" id="socketHint"></p>
       </div>
       <div class="metric-strip" id="socketMetrics"></div>
       <div class="toolbar">
-        <label class="field search-field"><span>Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="socketSearch" placeholder="payload text…"></span></label>
+        <label class="field search-field"><span class="visually-hidden">Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="socketSearch" placeholder="payload text…"></span></label>
         <div class="toolbar-group-stack" id="socketFrameTypeGroup">
           <span class="toolbar-group-label">Frame type</span>
           <div class="seg" id="socketFrameTypeSeg" role="group" aria-label="Filter by frame type">
@@ -351,20 +374,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <div class="list-pane">
           <div class="list-head" id="socketListHead"></div>
           <div class="list-body" id="sockets" aria-label="Socket connections"><div class="empty-state empty-connect">
-            <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-sockets"/></svg>
-            <div class="empty-title">Not connected yet</div>
-            <div class="empty-sub">WebSocket connections and frames appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</div>
+            <svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg>
+            <div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">WebSocket connections and frames appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</p>
             <ul class="connect-steps">
               <li>Open mode accepts the bare <code class="inline-code">http://host:port/</code> address. In SESSION_CODE mode, the <code class="inline-code">#code=</code> fragment is the credential.</li>
               <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
               <li>Open the URL directly, or scan the QR/paste the code when SESSION_CODE is enabled.</li>
-            </ul>
-          </div></div>
+            </ul></div></details></div></div>
           <div class="list-foot"><span id="socketFootLeft"></span><span id="socketFootRight"></span></div>
         </div>
         <div class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize list and detail panes" tabindex="0" title="Drag to resize — drag past the edge to hide a pane. Arrow keys resize (and restore a hidden pane), Home hides the list, End hides the detail, double-click resets"></div>
         <aside class="detail-pane-v2" id="socketMessages">
-          <div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-sockets"/></svg><div class="empty-title">No socket message selected</div><div class="empty-sub">Select a connection or apply filters to inspect frames. JSON text frames are formatted; binary previews appear only when the host opted in.</div></div>
+          <div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-select"/><use class="spot-accent" href="#dc-spot-select-accent"/></svg><div class="empty-title">No socket message selected</div><div class="empty-sub">Select a connection or apply filters to inspect frames. JSON text frames are formatted; binary previews appear only when the host opted in.</div></div>
         </aside>
       </div>
     </section>
@@ -373,11 +394,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <section class="view" id="pushView">
       <div class="view-head">
         <div class="view-title-row"><h1 class="view-title">Push</h1><span class="view-badge" id="pushBadge"></span></div>
-        <p class="view-hint">Captured push lifecycle events. Simulated payloads are labelled everywhere they appear.</p>
       </div>
       <div class="metric-strip" id="pushMetrics"></div>
       <div class="toolbar">
-        <label class="field search-field"><span>Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="pushSearch" placeholder="message, campaign, source…"></span></label>
+        <label class="field search-field"><span class="visually-hidden">Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="pushSearch" placeholder="message, campaign, source…"></span></label>
         <div class="seg" id="pushProviderSeg" role="group" aria-label="Filter by provider"></div>
         <div class="toolbar-spacer"></div>
         <button type="button" id="pushRefresh"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Refresh</button>
@@ -398,20 +418,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <span class="col-badge">Provider</span><span class="col-main">Message</span><span class="col-duration">Lifecycle</span><span class="col-status">Time</span><span class="col-flag"></span>
           </div>
           <div class="list-body" id="pushEvents" aria-label="Push events"><div class="empty-state empty-connect">
-            <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-push"/></svg>
-            <div class="empty-title">Not connected yet</div>
-            <div class="empty-sub">Captured push lifecycle events appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</div>
+            <svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg>
+            <div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Captured push lifecycle events appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</p>
             <ul class="connect-steps">
               <li>Open mode accepts the bare <code class="inline-code">http://host:port/</code> address. In SESSION_CODE mode, the <code class="inline-code">#code=</code> fragment is the credential.</li>
               <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
               <li>Open the URL directly, or scan the QR/paste the code when SESSION_CODE is enabled.</li>
-            </ul>
-          </div></div>
+            </ul></div></details></div></div>
           <div class="list-foot"><span id="pushFootLeft"></span><span id="pushFootRight"></span></div>
         </div>
         <div class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize list and detail panes" tabindex="0" title="Drag to resize — drag past the edge to hide a pane. Arrow keys resize (and restore a hidden pane), Home hides the list, End hides the detail, double-click resets"></div>
         <aside class="detail-pane-v2" id="pushDetail">
-          <div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-push"/></svg><div class="empty-title">No push notification selected</div><div class="empty-sub">Select a push event from the list to inspect its payload.</div></div>
+          <div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-select"/><use class="spot-accent" href="#dc-spot-select-accent"/></svg><div class="empty-title">No push notification selected</div><div class="empty-sub">Select a push event from the list to inspect its payload.</div></div>
         </aside>
       </div>
     </section>
@@ -420,11 +438,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <section class="view" id="crashesView">
       <div class="view-head">
         <div class="view-title-row"><h1 class="view-title">Crashes</h1><span class="view-badge" id="crashesBadge"></span></div>
-        <p class="view-hint">Uncaught exceptions and ANRs from the crash plugin — every crash and ANR is flagged into the evidence tray automatically.</p>
       </div>
       <div class="metric-strip" id="crashesMetrics"></div>
       <div class="toolbar">
-        <label class="field search-field"><span>Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="crashesSearch" placeholder="summary, thread…"></span></label>
+        <label class="field search-field"><span class="visually-hidden">Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="crashesSearch" placeholder="summary, thread…"></span></label>
         <div class="toolbar-group-stack">
           <span class="toolbar-group-label">Kind</span>
           <div class="seg" id="crashesKindSeg" role="group" aria-label="Filter by kind">
@@ -442,74 +459,68 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <span class="col-badge">Kind</span><span class="col-main">Summary</span><span class="col-duration">Thread</span><span class="col-status">Time</span><span class="col-flag"></span>
           </div>
           <div class="list-body" id="crashesList" aria-label="Crashes"><div class="empty-state empty-connect">
-            <svg class="ic empty-icon" aria-hidden="true"><use href="#dc-bug"/></svg>
-            <div class="empty-title">Not connected yet</div>
-            <div class="empty-sub">Crashes and ANRs appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</div>
+            <svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg>
+            <div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Crashes and ANRs appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</p>
             <ul class="connect-steps">
               <li>Open mode accepts the bare <code class="inline-code">http://host:port/</code> address. In SESSION_CODE mode, the <code class="inline-code">#code=</code> fragment is the credential.</li>
               <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
               <li>Open the URL directly, or scan the QR/paste the code when SESSION_CODE is enabled.</li>
-            </ul>
-          </div></div>
+            </ul></div></details></div></div>
           <div class="list-foot"><span id="crashesFootLeft"></span><span id="crashesFootRight"></span></div>
         </div>
         <div class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize list and detail panes" tabindex="0" title="Drag to resize — drag past the edge to hide a pane. Arrow keys resize (and restore a hidden pane), Home hides the list, End hides the detail, double-click resets"></div>
         <aside class="detail-pane-v2" id="crashDetail">
-          <div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-bug"/></svg><div class="empty-title">No crash selected</div><div class="empty-sub">Select a crash or ANR from the list to inspect its breadcrumbs and all-thread dump.</div></div>
+          <div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-select"/><use class="spot-accent" href="#dc-spot-select-accent"/></svg><div class="empty-title">No crash selected</div><div class="empty-sub">Select a crash or ANR from the list to inspect its breadcrumbs and all-thread dump.</div></div>
         </aside>
       </div>
     </section>
 
     <!-- STATE & FLAGS -->
     <section class="view" id="stateView">
-      <div class="view-head"><h1 class="view-title">State &amp; Flags</h1><p class="view-hint">App state snapshots and feature flags. Each flag's own `mutable` bit gates its toggle — the SDK reports no session-wide write switch for either.</p></div>
+      <div class="view-head"><h1 class="view-title">State &amp; Flags</h1></div>
       <div id="stateGate" role="status" aria-live="polite" aria-atomic="true" hidden></div>
-      <div id="stateCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-flag"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect state and flags.</div></div></div>
+      <div id="stateCards"><div class="empty-state"><svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect state and flags.</p></div></details></div></div>
     </section>
 
     <!-- REMOTE CONFIG -->
     <section class="view" id="remoteConfigView">
       <div class="view-head">
         <div class="view-title-row"><h1 class="view-title">Remote Config</h1><span class="view-badge" id="remoteConfigBadge"></span></div>
-        <p class="view-hint">Read-only view of the Remote Config values active on this device. The source badge is the point: a key serving a <em>default</em> because the last fetch failed or was throttled looks identical to a published one until you can see where it came from.</p>
       </div>
       <div class="toolbar">
-        <label class="field search-field"><span>Find key</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="remoteConfigSearch" placeholder="checkout_v2, banner…"></span></label>
+        <label class="field search-field"><span class="visually-hidden">Find key</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="remoteConfigSearch" placeholder="checkout_v2, banner…"></span></label>
         <div class="toolbar-group"><span class="toolbar-group-label">Source</span><div class="seg" id="remoteConfigSourceSeg" role="group" aria-label="Filter by value source"><button type="button" class="active" data-value="all">All</button><button type="button" data-value="remote">Remote</button><button type="button" data-value="default">Default</button><button type="button" data-value="static">Static</button><button type="button" data-value="override">Override</button><button type="button" data-value="unknown">Unknown</button></div></div>
         <button type="button" class="btn" id="remoteConfigRefresh"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Refresh</button>
       </div>
-      <div id="remoteConfigCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-sliders"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect Remote Config.</div></div></div>
+      <div id="remoteConfigCards"><div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect Remote Config.</p></div></details></div></div>
     </section>
 
     <!-- PREFERENCES -->
     <section class="view" id="preferencesView">
       <div class="view-head">
         <div class="view-title-row"><h1 class="view-title">Preferences</h1><span class="view-badge" id="prefBadge"></span></div>
-        <p class="view-hint">SharedPreferences viewer. Redaction is allowlist-based — keys that merely look sensitive can still slip through unmasked.</p>
       </div>
       <div class="toolbar"><label class="field field-w240"><span>Preferences file</span><select id="prefFile"><option value="">Choose a file</option></select></label></div>
-      <div id="prefCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-sliders"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to browse SharedPreferences.</div></div></div>
+      <div id="prefCards"><div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to browse SharedPreferences.</p></div></details></div></div>
     </section>
 
     <!-- DATABASE -->
     <section class="view" id="databaseView">
       <div class="view-head">
         <div class="view-title-row"><h1 class="view-title">Database</h1><span class="view-badge" id="dbBadge"></span></div>
-        <p class="view-hint">Read-only SQLite browser unless the database capability is enabled. Filter the table list, then query inside it.</p>
       </div>
       <div class="toolbar">
         <label class="field field-w200"><span>Database</span><select id="dbName"><option value="">Choose a database</option></select></label>
-        <label class="field search-field"><span>Find table</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="dbTableSearch" placeholder="order, menu, courier…"></span></label>
+        <label class="field search-field"><span class="visually-hidden">Find table</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="dbTableSearch" placeholder="order, menu, courier…"></span></label>
         <div class="toolbar-group"><span class="toolbar-group-label">Sort</span><div class="seg" id="dbSortSeg" role="group" aria-label="Sort tables by"><button type="button" class="active" data-value="name">Name</button><button type="button" data-value="rows">Rows</button></div></div>
       </div>
-      <div id="dbCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-database"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to browse the SQLite databases.</div></div></div>
+      <div id="dbCards"><div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to browse the SQLite databases.</p></div></details></div></div>
     </section>
 
     <!-- FILES -->
     <section class="view" id="filesView">
       <div class="view-head">
         <div class="view-title-row"><h1 class="view-title">Files</h1><span class="view-badge" id="filesBadge"></span></div>
-        <p class="view-hint">Sandbox browser. Create, rename, and save need the files capability.</p>
       </div>
       <div class="toolbar">
         <label class="field field-w150"><span>Root</span><select id="fileRoot"><option value="">Choose a root</option></select></label>
@@ -517,21 +528,20 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <button type="button" id="fileGo"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-folder"/></svg>Go</button>
         <button type="button" id="fileCreate" disabled title="Sign in and enable the files capability"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-plus"/></svg>New file</button>
       </div>
-      <div id="filesCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-folder"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to browse the sandbox.</div></div></div>
+      <div id="filesCards"><div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to browse the sandbox.</p></div></details></div></div>
     </section>
 
     <!-- SDK HEALTH -->
     <section class="view" id="sdkHealthView">
-      <div class="view-head"><h1 class="view-title">SDK Health</h1><p class="view-hint">Bounded health snapshot and protocol metadata reported by the on-device SDK.</p></div>
+      <div class="view-head"><h1 class="view-title">SDK Health</h1></div>
       <div class="metric-strip" id="sdkHealthMetrics"></div>
-      <div id="sdkHealthDetail"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-health"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect SDK health.</div></div></div>
+      <div id="sdkHealthDetail"><div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect SDK health.</p></div></details></div></div>
     </section>
 
     <!-- EVIDENCE TRAY -->
     <section class="view" id="evidenceView">
       <div class="view-head">
         <div class="view-title-row"><h1 class="view-title">Evidence tray</h1><span class="view-badge" id="evidenceBadge"></span></div>
-        <p class="view-hint">Everything a developer needs to reproduce, assembled while the session is still live.</p>
       </div>
       <div class="metric-strip" id="evidenceMetrics"></div>
       <div id="evidenceList"></div>
@@ -539,14 +549,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     <!-- SESSION & SECURITY -->
     <section class="view" id="sessionView">
-      <div class="view-head"><h1 class="view-title">Session &amp; Security</h1><p class="view-hint">Who is connected, what is retained, and what this build exposes on the LAN.</p></div>
+      <div class="view-head"><h1 class="view-title">Session &amp; Security</h1></div>
       <div class="metric-strip" id="sessionMetrics"></div>
-      <div id="sessionCards"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-shield"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to see who's connected and what this build exposes.</div></div></div>
+      <div id="sessionCards"><div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to see who's connected and what this build exposes.</p></div></details></div></div>
     </section>
 
     <!-- COMPOSER -->
     <section class="view" id="composerView">
-      <div class="view-head"><h1 class="view-title">Composer</h1><p class="view-hint">Run requests on the device or on a connected computer — never in the browser, so CORS does not apply. Import cURL and save ephemeral collections.</p></div>
+      <div class="view-head"><h1 class="view-title">Composer</h1></div>
       <div id="composerGate" role="status" aria-live="polite" aria-atomic="true" hidden></div>
       <div class="cards-grid">
         <section class="card-shell" data-contained="true" data-span="2">
@@ -557,50 +567,41 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             </div>
           </div>
           <div class="card-shell-body">
-          <div class="card-fields filter-grid filter-grid-flush">
-            <label class="field" id="composerExecutorField"><span>Run on</span><select id="composerExecutor"><option value="device">This device (Android)</option></select></label>
-            <label class="field"><span>HTTP method</span><select id="composerMethod"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option></select></label>
-            <label class="field"><span>URL</span><input id="composerUrl" type="url" placeholder="https://api.example.test/orders"></label>
-            <label class="field"><span>Body type</span><select id="composerBodyType"><option value="NONE">None</option><option value="TEXT">Text</option><option value="JSON">JSON</option><option value="FORM_URL_ENCODED">Form URL encoded</option><option value="MULTIPART">Multipart</option><option value="BINARY_FILE">Binary file</option></select></label>
-            <label class="field"><span>Timeout ms</span><input id="composerTimeout" type="number" min="1" max="120000" value="15000"></label>
-            <label class="field"><span>Redirect policy</span><select id="composerRedirects"><option value="true">Follow allowed redirects</option><option value="false">Do not follow</option></select></label>
-            <label class="field"><span>Binary body (maximum 3 MiB)</span><input id="composerBinary" type="file"></label>
-            <label class="field field-full"><span>Query parameters (name=value, one per line)</span><textarea id="composerQuery" rows="3"></textarea></label>
-            <label class="field field-full"><span>Headers (Name: value, one per line)</span><textarea id="composerHeaders" rows="3"></textarea></label>
-            <label class="field field-full"><span>Text or JSON body</span><textarea id="composerBody" rows="4"></textarea></label>
-            <label class="field"><span>Form fields (name=value, one per line)</span><textarea id="composerForm" rows="3"></textarea></label>
-            <label class="field"><span>Multipart fields (name=value, one per line)</span><textarea id="composerMultipart" rows="3"></textarea></label>
-            <label class="field"><span>Environment variables (name=value, one per line)</span><textarea id="composerVariables" rows="3"></textarea></label>
-            <label class="field"><span>Secret variables (memory only)</span><textarea id="composerSecrets" rows="3"></textarea></label>
-          </div>
+<div class="card-fields filter-grid filter-grid-flush"><label class="field"><span>HTTP method</span><select id="composerMethod"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option></select></label>
+<label class="field field-url"><span>URL</span><input id="composerUrl" type="url" placeholder="https://api.example.test/orders"></label>
+<label class="field" id="composerExecutorField"><span>Run on</span><select id="composerExecutor"><option value="device">This device (Android)</option></select></label>
+<label class="field field-full"><span>Headers (Name: value, one per line)</span><textarea id="composerHeaders" rows="3"></textarea></label>
+<label class="field field-full"><span>Text or JSON body</span><textarea id="composerBody" rows="4"></textarea></label></div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>More options</summary><div class="fold-content"><div class="card-fields filter-grid filter-grid-flush"><label class="field"><span>Body type</span><select id="composerBodyType"><option value="NONE">None</option><option value="TEXT">Text</option><option value="JSON">JSON</option><option value="FORM_URL_ENCODED">Form URL encoded</option><option value="MULTIPART">Multipart</option><option value="BINARY_FILE">Binary file</option></select></label>
+<label class="field"><span>Timeout ms</span><input id="composerTimeout" type="number" min="1" max="120000" value="15000"></label>
+<label class="field"><span>Redirect policy</span><select id="composerRedirects"><option value="true">Follow allowed redirects</option><option value="false">Do not follow</option></select></label>
+<label class="field"><span>Binary body (maximum 3 MiB)</span><input id="composerBinary" type="file"></label>
+<label class="field field-full"><span>Query parameters (name=value, one per line)</span><textarea id="composerQuery" rows="3"></textarea></label>
+<label class="field"><span>Form fields (name=value, one per line)</span><textarea id="composerForm" rows="3"></textarea></label>
+<label class="field"><span>Multipart fields (name=value, one per line)</span><textarea id="composerMultipart" rows="3"></textarea></label>
+<label class="field"><span>Environment variables (name=value, one per line)</span><textarea id="composerVariables" rows="3"></textarea></label>
+<label class="field"><span>Secret variables (memory only)</span><textarea id="composerSecrets" rows="3"></textarea></label></div></div></details>
           <div class="card-buttons"><button type="button" id="composerRun" class="primary" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-send"/></svg>Execute request</button></div>
           <p class="card-lede mt-10" id="composerAgentHint"></p>
           </div>
         </section>
-        <section class="card-shell" data-contained="true">
-          <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-terminal"/></svg><h2 class="card-shell-title">cURL import</h2></div>
-          <div class="card-shell-body">
+        <details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>cURL import</summary><div class="fold-content">
           <label class="field"><span>Supported cURL command</span><textarea id="composerCurl" rows="4" placeholder="curl -X POST …"></textarea></label>
           <div class="card-buttons"><button type="button" id="composerImport" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-terminal"/></svg>Import cURL</button></div>
-          </div>
-        </section>
+          </div></details>
         <section class="card-shell">
           <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-send"/></svg><h2 class="card-shell-title">Last response</h2></div>
           <div class="card-shell-body">
-          <div id="composerResult"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-send"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to execute or import requests.</div></div></div>
+          <div id="composerResult"><div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to execute or import requests.</p></div></details></div></div>
           </div>
         </section>
-        <section class="card-shell">
-          <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-folder"/></svg><h2 class="card-shell-title">Ephemeral collections</h2></div>
-          <div class="card-shell-body">
+        <details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>Collections</summary><div class="fold-content">
           <label class="field"><span>Collection name</span><input id="composerCollectionName"></label>
           <div class="card-buttons">
             <button type="button" id="composerCollectionSave" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg>Save imported cURL</button>
             <button type="button" id="composerCollections"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Load collections</button>
           </div>
           <div id="composerCollectionList" class="mt-10">Collections contain no persisted secret variable values.</div>
-          </div>
-        </section>
+          </div></details>
         <section class="card-shell">
           <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-shield"/></svg><h2 class="card-shell-title">Host allowlist</h2></div>
           <div class="card-shell-body">
@@ -617,7 +618,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     <!-- MOCKS -->
     <section class="view" id="mocksView">
-      <div class="view-head"><h1 class="view-title">Mocks</h1><p class="view-hint">Rules that intercept matching requests on device before they reach the network.</p></div>
+      <div class="view-head"><h1 class="view-title">Mocks</h1></div>
       <div class="metric-strip" id="mocksMetrics"></div>
       <div id="mocksGate" role="status" aria-live="polite" aria-atomic="true" hidden></div>
       <div class="cards-grid">
@@ -640,30 +641,27 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     <!-- CAPTURE RULES -->
     <section class="view" id="captureRulesView">
-      <div class="view-head"><h1 class="view-title">Capture rules</h1><p class="view-hint">What the SDK records, and what it drops before anything is retained.</p></div>
+      <div class="view-head"><h1 class="view-title">Capture rules</h1></div>
       <div id="captureRulesGate" role="status" aria-live="polite" aria-atomic="true" hidden></div>
       <div class="cards-grid">
         <section class="card-shell" data-span="2">
           <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-funnel"/></svg><h2 class="card-shell-title">Active exclusions</h2><span class="card-shell-badge" id="captureRulesBadge"></span></div>
           <div class="card-shell-body">
           <div id="captureRuleList"></div>
-          <div class="card-fields mt-12">
+<details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>Add exclusion</summary><div class="fold-content">          <div class="card-fields mt-12">
             <label class="field"><span>Rule ID</span><input id="captureRuleId" placeholder="auth-host"></label>
             <label class="field"><span>Host (exact)</span><input id="captureRuleHost" placeholder="auth.example.test"></label>
             <label class="field"><span>Method (optional)</span><input id="captureRuleMethod" placeholder="POST"></label>
             <label class="field"><span>Path prefix (optional)</span><input id="captureRulePathPrefix" placeholder="/token"></label>
           </div>
-          <div class="card-buttons"><button type="button" id="captureRuleSave" disabled title="Sign in and enable the captureRules capability"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg>Save exclusion</button></div>
-          <pre id="captureRuleStatus" class="mt-10">Connect this browser to inspect capture exclusions.</pre>
+          <div class="card-buttons"><button type="button" id="captureRuleSave" disabled title="Sign in and enable the captureRules capability"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg>Save exclusion</button></div></div></details>
+          <p id="captureRuleStatus" class="card-lede mt-10">Connect this browser to inspect capture exclusions.</p>
           </div>
         </section>
-        <section class="card-shell">
-          <div class="card-shell-head"><svg class="ic tone-text-warn" aria-hidden="true"><use href="#dc-shield"/></svg><h2 class="card-shell-title">Redacted field names</h2></div>
-          <div class="card-shell-body">
-          <p class="card-lede">Header and body keys matching these names are masked before anything leaves the device. This is the real denylist reported by the SDK — not an allowlist of what stays verbatim.</p>
+        <details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>Redacted field names<span class="fold-count" id="captureRedactionCount"></span></summary><div class="fold-content">
+          <p class="card-lede">Matching header and body keys are masked on device.</p>
           <div id="captureRedaction"></div>
-          </div>
-        </section>
+          </div></details>
       </div>
     </section>
    </div>

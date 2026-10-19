@@ -7,19 +7,20 @@
 
 package io.devconsole.ui.compose
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -33,8 +34,7 @@ internal data class InspectorKeyValue(
 )
 
 /**
- * Mono key/value list used inside a [CollapsibleSection]: 12sp json-key-colored key, 13.5sp value,
- * 1dp hairline divider above each entry.
+ * Fixed-width muted keys and monospace values, separated by inset panel hairlines.
  */
 @Composable
 internal fun InspectorKeyValueList(
@@ -45,15 +45,12 @@ internal fun InspectorKeyValueList(
     currentMatchOrdinal: Int? = null,
 ) {
     val colors = DevConsoleTheme.colors
-    val lineColor = colors.line
     val sectionMatches = searchMatches.filter { it.sectionKey == sectionKey || sectionKey.isEmpty() }
     val highlightIndex =
         remember(sectionMatches, currentMatchOrdinal) {
             indexInspectorSearchHighlights(sectionMatches, currentMatchOrdinal)
         }
-    // No top inset on this padding, so the first divider sits flush under the section header
-    // instead of 8dp below it.
-    Column(modifier = modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
+    Column(modifier = modifier.fillMaxWidth()) {
         entries.forEachIndexed { index, entry ->
             val itemId = "row:$index"
             val bringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -61,15 +58,15 @@ internal fun InspectorKeyValueList(
             LaunchedEffect(isActive, currentMatchOrdinal) {
                 if (isActive) bringIntoViewRequester.bringIntoView()
             }
-            Column(
+            if (index > 0) GroupedPanelDivider()
+            Row(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .bringIntoViewRequester(bringIntoViewRequester)
-                        .drawBehind {
-                            drawLine(lineColor, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx())
-                        }.padding(vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                        .heightIn(min = 48.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     inspectorHighlightedText(
@@ -77,9 +74,10 @@ internal fun InspectorKeyValueList(
                         highlights = highlightIndex.highlightsFor(itemId, InspectorSearchField.KEY),
                         colors = colors,
                     ),
-                    color = colors.jsonKey,
+                    modifier = Modifier.width(96.dp).padding(end = 12.dp),
+                    color = colors.muted,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                 )
                 Text(
                     inspectorHighlightedText(
@@ -89,7 +87,7 @@ internal fun InspectorKeyValueList(
                     ),
                     color = entry.valueColor ?: colors.ink,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 13.5.sp,
+                    fontSize = 14.sp,
                 )
             }
         }

@@ -79,8 +79,8 @@ data class ComposerRequest(
 
     /**
      * Returns the only representation that may be persisted or sent to a browser. Binary bytes and
-     * secret variable values are dropped; every remaining string crosses the active redaction
-     * boundary before it is copied.
+     * binary payloads are omitted; secret variables are masked only when redaction is enabled.
+     * Every remaining string crosses the active redaction boundary before it is copied.
      */
     fun redacted(redaction: RedactionEngine): ComposerRequest =
         copy(
@@ -120,7 +120,12 @@ data class ComposerRequest(
                 variables.map { variable ->
                     variable.copy(
                         name = redaction.redactText(variable.name),
-                        value = if (variable.secret) redaction.replacement() else redaction.redactText(variable.value),
+                        value =
+                            if (variable.secret && redaction.isEnabled()) {
+                                redaction.replacement()
+                            } else {
+                                redaction.redactText(variable.value)
+                            },
                     )
                 },
         )
