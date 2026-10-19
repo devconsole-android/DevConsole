@@ -54,7 +54,7 @@ class InspectorRoutesTest {
     @Test
     fun `unauthenticated requests are rejected across preferences database and files routes`() =
         testApplication {
-            application { devConsoleModule(SessionAuthority()) }
+            application { protectedDevConsoleModule(SessionAuthority()) }
 
             val unauthenticated =
                 listOf(
@@ -112,7 +112,7 @@ class InspectorRoutesTest {
                         ),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     preferencesInspector = inspector
                     preferencesEditable = true
                 }
@@ -142,7 +142,7 @@ class InspectorRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val inspector = FakePreferencesInspector(filesResult = emptyList())
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     preferencesInspector = inspector
                     preferencesEditable = true
                 }
@@ -176,7 +176,7 @@ class InspectorRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val rejectingInspector = FakePreferencesInspector(filesResult = emptyList(), putResult = false)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     preferencesInspector = rejectingInspector
                     preferencesEditable = true
                 }
@@ -221,7 +221,7 @@ class InspectorRoutesTest {
                         ),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     preferencesInspector = inspector
                     preferencesEditable = true
                 }
@@ -245,7 +245,7 @@ class InspectorRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     // preferencesInspector left null on purpose.
                     preferencesEditable = true
                 }
@@ -269,7 +269,7 @@ class InspectorRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val inspector = FakePreferencesInspector(filesResult = emptyList(), removeResult = true)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     preferencesInspector = inspector
                     preferencesEditable = true
                 }
@@ -300,7 +300,7 @@ class InspectorRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val audit = InMemoryCommandAuditLog()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     preferencesInspector = FakePreferencesInspector(filesResult = emptyList())
                     preferencesEditable = false
                     commandAuditLog = audit
@@ -343,7 +343,7 @@ class InspectorRoutesTest {
                         ),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     databaseInspector = inspector
                 }
             }
@@ -400,7 +400,7 @@ class InspectorRoutesTest {
                         ),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     databaseInspector = inspector
                 }
             }
@@ -438,7 +438,7 @@ class InspectorRoutesTest {
                         ),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     databaseInspector = inspector
                     databaseEditable = true
                 }
@@ -468,7 +468,7 @@ class InspectorRoutesTest {
                         ),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     databaseInspector = inspector
                     databaseEditable = true
                 }
@@ -502,7 +502,7 @@ class InspectorRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val inspector = FakeDatabaseInspector()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     databaseInspector = inspector
                     databaseEditable = true
                 }
@@ -534,7 +534,7 @@ class InspectorRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val inspector = FakeDatabaseInspector(executeResult = DatabaseExecResult.Write(affectedRows = 2))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     databaseInspector = inspector
                     databaseEditable = true
                 }
@@ -566,7 +566,7 @@ class InspectorRoutesTest {
                         ),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     databaseInspector = inspector
                     databaseEditable = false
                 }
@@ -591,7 +591,7 @@ class InspectorRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val inspector = FakeDatabaseInspector(executeResult = DatabaseExecResult.Failed("no such table: ghost"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     databaseInspector = inspector
                     databaseEditable = true
                 }
@@ -622,7 +622,7 @@ class InspectorRoutesTest {
                     previewResult = FilePreviewData.Text("hello world", truncated = false),
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                 }
             }
@@ -666,7 +666,7 @@ class InspectorRoutesTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = approvedSession(sessions, sessionCodes)
 
             val response =
@@ -702,7 +702,7 @@ class InspectorRoutesTest {
                     deleteProvider = { _, path -> !path.contains("..") },
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                     filesEditable = true
                 }
@@ -731,7 +731,7 @@ class InspectorRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val inspector = FakeFileInspector(rootNames = listOf("storage"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                     filesEditable = false
                 }
@@ -766,7 +766,7 @@ class InspectorRoutesTest {
                         "a.txt"
                 })
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                     filesEditable = true
                 }
@@ -804,7 +804,7 @@ class InspectorRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     preferencesInspector = FakePreferencesInspector(filesResult = emptyList())
                     preferencesEditable = true
                 }
@@ -837,7 +837,7 @@ class InspectorRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     databaseInspector =
                         FakeDatabaseInspector(
                             executeResult =
@@ -876,7 +876,7 @@ class InspectorRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = FakeFileInspector(rootNames = listOf("storage"), deleteProvider = { _, _ -> true })
                     filesEditable = true
                 }
@@ -908,7 +908,7 @@ class InspectorRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val inspector = FakeFileInspector(rootNames = listOf("storage"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                     filesEditable = false
                 }
@@ -942,7 +942,7 @@ class InspectorRoutesTest {
             val inspector =
                 FakeFileInspector(rootNames = listOf("storage"), createProvider = { _, path, _ -> path == "new.txt" })
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                     filesEditable = true
                 }
@@ -981,7 +981,7 @@ class InspectorRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val inspector = FakeFileInspector(rootNames = listOf("storage"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                     filesEditable = true
                 }
@@ -1006,7 +1006,7 @@ class InspectorRoutesTest {
             val inspector =
                 FakeFileInspector(rootNames = listOf("storage"), replaceProvider = { _, path, _ -> path == "a.txt" })
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                     filesEditable = true
                 }
@@ -1041,7 +1041,7 @@ class InspectorRoutesTest {
                     renameProvider = { _, _, newPath -> newPath == "b.txt" },
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                     filesEditable = true
                 }
@@ -1078,7 +1078,7 @@ class InspectorRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val inspector = FakeFileInspector(rootNames = listOf("storage"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                     filesEditable = false
                 }
@@ -1108,7 +1108,7 @@ class InspectorRoutesTest {
                     readBytesProvider = { _, path -> if (path == "a.bin") bytes else null },
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                     filesEditable = false
                 }
@@ -1137,7 +1137,7 @@ class InspectorRoutesTest {
                     readBytesProvider = { _, path -> if (path == "a.bin") bytes else null },
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                     filesEditable = true
                 }
@@ -1176,7 +1176,7 @@ class InspectorRoutesTest {
                     readBytesProvider = { _, path -> if (path == maliciousName) bytes else null },
                 )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = inspector
                     filesEditable = true
                 }
@@ -1206,7 +1206,7 @@ class InspectorRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     fileInspector = FakeFileInspector(rootNames = listOf("storage"))
                     filesEditable = true
                 }
@@ -1236,7 +1236,7 @@ class InspectorRoutesTest {
 
 /**
  * Mints an authenticated [BrowserSession] the only way an external caller can: issue a session code
- * and exchange it over the real HTTP route. Must be called after `application { devConsoleModule(...) }`
+ * and exchange it over the real HTTP route. Must be called after `application { protectedDevConsoleModule(...) }`
  * has been registered, since the exchange request is what triggers the test application to start.
  */
 private suspend fun ApplicationTestBuilder.approvedSession(

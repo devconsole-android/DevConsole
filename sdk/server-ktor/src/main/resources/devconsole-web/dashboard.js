@@ -8,12 +8,168 @@
 (() => {
   'use strict';
 
+  // Reads go through this module-scoped `fetch`: it backs off on the server's read-rate limit (429)
+  // and shares one request between identical concurrent GETs, so a burst of view switches does not
+  // trip the limiter. It delegates to window.fetch, which adds the 401 session tracking below.
+  const inFlightGets = new Map();
+
+  function getAuthHeader(headers) {
+    if (!headers) return '';
+    if (typeof headers.get === 'function') {
+      return headers.get('Authorization') || headers.get('authorization') || '';
+    }
+    if (Array.isArray(headers)) {
+      const found = headers.find(([k]) => k.toLowerCase() === 'authorization');
+      return found ? found[1] : '';
+    }
+    if (typeof headers === 'object') {
+      for (const k of Object.keys(headers)) {
+        if (k.toLowerCase() === 'authorization') return headers[k] || '';
+      }
+    }
+    return '';
+  }
+
+  async function fetchWithRetry(input, init) {
+    let retries = 0;
+    while (true) {
+      const response = await window.fetch(input, init);
+      if (response.status === 429 && retries < 3) {
+        retries++;
+        let delayMs = Math.pow(2, retries - 1) * 1000;
+        const retryAfter = response.headers.get('Retry-After');
+        if (retryAfter) {
+          const seconds = parseFloat(retryAfter);
+          if (!isNaN(seconds) && seconds > 0) {
+            delayMs = Math.min(seconds * 1000, 10000);
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+      return response;
+    }
+  }
+
+  async function fetch(input, init) {
+    const method = (init?.method || (typeof input === 'object' && input?.method) || 'GET').toUpperCase();
+    const isRead = method === 'GET' || method === 'HEAD';
+    if (!isRead) {
+      return window.fetch(input, init);
+    }
+    const url = typeof input === 'string' ? input : (input?.url || String(input));
+    const authHeader = getAuthHeader(init?.headers || (typeof input === 'object' ? input?.headers : null));
+    const key = method + ':' + url + '::' + authHeader;
+    if (inFlightGets.has(key)) {
+      const sharedResponse = await inFlightGets.get(key);
+      return sharedResponse.clone();
+    }
+    const fetchPromise = (async () => {
+      try {
+        return await fetchWithRetry(input, init);
+      } finally {
+        inFlightGets.delete(key);
+      }
+    })();
+    inFlightGets.set(key, fetchPromise);
+    const response = await fetchPromise;
+    return response.clone();
+  }
+
+  function unavailableReason(status) {
+    if (!status) return 'Could not reach the app. Try again.';
+    if (status === 401 || status === 403) return 'Sign in to see this.';
+    if (status === 404) return 'Not available in this build.';
+    if (status === 429) return 'Too many requests right now. Try again in a moment.';
+    if (typeof status === 'number' && status >= 500) return "The app didn't respond.";
+    return "Couldn't load (HTTP " + status + ").";
+  }
+
   // ================================================================
   // State
   // ================================================================
   let token = '';
+  const viewLoadedAt = new Map();
+  const viewPending = new Map();
+  const viewRevision = new Map();
+  const jsonCache = new Map();
+  let cacheGeneration = 0;
+  function invalidateSessionCache() {
+    cacheGeneration++;
+    jsonCache.clear();
+    viewLoadedAt.clear();
+    viewPending.clear();
+  }
+  // Redaction is opt-in on the device; null until meta reports it (older servers never do, and
+  // always redacted), so the "redacted on device" lines only show when they are true.
+  let redactionOn = null;
+  const redactionShown = () => redactionOn !== false;
+  // Cache parsed JSON and response metadata; each caller gets an independent response facade.
+  async function cachedJson(url, ttlMs) {
+    const key = cacheGeneration + ':' + token + ':' + url;
+    let entry = jsonCache.get(key);
+    if (!entry || Date.now() - entry.at >= ttlMs) {
+      entry = { at: Date.now(), promise: (async () => {
+        const response = await fetch(url, { headers: auth() });
+        const data = response.ok ? await response.json() : null;
+        if (url === '/api/v1/meta' && data) redactionOn = data.redaction?.enabled ?? null;
+        return { response, data };
+      })() };
+      jsonCache.set(key, entry);
+    }
+    try {
+      const { response, data } = await entry.promise;
+      if (!response.ok) jsonCache.delete(key);
+      return { ok: response.ok, status: response.status, headers: response.headers,
+        json: async () => JSON.parse(JSON.stringify(data)) };
+    } catch (error) {
+      jsonCache.delete(key);
+      throw error;
+    }
+  }
+  const viewContainers = {
+    overview: 'overviewCards', timeline: 'events', network: 'transactions', socket: 'sockets',
+    push: 'pushEvents', crashes: 'crashesList', sdkHealth: 'sdkHealthDetail',
+    state: 'stateCards', remoteConfig: 'remoteConfigCards', preferences: 'prefCards',
+    database: 'dbCards', files: 'filesCards', session: 'sessionCards',
+    mocks: 'mockRuleList', captureRules: 'captureRuleList', composer: 'composerCollectionList', evidence: 'evidenceList',
+  };
+  function renderLoadFailure(container, title, status, retry) {
+    container.innerHTML = '<div class="load-status" role="status"><span>' + esc(title) +
+      ': ' + esc(unavailableReason(status)) + '</span> <button type="button" class="load-retry">Retry</button></div>';
+    container.querySelector('button').onclick = retry;
+  }
+  async function runViewLoader(view, loader) {
+    if (!hasSession()) return;
+    viewLoadedAt.delete(view);
+    const revision = viewRevision.get(view) || 0;
+    const generation = cacheGeneration;
+    const container = $(viewContainers[view]);
+    if (container?.querySelector('.empty-connect, .load-status')) {
+      container.innerHTML = '<div class="load-status" role="status">Loading…</div>';
+    }
+    const pending = (async () => {
+      try {
+        const result = await loader();
+        if (result !== false && hasSession() && generation === cacheGeneration && revision === (viewRevision.get(view) || 0)) viewLoadedAt.set(view, Date.now());
+        return result;
+      } catch (error) {
+        viewLoadedAt.delete(view);
+        if (container && hasSession() && generation === cacheGeneration) renderLoadFailure(container, 'Could not load this view', error.status || 0, () => runViewLoader(view, loader));
+        return false;
+      } finally {
+        if (viewPending.get(view) === pending) viewPending.delete(view);
+      }
+    })();
+    viewPending.set(view, pending);
+    return pending;
+  }
+  function requireLoad(response) {
+    if (!response.ok) throw Object.assign(new Error(unavailableReason(response.status)), { status: response.status });
+  }
   let openAccess = false;
   let currentView = 'overview';
+  let sessionRetryTimer = 0;
   let csrf = '';
   let paused = true;
   let events = [];
@@ -96,7 +252,10 @@
   const networkSelectedIds = new Set();
   let networkShowHost = true;
   let networkPinnedId = '';
-  let networkTab = 'compare';
+  let networkTab = 'response';
+  let networkFullEndpoint = false;
+  let networkListController = null;
+  try { networkFullEndpoint = localStorage.getItem('devconsole.network.fullEndpoint') === 'true'; } catch { /* storage unavailable */ }
   let networkDetailQuery = '';
   let networkSbsStacked = false;
   // Open state of the detail pane's kebab (⋮) actions menu. Module-level, not DOM state, because
@@ -241,6 +400,9 @@
   const esc = (s) =>
     String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = (name, cls) => `<svg class="ic${cls ? ' ' + esc(cls) : ''}" aria-hidden="true"><use href="#dc-${esc(name)}"/></svg>`;
+  /** Two-layer empty-state illustration (see the dc-spot-* symbols): muted lines plus one signal accent. */
+  const spot = (name) =>
+    `<svg class="spot" aria-hidden="true"><use href="#dc-spot-${esc(name)}"/><use class="spot-accent" href="#dc-spot-${esc(name)}-accent"/></svg>`;
   const hasSession = () => Boolean(token);
   // Wrapped once, globally, instead of at each of this file's ~100 fetch call sites: a stray 401 on
   // an authenticated request can just be a request racing a fresh reconnect, but several in a row
@@ -288,7 +450,7 @@
   const SEVERITY_SHORT = ['DBG', 'INF', 'WRN', 'ERR'];
 
   function renderEmpty(container, iconName, title, sub) {
-    container.innerHTML = `<div class="empty-state">${icon(iconName, 'empty-icon')}<div class="empty-title">${esc(
+    container.innerHTML = `<div class="empty-state">${/ selected$/.test(title) ? spot('select') : icon(iconName, 'empty-icon')}<div class="empty-title">${esc(
       title,
     )}</div>${sub ? `<div class="empty-sub">${esc(sub)}</div>` : ''}</div>`;
   }
@@ -327,8 +489,7 @@
     if (!status) return 'error';
     if (status >= 500) return 'error';
     if (status >= 400) return 'warn';
-    if (status >= 300) return 'put';
-    return 'signal';
+    return 'ink';
   }
   function levelTone(shortName) {
     if (shortName === 'ERR') return 'error';
@@ -353,7 +514,7 @@
    * text is prose (a log summary, a crash reason), which `word-break: break-all` would chop
    * mid-word. Both are opt-in, so those lists keep the single-line row they always had. */
   function rowHtml(opts) {
-    const { id, selected, badgeText, badgeTone, mainText, mainSub, mainRtl, tagText, tagTone, duration, statusText, sTone, flagKind, flagLabel, checkbox, checked, posinset, setsize, stackMetrics, wrapMain } = opts;
+    const { id, selected, badgeText, badgeTone, mainText, mainSub, mainRtl, tagText, tagTone, duration, statusText, sTone, flagKind, flagLabel, checkbox, checked, posinset, setsize, stackMetrics, wrapMain, metricsInline, mainPrefix } = opts;
     const flagId = opts.flagId ?? id; // selection id and evidence id may differ (socket frames)
     const flagged = flagKind ? isFlagged(flagKind, flagId) : false;
     // aria-posinset/aria-setsize: with the list virtualized, only a window of `role="option"`
@@ -369,11 +530,13 @@
       }
       <span class="row-badge badge-${badgeTone}">${esc(badgeText)}</span>
       <span class="row-main">
-        <span class="row-main-text${wrapMain ? ' row-main-wrap' : ''}"${mainRtl ? ' style="direction:rtl;text-align:left"' : ''}${mainSub ? ` title="${esc(mainText + mainSub)}"` : ''}>${esc(mainText)}${mainSub ? `<span class="row-main-sub">${esc(mainSub)}</span>` : ''}</span>
+        <span class="row-main-text${wrapMain ? ' row-main-wrap' : ''}${mainRtl ? ' text-rtl' : ''}"${mainSub || mainPrefix ? ` title="${esc((mainPrefix || '') + mainText + (mainSub || ''))}"` : ''}>${mainPrefix ? `<span class="row-main-host">${esc(mainPrefix)}</span>` : ''}${esc(mainText)}${mainSub ? `<span class="row-main-sub">${esc(mainSub)}</span>` : ''}</span>
         ${tagText ? `<span class="row-tag tone-text-${tagTone || 'muted'}">${esc(tagText)}</span>` : ''}
       </span>
       ${
-        stackMetrics
+        metricsInline
+          ? `<span class="row-metrics-inline"><span class="tone-text-${sTone || 'muted'}">${esc(statusText ?? '—')}</span><span class="row-time"> · ${esc(duration ?? '—')}</span></span>`
+          : stackMetrics
           ? `<span class="row-metrics">
         <span class="row-status tone-text-${sTone || 'muted'}">${esc(statusText ?? '')}</span>
         <span class="row-duration">${esc(duration ?? '')}</span>
@@ -617,9 +780,9 @@
       const anchorDelta = el.scrollTop - ensureOffsets()[anchorIndex];
       const focusSnap = captureFocus(el);
       const offs = ensureOffsets();
-      let html = start > 0 ? `<div class="virt-spacer" style="height:${offs[start]}px"></div>` : '';
+      let html = start > 0 ? `<svg class="virt-spacer" height="${offs[start]}" aria-hidden="true"></svg>` : '';
       for (let i = start; i < end; i++) html += renderRow(i, count);
-      if (end < count) html += `<div class="virt-spacer" style="height:${offs[count] - offs[end]}px"></div>`;
+      if (end < count) html += `<svg class="virt-spacer" height="${offs[count] - offs[end]}" aria-hidden="true"></svg>`;
       el.innerHTML = html;
       restoreFocus(focusSnap, el);
       // Roving tabindex meets virtualization: the selected row is normally the list's only tab
@@ -846,9 +1009,9 @@
     return `<div class="bars-grid">${bars
       .map(
         (b) =>
-          `<div class="bar-row"><span class="bar-row-label">${esc(b.label)}</span><span class="bar-track"><span class="bar-fill tone-bg-${
+          `<div class="bar-row"><span class="bar-row-label">${esc(b.label)}</span><span class="bar-track"><progress max="100" value="${Number(b.pct) || 0}" class="bar-fill tone-bg-${
             b.tone
-          }" style="width:${b.pct}%"></span></span><span class="bar-row-val">${esc(b.val)}</span></div>`,
+          }"></progress></span><span class="bar-row-val">${esc(b.val)}</span></div>`,
       )
       .join('')}</div>`;
   }
@@ -906,7 +1069,7 @@
   function cardStackHtml(segs) {
     if (!segs || !segs.length) return '';
     return `<div class="card-stack"><span class="card-stack-bar">${segs
-      .map((s) => `<span class="tone-bg-${s.tone}" title="${esc(s.label)}" style="width:${s.pct}%"></span>`)
+      .map((s) => `<svg class="tone-bg-${s.tone}" title="${esc(s.label)}" width="${Number(s.pct) || 0}%" height="10" aria-hidden="true"></svg>`)
       .join('')}</span><div class="card-stack-legend">${segs
       .map((s) => `<span class="card-stack-legend-item"><span class="card-stack-dot tone-bg-${s.tone}"></span>${esc(s.label)}<span class="val">${esc(s.val)}</span></span>`)
       .join('')}</div></div>`;
@@ -929,9 +1092,8 @@
   }
   function cardMetricsHtml(metrics) {
     if (!metrics || !metrics.length) return '';
-    return `<div class="card-metrics">${metrics
-      .map((m) => `<div class="card-metric"><div class="card-metric-label">${esc(m.label)}</div><div class="card-metric-val tone-text-${m.tone || 'ink'}">${esc(m.val)}</div></div>`)
-      .join('')}</div>`;
+    // Tiles are banned by design (.card-metrics is display:none), so the numbers render as flat rows.
+    return cardRowsHtml(metrics.map((m) => ({ k: m.label, v: m.val + (m.sub ? ' ' + m.sub : ''), tone: m.tone || 'ink' })));
   }
   /** `radioLabel` switches this from a set of independent `role="switch"` toggles (mocks rules,
    * state flags — any combination may be on) into a single-choice `role="radiogroup"` of
@@ -987,14 +1149,12 @@
   }
   function cardTreeHtml(nodes, treeMax) {
     if (!nodes || !nodes.length) return '';
-    return `<div class="card-tree"${treeMax ? ` style="--tree-max:${esc(String(treeMax))}"` : ''}>${nodes
+    return `<div class="card-tree">${nodes
       .map(
         (n) =>
           `<button type="button" class="card-tree-node${n.selected ? ' selected' : ''}" data-tree-id="${esc(n.id)}"${
             n.selected ? ' aria-current="true"' : ''
-          } style="padding-left:${
-            n.indent ?? 8
-          }px" title="${esc(n.label)}">${n.icon ? icon(n.icon, 'ic-sm') : ''}<span class="card-tree-node-label tone-text-${n.tone || 'muted'}">${esc(
+          } title="${esc(n.label)}"><svg class="tree-indent" width="${Math.max(0, (n.indent ?? 8) - 8)}" height="1" aria-hidden="true"></svg>${n.icon ? icon(n.icon, 'ic-sm') : ''}<span class="card-tree-node-label tone-text-${n.tone || 'muted'}">${esc(
             n.label,
           )}</span><span class="card-tree-node-meta">${esc(n.meta || '')}</span></button>`,
       )
@@ -1011,14 +1171,21 @@
       )
       .join('')}</div>`;
   }
+  function foldHtml(label, content, count = '', open = false) {
+    return '<details class="fold"' + (open ? ' open' : '') + '><summary>' +
+      icon('chevron', 'ic-sm fold-chevron') + esc(label) +
+      (count ? '<span class="fold-count">' + esc(count) + '</span>' : '') +
+      '</summary><div class="fold-content">' + content + '</div></details>';
+  }
   function cardHtml(c) {
+    if (c.bodyFold) return foldHtml(c.bodyFold, c.bodyHtml || esc(c.emptyText || ''), c.foldCount);
     return `<section class="card-shell"${c.span > 1 ? ` data-span="${c.span}"` : ''}>
       <div class="card-shell-head">${c.icon ? icon(c.icon, `tone-text-${c.iconTone || 'signal'}`) : ''}<h2 class="card-shell-title">${esc(
         c.title,
       )}</h2>${c.badge ? `<span class="card-shell-badge tone-text-${c.badgeTone || 'muted'}">${esc(c.badge)}</span>` : ''}</div>
       <div class="card-shell-body">
-        ${c.lede ? `<p class="card-lede">${esc(c.lede)}</p>` : ''}
-        ${c.fieldsHtml || ''}
+        ${c.lede ? (c.ledeFold ? foldHtml(c.ledeFold, `<p class="card-lede">${esc(c.lede)}</p>`) : `<p class="card-lede">${esc(c.lede)}</p>`) : ''}
+        ${c.editFold ? '' : (c.fieldsHtml || '')}
         ${cardStackHtml(c.stack)}
         ${cardRowsHtml(c.rows)}
         ${cardMetricsHtml(c.metrics)}
@@ -1028,7 +1195,7 @@
         ${cardFindingsHtml(c.findings)}
         ${cardTreeHtml(c.tree, c.treeMax)}
         ${c.bodyHtml || ''}
-        ${cardButtonsHtml(c.buttons)}
+        ${c.editFold ? foldHtml(c.editFold, (c.fieldsHtml || '') + cardButtonsHtml((c.buttons || []).filter((b) => b.id !== 'download'))) + cardButtonsHtml((c.buttons || []).filter((b) => b.id === 'download')) : cardButtonsHtml(c.buttons)}
       </div>
     </section>`;
   }
@@ -1226,7 +1393,7 @@
     const body = $('railAdvancedBody');
     const group = $('railGroupAdvanced');
     const data = $('railGroupData');
-    if (!body || !group) return;
+    if (!body || !group || group.hidden) return;
     if (uiMode === 'simple') {
       RAIL_ADVANCED_IDS.forEach((id) => { const btn = $(id); if (btn && btn.parentElement !== body) body.appendChild(btn); });
       group.hidden = false;
@@ -1302,6 +1469,7 @@
   /** Persisted independently of the mode itself — collapsed by default, but once a user opens it
    * (or navigation auto-expands it, see `show()`) it stays open across reloads. */
   function setRailAdvancedOpen(open) {
+    if (!$('railGroupAdvanced') || $('railGroupAdvanced').hidden) return;
     railAdvancedOpen = open;
     const bodyEl = $('railAdvancedBody');
     if (bodyEl) bodyEl.hidden = !open;
@@ -1317,19 +1485,14 @@
     const btn = $('modeToggle');
     if (!btn) return;
     const advanced = uiMode === 'advanced';
-    btn.innerHTML = icon(advanced ? 'collapse' : 'expand');
+    btn.querySelector('.ic').outerHTML = icon(advanced ? 'collapse' : 'expand');
     btn.setAttribute('aria-pressed', String(advanced));
     btn.title = (advanced ? 'Advanced mode on — showing every view (a)' : 'Advanced mode off — Simple view (a)');
   }
-  /** The Diff tab is allowed to stay in Simple mode (it needs a baseline the user pinned via the
-   * `b` shortcut, which keeps working in both modes); Headers/Timing/Related do not survive a
-   * switch to Simple, so land back on the always-visible Request & response tab rather than
-   * leaving the detail pane rendering a tab with no visible way to reach it. */
+  /** Normalize legacy tab names; both UI modes expose the same Network inspector tabs. */
   function normalizeNetworkTabForMode() {
-    if (uiMode === 'simple' && !['compare', 'summary', 'diff'].includes(networkTab)) {
-      networkTab = 'compare';
-      if (currentView === 'network' && selectedTransactionDetail) renderNetworkDetail();
-    }
+    if (networkTab === 'compare') networkTab = 'response';
+    if (networkTab === 'summary') networkTab = 'timing';
   }
   function applyUiMode() {
     document.body.classList.toggle('mode-simple', uiMode === 'simple');
@@ -2326,7 +2489,7 @@
    * counterpart (see `renderNetworkDetail`'s `mockDiffSig`) — required whenever `diffInfo` is set,
    * so the tree-reuse cache below can tell "same diff as last render" apart from "different rule
    * or snapshot, must rebuild". */
-  function bodyViewerHtml(raw, contentType, codeLines, title, large, groupKey, diffInfo, diffSig) {
+  function bodyViewerHtml(raw, contentType, codeLines, title, large, groupKey, diffInfo, diffSig, lineView = false) {
     const rawBlock = codeLines && codeLines.length
       ? codeBlockHtml(codeLines, Boolean(large), title)
       : `<span class="detail-group-empty">${raw ? esc(raw) : '(empty body)'}</span>`;
@@ -2351,16 +2514,15 @@
     return `<div class="body-viewer">
       <div class="body-viewer-toolbar">
         <div class="seg body-viewer-seg" role="group" aria-label="Body format">
-          <button type="button" class="active" data-body-mode="pretty">Pretty</button>
-          <button type="button" data-body-mode="raw">Raw</button>
+          ${lineView ? '<button type="button" data-body-mode="pretty">Tree</button>\n          <button type="button" class="active" data-body-mode="raw">Code</button>' : '<button type="button" class="active" data-body-mode="pretty">Pretty</button>\n          <button type="button" data-body-mode="raw">Raw</button>'}
         </div>
         <div class="body-viewer-tools">
           <button type="button" class="body-viewer-tool-btn" data-body-copy="${esc(mountKey)}" title="Copy body" aria-label="Copy body">${icon('copy', 'ic-sm')}</button>
           <button type="button" class="body-viewer-tool-btn" data-body-fullscreen="${esc(mountKey)}" data-body-title="${esc(title || '')}" title="Full screen" aria-label="Full screen">${icon('expand', 'ic-sm')}</button>
         </div>
       </div>
-      <div class="body-viewer-pretty" data-body-mount="${esc(mountKey)}"></div>
-      <div class="body-viewer-raw" hidden>${rawBlock}</div>
+      <div class="body-viewer-pretty" data-body-mount="${esc(mountKey)}"${lineView ? ' hidden' : ''}></div>
+      <div class="body-viewer-raw"${lineView ? '' : ' hidden'}>${rawBlock}</div>
     </div>`;
   }
 
@@ -2423,6 +2585,13 @@
       const applyCollapseClass = () => {
         shell.classList.toggle('collapse-list', collapsed === 'list');
         shell.classList.toggle('collapse-detail', collapsed === 'detail');
+        if (viewKey === 'network') {
+          shell.classList.toggle('list-collapsed', collapsed === 'list');
+          shell.classList.remove('list-overlay-open');
+          try { localStorage.setItem('devconsole.network.listCollapsed', String(collapsed === 'list')); } catch { /* storage unavailable */ }
+          syncNetworkListToggle();
+          requestAnimationFrame(() => virtualLists.get('transactions')?.remeasure());
+        }
       };
       const restoreFallback = () => (lastWidth != null ? lastWidth : Math.round((MIN_WIDTH + maxWidth()) / 2));
 
@@ -2470,6 +2639,19 @@
 
       // ---- Restore persisted width/collapse state before this splitter's first paint. ----
       const saved = readSaved();
+      // Read the dedicated preference before applyCollapseClass persists any state.
+      let networkSavedCollapse = false;
+      if (viewKey === 'network') {
+        try { networkSavedCollapse = localStorage.getItem('devconsole.network.listCollapsed') === 'true'; } catch { /* storage unavailable */ }
+        listPane.id = 'networkListPane';
+        networkListController = {
+          toggle() {
+            if (collapsed !== 'list') { collapse('list'); persist(); $('networkListToggle')?.focus(); return; }
+            setNetworkListOverlay(!shell.classList.contains('list-overlay-open'));
+          },
+          close: () => setNetworkListOverlay(false),
+        };
+      }
       if (saved && (saved.collapsed === 'list' || saved.collapsed === 'detail')) {
         lastWidth = typeof saved.width === 'number' ? saved.width : null;
         if (lastWidth != null) shell.style.setProperty('--list-w', Math.max(MIN_WIDTH, Math.min(lastWidth, maxWidth())) + 'px');
@@ -2478,6 +2660,7 @@
       } else if (saved && typeof saved.width === 'number') {
         setWidth(saved.width);
       }
+      if (viewKey === 'network' && networkSavedCollapse) collapse('list');
       syncAria();
 
       let startX = 0;
@@ -2663,7 +2846,7 @@
     $('timelineBookmarkOnly').setAttribute('aria-pressed', String(timelineBookmarkedOnly));
   }
 
-  const TIMELINE_EMPTY_HTML = '<div class="list-empty">' + icon('activity', 'ic-lg') + '<div class="list-empty-title">No events match</div><div class="list-empty-sub">Clear a filter to see the other captured events.</div></div>';
+  const TIMELINE_EMPTY_HTML = '<div class="list-empty">' + spot('search') + '<div class="list-empty-title">No events match</div><div class="list-empty-sub">Clear a filter to see the other captured events.</div></div>';
   const render = () => {
     const q = $('search').value.toLowerCase();
     const rows = events.filter(
@@ -2723,7 +2906,7 @@
     events.forEach((e) => { counts[e.pluginId] = (counts[e.pluginId] || 0) + 1; });
     $('timelineSourceSeg').innerHTML =
       `<button type="button" class="${timelineSourceFilter === '' ? 'active' : ''}" data-value="" aria-pressed="${timelineSourceFilter === ''}">All</button>` +
-      sources.map((s) => `<button type="button" class="${timelineSourceFilter === s ? 'active' : ''}" data-value="${esc(s)}" aria-pressed="${timelineSourceFilter === s}">${esc(s)}<span style="margin-left:8px;color:var(--text-3);font-size:10.5px">${counts[s]}</span></button>`).join('');
+      sources.map((s) => `<button type="button" class="${timelineSourceFilter === s ? 'active' : ''}" data-value="${esc(s)}" aria-pressed="${timelineSourceFilter === s}">${esc(s)}<span class="seg-count">${counts[s]}</span></button>`).join('');
   }
   const refreshSources = renderTimelineSourceSeg;
 
@@ -2885,8 +3068,8 @@
         ${screenshotHtml}
         ${kvGridHtml(kvs, true)}
         ${stackTraceHtml}
-        <label class="detail-note"><span>Note — stored in the session export, never on a server</span><textarea id="eventNoteInput" rows="2" placeholder="Add a non-sensitive note…" ${token ? '' : 'disabled'}>${esc(event.note || '')}</textarea></label>
-        <div class="detail-actions-row"><button type="button" id="eventNoteSaveBtn" ${token ? '' : 'disabled'} title="${token ? 'Save note' : 'Sign in required'}">${icon('check', 'ic-sm')}Save note</button></div>
+        <details class="fold"${event.note ? ' open' : ''}><summary>${icon('chevron', 'ic-sm fold-chevron')}Add note</summary><div class="fold-content"><label class="detail-note"><span>Note — stored in the session export</span><textarea id="eventNoteInput" rows="2" placeholder="Add a non-sensitive note…" ${token ? '' : 'disabled'}>${esc(event.note || '')}</textarea></label>
+        <div class="detail-actions-row"><button type="button" id="eventNoteSaveBtn" ${token ? '' : 'disabled'} title="${token ? 'Save note' : 'Sign in required'}">${icon('check', 'ic-sm')}Save note</button></div></div></details>
       </div>`;
     restoreFocus(focusSnap, pane);
     // toggle-zoom is handled by the delegated listener wired once in wireEvents (`$('eventDetail')
@@ -3022,6 +3205,15 @@
   }
 
   function updateRecordButton() {
+    const toggle = $('liveToggle');
+    if (toggle) {
+      toggle.hidden = !token || sessionExpired;
+      toggle.classList.toggle('is-paused', paused);
+      toggle.setAttribute('aria-pressed', String(!paused));
+      toggle.setAttribute('aria-label', paused ? 'Resume live events' : 'Pause live events');
+      $('liveToggleLabel').textContent = paused ? 'Paused' : 'Live';
+      document.querySelector('.session-pill').hidden = !toggle.hidden;
+    }
     const live = $('streamLive');
     const stopped = $('streamPaused');
     if (!live || !stopped) return;
@@ -3048,7 +3240,7 @@
       }
       flushLiveTailRefreshes();
     }
-    $('status').textContent = paused ? 'LIVE / PAUSED' : 'LIVE / TAILING';
+    $('status').textContent = paused ? 'Paused' : 'Live';
   }
 
   function noteSequenceSeen(seq) {
@@ -3070,7 +3262,10 @@
     clearTimeout(streamRetry);
     const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
     stream = new WebSocket(`${scheme}//${location.host}/api/v1/stream`);
-    stream.onopen = () => stream.send('{"type":"client.hello","protocolVersion":1}');
+    stream.onopen = () => {
+      invalidateSessionCache();
+      stream.send('{"type":"client.hello","protocolVersion":1}');
+    };
     stream.onmessage = (message) => {
       let value;
       try {
@@ -3081,7 +3276,7 @@
       if (value.type === 'server.welcome') {
         $('lamp').classList.remove('expired');
         $('lamp').classList.add('live');
-        $('status').textContent = paused ? 'LIVE / PAUSED' : 'LIVE / TAILING';
+        $('status').textContent = paused ? 'Paused' : 'Live';
         // lastKnownSequence starts at -1, so this only fires on a genuine reconnect (one that
         // already saw at least one sequence number before now) -- a fresh first connect has
         // nothing to backfill and every view loads its own initial data anyway.
@@ -3091,6 +3286,15 @@
         return;
       }
       if (value.type !== 'event.appended' || !value.event) return;
+      // Responses started before an event cannot mark affected views fresh.
+      const affected = new Set(['overview', 'timeline', 'sdkHealth', 'session']);
+      const pluginView = { websocket: 'socket', crash: 'crashes', preferences: 'preferences',
+        database: 'database', files: 'files', remoteconfig: 'remoteConfig', 'remote-config': 'remoteConfig' };
+      affected.add(pluginView[value.event.pluginId] || value.event.pluginId);
+      affected.forEach((view) => {
+        viewLoadedAt.delete(view);
+        viewRevision.set(view, (viewRevision.get(view) || 0) + 1);
+      });
       noteSequenceSeen(value.event.sequence);
       if (paused) {
         const queued = new Map(pendingLiveEvents.map((e) => [e.id, e]));
@@ -3147,6 +3351,7 @@
     clearTimeout(streamRetry);
     openAccess = false;
     token = '';
+    invalidateSessionCache();
     csrf = '';
     stream?.close();
     stream = null;
@@ -3165,11 +3370,15 @@
   const TIMELINE_FETCH_LIMIT = 500;
   let timelineLoadingMore = false;
   async function load(cursor = null) {
+    if (!hasSession()) return loadImpl(cursor);
+    return runViewLoader('timeline', () => loadImpl(cursor));
+  }
+  async function loadImpl(cursor = null) {
     if (!token) return;
     const params = new URLSearchParams({ limit: String(TIMELINE_FETCH_LIMIT), sort: 'DESC' });
     if (cursor) params.set('cursor', cursor);
     const r = await fetch('/api/v1/events?' + params, { headers: auth() });
-    if (!r.ok) return;
+    requireLoad(r);
     const body = await r.json();
     events = (body.data || [])
       .map((raw) => ({ ...raw, wallTimeMs: raw.wallTimeMs ?? raw.timestampEpochMs ?? 0 }))
@@ -3182,7 +3391,7 @@
     refreshSources();
     render();
     setNavCount('navCountTimeline', events.length);
-    $('status').textContent = paused ? 'LIVE / PAUSED' : 'LIVE / TAILING';
+    $('status').textContent = paused ? 'Paused' : 'Live';
     // Best-effort priming so a log/crash event's message + stack trace (see
     // ensureEventPayloadsLoaded above) is usually already cached by the time something is
     // clicked; renderEventDetail() re-renders itself once this resolves if it's still relevant.
@@ -3228,6 +3437,10 @@
    * Network/Timeline views' shared state) so it renders correctly whether or not those views have
    * been visited yet — same "each view loads its own data" convention every other view follows. */
   async function loadOverview() {
+    if (!hasSession()) return loadOverviewImpl();
+    return runViewLoader('overview', () => loadOverviewImpl());
+  }
+  async function loadOverviewImpl() {
     $('overviewBadge').textContent = hasSession() ? 'connected' : 'not connected';
     if (!hasSession()) {
       $('overviewMetrics').innerHTML = '';
@@ -3235,17 +3448,18 @@
       $('overviewCrashBanner').hidden = true;
       return;
     }
-    const [overviewRes, metaRes, networkRes, eventsRes, runsRes] = await Promise.all([
+    const [overviewRes, metaRes, networkRes, eventsRes, runsRes, crashesRes] = await Promise.all([
       fetch('/api/v1/overview', { headers: auth() }),
-      fetch('/api/v1/meta', { headers: auth() }),
+      cachedJson('/api/v1/meta', 30000),
       fetch('/api/v1/network/transactions?limit=100', { headers: auth() }),
       fetch('/api/v1/events?limit=6&sort=DESC', { headers: auth() }),
       // The "previous-run-crashed banner": GET /api/v1/runs reports every
       // retained run's StoredSessionStatus, sorted newest-first by the server. The most recent
       // *non-active* run is the "previous run".
-      fetch('/api/v1/runs', { headers: auth() }),
+      cachedJson('/api/v1/runs', 30000),
+      fetch('/api/v1/retained-events?pluginId=crash&limit=500', { headers: auth() }),
     ]);
-    if (!overviewRes.ok) return;
+    requireLoad(overviewRes);
     const meta = metaRes.ok ? await metaRes.json() : {};
     // Fail-open when captureCategories is missing (older SDK) or malformed -- see
     // applyCaptureCategoryGating's own null-means-unknown handling.
@@ -3254,7 +3468,8 @@
     const eventSample = eventsRes.ok ? (await eventsRes.json()).data || [] : [];
     const runs = runsRes.ok ? (await runsRes.json()).data || [] : [];
     const previousRun = runs.find((run) => run.status !== 'ACTIVE') || null;
-    renderOverview(await overviewRes.json(), meta, netSample, eventSample, previousRun);
+    const crashSample = crashesRes.ok ? ((await crashesRes.json()).data || []).map(decorateCrashRow) : [];
+    renderOverview(await overviewRes.json(), meta, netSample, eventSample, previousRun, crashSample);
   }
   /** Keeps the session-pill's visible label and its hover tooltip (the full text, for when the
    * pill has ellipsised at a narrow width — see the topbar breakpoint ladder in dashboard.css) in
@@ -3266,14 +3481,20 @@
     el.title = title || text;
   }
   function activateBrowserAccess(accessToken, csrfToken, source, isOpen = false) {
+    invalidateSessionCache();
     openAccess = isOpen;
     token = isOpen ? 'open' : accessToken;
     csrf = isOpen ? '' : csrfToken;
     sessionExpired = false;
     consecutiveAuthFailures = 0;
+    Object.values(viewContainers).forEach((id) => {
+      const container = $(id);
+      if (container && (id === 'overviewCards' || container.querySelector('.empty-connect'))) container.innerHTML = '<div class="load-status">Select this view to load captures.</div>';
+    });
     if (source !== 'manual') history.replaceState(null, '', location.pathname);
-    setStatus(isOpen ? 'Connected (open)' : 'Connected');
+    setStatus('Live', isOpen ? 'Connected (open)' : 'Connected');
     toast(isOpen ? 'Connected to DevConsole.' : 'Connected to DevConsole session.');
+    if ($('composerResult').querySelector('.empty-connect')) $('composerResult').innerHTML = '<div class="load-status">Execute a request to see its response.</div>';
     updateControlUi();
     connectStream();
     // `paused` starts true because there is nothing to tail before a session exists. Connecting is
@@ -3334,57 +3555,51 @@
     }${esc(time(when))}${previousRun.deviceModel ? ' · ' + esc(previousRun.deviceModel) : ''}. Open Crashes for the breadcrumb trail and full dump.</div></div><span class="gate-banner-code">VIEW</span></button>`;
     $('overviewCrashBannerBtn').onclick = () => focusCrashesOnRun(previousRun.id);
   }
-  function renderOverview(body, meta, netSample, eventSample, previousRun) {
-    renderOverviewCrashBanner(previousRun);
-    if (!body) {
-      cardsGridHtml('overviewCards', [
-        {
-          icon: 'lock', iconTone: 'warn', title: 'Connect this browser', span: 2,
-          // fieldsHtml (unlike `lede`) is inserted raw, not HTML-escaped — the only field on this
-          // card that can carry <code>/<strong> markup (device path, the
-          // adb forward command, and the #code= credential note) ahead of the actual connect
-          // input, since cardHtml() always renders fieldsHtml before its own buttons/lede order
-          // isn't ours to change (it's shared by every card-grid view, not scoped to Overview).
-          fieldsHtml: `
-            <p class="card-lede">This server requires a browser session. On the device, open DevConsole → <strong>More</strong> — it shows the connect QR and an 8-character, single-use code that expires after five minutes. Scan the QR, or paste the code below.</p>
-            <ul class="connect-steps">
-              <li>The <code class="inline-code">#code=</code> fragment in that link is the credential because this server is using SESSION_CODE; a bare <code class="inline-code">http://host:port/</code> address is not enough.</li>
-              <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
-              <li>Logcat deliberately never prints the code — read it from the device screen, not the log.</li>
-            </ul>
-            <div class="card-fields mt-12"><label class="field"><span>Session code</span><input id="connectCode" placeholder="e.g. 7K2QF9" maxlength="12" autocomplete="off"></label></div>`,
-          buttons: [{ id: 'connect', label: 'Connect', icon: 'plug', kind: 'primary' }],
-        },
-      ]);
-      wireCardGrid('overviewCards', { onButton: (id) => { if (id === 'connect') exchangeSessionCode($('connectCode').value.trim(), 'manual'); } });
-      return;
-    }
+  function overviewNetworkRow(t) {
+    return `<button type="button" class="overview-row" data-overview-network="${esc(t.id)}">
+      <span class="overview-method">${esc(t.method)}</span><span class="overview-path">${esc(t.path)}${t.query ? `<span class="row-main-sub">?${esc(t.query)}</span>` : ''}</span>
+      <span class="overview-result"><span class="overview-status tone-text-${statusTone(t.status)}">${esc(t.status || 'Failed')}</span><span aria-hidden="true">·</span><span>${esc(t.durationMs != null ? t.durationMs + ' ms' : '—')}</span></span>
+    </button>`;
+  }
+  function renderOverview(body, meta, netSample, eventSample, previousRun, crashSample = []) {
+    $('overviewCrashBanner').hidden = true;
+    $('overviewMetrics').innerHTML = '';
+    $('overviewCards').classList.remove('cards-grid');
+    const latest = netSample.slice().sort((a, b) => (b.startedAtEpochMs || 0) - (a.startedAtEpochMs || 0));
     const durations = netSample.map((t) => t.durationMs).filter((d) => d != null).sort((a, b) => a - b);
     const p95 = percentile(durations, 0.95);
-    const failCount = netSample.filter(failing).length;
-    $('overviewMetrics').innerHTML = metricsStripHtml([
-      { label: 'Requests', val: String(netSample.length), sub: 'sample', tone: 'ink' },
-      { label: 'Failing', val: String(failCount), sub: netSample.length ? Math.round((failCount / netSample.length) * 100) + '%' : '', tone: 'error' },
-      { label: 'p95', val: p95 != null ? (p95 / 1000).toFixed(2) : '—', sub: p95 != null ? 's' : '', tone: 'warn' },
-      { label: 'Flagged', val: String(evidenceFlags.size), sub: 'as evidence', tone: 'signal' },
-    ]);
-    cardsGridHtml('overviewCards', [
-      overviewNeedsAttentionCard(netSample, failCount),
-      overviewTrafficHealthCard(netSample, durations, p95, failCount),
-      overviewServerCard(body, meta),
-      overviewSignalsCard(eventSample),
-      overviewHealthCard(body.sdkHealth),
-    ]);
-    wireCardGrid('overviewCards', {
-      onButton: (id) => {
-        if (id === 'open-failures') { networkFailOnly = true; show('network'); loadNetwork(); }
-        else if (id === 'flag-all') {
-          netSample.filter(failing).forEach((t) => { if (!isFlagged('network', t.id)) toggleEvidenceFlag('network', t.id, t.method + ' ' + t.path); });
-          toast(failCount + ' capture' + (failCount === 1 ? '' : 's') + ' flagged as evidence');
-          loadOverview();
-        }
-      },
-    });
+    const requestCount = body ? Object.values(body.networkStatusDistribution || {}).reduce((sum, count) => sum + Number(count), 0) : 0;
+    $('overviewSubtitle').textContent = body
+      ? (requestCount || netSample.length) + ' requests in this session' + (p95 != null ? ' · p95 ' + p95 + ' ms' : '')
+      : 'Connect this browser to see session activity.';
+    const failures = latest.filter(failing).map((t) => ({ time: t.startedAtEpochMs || 0, html: overviewNetworkRow(t) }));
+    const crashes = crashSample.map((e) => ({ time: e.wallTimeMs || 0, html: `<button type="button" class="overview-row" data-overview-crash="${esc(e.id)}"><span class="overview-method">${crashKindOf(e) === 'ANR' ? 'ANR' : 'CRASH'}</span><span class="overview-path">${esc(e.summary)}</span><span class="overview-result">${esc(time(e.wallTimeMs))}</span></button>` }));
+    const attention = failures.concat(crashes).sort((a, b) => b.time - a.time).slice(0, 5);
+    const connect = body ? '' : `<form id="overviewConnect" class="overview-connect"><label class="field"><span>Session code from DevConsole → More on the device</span><input id="connectCode" placeholder="Single-use session code" maxlength="12" autocomplete="off" required></label><button type="submit" class="primary">Connect</button></form>`;
+    $('overviewCards').innerHTML = `${connect}
+      <section class="overview-section" aria-labelledby="overviewAttentionTitle"><h2 id="overviewAttentionTitle">Needs attention</h2><div class="grouped-list">${attention.length ? attention.map((r) => r.html).join('') : '<div class="overview-empty">Nothing needs attention</div>'}</div></section>
+      <section class="overview-section" aria-labelledby="overviewRecentTitle"><h2 id="overviewRecentTitle">Recent activity</h2><div class="grouped-list">${latest.length ? latest.slice(0, 6).map(overviewNetworkRow).join('') : '<div class="overview-empty">No requests captured yet</div>'}</div></section>`;
+    const form = $('overviewConnect');
+    if (form) form.onsubmit = (event) => { event.preventDefault(); exchangeSessionCode($('connectCode').value.trim(), 'manual'); };
+    $('overviewCards').onclick = async (event) => {
+      const networkRow = event.target.closest('[data-overview-network]');
+      if (networkRow) {
+        await show('network');
+        const id = networkRow.dataset.overviewNetwork;
+        // A prior search may exclude the Overview capture; keep this explicit selection reachable.
+        if (!transactions.some((t) => t.id === id)) transactions.unshift(latest.find((t) => t.id === id));
+        await showTransaction(id);
+        return;
+      }
+      const crashRow = event.target.closest('[data-overview-crash]');
+      if (crashRow) {
+        await show('crashes');
+        selectedCrashId = crashRow.dataset.overviewCrash;
+        crashKindFilter = '';
+        $('crashesSearch').value = '';
+        renderCrashes();
+      }
+    };
   }
   function overviewNeedsAttentionCard(netSample, failCount) {
     const bad = netSample.filter(failing).slice(0, 8);
@@ -3439,15 +3654,17 @@
     };
   }
   function overviewServerCard(body, meta) {
-    const endpoint = meta.endpoint;
+    const endpoint = meta?.endpoint;
+    const isLan = endpoint?.bindingMode === 'LAN';
+    const isLoopback = endpoint?.bindingMode === 'LOOPBACK';
     return {
       icon: 'grid', iconTone: 'signal', title: 'Server & app',
       rows: [
         { k: 'Package', v: body.app?.packageName || '—', tone: 'ink' },
         { k: 'Version', v: body.app?.versionName || '—', tone: 'ink' },
-        { k: 'Bound to', v: endpoint ? endpoint.host + ':' + endpoint.port : location.host, tone: 'ink', tag: endpoint?.bindingMode === 'LAN' ? 'LAN' : false, tagTone: 'warn' },
-        { k: 'Protocol', v: meta.protocolVersion ? 'devconsole/' + meta.protocolVersion : '—', tone: 'muted' },
-        { k: 'Build', v: meta.build?.variant || '—', tone: 'muted' },
+        { k: 'Bound to', v: endpoint ? endpoint.host + ':' + endpoint.port : '—', tone: 'ink', tag: isLan ? 'LAN' : (isLoopback ? 'LOOPBACK' : false), tagTone: isLan ? 'warn' : 'signal' },
+        { k: 'Protocol', v: meta?.protocolVersion ? 'devconsole/' + meta.protocolVersion : '—', tone: 'muted' },
+        { k: 'Build', v: meta?.build?.variant || '—', tone: 'muted' },
         { k: 'Mocks', v: body.mocks?.enabled ? body.mocks.ruleCount + ' rule' + (body.mocks.ruleCount === 1 ? '' : 's') + ' active' : 'disabled', tone: body.mocks?.enabled ? 'put' : 'muted' },
         body.sessionIntegrity ? { k: 'Session', v: body.sessionIntegrity.pristine ? 'pristine' : 'modified', tone: body.sessionIntegrity.pristine ? 'signal' : 'warn', tag: body.sessionIntegrity.pristine ? false : 'MODIFIED', tagTone: 'warn' } : false,
       ].filter(Boolean),
@@ -3538,18 +3755,17 @@
       .filter(([, value]) => value);
   }
   async function loadNetwork(cursor = null) {
+    if (!hasSession()) return loadNetworkImpl(cursor);
+    return runViewLoader('network', () => loadNetworkImpl(cursor));
+  }
+  async function loadNetworkImpl(cursor = null) {
     if (!token) return;
     networkPagedIntoHistory = Boolean(cursor);
     const params = new URLSearchParams({ limit: String(NETWORK_FETCH_LIMIT) });
     if (cursor) params.set('cursor', cursor);
     networkFilterEntries().forEach(([name, value]) => params.append(name, value));
     const r = await fetch('/api/v1/network/transactions?' + params, { headers: auth() });
-    if (!r.ok) {
-      // Never clobber the detail pane (a background live-tail refresh hitting a 429 would wipe
-      // the transaction the operator is reading, permanently). Surface on the transient channel.
-      toast(r.status === 429 ? 'Refresh rate-limited — retrying shortly.' : 'Network filter rejected: ' + r.status, 'error');
-      return;
-    }
+    requireLoad(r);
     const body = await r.json();
     networkPage = body.data || [];
     networkCursor = body.page?.nextCursor || null;
@@ -3654,9 +3870,10 @@
   }
 
   let networkOrder = [];
-  const NETWORK_EMPTY_HTML = '<div class="list-empty">' + icon('funnel', 'ic-lg') + '<div class="list-empty-title">No transactions match</div><div class="list-empty-sub">Clear a filter or widen the status/method selection to see the other captures.</div></div>';
+  const NETWORK_EMPTY_HTML = '<div class="list-empty">' + spot('search') + '<div class="list-empty-title">No transactions match</div><div class="list-empty-sub">Clear a filter or widen the status/method selection to see the other captures.</div></div>';
   function renderNetwork() {
     $('networkMainColLabel').textContent = 'Path';
+    $('networkFullEndpoint').setAttribute('aria-pressed', String(networkFullEndpoint));
     // Normalize the selection BEFORE painting, like the other four list views: rows gate tabindex
     // on `selected`, so painting with a stale id would leave zero tabbable rows until
     // showTransaction()'s async re-render -- or forever, if that detail fetch rejects.
@@ -3671,15 +3888,16 @@
           checkbox: true, checked: networkSelectedIds.has(t.id),
           badgeText: t.method, badgeTone: methodTone(t.method),
           mainText: t.path,
+          mainPrefix: networkFullEndpoint ? t.host : '',
           // The query is what separates two rows on the same endpoint, so it belongs in the row --
           // dimmed and after the path, which stays the part that survives the ellipsis.
           mainSub: t.query ? '?' + t.query : '',
           // Single row-tag slot: a pinned diff baseline always wins over the mocked marker.
-          tagText: networkPinnedId === t.id ? 'BASE' : t.tags?.mocked === 'true' ? 'MOCK' : false,
+          tagText: false,
           tagTone: 'put',
           duration: t.durationMs != null ? t.durationMs + ' ms' : t.error ? 'failed' : '—',
-          statusText: t.status != null ? String(t.status) : t.error ? 'ERR' : '—', sTone: statusTone(t.status),
-          stackMetrics: true, wrapMain: true,
+          statusText: t.status != null ? String(t.status) : t.error ? 'ERR' : '—', sTone: t.status != null ? statusTone(t.status) : t.error ? 'error' : 'muted',
+          metricsInline: true,
           flagKind: 'network', flagLabel: t.method + ' ' + t.path,
           posinset: i + 1, setsize: total,
         });
@@ -3697,7 +3915,7 @@
     renderNetworkSelectionBar();
     if (networkSelectionStale) {
       if (transactions.length) showTransaction(selectedTransactionId);
-      else renderEmpty($('networkDetailPane'), 'network', 'No transaction selected', 'Select a transaction from the list to inspect its redacted metadata.');
+      else renderNetworkEmpty();
     }
   }
 
@@ -3865,8 +4083,8 @@
             const on = selected.has(it.value);
             return `<button type="button" class="drop-item" role="checkbox" aria-checked="${on}" data-drop-value="${esc(it.value)}">
               <span class="drop-box">${on ? icon('check') : ''}</span>
-              ${dotForItem ? `<span class="drop-dot" style="background:${dotForItem(it)}"></span>` : ''}
-              <span class="drop-item-label"${it.rtl ? ' style="direction:rtl;text-align:left"' : ''}>${esc(it.label)}</span>
+              ${dotForItem ? '<span class="drop-dot"></span>' : ''}
+              <span class="drop-item-label${it.rtl ? ' text-rtl' : ''}">${esc(it.label)}</span>
               <span class="drop-item-count">${esc(it.count ?? '')}</span>
             </button>`;
           })
@@ -3933,7 +4151,7 @@
   // WebSockets
   // ================================================================
   function listEmptyHtml(iconName, title, sub) {
-    return `<div class="list-empty">${icon(iconName, 'ic-lg')}<div class="list-empty-title">${esc(title)}</div><div class="list-empty-sub">${esc(sub)}</div></div>`;
+    return `<div class="list-empty">${spot('search')}<div class="list-empty-title">${esc(title)}</div><div class="list-empty-sub">${esc(sub)}</div></div>`;
   }
   function shortSocketUrl(url) {
     return (url || '').replace(/^wss?:\/\/[^/]+/, '') || '/';
@@ -3972,20 +4190,28 @@
     });
 
   async function loadSockets() {
+    if (!hasSession()) return loadSocketsImpl();
+    return runViewLoader('socket', () => loadSocketsImpl());
+  }
+  async function loadSocketsImpl() {
     if (!token) return;
     const connParams = new URLSearchParams();
     if (socketProtocolFilter !== 'all') connParams.append('protocol', socketProtocolFilter);
     const r = await fetch('/api/v1/websockets/connections?' + connParams, { headers: auth() });
-    if (!r.ok) return;
+    requireLoad(r);
     socketConnections = (await r.json()).data || [];
     [...socketSelectedConnIds].forEach((id) => { if (!socketConnections.some((s) => s.id === id)) socketSelectedConnIds.delete(id); });
     setNavCount('navCountSockets', socketConnections.length);
-    await loadSocketMessages();
+    return await loadSocketMessages();
   }
 
   /** Broad fetch respecting every server-side filter (connections, frame type, direction, search,
    * time, error) — List/Timeline mode is purely a client-side presentation choice on top. */
   async function loadSocketMessages() {
+    if (!hasSession()) return;
+    return runViewLoader('socket', loadSocketMessagesImpl);
+  }
+  async function loadSocketMessagesImpl() {
     if (!token) return;
     const params = new URLSearchParams();
     socketSelectedConnIds.forEach((id) => params.append('connectionId', id));
@@ -3997,7 +4223,11 @@
       if (value) params.append(name, value);
     });
     const r = await fetch('/api/v1/websockets/messages?' + params, { headers: auth() });
-    if (!r.ok) { renderEmpty($('socketMessages'), 'alert', 'Invalid WebSocket filter combination.'); return; }
+    if (!r.ok) {
+      renderLoadFailure($('sockets'), 'Could not load messages', r.status, loadSocketMessages);
+      viewLoadedAt.delete('socket');
+      return false;
+    }
     socketMessages_ = formatSocketMessages((await r.json()).data || []);
     if (socketSelectedIndex >= socketMessages_.length) socketSelectedIndex = -1;
     renderSockets();
@@ -4008,7 +4238,7 @@
   function renderSockets() {
     const timelineMode = socketMode === 'timeline';
     $('socketListHead').innerHTML = timelineMode
-      ? '<span style="flex:0 0 74px;text-align:right">Time</span><span style="flex:0 0 20px"></span><span style="flex:1">Frame · payload size</span>'
+      ? '<span class="trace-head-time">Time</span><span class="trace-head-line"></span><span class="trace-head-main">Frame · payload size</span>'
       : '<span class="col-badge">Dir</span><span class="col-main">Payload preview</span><span class="col-duration">Size</span><span class="col-status">Time</span><span class="col-flag"></span>';
     // Normalize the selection before painting (not after) so a stale/dropped selectedIndex never
     // leaves every row tabindex=-1 for a frame — both sub-modes below read socketSelectedIndex.
@@ -4037,7 +4267,7 @@
 
                 <span class="trace-time"><span class="trace-t">${time(m.timestampEpochMs)}</span><span class="trace-gap${gapMs > 4000 ? ' warn' : ''}">${prev ? '+' + (gapMs < 1000 ? gapMs + 'ms' : (gapMs / 1000).toFixed(2) + 's') : 'start'}</span></span>
                 <span class="trace-line"><span class="trace-dot tone-bg-${rec ? 'put' : 'signal'}">${icon(rec ? 'arrow-down' : 'arrow-up')}</span></span>
-                <span class="trace-main"><span class="trace-line1"><span class="trace-dir tone-text-${rec ? 'put' : 'signal'}">${esc(m.direction)}</span><span class="trace-label">${esc(protoPrefix + framePreviewText(m))}</span><span class="trace-sz">${esc(frameSizeLabel(m))}</span></span><span class="trace-bar tone-bg-${m.frameType === 'BINARY' ? 'strong' : rec ? 'put' : 'signal'}" style="width:${pct}%"></span></span>
+                <span class="trace-main"><span class="trace-line1"><span class="trace-dir tone-text-${rec ? 'put' : 'signal'}">${esc(m.direction)}</span><span class="trace-label">${esc(protoPrefix + framePreviewText(m))}</span><span class="trace-sz">${esc(frameSizeLabel(m))}</span></span><progress class="trace-bar tone-bg-${m.frameType === 'BINARY' ? 'strong' : rec ? 'put' : 'signal'}" max="100" value="${pct}"></progress></span>
               </div>`;
         },
         SOCKETS_EMPTY_HTML,
@@ -4055,7 +4285,8 @@
           // when more than one connection is in scope), rather than reusing dashboard.css for a
           // second badge slot this row layout doesn't have.
           const protoTag = conn?.protocol === 'mqtt' ? 'MQTT' : null;
-          const scopeTag = socketSelectedConnIds.size === 1 ? (m.frameType === 'BINARY' ? 'BIN' : null) : conn ? shortSocketUrl(conn.url) : null;
+          // The connection URL only tells rows apart when more than one connection is in view.
+          const scopeTag = socketSelectedConnIds.size === 1 || socketConnections.length < 2 ? (m.frameType === 'BINARY' ? 'BIN' : null) : conn ? shortSocketUrl(conn.url) : null;
           return rowHtml({
             id: String(i), selected: socketSelectedIndex === i,
             badgeText: rec ? 'RECV' : 'SENT', badgeTone: rec ? 'put' : 'signal',
@@ -4204,7 +4435,7 @@
       body = bodyViewerHtml(preview, null, lines, conn ? conn.url : 'Socket frame payload', true, 'socket:' + socketFlagId(socketSelectedIndex, m));
     }
     const findBar = findBarHtml(query, lines ? countPaneHits([{ groups: [{ code: lines }] }]) : 0, 'socketDetailFindInput');
-    body += `<div class="detail-footnote">${icon('lock', 'ic-sm')}<span>Frame payloads pass through the same redaction allowlist as HTTP bodies.</span></div>`;
+    if (redactionShown()) body += `<div class="detail-footnote">${icon('lock', 'ic-sm')}<span>Frame payloads are redacted on device.</span></div>`;
     const focusSnap = captureFocus(pane);
     pane.innerHTML = head + findBar + `<div class="detail-body">${body}</div>`;
     mountBodyViewers(pane);
@@ -4230,6 +4461,7 @@
   // ================================================================
   let pushOrder = [];
   const PUSH_EMPTY_HTML = listEmptyHtml('push', 'No push events match', 'Clear the provider filter or search to see the other captured events.');
+  const PUSH_NONE_HTML = listEmptyHtml('push', 'No push events yet', 'Push messages the app receives appear here.');
   function renderPush() {
     const q = $('pushSearch').value.toLowerCase();
     const rows = pushes
@@ -4255,10 +4487,10 @@
           posinset: n + 1, setsize: total,
         });
       },
-      PUSH_EMPTY_HTML,
+      pushes.length ? PUSH_EMPTY_HTML : PUSH_NONE_HTML,
     );
     $('pushFootLeft').textContent = rows.length + ' of ' + pushes.length;
-    $('pushFootRight').textContent = 'push tokens are redacted';
+    $('pushFootRight').textContent = redactionShown() ? 'push tokens are redacted' : '';
     $('pushBadge').textContent = pushes.length + ' events';
     renderPushMetrics();
     renderPushDetail();
@@ -4306,7 +4538,7 @@
     const body = codeBlockHtml(lines, true, p.notification?.title || p.messageId || 'Push payload') + `<div class="detail-footnote">${icon('lock', 'ic-sm')}<span>${
       p.simulated
         ? 'This event was injected from the Push view — it never came from a provider.'
-        : 'Captured from ' + esc(p.provider.toUpperCase()) + ' on device. Redacted fields are replaced by the on-device allowlist before this browser receives them.'
+        : 'Captured from ' + esc(p.provider.toUpperCase()) + ' on device.' + (redactionShown() ? ' Redacted fields are replaced by the on-device allowlist before this browser receives them.' : '')
     }</span></div>`;
     const focusSnap = captureFocus(pane);
     pane.innerHTML = head + findBar + `<div class="detail-body">${body}</div>`;
@@ -4346,13 +4578,17 @@
     pushes.forEach((p) => { counts[p.provider] = (counts[p.provider] || 0) + 1; });
     $('pushProviderSeg').innerHTML =
       `<button type="button" class="${pushProviderFilter === '' ? 'active' : ''}" data-value="" aria-pressed="${pushProviderFilter === ''}">All</button>` +
-      providers.map((p) => `<button type="button" class="${pushProviderFilter === p ? 'active' : ''}" data-value="${esc(p)}" aria-pressed="${pushProviderFilter === p}">${esc(p)}<span style="margin-left:8px;color:var(--text-3);font-size:10.5px">${counts[p]}</span></button>`).join('');
+      providers.map((p) => `<button type="button" class="${pushProviderFilter === p ? 'active' : ''}" data-value="${esc(p)}" aria-pressed="${pushProviderFilter === p}">${esc(p)}<span class="seg-count">${counts[p]}</span></button>`).join('');
   }
 
   async function loadPush() {
+    if (!hasSession()) return loadPushImpl();
+    return runViewLoader('push', () => loadPushImpl());
+  }
+  async function loadPushImpl() {
     if (!token) return;
     const r = await fetch('/api/v1/push/events', { headers: auth() });
-    if (!r.ok) return;
+    requireLoad(r);
     pushes = (await r.json()).data || [];
     if (selectedPushIndex >= pushes.length) selectedPushIndex = -1;
     refreshPushChips();
@@ -4416,6 +4652,7 @@
   let crashKindFilter = '';
   let crashRunsById = new Map(); // sessionId -> row from GET /api/v1/runs, refreshed by loadCrashes()
   const CRASHES_EMPTY_HTML = listEmptyHtml('bug', 'No crashes or ANRs match', 'Clear the kind filter or search to see the other captured events.');
+  const CRASHES_NONE_HTML = listEmptyHtml('bug', 'No crashes yet', 'Crashes and ANRs from this session appear here.');
   /** Splits raw multi-line text (the all-thread dump — not JSON) into codeBlockHtml()'s line-object
    * shape so the crash dump gets the exact same collapsible/fullscreen/copy treatment as every
    * JSON code block, without pretending the text is JSON. Truncation markers
@@ -4468,14 +4705,18 @@
    * every row can be joined to the run that produced it (crashRunInfo()); a failed runs fetch just
    * leaves crashRunsById empty, so every row's run info falls back to "omit" rather than guessing. */
   async function loadCrashes() {
+    if (!hasSession()) return loadCrashesImpl();
+    return runViewLoader('crashes', () => loadCrashesImpl());
+  }
+  async function loadCrashesImpl() {
     if (!token) return;
     const params = new URLSearchParams({ limit: '500' });
     params.append('pluginId', 'crash');
     const [crashesRes, runsRes] = await Promise.all([
       fetch('/api/v1/retained-events?' + params, { headers: auth() }),
-      fetch('/api/v1/runs', { headers: auth() }),
+      cachedJson('/api/v1/runs', 30000),
     ]);
-    if (!crashesRes.ok) { toast('Crashes fetch failed: ' + crashesRes.status, 'error'); return; }
+    requireLoad(crashesRes);
     const body = await crashesRes.json();
     const runs = runsRes.ok ? (await runsRes.json()).data || [] : [];
     crashRunsById = new Map(runs.map((run) => [run.id, run]));
@@ -4524,7 +4765,7 @@
           posinset: n + 1, setsize: total,
         });
       },
-      CRASHES_EMPTY_HTML,
+      crashEvents.length ? CRASHES_EMPTY_HTML : CRASHES_NONE_HTML,
     );
     $('crashesFootLeft').textContent = rows.length + ' of ' + crashEvents.length;
     $('crashesFootRight').textContent = 'auto-flagged as evidence';
@@ -4604,7 +4845,7 @@
       <div class="block-title">Breadcrumbs</div>
       ${breadcrumbsHtml}
       ${dumpGroup}
-      <div class="detail-footnote">${icon('lock', 'ic-sm')}<span>Breadcrumbs are already-redacted summaries; the all-thread dump is redacted the same way any other stack trace/text payload is before it ever leaves the device.</span></div>
+      ${redactionShown() ? `<div class="detail-footnote">${icon('lock', 'ic-sm')}<span>Breadcrumbs and stack traces are redacted on device.</span></div>` : ''}
     </div>`;
     restoreFocus(focusSnap, pane);
   }
@@ -4643,8 +4884,14 @@
   let selectedStateMutators = [];
   let cachedFlags = [];
   async function loadState() {
+    if (!hasSession()) return loadStateImpl();
+    return runViewLoader('state', () => loadStateImpl());
+  }
+  async function loadStateImpl() {
     if (!token) return;
     const [statesRes, flagsRes] = await Promise.all([fetch('/api/v1/state', { headers: auth() }), fetch('/api/v1/flags', { headers: auth() })]);
+    requireLoad(statesRes);
+    requireLoad(flagsRes);
     stateProviderIds = statesRes.ok ? ((await statesRes.json()).data || []).map((s) => s.id) : [];
     if (!stateProviderIds.includes(selectedStateProviderId)) {
       selectedStateProviderId = stateProviderIds[0] || '';
@@ -4752,7 +4999,7 @@
     const otherFlags = cachedFlags.filter((f) => f.type !== 'BOOLEAN');
     cardsGridHtml('stateCards', [
       {
-        icon: 'flag', iconTone: 'signal', title: 'Feature flags', badge: cachedFlags.length + ' flag' + (cachedFlags.length === 1 ? '' : 's'), badgeTone: 'muted',
+        icon: 'toggle', iconTone: 'signal', title: 'Feature flags', badge: cachedFlags.length + ' flag' + (cachedFlags.length === 1 ? '' : 's'), badgeTone: 'muted',
         lede: cachedFlags.length ? false : 'No feature flags are registered for this session.',
         rows: otherFlags.map((f) => ({ k: f.key, v: f.value, tone: 'ink', tag: f.mutable ? false : 'FIXED', tagTone: 'muted' })),
         toggles: boolFlags.map((f) => ({
@@ -4764,7 +5011,7 @@
       {
         icon: 'database', iconTone: 'signal', title: 'State providers', badge: stateProviderIds.length + ' registered', badgeTone: 'muted',
         lede: stateProviderIds.length ? false : 'This application has not registered any state providers.',
-        tree: stateProviderIds.map((id) => ({ id, label: id, icon: 'flag', selected: id === selectedStateProviderId, tone: id === selectedStateProviderId ? 'ink' : 'muted' })),
+        tree: stateProviderIds.map((id) => ({ id, label: id, icon: 'toggle', selected: id === selectedStateProviderId, tone: id === selectedStateProviderId ? 'ink' : 'muted' })),
       },
       {
         icon: 'grid', iconTone: 'signal', title: selectedStateProviderId ? 'App state · ' + selectedStateProviderId : 'App state', span: 2,
@@ -4789,17 +5036,13 @@
   let remoteConfigSourceFilter = 'all';
   const REMOTE_CONFIG_SOURCE_TONE = { remote: 'signal', override: 'warn', default: 'muted', static: 'muted', unknown: 'muted' };
   async function loadRemoteConfig() {
+    if (!hasSession()) return loadRemoteConfigImpl();
+    return runViewLoader('remoteConfig', () => loadRemoteConfigImpl());
+  }
+  async function loadRemoteConfigImpl() {
     if (!token) return;
     const r = await fetch('/api/v1/remote-config', { headers: auth() });
-    if (!r.ok) {
-      // Counter and badge are reset here too: leaving the last successful load's numbers next to a
-      // card that says the fetch failed is the one reading that is worse than either alone.
-      remoteConfigProviders = [];
-      setNavCount('navCountRemoteConfig', 0);
-      $('remoteConfigBadge').textContent = 'unavailable';
-      cardsGridHtml('remoteConfigCards', [{ icon: 'sliders', iconTone: 'signal', title: 'Remote Config', lede: 'Remote Config unavailable: ' + r.status }]);
-      return;
-    }
+    requireLoad(r);
     remoteConfigProviders = (await r.json()).data || [];
     renderRemoteConfigCards();
   }
@@ -4819,7 +5062,7 @@
       : 'no providers';
     if (!remoteConfigProviders.length) {
       cardsGridHtml('remoteConfigCards', [{
-        icon: 'sliders', iconTone: 'signal', title: 'Remote Config', span: 2,
+        icon: 'cloud', iconTone: 'signal', title: 'Remote Config', span: 2,
         lede: 'No Remote Config provider is registered for this session. Register one with DevConsoleConfig.withRemoteConfigProviders(...) — see docs/REMOTE_CONFIG.md.',
       }]);
       return;
@@ -4838,7 +5081,7 @@
           : 'No values returned by the last fetch.';
       } else if (!shown.length) lede = 'No key matches the current filter.';
       return {
-        icon: 'sliders', iconTone: provider.unavailableReason ? 'warn' : 'signal', span: 2,
+        icon: 'cloud', iconTone: provider.unavailableReason ? 'warn' : 'signal', span: 2,
         title: 'Remote Config · ' + provider.id,
         badge: remoteConfigFetchLine(provider), badgeTone: provider.unavailableReason ? 'warn' : 'muted',
         lede,
@@ -4974,12 +5217,13 @@
   const SENSITIVE_KEY_PATTERN = /token|secret|password|passwd|auth|credential|cookie/i;
   const canEditPreferences = () => hasSession() && preferencesEditable;
   async function loadPreferences() {
+    if (!hasSession()) return loadPreferencesImpl();
+    return runViewLoader('preferences', () => loadPreferencesImpl());
+  }
+  async function loadPreferencesImpl() {
     if (!token) return;
     const r = await fetch('/api/v1/preferences', { headers: auth() });
-    if (!r.ok) {
-      cardsGridHtml('prefCards', [{ icon: 'sliders', iconTone: 'signal', title: 'Preferences', lede: 'Preferences unavailable: ' + r.status }]);
-      return;
-    }
+    requireLoad(r);
     const body = await r.json();
     preferencesEditable = body.editable === true;
     updateControlUi();
@@ -4995,10 +5239,12 @@
     const file = preferenceFiles.find((f) => f.name === name);
     const entries = file?.entries || [];
     const masked = entries.filter((e) => e.redacted);
-    const blindSpots = entries.filter((e) => !e.redacted && SENSITIVE_KEY_PATTERN.test(e.key));
+    // With redaction off (the default) values are shown on purpose: no blind spots, no Redaction column.
+    const redacting = redactionShown();
+    const blindSpots = redacting ? entries.filter((e) => !e.redacted && SENSITIVE_KEY_PATTERN.test(e.key)) : [];
     const cards = [
-      {
-        icon: 'alert', iconTone: blindSpots.length ? 'warn' : 'signal', title: 'Known redaction blind spot', span: 2,
+      redacting && {
+        icon: 'alert', iconTone: blindSpots.length ? 'warn' : 'signal', title: 'Known redaction blind spot', span: 2, ledeFold: 'Why this happens',
         lede: 'The allowlist matches key names literally. A key that merely *looks* sensitive but isn’t on the deny list is transmitted verbatim — shown honestly here rather than hidden, since the fix is a pattern rule, not a UI change.',
         rows: masked.slice(0, 4).map((e) => ({ k: e.key, v: e.value, tone: 'warn', tag: 'MASKED', tagTone: 'warn' })).concat(
           blindSpots.map((e) => ({ k: e.key, v: e.value, tone: 'error', tag: 'VERBATIM', tagTone: 'error' })),
@@ -5006,20 +5252,21 @@
       },
       file
         ? {
-            icon: 'sliders', iconTone: 'signal', title: name, span: 2, badge: entries.length + ' entries', badgeTone: 'muted',
+            icon: 'sliders', iconTone: 'signal', title: name, span: 2, editFold: 'Add or change a key', badge: entries.length + ' entries', badgeTone: 'muted',
             lede: entries.length ? false : 'This file has no entries.',
             table: entries.length
               ? {
-                  cols: ['Key', 'Value', 'Type', 'Redaction'],
+                  cols: redacting ? ['Key', 'Value', 'Type', 'Redaction'] : ['Key', 'Value', 'Type'],
                   rows: entries.map((e) => [
                     { v: e.key, tone: 'ink' },
-                    { v: e.value, tone: e.redacted ? 'warn' : SENSITIVE_KEY_PATTERN.test(e.key) ? 'error' : 'ink' },
+                    { v: e.value, tone: e.redacted ? 'warn' : redacting && SENSITIVE_KEY_PATTERN.test(e.key) ? 'error' : 'ink' },
                     { v: e.type, tone: 'muted' },
+                  ].concat(redacting ? [
                     { v: e.redacted ? 'masked' : SENSITIVE_KEY_PATTERN.test(e.key) ? 'NOT MATCHED' : 'none', tone: e.redacted ? 'warn' : SENSITIVE_KEY_PATTERN.test(e.key) ? 'error' : 'muted' },
-                  ]),
+                  ] : [])),
                 }
               : false,
-            fieldsHtml: `<div class="card-fields" style="margin-top:12px">
+            fieldsHtml: `<div class="card-fields mt-12">
               <label class="field"><span>Key</span><input id="prefKey" placeholder="last_user_id"></label>
               <label class="field"><span>Value</span><input id="prefValue" placeholder="42"></label>
               <label class="field"><span>Type</span><select id="prefType"><option>STRING</option><option>BOOLEAN</option><option>INT</option><option>LONG</option><option>FLOAT</option></select></label>
@@ -5031,7 +5278,7 @@
           }
         : { icon: 'sliders', iconTone: 'signal', title: 'Entries', span: 2, lede: 'Choose a file to inspect its entries.' },
     ];
-    cardsGridHtml('prefCards', cards);
+    cardsGridHtml('prefCards', cards.filter(Boolean));
     wireCardGrid('prefCards', { onButton: (id) => { if (id === 'save') savePreference(); else if (id === 'remove') removePreference(); } });
   }
   async function savePreference() {
@@ -5071,12 +5318,13 @@
   let dbSizeBytes = null;
   const canEditDatabase = () => hasSession() && databaseEditable;
   async function loadDatabases() {
+    if (!hasSession()) return loadDatabasesImpl();
+    return runViewLoader('database', () => loadDatabasesImpl());
+  }
+  async function loadDatabasesImpl() {
     if (!token) return;
     const r = await fetch('/api/v1/database', { headers: auth() });
-    if (!r.ok) {
-      cardsGridHtml('dbCards', [{ icon: 'database', iconTone: 'signal', title: 'Database', lede: 'Databases unavailable: ' + r.status }]);
-      return;
-    }
+    requireLoad(r);
     const body = await r.json();
     databaseEditable = body.editable === true;
     updateControlUi();
@@ -5093,7 +5341,7 @@
     if (!token || !name) return;
     const r = await fetch('/api/v1/database/' + encodeURIComponent(name), { headers: auth() });
     if (!r.ok) {
-      cardsGridHtml('dbCards', [{ icon: 'database', iconTone: 'signal', title: 'Tables', lede: 'Tables unavailable: ' + r.status }]);
+      cardsGridHtml('dbCards', [{ icon: 'database', iconTone: 'signal', title: 'Tables', lede: 'Tables unavailable. ' + unavailableReason(r.status) }]);
       return;
     }
     const body = await r.json();
@@ -5284,12 +5532,13 @@
   let filePreviewStatus = 'Choose a file to preview its contents.';
   let filePreviewContent = null; // raw text, only when preview.kind === 'TEXT'
   async function loadFileRoots() {
+    if (!hasSession()) return loadFileRootsImpl();
+    return runViewLoader('files', () => loadFileRootsImpl());
+  }
+  async function loadFileRootsImpl() {
     if (!token) return;
     const r = await fetch('/api/v1/files', { headers: auth() });
-    if (!r.ok) {
-      cardsGridHtml('filesCards', [{ icon: 'folder', iconTone: 'signal', title: 'Files', lede: 'Files unavailable: ' + r.status }]);
-      return;
-    }
+    requireLoad(r);
     const body = await r.json();
     filesEditable = body.editable === true;
     updateControlUi();
@@ -5311,7 +5560,7 @@
     if (!token || !root) return;
     const r = await fetch('/api/v1/files/' + encodeURIComponent(root) + '?path=' + encodeURIComponent(path || ''), { headers: auth() });
     if (!r.ok) {
-      cardsGridHtml('filesCards', [{ icon: 'folder', iconTone: 'signal', title: 'Tree', lede: 'Listing unavailable: ' + r.status }]);
+      cardsGridHtml('filesCards', [{ icon: 'folder', iconTone: 'signal', title: 'Tree', lede: 'Listing unavailable. ' + unavailableReason(r.status) }]);
       return;
     }
     const listing = await r.json();
@@ -5333,7 +5582,7 @@
     renderFilesCards();
     const r = await fetch('/api/v1/files/' + encodeURIComponent(root) + '/preview?path=' + encodeURIComponent(relativePath), { headers: auth() });
     if (!r.ok) {
-      filePreviewStatus = 'Preview unavailable: ' + r.status;
+      filePreviewStatus = 'Preview unavailable. ' + unavailableReason(r.status);
       renderFilesCards();
       return;
     }
@@ -5447,11 +5696,11 @@
         })),
       },
       {
-        icon: 'file', iconTone: 'signal', title: selectedFilePath || 'Preview', span: 2,
+        icon: 'file', iconTone: 'signal', title: selectedFilePath || 'Preview', span: 2, editFold: 'Edit file',
         badge: selectedFilePath ? (canEditFiles() ? 'editable' : 'read-only') : false, badgeTone: canEditFiles() ? 'signal' : 'warn',
         lede: filePreviewStatus || false,
         code: filePreviewContent != null ? filePreviewContent.split('\n').map((line) => ({ pad: '', k: '', v: line, cls: 'tone-text-ink' })) : false,
-        fieldsHtml: `<div class="card-fields" style="margin-top:12px">
+        fieldsHtml: `<div class="card-fields mt-12">
           <label class="field"><span>Content (create / save changes)</span><textarea id="fileEditor" rows="6" placeholder="Text content for create / save changes">${esc(filePreviewContent || '')}</textarea></label>
           <label class="field"><span>New / rename target</span><input id="fileTargetPath" placeholder="relative/path.txt"></label>
         </div>`,
@@ -5481,18 +5730,19 @@
   // SDK health
   // ================================================================
   async function loadSdkHealth() {
+    if (!hasSession()) return loadSdkHealthImpl();
+    return runViewLoader('sdkHealth', () => loadSdkHealthImpl());
+  }
+  async function loadSdkHealthImpl() {
     if (!token) return;
     const [healthRes, metaRes, overviewRes] = await Promise.all([
       fetch('/api/v1/sdk-health', { headers: auth() }),
-      fetch('/api/v1/meta', { headers: auth() }),
+      cachedJson('/api/v1/meta', 30000),
       fetch('/api/v1/overview', { headers: auth() }),
     ]);
-    if (!healthRes.ok) {
-      renderEmpty($('sdkHealthDetail'), 'health', 'Health unavailable: ' + healthRes.status);
-      return;
-    }
+    requireLoad(healthRes);
     const health = await healthRes.json();
-    const meta = metaRes.ok ? await metaRes.json() : {};
+    const meta = metaRes.ok ? await metaRes.json() : null;
     const csp = metaRes.ok ? metaRes.headers.get('Content-Security-Policy') : null;
     const integrity = overviewRes.ok ? (await overviewRes.json()).sessionIntegrity : null;
     $('sdkHealthMetrics').innerHTML = metricsStripHtml([
@@ -5507,13 +5757,13 @@
         { label: 'Active principals', val: String(health.activePrincipalCount ?? 0), tone: 'ink' },
       ] },
       { icon: 'grid', iconTone: 'signal', title: 'Protocol', rows: [
-        { k: 'Protocol', v: meta.protocolVersion ? 'devconsole/' + meta.protocolVersion : '—', tone: 'ink' },
+        { k: 'Protocol', v: meta?.protocolVersion ? 'devconsole/' + meta.protocolVersion : '—', tone: 'ink' },
         { k: 'Transport', v: 'ws + http (same origin)', tone: 'muted' },
         { k: 'CSP', v: csp || 'not reported', tone: 'muted', tag: csp ? 'ENFORCED' : false, tagTone: 'signal' },
-        { k: 'Capabilities', v: (meta.capabilities || []).join(', ') || '—', tone: 'muted' },
+        { k: 'Capabilities', v: meta ? (meta.capabilities || []).join(', ') || '—' : 'unknown', tone: 'muted' },
       ] },
       integrity
-        ? { icon: 'shield', iconTone: 'warn', title: 'Session integrity', lede: 'Guardrail counters the SDK tracks for this session — not fabricated response-time budgets, since none are reported by the on-device SDK.', metrics: [
+        ? { icon: 'shield', iconTone: 'warn', title: 'Session integrity', lede: 'Guardrail counters reported by the SDK.', metrics: [
             { label: 'Active mocks', val: String((integrity.activeMockRuleIds || []).length), tone: 'put' },
             { label: 'Flag overrides', val: String(Object.keys(integrity.featureFlagOverrides || {}).length), tone: 'ink' },
             { label: 'State mutations', val: String(integrity.stateMutationCount ?? 0), tone: integrity.stateMutationCount ? 'warn' : 'ink' },
@@ -5543,11 +5793,21 @@
     toast('Session code rotated.');
     renderSessionCards(lastSessionMeta, lastSessionCapabilities);
   }
+  /** meta.networkProtection ({rateLimiting, hostAndOriginChecks}, both opt-in) as one short value. */
+  function networkProtectionLabel(np) {
+    if (!np) return 'unknown';
+    const on = [np.rateLimiting && 'rate limits', np.hostAndOriginChecks && 'host & origin checks'].filter(Boolean);
+    return on.length ? on.join(' + ') : 'off';
+  }
   let retainedRuns = [];
   async function loadSession() {
+    if (!hasSession()) return loadSessionImpl();
+    return runViewLoader('session', () => loadSessionImpl());
+  }
+  async function loadSessionImpl() {
     if (!token) return;
     const [metaRes, principalsRes, prefsRes, dbRes, filesRes, mocksRes, captureRes, flagsRes, composerRes, runsRes] = await Promise.all([
-      fetch('/api/v1/meta', { headers: auth() }),
+      cachedJson('/api/v1/meta', 30000),
       fetch('/api/v1/auth/principals', { headers: auth() }),
       fetch('/api/v1/preferences', { headers: auth() }),
       fetch('/api/v1/database', { headers: auth() }),
@@ -5556,24 +5816,61 @@
       fetch('/api/v1/capture-rules', { headers: auth() }),
       fetch('/api/v1/flags', { headers: auth() }),
       fetch('/api/v1/composer/collections', { headers: auth() }),
-      fetch('/api/v1/runs', { headers: auth() }),
+      cachedJson('/api/v1/runs', 30000),
     ]);
-    const meta = metaRes.ok ? await metaRes.json() : {};
+    requireLoad(metaRes);
+    const meta = metaRes.ok ? await metaRes.json() : null;
     sessionPrincipals = principalsRes.ok ? (await principalsRes.json()).data || [] : [];
-    const flags = flagsRes.ok ? (await flagsRes.json()).data || [] : [];
+    const parseEditable = async (res) => {
+      if (!res.ok) return null;
+      try {
+        return (await res.json()).editable === true;
+      } catch {
+        return null;
+      }
+    };
+    const prefsEditable = await parseEditable(prefsRes);
+    const dbEditable = await parseEditable(dbRes);
+    const filesEditable = await parseEditable(filesRes);
+    const mocksEditable = await parseEditable(mocksRes);
+    const captureEditable = await parseEditable(captureRes);
+
+    let flagsMutable = null;
+    if (flagsRes.ok) {
+      try {
+        flagsMutable = ((await flagsRes.json()).data || []).some((f) => f.mutable);
+      } catch {
+        flagsMutable = null;
+      }
+    }
+
+    let composerExecution = null;
+    if (composerRes.ok) {
+      composerExecution = true;
+    } else if (composerRes.status === 404) {
+      composerExecution = false;
+    } else {
+      composerExecution = null;
+    }
+
     const capabilities = {
-      preferences: prefsRes.ok && (await prefsRes.json()).editable === true,
-      database: dbRes.ok && (await dbRes.json()).editable === true,
-      files: filesRes.ok && (await filesRes.json()).editable === true,
-      mocks: mocksRes.ok && (await mocksRes.json()).editable === true,
-      captureRules: captureRes.ok && (await captureRes.json()).editable === true,
-      featureFlags: flags.some((f) => f.mutable),
-      requestExecution: composerRes.status !== 404,
+      preferences: prefsEditable,
+      database: dbEditable,
+      files: filesEditable,
+      mocks: mocksEditable,
+      captureRules: captureEditable,
+      featureFlags: flagsMutable,
+      requestExecution: composerExecution,
     };
     retainedRuns = runsRes.ok ? (await runsRes.json()).data || [] : [];
     lastSessionMeta = meta;
     lastSessionCapabilities = capabilities;
     renderSessionCards(meta, capabilities);
+    // The binding card says "Retrying…" when meta failed (usually the read-rate limit), so retry.
+    clearTimeout(sessionRetryTimer);
+    if (!meta?.endpoint) {
+      sessionRetryTimer = setTimeout(() => { if (currentView === 'session') loadSession(); }, 5000);
+    }
   }
   async function revokePrincipal(id) {
     if (!hasSession()) return;
@@ -5619,33 +5916,44 @@
     });
   }
   function renderSessionCards(meta, capabilities) {
-    const endpoint = meta.endpoint;
+    const endpoint = meta?.endpoint;
     const lan = endpoint?.bindingMode === 'LAN';
+    const loopback = endpoint?.bindingMode === 'LOOPBACK';
+    const hasEndpoint = Boolean(endpoint);
     const capRows = [
       ['preferences', capabilities.preferences], ['database', capabilities.database], ['files', capabilities.files],
       ['mocks', capabilities.mocks], ['captureRules', capabilities.captureRules], ['featureFlags', capabilities.featureFlags],
       ['requestExecution', capabilities.requestExecution],
     ];
-    const capOnCount = capRows.filter(([, on]) => on).length;
+    const capKnown = capRows.filter(([, on]) => on !== null && on !== undefined);
+    const capOnCount = capRows.filter(([, on]) => on === true).length;
     $('sessionMetrics').innerHTML = metricsStripHtml([
       { label: openAccess ? 'Auth' : 'Browsers', val: openAccess ? 'open' : String(sessionPrincipals.length + 1), sub: openAccess ? 'no session' : 'incl. this one', tone: 'ink' },
-      { label: 'Capabilities', val: String(capOnCount), sub: 'of ' + capRows.length + ' on', tone: capOnCount ? 'signal' : 'warn' },
-      { label: 'Build', val: meta.build?.variant || '—', tone: 'ink' },
-      { label: 'Protocol', val: meta.protocolVersion ? 'v' + meta.protocolVersion : '—', tone: 'muted' },
+      { label: 'Capabilities', val: capKnown.length ? String(capOnCount) : '—', sub: capKnown.length ? capOnCount + ' of ' + capRows.length + ' on' : 'unknown', tone: capOnCount ? 'signal' : 'warn' },
+      { label: 'Build', val: meta?.build?.variant || '—', tone: 'ink' },
+      { label: 'Protocol', val: meta?.protocolVersion ? 'v' + meta.protocolVersion : '—', tone: 'muted' },
     ]);
     cardsGridHtml('sessionCards', [
       {
-        icon: 'alert', iconTone: lan ? 'warn' : 'signal', title: lan ? 'This console is reachable on your LAN' : 'This console is bound to the loopback interface', span: 2,
-        lede: lan
-          ? (openAccess
-            ? 'Anyone on this network can read every capture and use the enabled dashboard capabilities. Use LOOPBACK or SESSION_CODE on shared networks. Debug builds only — the SDK refuses to start in release.'
-            : 'Anyone on this network who has the session code can read every capture in this session, including redacted-but-present metadata. Debug builds only — the SDK refuses to start in release.')
-          : 'Only this device can reach the console — the SDK bound to loopback rather than a LAN-visible address.',
+        icon: 'alert', iconTone: lan ? 'warn' : (loopback ? 'signal' : 'muted'),
+        ledeFold: 'What this means',
+        title: lan ? 'This console is reachable on your LAN' : (loopback ? 'This console is bound to the loopback interface' : 'Connection details'), span: 2,
+        lede: !hasEndpoint
+          ? "Couldn't load the connection details. Retrying…"
+          : (lan
+            ? (openAccess
+              ? 'Anyone on this network can read every capture and use the enabled dashboard capabilities. Use LOOPBACK or SESSION_CODE on shared networks. Debug builds only — the SDK refuses to start in release.'
+              : 'Anyone on this network who has the session code can read every capture in this session, including redacted-but-present metadata. Debug builds only — the SDK refuses to start in release.')
+            : (loopback
+              ? 'Only this device can reach the console — the SDK bound to loopback rather than a LAN-visible address.'
+              : 'Bound to ' + endpoint.bindingMode)),
         rows: [
-          { k: 'Bound address', v: endpoint ? endpoint.host + ':' + endpoint.port : '—', tone: 'ink', tag: endpoint?.bindingMode || false, tagTone: lan ? 'warn' : 'signal' },
+          { k: 'Bound address', v: endpoint ? endpoint.host + ':' + endpoint.port : '—', tone: 'ink', tag: endpoint?.bindingMode || (hasEndpoint ? false : 'UNKNOWN'), tagTone: lan ? 'warn' : (loopback ? 'signal' : 'muted') },
           { k: 'Transport', v: 'http + ws, no TLS', tone: 'warn', tag: 'PLAINTEXT', tagTone: 'warn' },
           { k: 'Auth', v: openAccess ? 'open browser access' : 'rotating session code', tone: openAccess ? 'warn' : 'signal', tag: openAccess ? 'OPEN' : false, tagTone: 'warn' },
-          { k: 'Build type', v: meta.build?.variant || 'unknown', tone: meta.build?.variant === 'debug' ? 'signal' : 'muted', tag: meta.build?.variant === 'debug' ? 'GUARDED' : false, tagTone: 'signal' },
+          { k: 'Redaction', v: meta?.redaction?.enabled === false ? 'off — values shown as captured' : meta?.redaction?.enabled ? 'on' : 'unknown', tone: meta?.redaction?.enabled ? 'signal' : 'muted' },
+          { k: 'Network protection', v: networkProtectionLabel(meta?.networkProtection), tone: meta?.networkProtection?.rateLimiting || meta?.networkProtection?.hostAndOriginChecks ? 'signal' : 'muted' },
+          { k: 'Build type', v: meta?.build?.variant || 'unknown', tone: meta?.build?.variant === 'debug' ? 'signal' : 'muted', tag: meta?.build?.variant === 'debug' ? 'GUARDED' : false, tagTone: 'signal' },
         ].concat(
           rotatedSessionCode
             ? [
@@ -5666,26 +5974,34 @@
         bodyHtml: sessionPrincipals.length ? principalsTableHtml(sessionPrincipals) : '',
       },
       {
-        icon: 'database', iconTone: retainedRuns.some((r) => r.status === 'CRASHED') ? 'error' : 'signal', title: 'Retained runs', span: 2,
-        badge: retainedRuns.length + ' run' + (retainedRuns.length === 1 ? '' : 's'), badgeTone: 'muted',
-        lede: retainedRuns.length ? false : 'No retained runs on this device yet.',
+        icon: 'database', iconTone: retainedRuns.some((r) => r.status === 'CRASHED') ? 'error' : 'signal', title: 'Run history', span: 2,
+        bodyFold: 'Retained runs', foldCount: retainedRuns.length + ' runs',
+        emptyText: 'No retained runs on this device yet.',
         bodyHtml: retainedRuns.length ? retainedRunsTableHtml(retainedRuns) : '',
       },
       {
-        icon: 'lock', iconTone: 'signal', title: 'Capabilities', badge: capOnCount + ' of ' + capRows.length + ' on', badgeTone: capOnCount ? 'signal' : 'warn',
-        rows: capRows.map(([k, on]) => ({ k, v: on ? 'on' : 'off', tone: on ? 'signal' : 'warn', tag: on ? 'WRITE' : 'BLOCKED', tagTone: on ? 'signal' : 'warn' })),
+        icon: 'lock', iconTone: 'signal', title: 'Capabilities',
+        badge: capKnown.length ? capOnCount + ' of ' + capRows.length + ' on' : 'unknown',
+        badgeTone: capOnCount ? 'signal' : (capKnown.length ? 'warn' : 'muted'),
+        rows: capRows.map(([k, on]) => ({
+          k,
+          v: on === true ? 'on' : (on === false ? 'off' : 'unknown'),
+          tone: on === true ? 'signal' : (on === false ? 'warn' : 'muted'),
+          tag: on === true ? 'WRITE' : (on === false ? 'BLOCKED' : 'UNKNOWN'),
+          tagTone: on === true ? 'signal' : (on === false ? 'warn' : 'muted')
+        })),
       },
       {
         icon: 'download', iconTone: 'signal', title: 'Export & retention',
-        lede: 'Redaction is applied before anything leaves the device.',
+        lede: redactionShown() ? 'Redaction is applied before anything leaves the device.' : 'Redaction is off, so exports hold values as captured.',
         fieldsHtml: `<div class="card-fields">
           <label class="field"><span>Scope</span><select id="exportScope"><option value="WHOLE_SESSION">Whole session</option><option value="TIME_RANGE">Inclusive time range</option><option value="EVENT_IDS">Selected event IDs</option></select></label>
           <label class="field" id="exportFromField" hidden><span>From epoch ms</span><input id="exportFrom" type="number" min="0"></label>
           <label class="field" id="exportToField" hidden><span>To epoch ms</span><input id="exportTo" type="number" min="0"></label>
           <label class="field" id="exportIdsField" hidden><span>Event IDs (comma separated)</span><textarea id="exportIds" rows="2"></textarea></label>
-          <label class="field" style="flex-direction:row;align-items:center;gap:7px"><input id="exportMetadataOnly" type="checkbox" style="width:auto"><span style="text-transform:none;font-size:12px">Metadata only</span></label>
+          <label class="field export-metadata"><input id="exportMetadataOnly" type="checkbox"><span>Metadata only</span></label>
         </div>
-        <pre id="exportStatus" aria-live="polite" style="margin-top:8px">${esc(hasSession() ? 'Choose a scope, then create a redacted ZIP.' : 'Connect this browser to create a diagnostic export.')}</pre>`,
+        <pre id="exportStatus" aria-live="polite">${esc(hasSession() ? 'Choose a scope, then create a redacted ZIP.' : 'Connect this browser to create a diagnostic export.')}</pre>`,
         buttons: [
           { id: 'export-estimate', label: 'Estimate size', icon: 'grid', disabled: !hasSession(), title: 'Check the ZIP size for the current scope before creating it' },
           { id: 'export-create', label: 'Session ZIP', icon: 'download', kind: hasSession() ? 'primary' : 'default', disabled: !hasSession() },
@@ -5882,7 +6198,7 @@
   async function loadEvidenceFlags() {
     if (!token) { evidenceFlags.clear(); updateEvidenceUi(); return { items: [], report: evidenceReport }; }
     const r = await fetch('/api/v1/evidence', { headers: auth() });
-    if (!r.ok) return { items: [...evidenceFlags.values()], report: evidenceReport };
+    if (!r.ok) return { items: [...evidenceFlags.values()], report: evidenceReport, failureStatus: r.status };
     const body = await r.json();
     const items = body.data || [];
     evidenceFlags.clear();
@@ -5899,7 +6215,12 @@
     return { items: [...evidenceFlags.values()], report: evidenceReport };
   }
   async function loadEvidence() {
-    const { items } = await loadEvidenceFlags();
+    if (!hasSession()) return loadEvidenceImpl();
+    return runViewLoader('evidence', () => loadEvidenceImpl());
+  }
+  async function loadEvidenceImpl() {
+    const { items, failureStatus } = await loadEvidenceFlags();
+    if (failureStatus) requireLoad({ ok: false, status: failureStatus });
     let environment = null;
     if (hasSession()) {
       const r = await fetch('/api/v1/overview', { headers: auth() });
@@ -6215,7 +6536,8 @@
       cardsGridHtml('evidenceList', [
         {
           icon: 'flag', iconTone: 'muted', title: 'Nothing flagged yet', span: 3,
-          lede: 'Flag a transaction, frame, push event, timeline event or crash with the flag button at the end of its row — or from its detail header — and it lands here with the full redacted detail the server captured at flag time, not just a label. Draft the report while the session is still live; once it ends the proof is gone. A browser refresh keeps everything: flagged items and any typed report text are saved server-side.',
+          lede: 'Flag a request, event or crash from its row or detail header to collect it here.',
+          bodyHtml: foldHtml('How the tray works', '<p class="card-lede">' + esc("Flag a transaction, frame, push event, timeline event or crash with the flag button at the end of its row — or from its detail header — and it lands here with the full redacted detail the server captured at flag time, not just a label. Draft the report while the session is still live; once it ends the proof is gone. A browser refresh keeps everything: flagged items and any typed report text are saved server-side.") + '</p>'),
           buttons: [
             { id: 'go-network', label: 'Go to Network', icon: 'network', kind: 'primary' },
             { id: 'capture-screenshot', label: 'Capture screenshot', icon: 'camera', disabled: !hasSession(), title: hasSession() ? 'Capture the device\'s foreground screen — off by default; set screenshotPolicy.enabled to allow it' : 'Connect this browser first' },
@@ -6271,7 +6593,9 @@
         // Exactly one severity is ever selected — a radiogroup, not five independent switches.
         radioLabel: 'Severity',
         toggles: EVIDENCE_SEVERITIES.map((s) => ({ id: s, k: evidenceSeverityLabel(s), checked: evidenceReport.severity === s, sub: EVIDENCE_SEVERITY_SUB[s] })),
-        rows: [{ k: 'Redaction', v: 'applied before export (screenshots excepted — see below)', tone: 'signal', tag: 'SAFE', tagTone: 'signal' }],
+        rows: [redactionShown()
+          ? { k: 'Redaction', v: 'applied before export (screenshots excepted — see below)', tone: 'signal', tag: 'SAFE', tagTone: 'signal' }
+          : { k: 'Redaction', v: 'off — values are exported as captured', tone: 'muted' }],
       },
       {
         icon: 'camera', iconTone: 'signal', title: 'Screenshots',
@@ -6362,6 +6686,7 @@
   const controlHeaders = () => (openAccess ? {} : { ...auth(), 'X-DevConsole-CSRF': csrf });
   const updateControlUi = () => {
     const enabled = hasSession();
+    updateRecordButton();
     $('composerRun').disabled = !enabled;
     $('composerImport').disabled = !enabled;
     $('composerCollectionSave').disabled = !enabled;
@@ -6418,14 +6743,17 @@
       gate.hidden = false;
       gate.innerHTML = gateBannerHtml({
         title: 'Composer is turned off in this app',
-        body: 'Set composerEnabled(true) in the app\'s DevConsole config, and list the hosts it may call with composerAllowedHosts, to send requests from here.',
+        body: 'Set composerEnabled(true) in the app\'s DevConsole config to send requests from here.',
         code: 'COMPOSER_DISABLED',
       });
-      return;
+      return false;
     }
     gate.hidden = true;
     gate.innerHTML = '';
-    if (!r.ok) return;
+    if (!r.ok) {
+      renderLoadFailure($('composerCollectionList'), 'Could not load collections', r.status, loadComposerCollections);
+      return false;
+    }
     const collections = (await r.json()).data || [];
     $('composerCollectionList').innerHTML = collections.length
       ? cardRowsHtml(
@@ -6451,6 +6779,7 @@
   let composerAgents = [];
   let composerAllowedHostList = [];
   let composerHostsEditable = false;
+  let composerAnyHost = false;
   let composerHostEntries = [];
   let rejectedComposerHost = '';
 
@@ -6461,19 +6790,24 @@
       return '';
     }
   }
-  const isComposerHostAllowed = (host) => composerAllowedHostList.some((allowed) => allowed.toLowerCase() === host);
+  const isComposerHostAllowed = (host) =>
+    composerAnyHost || composerAllowedHostList.some((allowed) => allowed.toLowerCase() === host);
 
   async function loadComposerHostAllowlist() {
     if (!token) return;
     const [metaResponse, hostsResponse] = await Promise.all([
-      fetch('/api/v1/meta', { headers: auth() }),
+      cachedJson('/api/v1/meta', 30000),
       fetch('/api/v1/composer/hosts', { headers: auth() }),
     ]);
     if (metaResponse.ok) composerCapabilityEnabled = ((await metaResponse.json()).composer || {}).enabled === true;
-    if (!hostsResponse.ok) return;
-    const { editable, data } = await hostsResponse.json();
+    if (!hostsResponse.ok) {
+      renderLoadFailure($('composerAllowedHosts'), 'Could not load allowed hosts', hostsResponse.status, loadComposerHostAllowlist);
+      return false;
+    }
+    const { editable, anyHost, data } = await hostsResponse.json();
     const hosts = data || [];
-    composerHostsEditable = editable === true;
+    composerAnyHost = anyHost === true;
+    composerHostsEditable = editable === true && !composerAnyHost;
     composerHostEntries = hosts;
     composerAllowedHostList = hosts.map((entry) => entry.host);
     renderComposerHostList(hosts);
@@ -6491,6 +6825,8 @@
           tagTone: 'error',
         })),
       );
+    } else if (composerAnyHost) {
+      list.innerHTML = '<p class="card-lede">No allowlist configured — the composer can reach any host.</p>';
     } else {
       const hint = composerHostsEditable ? 'Add one below.' : 'The host app has to allow some.';
       list.innerHTML = `<p class="card-lede">No hosts allowed yet, so every Composer host is refused. ${hint}</p>`;
@@ -6506,9 +6842,11 @@
     $('composerHostEditor').hidden = !canEdit;
     updateComposerAllowHostButton();
     syncRejectedHostPanel();
-    $('composerHostNote').textContent = composerHostsEditable
-      ? 'Hosts added here last until DevConsole stops. You can paste a full URL; only the hostname is kept.'
-      : 'The app fixes this list. Turn on composerHostsEditable in its DevConsole config to add hosts here.';
+    $('composerHostNote').textContent = composerAnyHost
+      ? ''
+      : composerHostsEditable
+        ? 'Hosts added here last until DevConsole stops. You can paste a full URL; only the hostname is kept.'
+        : 'The app fixes this list. Turn on composerHostsEditable in its DevConsole config to add hosts here.';
   }
 
   const COMPOSER_HOST_ERRORS = {
@@ -6720,10 +7058,8 @@
       return `${composerAgents.length} ${noun} connected. Requests sent to one use its network, VPN and localhost.`;
     }
     const codeFlag = openAccess ? '' : ' --code <session code>';
-    return (
-      'To run requests from your Mac, Linux or Windows computer (VPN, localhost or private APIs the phone ' +
-      `cannot reach), start: devconsole-agent --device http://${location.host}${codeFlag}`
-    );
+    const command = `devconsole-agent --device http://${location.host}${codeFlag}`;
+    return `For VPN, localhost or private APIs, run requests on a computer:<code class="agent-command">${esc(command)}</code>`;
   }
   async function loadComposerAgents() {
     if (!token) return false;
@@ -6745,7 +7081,7 @@
     });
     const stillAvailable = [...select.options].some((option) => option.value === previousChoice);
     select.value = stillAvailable ? previousChoice : COMPOSER_DEVICE_EXECUTOR;
-    $('composerAgentHint').textContent = composerAgentHint();
+    $('composerAgentHint').innerHTML = composerAgentHint();
     return true;
   }
   const waitMs = (duration) => new Promise((resolve) => setTimeout(resolve, duration));
@@ -7002,13 +7338,18 @@
   async function loadMockRules() {
     if (!token) return;
     const r = await fetch('/api/v1/mocks/rules', { headers: auth() });
+    if (!r.ok) {
+      viewLoadedAt.delete('mocks');
+      renderLoadFailure($('mockRuleList'), 'Could not load mock rules', r.status, loadMocks);
+      return false;
+    }
     if (r.ok) {
       const body = await r.json();
       mocksEditable = body.editable === true;
       updateControlUi();
       const rules = body.data || [];
       mockRulesCache = rules;
-      $('mocksRulesBadge').textContent = rules.filter((rule) => rule.enabled).length + ' of ' + rules.length + ' active';
+      $('mocksRulesBadge').textContent = '';
       $('mockRuleList').innerHTML = rules.length
         ? cardTogglesHtml(
             rules.map((rule) => ({
@@ -7067,11 +7408,16 @@
       : '<p class="card-lede">No overlapping rules detected.</p>';
   }
   async function loadMocks() {
+    if (!hasSession()) return loadMocksImpl();
+    return runViewLoader('mocks', () => loadMocksImpl());
+  }
+  async function loadMocksImpl() {
     if (!token) return;
     const r = await fetch('/api/v1/mocks', { headers: auth() });
+    requireLoad(r);
     mocksGloballyEnabled = r.ok ? (await r.json()).enabled === true : true;
     syncMockEngineButton();
-    loadMockRules();
+    return await loadMockRules();
   }
   /** Turning mocking off stays on the ungated `disable-all` route, so a host that publishes mocks
    *  as read-only can still fall back to real traffic; turning it back on goes through the
@@ -7128,16 +7474,17 @@
   // ================================================================
   const canEditCaptureRules = () => hasSession() && captureRulesEditable;
   async function loadCaptureRules() {
+    if (!hasSession()) return loadCaptureRulesImpl();
+    return runViewLoader('captureRules', () => loadCaptureRulesImpl());
+  }
+  async function loadCaptureRulesImpl() {
     if (!token) return;
-    const [rulesRes, metaRes] = await Promise.all([fetch('/api/v1/capture-rules', { headers: auth() }), fetch('/api/v1/meta', { headers: auth() })]);
-    if (!rulesRes.ok) {
-      $('captureRuleStatus').textContent = 'Capture exclusions unavailable: ' + rulesRes.status;
-      return;
-    }
+    const [rulesRes, metaRes] = await Promise.all([fetch('/api/v1/capture-rules', { headers: auth() }), cachedJson('/api/v1/meta', 30000)]);
+    requireLoad(rulesRes);
     const body = await rulesRes.json();
     captureRulesEditable = body.editable === true;
     updateControlUi();
-    $('captureRuleStatus').textContent = canEditCaptureRules() ? 'Capture exclusions are editable.' : 'Read-only — sign in and enable the captureRules capability to edit.';
+    $('captureRuleStatus').textContent = canEditCaptureRules() ? '' : 'Read-only — sign in and enable the captureRules capability to edit.';
     const rules = body.data || [];
     $('captureRulesBadge').textContent = rules.length + ' rule' + (rules.length === 1 ? '' : 's');
     $('captureRuleList').innerHTML = rules.length ? captureRuleTableHtml(rules) : '<p class="card-lede">No capture exclusions are configured — everything matching a capture rule is retained.</p>';
@@ -7151,6 +7498,7 @@
     }
     if (metaRes.ok) {
       const names = (await metaRes.json()).redaction?.sensitiveFieldNames || [];
+      $('captureRedactionCount').textContent = String(names.length);
       $('captureRedaction').innerHTML = names.length
         ? cardRowsHtml(names.map((n) => ({ k: n, v: 'masked before capture', tone: 'warn', tag: 'MASK', tagTone: 'warn' })))
         : '<p class="card-lede">No redacted field names were reported.</p>';
@@ -7172,7 +7520,7 @@
         <td class="tone-text-error">EXCLUDE</td>
         <td>${
           editable
-            ? `<button type="button" class="card-row-tag tone-text-${rule.enabled ? 'signal' : 'muted'} tone-border-${rule.enabled ? 'signal' : 'muted'}" data-capture-toggle="${esc(rule.id)}" data-capture-next="${rule.enabled ? 'false' : 'true'}" aria-pressed="${rule.enabled}" style="cursor:pointer">${rule.enabled ? 'ACTIVE' : 'PAUSED'}</button>`
+            ? `<button type="button" class="card-row-tag tone-text-${rule.enabled ? 'signal' : 'muted'} tone-border-${rule.enabled ? 'signal' : 'muted'}" data-capture-toggle="${esc(rule.id)}" data-capture-next="${rule.enabled ? 'false' : 'true'}" aria-pressed="${rule.enabled}">${rule.enabled ? 'ACTIVE' : 'PAUSED'}</button>`
             : `<span class="tone-text-${rule.enabled ? 'signal' : 'muted'}">${rule.enabled ? 'ACTIVE' : 'PAUSED'}</span>`
         }</td>
         <td>${editable ? `<button type="button" class="row-flag" data-capture-delete="${esc(rule.id)}" title="Delete" aria-label="Delete ${esc(rule.id)}">${icon('trash', 'ic-sm')}</button>` : ''}</td>
@@ -7246,7 +7594,8 @@
    * today) rather than a blanket switch: the other detail panes carry two or three actions each,
    * where a row costs nothing and a menu would only add a click. `menuOpen` is the caller's own
    * state, since these panes re-render wholesale and the flag has to outlive the innerHTML swap. */
-  function detailHeadHtml({ badgeText, badgeTone, title, statusText, sTone, mocked, extraBadge, facts, actions, tabs, layoutToggle, actionsMenu, menuOpen }) {
+  function detailHeadHtml({ badgeText, badgeTone, title, statusText, sTone, mocked, extraBadge, facts, actions, tabs, layoutToggle, actionsMenu, menuOpen, networkHeader }) {
+    if (networkHeader) return networkDetailHeadHtml({ badgeText, title, actions, tabs, menuOpen, ...networkHeader });
     const zoom = document.body.classList.contains('detail-zoom');
     const hasActions = actions && actions.length;
     return `<div class="detail-head">
@@ -7304,7 +7653,8 @@
    * lives in the DOM at once (only one view is visible, but none are torn down when hidden). */
   function findBarHtml(query, matchCount, inputId = 'detailFindInput') {
     return `<div class="detail-find"><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="text" id="${inputId}" placeholder="Find in headers, payload and response…" value="${esc(query)}"></span><span class="detail-find-count tone-text-${query ? (matchCount ? 'signal' : 'warn') : 'muted'}">${
-      query ? matchCount + ' match' + (matchCount === 1 ? '' : 'es') : 'headers + payload + response'
+      // The placeholder already names the scope; the count only appears once there is a query.
+      query ? matchCount + ' match' + (matchCount === 1 ? '' : 'es') : ''
     }</span></div>`;
   }
   function sbsPaneHtml(pane) {
@@ -7319,6 +7669,63 @@
     </div>`;
   }
   const networkGroupOpen = {};
+
+  function networkListToggleHtml() {
+    const shell = $('networkDetailPane').parentElement;
+    const visible = !shell.classList.contains('list-collapsed') || shell.classList.contains('list-overlay-open');
+    const label = visible ? 'Hide request list' : 'Show request list';
+    return `<button type="button" id="networkListToggle" class="network-icon-action" data-action="toggle-request-list" title="${label}" aria-label="${label}" aria-expanded="${visible}" aria-controls="networkListPane">${icon('sidebar', 'ic-sm')}</button>`;
+  }
+  function syncNetworkListToggle() {
+    const btn = $('networkListToggle');
+    if (!btn) return;
+    const shell = $('networkDetailPane').parentElement;
+    const visible = !shell.classList.contains('list-collapsed') || shell.classList.contains('list-overlay-open');
+    const label = visible ? 'Hide request list' : 'Show request list';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-expanded', String(visible));
+  }
+  function setNetworkListOverlay(open) {
+    const shell = $('networkDetailPane').parentElement;
+    const wasOpen = shell.classList.contains('list-overlay-open');
+    shell.classList.toggle('list-overlay-open', open && shell.classList.contains('list-collapsed'));
+    syncNetworkListToggle();
+    if (open) requestAnimationFrame(() => {
+      if (!shell.classList.contains('list-overlay-open')) return;
+      const list = virtualLists.get('transactions');
+      list?.remeasure();
+      focusSelectedRow('transactions', networkOrder.indexOf(selectedTransactionId));
+    });
+    else if (wasOpen) $('networkListToggle')?.focus();
+  }
+  function renderNetworkEmpty() {
+    const pane = $('networkDetailPane');
+    renderEmpty(pane, 'network', 'No transaction selected', 'Select a request to inspect it.');
+    pane.insertAdjacentHTML('afterbegin', `<div class="network-empty-head">${networkListToggleHtml()}</div>`);
+  }
+  function networkDetailHeadHtml({ badgeText, title, actions, tabs, menuOpen, fullUrl, metaLine }) {
+    const primary = ['curl', 'clone', 'flag'];
+    const menuActions = actions.filter((a) => !primary.includes(a.id));
+    return `<div class="detail-head network-detail-head"><div class="detail-head-row">
+      ${networkListToggleHtml()}<span class="network-method">${esc(badgeText)}</span>
+      <span class="detail-head-title" title="${esc(fullUrl)}">${esc(title)}</span>
+      <div class="network-head-actions">${primary.map((id) => {
+        const a = actions.find((item) => item.id === id);
+        const label = id === 'curl' ? 'Copy cURL' : id === 'clone' ? 'Open in Composer' : 'Flag as evidence';
+        return `<button type="button" class="network-icon-action${a.on ? ' on' : ''}" data-detail-action="${id}" title="${label}" aria-label="${label}"${id === 'flag' ? ` aria-pressed="${Boolean(a.on)}"` : ''}>${icon(a.icon, 'ic-sm')}</button>`;
+      }).join('')}<button type="button" class="detail-menu-btn" id="detailActionsMenuBtn" data-action="toggle-actions-menu" aria-haspopup="menu" aria-controls="detailActionsMenuPanel" aria-expanded="${Boolean(menuOpen)}" title="Actions" aria-label="Actions">${icon('dots', 'ic-sm')}</button></div>
+      ${menuOpen ? `<div class="detail-menu-panel" id="detailActionsMenuPanel" role="menu" aria-label="Actions">${menuActions.map((a) => `<button type="button" role="menuitem" class="detail-menu-item" data-detail-action="${esc(a.id)}" ${a.disabled ? 'disabled' : ''} title="${esc(a.title || a.label)}">${a.icon ? icon(a.icon, 'ic-sm') : ''}<span>${esc(a.label)}</span></button>`).join('')}</div>` : ''}
+      </div><div class="network-meta">${esc(metaLine)}</div>
+      <div class="detail-tabs">${tabs.map((t) => `<button type="button" class="detail-tab${t.active ? ' active' : ''}" data-detail-tab="${esc(t.id)}">${esc(t.label)}</button>`).join('')}</div></div>`;
+  }
+  const NETWORK_STATUS_REASONS = {
+    200: 'OK', 201: 'Created', 202: 'Accepted', 204: 'No Content', 206: 'Partial Content',
+    301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified', 307: 'Temporary Redirect', 308: 'Permanent Redirect',
+    400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 405: 'Method Not Allowed',
+    408: 'Request Timeout', 409: 'Conflict', 422: 'Unprocessable Content', 429: 'Too Many Requests',
+    500: 'Internal Server Error', 502: 'Bad Gateway', 503: 'Service Unavailable', 504: 'Gateway Timeout',
+  };
 
   async function fetchTransactionDetail(id) {
     if (networkDetailCache.has(id)) {
@@ -7336,7 +7743,7 @@
     if (!token || !id) return;
     selectedTransactionId = id;
     selectedTransactionDetail = await fetchTransactionDetail(id);
-    if (networkTab === 'diff' && !networkPinnedId) networkTab = 'compare';
+    if (networkTab === 'diff' && !networkPinnedId) networkTab = 'response';
     renderNetwork();
     renderNetworkDetail();
   }
@@ -7371,6 +7778,14 @@
    * format" apart from "empty string body" and fall back to the plain code-block/empty state. */
   function bodyRawText(body) {
     return body?.type === 'text' ? body.value : undefined;
+  }
+
+  // Keep plain text literal rather than JSON-quoting it; JSON keeps the shared formatter.
+  function networkBodyLines(body, query) {
+    if (body?.type !== 'text') return bodyPreviewLines(body, query);
+    try { return formatJsonLines(JSON.parse(body.value), query); } catch { /* plain text */ }
+    const q = (query || '').trim().toLowerCase();
+    return (body.value || '').split('\n').map((v) => ({ pad: '', k: '', v, cls: 'code-text', hit: Boolean(q && v.toLowerCase().includes(q)) }));
   }
 
   // ================================================================
@@ -7553,16 +7968,15 @@
    * mockRulesCache) and passed down rather than recomputed. */
   function networkSummaryKvs(detail, { mockRuleId, mockDiffTotal } = {}) {
     const rows = [
-      { k: 'time', v: time(detail.startedAtEpochMs) },
+      { k: 'started at', v: time(detail.startedAtEpochMs) },
       { k: 'duration', v: detail.durationMs != null ? detail.durationMs + ' ms' : '—' },
       { k: 'request.url', v: detail.request?.url || '' },
       { k: 'request.method', v: detail.method },
       { k: 'response.status', v: detail.status != null ? String(detail.status) : detail.error ? '— no response' : '—', tone: statusTone(detail.status) },
     ];
-    // The error string used to be parenthesised into response.status above, and to double as the
-    // compare tab's failure "General" group. Both are gone: this is its one home, on its own row
-    // so a long exception message isn't buried inside another value.
+    // Preserve capture facts in Timing, including failures and mock provenance.
     if (detail.error) rows.push({ k: 'response.error', v: detail.error, tone: 'error' });
+    if (detail.request?.contentType) rows.push({ k: 'request.contentType', v: detail.request.contentType });
     if (detail.response?.contentType) rows.push({ k: 'response.contentType', v: detail.response.contentType });
     if (detail.correlationId) rows.push({ k: 'correlationId', v: detail.correlationId });
     if (mockRuleId) rows.push({ k: 'mock rule', v: mockRuleId, mockRuleLink: true });
@@ -7610,24 +8024,18 @@
     // `pane` — in compare/diff mode the two side-by-side panes both emit `data-group-toggle` for
     // like-named groups, so a document-wide restore query could land on the wrong one.
     const focusSnap = captureFocus(pane);
-    if (!detail) { renderEmpty(pane, 'network', 'No transaction selected', 'Select a transaction from the list to inspect its redacted metadata.'); return; }
+    if (!detail) { renderNetworkEmpty(); return; }
+    normalizeNetworkTabForMode();
     resetBodyViewers();
     const pinId = networkPinnedId;
     const samePin = pinId === selectedTransactionId;
     const hasPin = Boolean(pinId) && !samePin && networkDetailCache.has(pinId);
-    if (networkTab === 'diff' && !pinId) networkTab = 'compare';
-    const diffCount = hasPin ? diffHeaderStats(networkDetailCache.get(pinId), detail) : null;
+    if (networkTab === 'diff' && !pinId) networkTab = 'response';
     const relatedFresh = networkRelatedEventsForId === detail.id;
-    // Summary leads: it absorbed the head's old facts strip (time/duration/content type/
-    // correlation/mock rule/error), so it is the "what is this capture" tab and reads first.
-    // `networkTab` still defaults to 'compare' — order here, not which tab opens selected.
-    const tabs = [{ id: 'summary', label: 'Summary' }, { id: 'compare', label: 'Request & response' }]
-      .concat(pinId ? [{ id: 'diff', label: 'Diff vs baseline', count: hasPin ? String(diffCount.changed + diffCount.added) : 'pick one' }] : [])
-      .concat([
-        { id: 'headers', label: 'Headers', count: String(headerRows(detail.request?.headers).length + headerRows(detail.response?.headers).length) },
-        { id: 'timing', label: 'Timing' },
-        { id: 'related', label: 'Related events', count: relatedFresh ? String(networkRelatedEvents.length) : undefined },
-      ])
+    // Response opens first; extra tabs exist only while their context is active.
+    const tabs = [{ id: 'response', label: 'Response' }, { id: 'request', label: 'Request' }, { id: 'headers', label: 'Headers' }, { id: 'timing', label: 'Timing' }]
+      .concat(pinId ? [{ id: 'diff', label: 'Diff' }] : [])
+      .concat(networkTab === 'related' ? [{ id: 'related', label: 'Related events' }] : [])
       .map((t) => ({ ...t, active: networkTab === t.id }));
     const flagged = isFlagged('network', detail.id);
     const mockRuleId = detail.tags?.mockRuleId;
@@ -7659,28 +8067,39 @@
       // exception; it's advanced-only in every state.
       { id: 'pin', label: samePin ? 'Baseline — unpin' : pinId ? 'Diff against baseline' : 'Pin as baseline', icon: 'star', on: samePin, title: pinId && !samePin ? 'Compare this response against the pinned baseline' : 'Pin this response as the baseline to diff others against (b)', hideInSimple: !pinId },
       { id: 'resend', label: 'Resend', icon: 'refresh', disabled: !canResend(), title: canResend() ? 'Re-execute this exact request through the device (same gating as Composer)' : 'Sign in and enable the composer capability' },
-      { id: 'clone', label: 'Clone to composer', icon: 'terminal' },
+      { id: 'clone', label: 'Open in Composer', icon: 'pencil' },
       ...(mockAction ? [mockAction] : []),
       { id: 'curl', label: 'cURL', icon: 'copy' },
       { id: 'fetch', label: 'fetch', icon: 'copy', hideInSimple: true },
+      { id: 'related', label: 'Related events', icon: 'activity' },
     ];
-    const showLayoutToggle = (networkTab === 'compare' || networkTab === 'diff') && (hasPin || networkTab === 'compare');
-    const layoutToggle = showLayoutToggle ? { on: !networkSbsStacked, label: networkSbsStacked ? 'Side by side' : 'Stacked', title: networkSbsStacked ? 'Show the two panes side by side' : 'Stack the two panes in one column', icon: 'grid' } : null;
+    const fullUrl = detail.request?.url || detail.host + detail.path + (detail.query ? '?' + detail.query : '');
+    const statusLabel = detail.status != null ? detail.status + (NETWORK_STATUS_REASONS[detail.status] ? ' ' + NETWORK_STATUS_REASONS[detail.status] : '') : detail.error ? 'ERR' : '—';
+    const metaLine = [detail.host, statusLabel, detail.durationMs != null ? detail.durationMs + ' ms' : '—', time(detail.startedAtEpochMs)].join(' · ') + (isMocked ? ' · mocked' : '');
     const head = detailHeadHtml({
-      badgeText: detail.method, badgeTone: methodTone(detail.method), title: detail.host + detail.path,
+      badgeText: detail.method, badgeTone: methodTone(detail.method), title: detail.path + (detail.query ? '?' + detail.query : ''),
       statusText: detail.status != null ? String(detail.status) : detail.error ? 'FAILED' : '—', sTone: statusTone(detail.status),
       mocked: isMocked,
-      // No facts strip: time/duration/content type/correlation/mock rule now live in the Summary
+      // No facts strip: time/duration/content type/correlation/mock rule now live in the Timing
       // tab (see networkSummaryKvs) instead of being repeated under the title.
-      actions, tabs, layoutToggle,
+      actions, tabs, networkHeader: { fullUrl, metaLine },
       actionsMenu: true, menuOpen: networkActionsMenuOpen,
     });
     let findBar = '';
     let bodyHtml;
-    if (networkTab === 'compare') {
-      const panes = networkComparePanes(detail, networkDetailQuery, mockDiff, mockDiffSig);
-      findBar = findBarHtml(networkDetailQuery, countPaneHits(panes));
-      bodyHtml = `<div class="sbs-grid${networkSbsStacked ? ' stacked' : ''}">${panes.map(sbsPaneHtml).join('')}</div>`;
+    if (networkTab === 'response' || networkTab === 'request') {
+      const response = networkTab === 'response';
+      const side = response ? detail.response : detail.request;
+      const headers = headerRows(side?.headers);
+      const lines = networkBodyLines(side?.body, networkDetailQuery);
+      const hits = markKvHits(headers, networkDetailQuery).filter((r) => r.hit).length + (lines || []).filter((l) => l.hit).length;
+      findBar = findBarHtml(networkDetailQuery, hits);
+      // The body viewer's own toolbar carries Tree/Code, Copy and Full screen: one row, no second copy.
+      bodyHtml = `<div class="network-body-code">`;
+      if (response && detail.error) bodyHtml += `<div class="network-body-empty tone-text-error">${esc(detail.error)}</div>`;
+      else if (lines) bodyHtml += bodyViewerHtml(bodyRawText(side?.body), side?.contentType, lines, response ? 'Response body' : 'Request body', true, 'network/' + detail.id + '/' + networkTab, response ? mockDiff : undefined, response ? mockDiffSig : undefined, true);
+      else bodyHtml += `<div class="network-body-empty">${esc(response ? 'No response body.' : detail.method + ' request — no body sent.')}</div>`;
+      bodyHtml += `</div><details class="fold network-headers-fold"><summary>${icon('chevron', 'ic-sm fold-chevron')}${response ? 'Response' : 'Request'} headers · ${headers.length}</summary><div class="fold-content">${kvGridHtml(markKvHits(headers, networkDetailQuery), true)}</div></details>`;
     } else if (networkTab === 'diff') {
       if (!hasPin) {
         bodyHtml = `<div class="sbs-grid stacked">${sbsPaneHtml({
@@ -7694,10 +8113,9 @@
         const panes = [diffPaneHtml('Baseline · ' + time(pinDetail.startedAtEpochMs), pinDetail, detail, true), diffPaneHtml('Selected · ' + time(detail.startedAtEpochMs), detail, pinDetail, false)];
         bodyHtml = `<div class="sbs-grid${networkSbsStacked ? ' stacked' : ''}">${panes.map(sbsPaneHtml).join('')}</div>`;
       }
-    } else if (networkTab === 'summary') {
-      bodyHtml = kvGridHtml(networkSummaryKvs(detail, { mockRuleId, mockDiffTotal }), true);
     } else if (networkTab === 'headers') {
-      bodyHtml = kvGridHtml(networkHeadersKvs(detail), true);
+      bodyHtml = `<div class="network-section-label">Request headers</div>${kvGridHtml(markKvHits(headerRows(detail.request?.headers), networkDetailQuery), true)}<div class="network-section-label">Response headers</div>${kvGridHtml(markKvHits(headerRows(detail.response?.headers), networkDetailQuery), true)}`;
+      findBar = findBarHtml(networkDetailQuery, markKvHits(headerRows(detail.request?.headers).concat(headerRows(detail.response?.headers)), networkDetailQuery).filter((r) => r.hit).length);
     } else if (networkTab === 'timing') {
       const { bars, fallback } = networkTimingBars(detail);
       if (!bars) {
@@ -7708,6 +8126,7 @@
           bodyHtml += `<div class="detail-group-empty">Phase-level timing (DNS/connect/TLS/wait/receive) requires the OkHttp event listener to be installed; showing total duration only.</div>`;
         }
       }
+      bodyHtml += kvGridHtml(networkSummaryKvs(detail, { mockRuleId, mockDiffTotal }), true);
     } else {
       // 'related' — a real tab (not a one-shot action that clobbered .detail-body with no way
       // back) so it survives re-render like every other tab. Data is per-transaction and fetched
@@ -7721,7 +8140,7 @@
         bodyHtml = `<span class="detail-group-empty">No related timeline events found for this transaction's correlation id.</span>`;
       }
     }
-    bodyHtml += `<div class="detail-footnote">${icon('lock', 'ic-sm')}<span>Headers and bodies are redacted by the on-device allowlist before they reach this browser. Values shown as •••• never left the app.</span></div>`;
+    if (redactionShown()) bodyHtml += `<div class="detail-footnote">${icon('lock', 'ic-sm')}<span title="Headers and bodies are redacted by the on-device allowlist before they reach this browser. Values shown as •••• never left the app.">Redacted on device.</span></div>`;
     pane.innerHTML = head + findBar + `<div class="detail-body">${bodyHtml}</div>`;
     mountBodyViewers(pane);
     // The menu panel is position: fixed (the detail pane is overflow: hidden, so an absolutely
@@ -7767,7 +8186,25 @@
    * toggle, zoom, find, and the header/pane action buttons — wired once (not per render). */
   function wireNetworkDetailPane() {
     const pane = $('networkDetailPane');
+    $('networkFullEndpoint').addEventListener('click', () => {
+      networkFullEndpoint = !networkFullEndpoint;
+      try { localStorage.setItem('devconsole.network.fullEndpoint', String(networkFullEndpoint)); } catch { /* storage unavailable */ }
+      renderNetwork();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (currentView !== 'network') return;
+      if (e.key === 'Escape') { networkListController?.close(); return; }
+      if (e.key !== '[' || e.ctrlKey || e.metaKey || e.altKey || (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable="true"]'))) return;
+      e.preventDefault();
+      networkListController?.toggle();
+    });
+    document.addEventListener('click', (e) => {
+      const shell = pane.parentElement;
+      if (shell.classList.contains('list-overlay-open') && !e.target.closest('#networkListPane, #networkListToggle')) networkListController?.close();
+    });
+    if (!selectedTransactionDetail) renderNetworkEmpty();
     pane.addEventListener('click', (e) => {
+      if (e.target.closest('[data-action="toggle-request-list"]')) { networkListController?.toggle(); return; }
       if (e.target.closest('[data-action="toggle-actions-menu"]')) { networkActionsMenuOpen = !networkActionsMenuOpen; renderNetworkDetail(); return; }
       if (e.target.closest('[data-action="toggle-zoom"]')) { toggleDetailZoom(); return; }
       const mockLink = e.target.closest('[data-open-mock-rule]');
@@ -7809,13 +8246,24 @@
       // read first since the repaint detaches `actionBtn` from the tree.
       if (networkActionsMenuOpen) { networkActionsMenuOpen = false; renderNetworkDetail(); }
       if (id === 'flag') { const d = selectedTransactionDetail; toggleEvidenceFlag('network', d.id, d.method + ' ' + d.host + d.path); renderNetworkDetail(); }
-      else if (id === 'pin') pinNetworkBaseline(selectedTransactionId);
+      else if (id === 'pin') {
+        if (networkPinnedId && networkPinnedId !== selectedTransactionId) {
+          networkTab = 'diff';
+          fetchTransactionDetail(networkPinnedId).then(renderNetworkDetail);
+          renderNetworkDetail();
+        } else pinNetworkBaseline(selectedTransactionId);
+      }
       else if (id === 'resend') resendCapturedRequest();
       else if (id === 'clone') cloneCapturedRequest();
       else if (id === 'mock') mockThisResponse();
       else if (id === 'unmock') unmockNetworkResponse();
       else if (id === 'curl') copyNetworkCurl();
       else if (id === 'fetch') copyNetworkFetch();
+      else if (id === 'related') { networkTab = 'related'; renderNetworkDetail(); }
+      else if (id === 'copy-response-body' || id === 'copy-request-body') {
+        const side = id === 'copy-response-body' ? selectedTransactionDetail.response : selectedTransactionDetail.request;
+        copyToClipboard(bodyRawText(side?.body) ?? selectedTransactionDetail.error ?? '', 'Body');
+      }
       else copyToClipboard(detailActionText(id, selectedTransactionDetail), actionBtn.textContent.trim() || 'Value');
     });
     pane.addEventListener('input', (e) => {
@@ -8174,7 +8622,10 @@
       files: loadFileRoots,
       push: loadPush,
       crashes: loadCrashes,
-      composer: () => Promise.all([loadComposerCollections(), loadComposerHostAllowlist(), loadComposerAgents()]),
+      composer: () => runViewLoader('composer', async () => {
+        const results = await Promise.all([loadComposerCollections(), loadComposerHostAllowlist(), loadComposerAgents().then(() => true)]);
+        return results.every((result) => result !== false);
+      }),
       mocks: loadMocks,
       captureRules: loadCaptureRules,
       sdkHealth: loadSdkHealth,
@@ -8185,6 +8636,8 @@
     // `show()` was ever called with one directly (e.g. a future caller that bypasses the redirect),
     // so nothing ever fetches a route the server now answers 403 CATEGORY_DISABLED for.
     if (isViewDisabledByCapture(view)) return undefined;
+    if (viewPending.has(view)) return viewPending.get(view);
+    if (hasSession() && Date.now() - (viewLoadedAt.get(view) || 0) < 5000) return Promise.resolve();
     return loaders[view] ? loaders[view]() : undefined;
   }
 
@@ -8224,15 +8677,17 @@
     const el = $('hostLine');
     if (!el) return;
     if (!token) {
-      el.textContent = "Not connected — see the device's More screen for the connect QR";
+      el.textContent = '';
       return;
     }
     try {
-      const [overviewRes, metaRes] = await Promise.all([fetch('/api/v1/overview', { headers: auth() }), fetch('/api/v1/meta', { headers: auth() })]);
+      const [overviewRes, metaRes] = await Promise.all([fetch('/api/v1/overview', { headers: auth() }), cachedJson('/api/v1/meta', 30000)]);
       const overview = overviewRes.ok ? await overviewRes.json() : null;
       const meta = metaRes.ok ? await metaRes.json() : null;
+      if (currentView === 'network') renderNetworkDetail();
       const parts = [overview?.app?.packageName, overview?.app?.versionName, meta?.endpoint ? `${meta.endpoint.host}:${meta.endpoint.port}` : location.host].filter(Boolean);
-      if (parts.length) el.textContent = parts.join(' · ');
+      el.textContent = overview?.app?.packageName || '';
+      el.title = parts.join(' · ');
     } catch {
       /* keep previous text on transient failure */
     }
@@ -8241,6 +8696,98 @@
   // ================================================================
   // Wiring
   // ================================================================
+  function wireTopbarOverflow() {
+    const container = $('topbarOverflow');
+    const toggle = $('topbarOverflowToggle');
+    const panel = $('topbarOverflowPanel');
+    const items = () => [...panel.querySelectorAll('button:not(:disabled)')];
+    function setOpen(open, focusFirst = false) {
+      panel.hidden = !open;
+      toggle.setAttribute('aria-expanded', String(open));
+      if (open && focusFirst) items()[0]?.focus();
+    }
+    toggle.onclick = () => setOpen(panel.hidden);
+    toggle.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true, true); }
+    });
+    panel.addEventListener('keydown', (event) => {
+      const buttons = items();
+      const index = buttons.indexOf(document.activeElement);
+      let next;
+      if (event.key === 'ArrowDown') next = (index + 1) % buttons.length;
+      if (event.key === 'ArrowUp') next = (index - 1 + buttons.length) % buttons.length;
+      if (event.key === 'Home') next = 0;
+      if (event.key === 'End') next = buttons.length - 1;
+      if (next !== undefined) { event.preventDefault(); buttons[next]?.focus(); }
+    });
+    panel.addEventListener('click', (event) => {
+      if (event.composedPath().some((node) => node.matches?.('button:not(:disabled)'))) {
+        setOpen(false);
+        // The shortcuts handler may have already moved focus into its dialog.
+        if (panel.contains(document.activeElement)) toggle.focus();
+      }
+    });
+    document.addEventListener('click', (event) => {
+      if (!container.contains(event.target)) setOpen(false);
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !panel.hidden) {
+        event.preventDefault();
+        setOpen(false);
+        toggle.focus();
+      }
+    });
+    container.addEventListener('focusout', (event) => {
+      if (!container.contains(event.relatedTarget)) setOpen(false);
+    });
+  }
+
+  function wireNetworkExportMenu() {
+    const container = $('networkExportMenu');
+    const toggle = $('networkExportToggle');
+    const panel = $('networkExportPanel');
+    if (!container || !toggle || !panel) return;
+    const items = () => [...panel.querySelectorAll('button:not(:disabled)')];
+    function setOpen(open, focusFirst = false) {
+      panel.hidden = !open;
+      toggle.setAttribute('aria-expanded', String(open));
+      if (open && focusFirst) items()[0]?.focus();
+    }
+    toggle.onclick = () => setOpen(panel.hidden);
+    toggle.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true, true); }
+    });
+    panel.addEventListener('keydown', (event) => {
+      const buttons = items();
+      const index = buttons.indexOf(document.activeElement);
+      let next;
+      if (event.key === 'ArrowDown') next = (index + 1) % buttons.length;
+      if (event.key === 'ArrowUp') next = (index - 1 + buttons.length) % buttons.length;
+      if (event.key === 'Home') next = 0;
+      if (event.key === 'End') next = buttons.length - 1;
+      if (next !== undefined) { event.preventDefault(); buttons[next]?.focus(); }
+    });
+    panel.addEventListener('click', (event) => {
+      if (event.composedPath().some((node) => node.matches?.('button:not(:disabled)'))) {
+        setOpen(false);
+        if (panel.contains(document.activeElement)) toggle.focus();
+      }
+    });
+    document.addEventListener('click', (event) => {
+      if (!container.contains(event.target)) setOpen(false);
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !panel.hidden) {
+        event.preventDefault();
+        setOpen(false);
+        toggle.focus();
+      }
+    });
+    container.addEventListener('focusout', (event) => {
+      if (!container.contains(event.relatedTarget)) setOpen(false);
+    });
+  }
+
   function wireEvents() {
     initTheme();
     initMode();
@@ -8249,9 +8796,9 @@
 
     $('themeToggle').onclick = toggleTheme;
     $('modeToggle').onclick = toggleMode;
-    $('railAdvancedToggle').onclick = () => setRailAdvancedOpen(!railAdvancedOpen);
+    if ($('railAdvancedToggle')) $('railAdvancedToggle').onclick = () => setRailAdvancedOpen(!railAdvancedOpen);
     wireRowList('events', { onSelect: (id) => { selectedEventId = id; render(); } });
-    wireRowList('transactions', { onSelect: (id) => showTransaction(id), onCheck: (id) => toggleNetworkSelection(id) });
+    wireRowList('transactions', { onSelect: (id) => { showTransaction(id); networkListController?.close(); }, onCheck: (id) => toggleNetworkSelection(id) });
     wireRowList('sockets', { onSelect: (id) => { socketSelectedIndex = Number(id); renderSockets(); }, rowSelector: '.row, .trace-row' });
     wireRowList('pushEvents', { onSelect: (id) => { selectedPushIndex = Number(id); renderPush(); } });
     wireRowList('crashesList', { onSelect: (id) => { selectedCrashId = id; renderCrashes(); } });
@@ -8326,6 +8873,7 @@
     $('networkRefresh').onclick = () => loadNetwork();
     $('networkNewest').onclick = () => loadNetwork();
     $('networkOlder').onclick = () => networkCursor && loadNetwork(networkCursor);
+    wireNetworkExportMenu();
     $('networkHarDownload').onclick = downloadHar;
     $('networkPostmanDownload').onclick = downloadPostman;
     $('networkClear').onclick = clearNetworkCaptures;
@@ -8507,6 +9055,8 @@
     // wired directly in renderEventDetail() since it only exists once an event is selected.
     $('streamLive').onclick = () => setPaused(false);
     $('streamPaused').onclick = () => setPaused(true);
+    $('liveToggle').onclick = () => setPaused(!paused);
+    wireTopbarOverflow();
 
     // ---- Topbar: rail toggle, evidence tray, quick export -----------------------
     $('viewEvidence').onclick = () => show('evidence');
@@ -8569,7 +9119,7 @@
       overlay.hidden = !willShow;
       $('shortcutsBtn').classList.toggle('active', willShow);
       if (willShow) {
-        shortcutsOpenerEl = document.activeElement;
+        shortcutsOpenerEl = $('topbarOverflowPanel').contains(document.activeElement) ? $('topbarOverflowToggle') : document.activeElement;
         document.addEventListener('keydown', shortcutsKeydown);
         $('shortcutsClose').focus();
       } else {

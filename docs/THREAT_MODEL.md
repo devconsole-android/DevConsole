@@ -14,6 +14,14 @@ operator, someone running a packet capture in a café — reads all of it. The p
 to `BrowserSecurity.NONE` for local development: a reachable browser does not need a bearer token or
 per-build session code. `BrowserSecurity.SESSION_CODE` restores the single-use credential flow.
 
+Runtime security layers are opt-in. The default redaction policy masks nothing; rate limiting and
+Host/Origin checks are off; every editing capability, Composer, state mutations, and screenshots are
+enabled. An empty Composer host list permits any host. See the
+[complete default and opt-in table](SECURITY_AND_REDACTION.md#opt-in-security-layers) and
+[hardening checklist](SECURITY_AND_REDACTION.md#hardening-checklist). The release/noop guard remains
+unchanged. Static security headers remain on. SESSION_CODE always retains bearer validation, CSRF
+tokens, expiry, and its code-attempt limiter; enabling it does not implicitly enable Origin checks.
+
 **The default binding reaches the network.** `BindingMode.AUTO` — what a bare
 `StartRequest()` and an unconfigured `BrowserConfig` both mean — binds a real interface whenever the
 device has one, and only falls back to `127.0.0.1` when it does not. Reachability is the default
@@ -26,9 +34,8 @@ something you get.
 
 ## Screenshots are unredactable by construction
 
-**If you turn on screenshot capture, unredacted screen content crosses your network in plaintext.**
-This is the single most important thing to understand before setting `ScreenshotPolicy.enabled = true`,
-so it is stated here, not buried in a feature doc.
+**Screenshots are enabled by default; unredacted screen content can cross your network in plaintext.**
+Disable capture explicitly with `.withScreenshotPolicy(ScreenshotPolicy(enabled = false))` when needed.
 
 A screenshot is pixels. Redaction works by recognizing field *names* — a header called
 `Authorization`, a JSON key called `password` — and replacing the *value* behind that name. There is
@@ -48,10 +55,8 @@ whatever is on someone's screen is one HTTP response away from anyone else on th
 
 Because of that, several design decisions in this feature are deliberately unforgiving:
 
-- **Capture defaults to off** (`ScreenshotPolicy.enabled = false`). This is the single most sensitive
-  artifact this SDK can produce, so it does not ship enabled the way network capture does — a host
-  must opt in explicitly, the same posture `EditingCapabilities.readOnly()` takes for every other
-  high-consequence feature.
+- **Capture defaults to on** (`ScreenshotPolicy.enabled = true`). A host can disable it explicitly;
+  redaction settings never mask pixels.
 - **A `FLAG_SECURE` window is refused, never captured as a black rectangle — and the check is race-free
   by construction, not just by a single read.** `ScreenshotCapture` reads `Window.attributes.flags` for
   `FLAG_SECURE` before any capture is attempted, deterministically, rather than trying to infer
@@ -120,9 +125,9 @@ the same recommendation this document makes for every other sensitive artifact t
 |---|---|---|
 | `BrowserSecurity.SESSION_CODE` | Uncredentialed browsers reaching the dashboard | A code holder, traffic observation, or attacks after a session is created |
 | `BrowserSecurity.NONE` | Nothing at the browser-authentication boundary | Any reachable client; use only on a trusted network or with loopback |
-| Bearer token + CSRF token | Cross-site requests from another origin | Reading the tokens off the wire |
-| Origin allowlist | Requests claiming a foreign `Host` | An attacker on the allowed network |
-| Redaction | Known-sensitive field *names* | Every field name not on the list |
+| Bearer token + CSRF token (SESSION_CODE) | Unauthenticated requests and mutations missing the session's CSRF token | Reading the tokens off the wire |
+| Host/Origin checks (opt-in) | Requests claiming an unlisted `Host` or foreign Origin | An attacker on the allowed network |
+| Redaction (opt-in) | Configured sensitive fields and patterns | Unmatched fields and screenshot pixels |
 | 5-minute session-code TTL, 30-minute session TTL | Indefinite reuse of a stale credential | Use inside the window |
 
 **There is no on-device approval gate.** When enabled, SESSION_CODE (see
@@ -146,8 +151,8 @@ hands a complete credential to every app with clipboard access.
 
 In `BrowserSecurity.NONE`, there is no code or authenticated principal. The dashboard still honors
 the host's `EditingCapabilities`, Composer allowlist, state-mutation flag, and capture-category
-gates, but those are feature boundaries rather than browser identity. Mutation routes also reject a
-foreign browser `Origin` (while allowing an absent `Origin` for command-line clients), which blocks
+gates, but those are feature boundaries rather than browser identity. When Host/Origin checks are
+enabled, mutation routes reject a foreign browser `Origin` (while allowing an absent `Origin` for command-line clients), which blocks
 cross-site browser requests but does not authenticate a client. Anyone who can reach the server can
 use the enabled surfaces, so do not use open mode on a shared or untrusted LAN.
 
@@ -165,7 +170,8 @@ a remedy, not a proof of control.
 
 ## Redaction is an allowlist, and allowlists miss things
 
-`RedactionPolicy.default()` matches a set of sensitive field names (case-insensitively) against
+`RedactionPolicy.default()` is `none()` and masks nothing. The opt-in
+`RedactionPolicy.recommended()` matches a set of sensitive field names (case-insensitively) against
 header names, JSON keys, and form/query field names. See
 [SECURITY_AND_REDACTION.md](SECURITY_AND_REDACTION.md) for the exact list.
 
@@ -185,13 +191,13 @@ Everything not on that list is transmitted and stored **verbatim**. In practice 
   `POST /api/v1/database/{name}/sql` requires the explicit `database` capability even for SELECT:
   enabling that capability is enabling raw, unredacted database access over the session.
 
-Redaction is a guard against the *predictable* leak — the `Authorization` header you would otherwise
-paste into a bug report. It is not a data-loss-prevention system, and it should not be the reason
+When enabled, redaction guards against predictable leaks such as a known `password` field.
+Authorization headers require an additional rule. Redaction is not a data-loss-prevention system, and it should not be the reason
 you feel comfortable putting a device on an untrusted network.
 
 Bodies are also truncated to 64 KiB before storage. That is a resource bound, not a privacy control.
 
-## Safe defaults
+## Explicit hardening
 
 **Untrusted or shared network — use loopback.** This is the recommended posture, and it is no
 longer the SDK's default: you have to ask for it.
@@ -264,12 +270,13 @@ start `devconsole-agent`. The device allowlist still decides which hosts any age
 call; `--allow-host`/`--block-private` on the agent are an additional local lock. Unlike the phone's
 own transport, the agent reaches localhost/private/VPN addresses by default -- that is its purpose.
 
-**`composerHostsEditable` hands the allowlist to anyone with the dashboard.** It is off by default.
-When on, an authenticated session (anyone who can open the dashboard, in the default open mode) can
+**`composerHostsEditable` hands the allowlist to anyone with the dashboard.** It is on by default, and
+only matters once the app sets `composerAllowedHosts` (an empty list already permits any host). When on,
+an authenticated session (anyone who can open the dashboard, in the default open mode) can
 add hosts that the device -- and any connected Composer agent -- will then call with whatever headers
 the request carries. Added hosts are session-only, capped, never override the app's own list, and
 every add or remove is in the command audit log. Enable it for debug builds on networks you control,
-and use `BrowserSecurity.SESSION_CODE` anywhere else.
+and use `BrowserSecurity.SESSION_CODE` with `composerHostsEditable(false)` anywhere else.
 
 **The bug report bundle, HAR export, Postman export, evidence bundle, and Android session ZIP are
 full-fidelity dumps.** `GET /api/v1/report`, `GET /api/v1/network/har`, and
@@ -357,15 +364,17 @@ merge the `<exclude>` entries into your existing files rather than replacing the
 
 **The Composer turns the device into a request proxy.** When enabled, an authenticated session can make the
 device issue arbitrary outbound HTTP requests from wherever it sits — including inside a corporate
-network. It is off by default for this reason, and can be confined to an allowlist of hosts. See
+network. It is enabled by default, with any host permitted. Set `composerEnabled = false` to disable
+it or pass a non-empty `composerAllowedHosts` set to restrict destinations. See
 [COMPOSER_AND_MOCKS.md](COMPOSER_AND_MOCKS.md).
 
 **The `files` capability is write access to the app sandbox.** With it enabled, an authenticated session
 can create, replace, rename, and delete regular files anywhere under the four sandbox roots, and
 download raw, unredacted bytes. If your app loads anything executable or executable-adjacent out of
 those directories — a JS or Dex bundle, a dynamic config, a plugin — granting `files` to a browser
-session is effectively granting code execution in your app. It is off by default; treat enabling it
-with the same weight as the Composer and the SQL console. The Share action also registers a
+session is effectively granting code execution in your app. It is enabled by default; use
+`.withEditingCapabilities(EditingCapabilities.readOnly())` to disable writes, including this surface.
+The Share action also registers a
 non-exported `FileProvider` (`<applicationId>.devconsole.files`) via manifest merge in every build
 that depends on `sdk:full`; grants are single-URI and temporary, but the provider's existence in
 your merged manifest is worth knowing about.

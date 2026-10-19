@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -46,7 +48,11 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 
@@ -117,6 +123,8 @@ internal data class ObserveUiState(
     val pushHeroCollapsed: Boolean = true,
     val logsHeroCollapsed: Boolean = true,
     val crashesHeroCollapsed: Boolean = true,
+    val searchOpen: Boolean = false,
+    val trafficFiltersOpen: Boolean = false,
 )
 
 // One callback per distinct Observe interaction; bundling further would just hide the count.
@@ -332,9 +340,12 @@ internal fun ObserveRoute(
             state.mockRules.mapTo(mutableSetOf()) { it.id },
             state.flaggedTransactionIds,
         )
-    // Live tail: re-read the capture store whenever Observe (re)enters composition; tab switches
+    // Live tail: re-read the capture store whenever Observe becomes started; tab switches
     // refresh again via the ViewModel (see selectObserveTab).
-    LaunchedEffect(Unit) { viewModel.dispatch(InspectorAction.Refresh) }
+    LifecycleStartEffect(Unit) {
+        viewModel.dispatch(InspectorAction.Refresh)
+        onStopOrDispose { }
+    }
     LaunchedEffect(ui.detailTarget, ui.mockDraft) {
         onDetailOverlayOpen(ui.detailTarget != null || ui.mockDraft != null)
     }
@@ -557,8 +568,7 @@ private fun ObserveTab.title(): String =
         ObserveTab.PUSH -> "Push"
         ObserveTab.LOGS -> "Logs"
         ObserveTab.CRASHES -> "Crashes"
-        // One word, like every other tab: the row divides its width equally, so "Remote Config"
-        // would wrap or truncate on a phone.
+        // Keep the provider category short enough to scan alongside the other tabs.
         ObserveTab.REMOTE_CONFIG -> "Config"
     }
 
@@ -576,34 +586,80 @@ internal fun ObserveScreen(
     modifier: Modifier = Modifier,
 ) {
     val colors = DevConsoleTheme.colors
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    var searchOpenTabs by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val searchOpen = state.observeTab.name in searchOpenTabs
+    var filtersOpen by rememberSaveable { mutableStateOf(false) }
+    var moreOpen by remember { mutableStateOf(false) }
+    val tabUi = ui.copy(searchOpen = searchOpen, trafficFiltersOpen = filtersOpen)
     Box(modifier = modifier.background(colors.ground)) {
         Column(Modifier.fillMaxSize()) {
             InspectorTopArea(
-                subLine = ui.appIdentity,
+                subLine = "",
                 title = state.observeTab.title(),
-                // The old search icon here only ever showed a "search opens the keyboard on device"
-                // message (dead chrome) -- InspectorSearchBar below, in each tab's own list, is the
-                // one real search affordance, so the top-area action is dropped rather than kept.
-                //
-                // Clear only exists on Traffic (the only tab whose captures it discards) and only
-                // once there is something to discard, so it never offers a no-op. It sits *before*
-                // the theme toggle so that toggle keeps its usual rightmost slot instead of sliding
-                // sideways as captures come and go.
                 actions =
                     buildList {
-                        if (state.observeTab == ObserveTab.TRAFFIC && state.transactions.isNotEmpty()) {
-                            add(clearCapturesTopAction(actions.onRequestClearTransactions))
+                        add(
+                            InspectorTopAction(
+                                contentDescription = "Search",
+                                onClick = {
+                                    if (searchOpen) clearObserveSearch(state.observeTab, actions)
+                                    searchOpenTabs =
+                                        if (searchOpen) {
+                                            searchOpenTabs - state.observeTab.name
+                                        } else {
+                                            searchOpenTabs + state.observeTab.name
+                                        }
+                                },
+                                icon = { InspectorGlyphIcon(InspectorGlyph.Search, null, tint = colors.muted) },
+                            ),
+                        )
+                        if (state.observeTab == ObserveTab.TRAFFIC) {
+                            add(
+                                InspectorTopAction(
+                                    contentDescription = "Filter",
+                                    onClick = { filtersOpen = !filtersOpen },
+                                    icon = {
+                                        ObserveGlyphIcon(
+                                            ObserveGlyph.Filter,
+                                            null,
+                                            tint =
+                                                if (filtersOpen ||
+                                                    ui.trafficChip != "all"
+                                                ) {
+                                                    colors.signal
+                                                } else {
+                                                    colors.muted
+                                                },
+                                        )
+                                    },
+                                ),
+                            )
                         }
-                        add(themeToggleTopAction(actions.onToggleTheme))
+                        add(
+                            InspectorTopAction(
+                                contentDescription = "More options",
+                                onClick = { moreOpen = true },
+                                icon = {
+                                    Box {
+                                        DevConsoleIcon(
+                                            R.drawable.devconsole_ic_more_horizontal,
+                                            contentDescription = null,
+                                            modifier = Modifier,
+                                            tint = colors.muted,
+                                            size = 20.dp,
+                                        )
+                                        ObserveOverflowMenu(state, ui, actions, moreOpen) { moreOpen = false }
+                                    }
+                                },
+                            ),
+                        )
                     },
             )
             previousCrashedSession(state.sessions)?.let { session ->
                 PreviousRunCrashedBanner(session = session, onViewCrash = { actions.onViewPreviousCrash(session.id) })
             }
-            // Only categories the host enabled at init get a tab at all -- see
-            // InspectorState.visibleObserveTabs for the gating rule (SOCKETS covers both plain
-            // WebSocket and MQTT capture).
-            val visibleTabs = state.visibleObserveTabs()
+            val visibleTabs = ObserveTab.entries.toList()
             InspectorTabRow(
                 tabs =
                     visibleTabs.map { tab ->
@@ -613,16 +669,11 @@ internal fun ObserveScreen(
             Box(Modifier.weight(1f)) {
                 when {
                     !state.available -> ObserveUnavailableNotice()
-                    // Defensive: InspectorViewModel.applySnapshot already snaps observeTab back onto
-                    // a visible tab the moment its category is disabled, but a stray selection this
-                    // screen didn't cause (e.g. a `SelectObserveTab` dispatched before that snap runs)
-                    // must render nothing rather than a hidden tab's content.
-                    state.observeTab !in visibleTabs -> ObserveTabEmptyState("This section is not available.")
-                    else -> ObserveTabPager(state.observeTab, visibleTabs, state, ui, actions)
+                    else -> ObserveTabPager(state.observeTab, visibleTabs, state, tabUi, actions)
                 }
             }
         }
-        if (ui.clearTransactionsPending) {
+        if (ui.clearTransactionsPending && lifecycleState.isAtLeast(Lifecycle.State.STARTED)) {
             ClearTransactionsConfirmDialog(
                 captureCount = state.transactions.size,
                 onConfirm = actions.onConfirmClearTransactions,
@@ -637,6 +688,63 @@ internal fun ObserveScreen(
                 onCancel = actions.onCancelMockDraft,
             )
         }
+    }
+}
+
+private fun clearObserveSearch(
+    tab: ObserveTab,
+    actions: ObserveActions,
+) {
+    when (tab) {
+        ObserveTab.TRAFFIC -> actions.onTrafficSearchChange("")
+        ObserveTab.SOCKETS -> actions.onSocketsSearchChange("")
+        ObserveTab.PUSH -> actions.onPushSearchChange("")
+        ObserveTab.LOGS -> actions.onLogsSearchChange("")
+        ObserveTab.CRASHES -> actions.onCrashesSearchChange("")
+        ObserveTab.REMOTE_CONFIG -> actions.onRemoteConfigSearchChange("")
+    }
+}
+
+@Composable
+private fun ObserveOverflowMenu(
+    state: InspectorState,
+    ui: ObserveUiState,
+    actions: ObserveActions,
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+) {
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val evidenceCount = ui.flaggedTransactionIds.size + ui.flaggedCrashIds.size
+    DropdownMenu(
+        expanded = expanded && lifecycleState.isAtLeast(Lifecycle.State.STARTED),
+        onDismissRequest = onDismiss,
+    ) {
+        DropdownMenuItem(
+            text = { Text(if (evidenceCount == 0) "Evidence tray" else "Evidence · $evidenceCount") },
+            onClick = {
+                onDismiss()
+                actions.onOpenEvidenceTray()
+            },
+        )
+        if (state.observeTab == ObserveTab.TRAFFIC) {
+            DropdownMenuItem(
+                text = { Text("Clear captures") },
+                onClick = {
+                    onDismiss()
+                    actions.onRequestClearTransactions()
+                },
+                enabled = state.transactions.isNotEmpty(),
+                modifier = Modifier.semantics { contentDescription = "Clear captured requests" },
+            )
+        }
+        DropdownMenuItem(
+            text = { Text("Switch theme") },
+            onClick = {
+                onDismiss()
+                actions.onToggleTheme()
+            },
+            modifier = Modifier.semantics { contentDescription = "Toggle theme" },
+        )
     }
 }
 

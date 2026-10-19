@@ -232,7 +232,13 @@ class FullFacadeTest {
                 InitResult.Initialized,
                 provider.initialize(
                     ApplicationProvider.getApplicationContext(),
-                    DevConsoleConfig(stateProviders = listOf(provided), featureFlags = listOf(flag)),
+                    DevConsoleConfig(
+                        stateProviders = listOf(provided),
+                        featureFlags = listOf(flag),
+                        redactionPolicy =
+                            io.devconsole.security.RedactionPolicy
+                                .recommended(),
+                    ),
                 ),
             )
 

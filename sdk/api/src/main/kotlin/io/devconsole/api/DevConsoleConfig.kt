@@ -24,14 +24,14 @@ data class DevConsoleConfig(
     val featureFlags: List<FeatureFlag> = emptyList(),
     /**
      * Enables the Composer, which lets an authenticated session make the device issue arbitrary
-     * outbound HTTP requests. Off by default because that turns the device into a proxy onto its
-     * network; pair with [composerAllowedHosts] to confine it to known backends.
+     * outbound HTTP requests. Enabled by default; set [composerAllowedHosts] to confine it to
+     * known backends, or disable it explicitly.
      */
-    val composerEnabled: Boolean = false,
-    /** Exact hosts the Composer may reach when [composerEnabled]. Empty denies every destination. */
+    val composerEnabled: Boolean = true,
+    /** Exact hosts the Composer may reach when [composerEnabled]. Empty allows any host. */
     val composerAllowedHosts: Set<String> = emptySet(),
-    /** Enables dashboard-driven state mutations. Off by default; state stays read-only otherwise. */
-    val stateMutationsEnabled: Boolean = false,
+    /** Enables dashboard-driven state mutations. Set false to opt in to read-only state. */
+    val stateMutationsEnabled: Boolean = true,
     /** Redaction applied at every capture boundary and reported to the dashboard. */
     val redactionPolicy: RedactionPolicy = RedactionPolicy.default(),
 ) {
@@ -39,13 +39,13 @@ data class DevConsoleConfig(
     var storagePolicy: StoragePolicy = StoragePolicy()
         private set
 
-    var composerHostsEditable: Boolean = false
+    var composerHostsEditable: Boolean = true
         private set
 
     var sessionPolicy: SessionPolicy = SessionPolicy()
         private set
 
-    /** Defaults to [EditingCapabilities]'s own defaults -- everything read-only but mocks. */
+    /** Defaults to [EditingCapabilities]'s own defaults -- every capability enabled. */
     var editingCapabilities: EditingCapabilities = EditingCapabilities()
         private set
 
@@ -62,11 +62,15 @@ data class DevConsoleConfig(
     var browserSecurity: BrowserSecurity = BrowserSecurity.NONE
         private set
 
+    /** Request budgets and Host/Origin validation are opt-in, independently of browser authentication. */
+    var networkProtection: NetworkProtection = NetworkProtection()
+        private set
+
     /** Uncaught-exception / ANR capture depth. See [CrashPolicy] for the enable gates and caps. */
     var crashPolicy: CrashPolicy = CrashPolicy()
         private set
 
-    /** Foreground-window screenshot capture. See [ScreenshotPolicy] for why it is off by default. */
+    /** Foreground-window screenshot capture, enabled by default. */
     var screenshotPolicy: ScreenshotPolicy = ScreenshotPolicy()
         private set
 
@@ -124,6 +128,9 @@ data class DevConsoleConfig(
     fun withBrowserConfig(value: BrowserConfig): DevConsoleConfig = duplicate().also { it.browserConfig = value }
 
     fun withBrowserSecurity(value: BrowserSecurity): DevConsoleConfig = duplicate().also { it.browserSecurity = value }
+
+    fun withNetworkProtection(value: NetworkProtection): DevConsoleConfig =
+        duplicate().also { it.networkProtection = value }
 
     fun withCrashPolicy(value: CrashPolicy): DevConsoleConfig = duplicate().also { it.crashPolicy = value }
 
@@ -187,6 +194,7 @@ data class DevConsoleConfig(
             retentionPolicy == other.retentionPolicy &&
             browserConfig == other.browserConfig &&
             browserSecurity == other.browserSecurity &&
+            networkProtection == other.networkProtection &&
             crashPolicy == other.crashPolicy &&
             screenshotPolicy == other.screenshotPolicy &&
             captureCategories == other.captureCategories &&
@@ -202,6 +210,7 @@ data class DevConsoleConfig(
             it.retentionPolicy = retentionPolicy
             it.browserConfig = browserConfig
             it.browserSecurity = browserSecurity
+            it.networkProtection = networkProtection
             it.crashPolicy = crashPolicy
             it.screenshotPolicy = screenshotPolicy
             it.captureCategories = captureCategories
@@ -215,10 +224,10 @@ data class DevConsoleConfig(
         private var eventBufferCapacity: Int = DEFAULT_EVENT_BUFFER_CAPACITY
         private val stateProviders = mutableListOf<StateProvider>()
         private val featureFlags = mutableListOf<FeatureFlag>()
-        private var composerEnabled: Boolean = false
+        private var composerEnabled: Boolean = true
         private var composerAllowedHosts: Set<String> = emptySet()
-        private var composerHostsEditable: Boolean = false
-        private var stateMutationsEnabled: Boolean = false
+        private var composerHostsEditable: Boolean = true
+        private var stateMutationsEnabled: Boolean = true
         private var redactionPolicy: RedactionPolicy = RedactionPolicy.default()
         private var storagePolicy: StoragePolicy = StoragePolicy()
         private var sessionPolicy: SessionPolicy = SessionPolicy()
@@ -226,6 +235,7 @@ data class DevConsoleConfig(
         private var retentionPolicy: RetentionPolicy? = null
         private var browserConfig = BrowserConfig()
         private var browserSecurity = BrowserSecurity.NONE
+        private var networkProtection = NetworkProtection()
         private var crashPolicy = CrashPolicy()
         private var screenshotPolicy = ScreenshotPolicy()
         private var captureCategories: Set<CaptureCategory> = CaptureCategory.all()
@@ -260,6 +270,8 @@ data class DevConsoleConfig(
 
         fun browserSecurity(value: BrowserSecurity) = apply { browserSecurity = value }
 
+        fun networkProtection(value: NetworkProtection) = apply { networkProtection = value }
+
         fun crashPolicy(value: CrashPolicy) = apply { crashPolicy = value }
 
         fun screenshotPolicy(value: ScreenshotPolicy) = apply { screenshotPolicy = value }
@@ -288,6 +300,7 @@ data class DevConsoleConfig(
                     .withEditingCapabilities(editingCapabilities)
                     .withBrowserConfig(browserConfig)
                     .withBrowserSecurity(browserSecurity)
+                    .withNetworkProtection(networkProtection)
                     .withCrashPolicy(crashPolicy)
                     .withScreenshotPolicy(screenshotPolicy)
                     .withCaptureCategories(captureCategories)

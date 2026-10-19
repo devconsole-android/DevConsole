@@ -74,58 +74,60 @@ internal data class DevConsoleColors(
     val jsonBraces: List<Color>,
 )
 
-private val DarkPrimary = Color(0xFF72A7FF)
-private val DarkError = Color(0xFFFF7B72)
-private val DarkWarning = Color(0xFFF2B66D)
-private val DarkSecondary = Color(0xFF72C4CE)
+// Signal green is the only accent; warn/error mark 4xx/5xx. Text roles clear WCAG AA on ground and
+// panel, borderStrong (control outlines) clears 3:1.
+private val DarkPrimary = Color(0xFFB7ED65)
+private val DarkError = Color(0xFFFF7A6B)
+private val DarkWarning = Color(0xFFE8B45C)
+private val DarkSecondary = Color(0xFF8FCFC9)
 
 internal val DevConsoleDarkColors =
     DevConsoleColors(
-        ground = Color(0xFF111317),
-        panel = Color(0xFF171A20),
-        surface2 = Color(0xFF1D2129),
-        surface3 = Color(0xFF242A34),
-        codeBg = Color(0xFF0D0F13),
-        ink = Color(0xFFECEEF2),
-        muted = Color(0xFF969DA8),
-        text3 = Color(0xFF858D99),
-        line = Color(0xFF343A45),
-        borderStrong = Color(0xFF4A5260),
+        ground = Color(0xFF111413),
+        panel = Color(0xFF181C1A),
+        surface2 = Color(0xFF1E2320),
+        surface3 = Color(0xFF252B27),
+        codeBg = Color(0xFF141816),
+        ink = Color(0xFFECEBE4),
+        muted = Color(0xFF8D9289),
+        text3 = Color(0xFF8D9289),
+        line = Color(0xFF242A26),
+        borderStrong = Color(0xFF6B726B),
         signal = DarkPrimary,
-        signalInk = Color(0xFF0E1624),
+        signalInk = Color(0xFF111413),
         warn = DarkWarning,
         error = DarkError,
-        errorInk = Color(0xFF0E1624),
+        errorInk = Color(0xFF111413),
         put = DarkSecondary,
-        signalSoft = DarkPrimary.copy(alpha = 0.13f),
-        errorSoft = DarkError.copy(alpha = 0.13f),
-        warnSoft = DarkWarning.copy(alpha = 0.13f),
-        putSoft = DarkSecondary.copy(alpha = 0.13f),
-        jsonKey = Color(0xFF8CB8FF),
-        jsonString = Color(0xFFA9D6B9),
+        signalSoft = DarkPrimary.copy(alpha = 0.14f),
+        errorSoft = DarkError.copy(alpha = 0.14f),
+        warnSoft = DarkWarning.copy(alpha = 0.14f),
+        putSoft = DarkSecondary.copy(alpha = 0.14f),
+        jsonKey = DarkSecondary,
+        jsonString = Color(0xFFA9D99A),
         jsonNumber = DarkWarning,
-        jsonBoolean = Color(0xFFC7A7FF),
-        jsonNull = Color(0xFF969DA8),
-        jsonBraces = listOf(DarkPrimary, DarkWarning, DarkSecondary, Color(0xFFECEEF2), Color(0xFFC7A7FF)),
+        jsonBoolean = Color(0xFFC9B3F2),
+        jsonNull = Color(0xFF8D9289),
+        jsonBraces = listOf(DarkPrimary, DarkWarning, DarkSecondary, Color(0xFFECEBE4), Color(0xFFC9B3F2)),
     )
 
-private val LightPrimary = Color(0xFF245DA8)
-private val LightError = Color(0xFFB6392A)
-private val LightWarn = Color(0xFF93630A)
-private val LightPut = Color(0xFF1F7A6C)
+private val LightPrimary = Color(0xFF2F7A1F)
+private val LightError = Color(0xFFC0261D)
+private val LightWarn = Color(0xFF9A5B00)
+private val LightPut = Color(0xFF1E6D6A)
 
 internal val DevConsoleLightColors =
     DevConsoleColors(
-        ground = Color(0xFFF7F8FA),
+        ground = Color(0xFFF2F3F0),
         panel = Color(0xFFFFFFFF),
-        surface2 = Color(0xFFEEF1F5),
-        surface3 = Color(0xFFE4E8EE),
-        codeBg = Color(0xFFF7F8FA),
-        ink = Color(0xFF1C1F24),
-        muted = Color(0xFF68707B),
-        text3 = Color(0xFF68707B),
-        line = Color(0xFFD5D9E0),
-        borderStrong = Color(0xFFAAB1BC),
+        surface2 = Color(0xFFECEEE9),
+        surface3 = Color(0xFFE2E5DF),
+        codeBg = Color(0xFFF6F7F4),
+        ink = Color(0xFF151714),
+        muted = Color(0xFF62675F),
+        text3 = Color(0xFF62675F),
+        line = Color(0xFFE3E5E0),
+        borderStrong = Color(0xFF8F948B),
         signal = LightPrimary,
         signalInk = Color(0xFFFFFFFF),
         warn = LightWarn,
@@ -136,18 +138,18 @@ internal val DevConsoleLightColors =
         errorSoft = LightError.copy(alpha = 0.10f),
         warnSoft = LightWarn.copy(alpha = 0.10f),
         putSoft = LightPut.copy(alpha = 0.10f),
-        jsonKey = Color(0xFF1F7A6C),
-        jsonString = Color(0xFF4A5B1F),
+        jsonKey = LightPut,
+        jsonString = Color(0xFF3D6B2A),
         jsonNumber = LightWarn,
-        jsonBoolean = LightPrimary,
-        jsonNull = Color(0xFF68707B),
+        jsonBoolean = Color(0xFF6A46A5),
+        jsonNull = Color(0xFF62675F),
         jsonBraces =
             listOf(
                 LightPrimary,
                 LightWarn,
                 LightPut,
-                Color(0xFF1C1F24),
-                Color(0xFF6A4C93),
+                Color(0xFF151714),
+                Color(0xFF6A46A5),
             ),
     )
 
@@ -179,7 +181,7 @@ internal val DevConsoleShapes =
 internal val DevConsoleTypography =
     Typography(
         headlineSmall =
-            TextStyle(fontSize = 27.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.02).em, lineHeight = 31.sp),
+            TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em, lineHeight = 34.sp),
         bodyLarge = TextStyle(fontSize = 14.5.sp),
         bodySmall = TextStyle(fontSize = 12.5.sp),
         labelMedium = TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.04.em),

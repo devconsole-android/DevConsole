@@ -10,7 +10,6 @@ package io.devconsole.ui.compose
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -53,7 +52,7 @@ import androidx.compose.ui.unit.sp
  * [InspectorCodeBlock]): a Raw/Formatted toggle when formatting is available, a size-guard notice
  * when it isn't (body too large), and either the raw redaction-aware lines, a pretty-printed XML
  * code block, or -- for JSON -- the collapsible tree ([flattenJsonTree]). [onExpandFullScreen], when
- * given, shows the same top-right expand button [InspectorCodeBlock] does.
+ * given, shows the same trailing Expand action [InspectorCodeBlock] does.
  */
 @Composable
 internal fun InspectorFormattableBody(
@@ -96,12 +95,8 @@ internal fun InspectorFormattableBody(
             RawFormattedToggle(
                 showRaw = renderedShowRaw,
                 onToggle = updateShowRaw,
-                // Matches the 16dp horizontal inset InspectorKeyValueList/InspectorProgressBars/
-                // InspectorDetailEmptyText each apply themselves for a CollapsibleSection's content --
-                // FilterChipRow carries no inset of its own (its other callers sit inside a parent
-                // that already pads), so without this the chip row alone sat flush against the
-                // section/card edge while every sibling body stayed inset.
-                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                // The enclosing detail panel supplies the code area inset.
+                modifier = Modifier.padding(bottom = 8.dp),
             )
         }
         if (body.tooLarge) {
@@ -116,13 +111,13 @@ internal fun InspectorFormattableBody(
                 modifier = Modifier.padding(bottom = 8.dp),
             )
         }
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             LazyColumn(
                 state = listState,
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(colors.codeBg)
                         .heightIn(max = InlineCodeBlockMaxHeight)
                         // Same known tradeoff as InspectorCodeBlock's own horizontalScroll: a

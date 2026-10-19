@@ -25,7 +25,7 @@ import org.robolectric.annotation.Config
 class AndroidDatabaseInspectorTest {
     private val application: Application = ApplicationProvider.getApplicationContext()
     private val inspector =
-        AndroidDatabaseInspector(application, RedactionEngine(RedactionPolicy.default()))
+        AndroidDatabaseInspector(application, RedactionEngine(RedactionPolicy.recommended()))
 
     @Before
     fun createDemoDatabase() {
@@ -43,6 +43,14 @@ class AndroidDatabaseInspectorTest {
         assertFalse(names.any { it.endsWith("-journal") })
         assertFalse(names.any { it.endsWith("-wal") })
         assertFalse(names.any { it.endsWith("-shm") })
+    }
+
+    @Test
+    fun `default policy preserves columns covered by built in personal data heuristics`() {
+        val unmasked = AndroidDatabaseInspector(application, RedactionEngine(RedactionPolicy.default()))
+        val result = requireNotNull(unmasked.query("demo.db", "users"))
+
+        assertEquals("a@example.test", result.rows.single()[1])
     }
 
     @Test

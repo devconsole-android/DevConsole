@@ -31,6 +31,7 @@ public final class io/devconsole/server/ktor/DevConsoleModuleConfig {
 	public final fun getMetadata ()Lio/devconsole/server/api/ServerMetadata;
 	public final fun getMockEngine ()Lio/devconsole/mocks/MockEngine;
 	public final fun getMocksEditable ()Z
+	public final fun getNetworkProtection ()Lio/devconsole/api/NetworkProtection;
 	public final fun getNetworkTransactions ()Lio/devconsole/network/NetworkTransactionStore;
 	public final fun getPreferencesEditable ()Z
 	public final fun getPreferencesInspector ()Lio/devconsole/server/api/PreferencesInspector;
@@ -74,6 +75,7 @@ public final class io/devconsole/server/ktor/DevConsoleModuleConfig {
 	public final fun setMetadata (Lio/devconsole/server/api/ServerMetadata;)V
 	public final fun setMockEngine (Lio/devconsole/mocks/MockEngine;)V
 	public final fun setMocksEditable (Z)V
+	public final fun setNetworkProtection (Lio/devconsole/api/NetworkProtection;)V
 	public final fun setNetworkTransactions (Lio/devconsole/network/NetworkTransactionStore;)V
 	public final fun setPreferencesEditable (Z)V
 	public final fun setPreferencesInspector (Lio/devconsole/server/api/PreferencesInspector;)V
@@ -121,6 +123,7 @@ public final class io/devconsole/server/ktor/KtorLocalServerEngine : io/devconso
 	public final fun withAttachmentMetadataReader (Lkotlin/jvm/functions/Function2;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
 	public final fun withAttachmentReader (Lkotlin/jvm/functions/Function2;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
 	public final fun withBrowserSecurity (Lio/devconsole/api/BrowserSecurity;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
+	public final fun withNetworkProtection (Lio/devconsole/api/NetworkProtection;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
 	public final fun withRetainedCaptures (Lio/devconsole/storage/api/RetainedCaptureQuery;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
 }
 

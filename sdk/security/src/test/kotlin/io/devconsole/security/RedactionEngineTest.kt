@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RedactionEngineTest {
-    private val engine = RedactionEngine(RedactionPolicy.default())
+    private val engine = RedactionEngine(RedactionPolicy.recommended())
 
     @Test
     fun `redacts default sensitive headers case insensitively`() {
@@ -16,9 +16,26 @@ class RedactionEngineTest {
     }
 
     @Test
-    fun `preserves authorization header unredacted by default`() {
+    fun `recommended policy preserves historical authorization header behavior`() {
         val fields = engine.redactFields(mapOf("Authorization" to "Bearer secret-token-123"))
         assertEquals("Bearer secret-token-123", fields["Authorization"])
+    }
+
+    @Test
+    fun `default and none policies mask no fields or text including empty JSON keys`() {
+        assertEquals(RedactionPolicy.none(), RedactionPolicy.default())
+        val engine = RedactionEngine(RedactionPolicy.default())
+        val fields = mapOf("Cookie" to "session=raw", "Authorization" to "Bearer raw", "token" to "raw")
+        val text = """{"":"raw","token":"raw"}?access_token=raw"""
+
+        assertFalse(engine.isEnabled())
+        assertEquals(fields, engine.redactFields(fields))
+        assertEquals(text, engine.redactText(text))
+        engine.updatePolicy(RedactionPolicy.recommended())
+        assertTrue(engine.isEnabled())
+        assertEquals("<redacted>", engine.redactFields(fields)["token"])
+        engine.updatePolicy(RedactionPolicy.none())
+        assertEquals(text, engine.redactText(text))
     }
 
     @Test
@@ -63,7 +80,7 @@ class RedactionEngineTest {
 
     @Test
     fun `redacts newly covered auth header names`() {
-        val engine = RedactionEngine(RedactionPolicy.default())
+        val engine = RedactionEngine(RedactionPolicy.recommended())
         val redacted =
             engine.redactFields(
                 mapOf(

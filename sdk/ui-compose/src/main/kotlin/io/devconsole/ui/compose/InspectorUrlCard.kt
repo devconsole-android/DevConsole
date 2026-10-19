@@ -13,6 +13,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,9 +21,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,14 +34,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * One 48dp pill action in an [InspectorUrlCard]'s action row. [flex] defaults to 1f.
- * Colors have no default: a data class constructor is not `@Composable`, so it cannot read
- * [DevConsoleTheme.colors] itself -- every call site supplies its own tint.
+ * One labelled URL action. The legacy color and flex fields preserve the shared caller contract;
+ * grouped panels render these actions as compact icon buttons.
  */
 internal data class InspectorUrlAction(
     val label: String,
@@ -52,13 +54,8 @@ internal data class InspectorUrlAction(
 )
 
 /**
- * A surface-2 block with a status dot + uppercase label, a mono 16sp URL, a muted sub line, and a
- * row of 48dp pill actions.
- *
- * The one place a filled container survives the flat redesign, and deliberately: this is the
- * dashboard address a QA engineer is meant to read off the device and type into a laptop, so it
- * earns a surface of its own instead of dissolving into the rules around it. Shaped by
- * [DevConsoleShapes]' `large` like every other filled block on the surface.
+ * Inline URL readout and compact icon actions, suitable for embedding in a grouped panel.
+ * The optional label and subtitle preserve existing callers, without introducing a nested card.
  */
 @Suppress("LongParameterList") // Every field varies per screen.
 @Composable
@@ -74,52 +71,47 @@ internal fun InspectorUrlCard(
     /** `true` while the session this card describes is live or still settling -- see [Box8Dot]. */
     dotPulsing: Boolean = false,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = DevConsoleTheme.colors.surface2,
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (label.isNotBlank()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box8Dot(dotColor, dotPulsing)
                 Text(
-                    label.uppercase(),
+                    label,
                     color = labelColor,
                     style = DevConsoleType.groupLabel,
                     modifier = Modifier.weight(1f),
                 )
             }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 url,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
                 color = urlColor,
                 fontFamily = FontFamily.Monospace,
-                fontSize = 16.sp,
+                fontSize = 14.sp,
+                maxLines = 1,
             )
-            Text(
-                subtitle,
-                modifier = Modifier.padding(top = 8.dp),
-                color = DevConsoleTheme.colors.muted,
-                fontSize = 12.5.sp,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                actions.forEach { action ->
-                    InspectorPillButton(
-                        label = action.label,
-                        onClick = action.onClick,
-                        modifier = Modifier.weight(action.flex),
-                        containerColor = action.containerColor,
-                        contentColor = action.contentColor,
-                        icon = action.icon,
-                        // URL-card action labels run 13.5sp, smaller than the button's own
-                        // 14.5sp default.
-                        labelFontSize = 13.5.sp,
-                    )
+            actions.forEach { action ->
+                IconButton(
+                    onClick = action.onClick,
+                    modifier = Modifier.size(40.dp).semantics { contentDescription = action.label },
+                ) {
+                    if (action.icon != null) {
+                        action.icon.invoke()
+                    } else {
+                        Text(action.label, color = DevConsoleTheme.colors.muted, fontSize = 12.sp)
+                    }
                 }
             }
+        }
+        if (subtitle.isNotBlank()) {
+            Text(
+                subtitle,
+                modifier = Modifier.padding(top = 4.dp),
+                color = DevConsoleTheme.colors.muted,
+                fontSize = 13.sp,
+            )
         }
     }
 }

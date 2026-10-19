@@ -9,43 +9,56 @@ package io.devconsole.ui.compose
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -63,43 +76,53 @@ internal data class InspectorTopAction(
 )
 
 /**
- * The Android inspector's screen head: a muted 13sp sub-line, trailing 48dp round icon actions,
- * and a large 27sp title below.
+ * Large screen title, optional live indicator and quiet 48dp actions, with a muted sub-line below.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun InspectorTopArea(
     subLine: String,
     title: String,
     modifier: Modifier = Modifier,
     actions: List<InspectorTopAction> = emptyList(),
+    live: Boolean = true,
 ) {
+    val colors = DevConsoleTheme.colors
     Column(modifier = modifier) {
-        TopAppBar(
-            title = { Text(title) },
-            actions = {
-                actions.forEach { action ->
-                    IconButton(onClick = action.onClick) {
-                        action.icon()
-                    }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title, color = colors.ink, style = MaterialTheme.typography.headlineSmall)
+            if (live) {
+                Row(
+                    modifier = Modifier.padding(start = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(colors.signal))
+                    Text("Live", color = colors.signal, fontSize = 13.sp)
                 }
-            },
-            colors =
-                TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    titleContentColor = DevConsoleTheme.colors.ink,
-                    actionIconContentColor = DevConsoleTheme.colors.muted,
-                ),
-            windowInsets =
-                androidx.compose.foundation.layout
-                    .WindowInsets(0.dp),
-        )
+            }
+            Spacer(Modifier.weight(1f))
+            actions.forEach { action ->
+                InspectorRoundIconButton(
+                    contentDescription = action.contentDescription,
+                    onClick = action.onClick,
+                    size = 48.dp,
+                    icon = {
+                        CompositionLocalProvider(LocalContentColor provides colors.muted) {
+                            action.icon()
+                        }
+                    },
+                )
+            }
+        }
         if (subLine.isNotEmpty()) {
             Text(
                 text = subLine,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
                 color = DevConsoleTheme.colors.muted,
-                style = MaterialTheme.typography.bodySmall,
+                fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -115,16 +138,14 @@ internal fun InspectorTopArea(
  */
 @Composable
 /**
- * The Traffic tab's "clear captures" action. Tinted [DevConsoleColors.error] rather than muted like
- * [themeToggleTopAction]: it is the only destructive control in the top area, and the colour is what
- * separates it from its neighbour at a glance.
+ * The Traffic tab's quiet "clear captures" action.
  */
 internal fun clearCapturesTopAction(onClear: () -> Unit): InspectorTopAction =
     InspectorTopAction(
         contentDescription = "Clear captured requests",
         onClick = onClear,
         icon = {
-            ObserveGlyphIcon(ObserveGlyph.Trash, contentDescription = null, tint = DevConsoleTheme.colors.error)
+            ObserveGlyphIcon(ObserveGlyph.Trash, contentDescription = null, tint = DevConsoleTheme.colors.muted)
         },
     )
 
@@ -145,17 +166,8 @@ internal data class InspectorTab(
 )
 
 /**
- * 52dp underline tabs: one 2dp round-capped indicator inset 14% each side, over a 1dp hairline.
- *
- * The indicator is a single bar that *travels* between tabs rather than one bar per tab flicking
- * between signal and transparent. Material tabs slide, and the slide is what carries the meaning:
- * it says which direction you moved through an ordered set, which a cut cannot. Drawn in
- * [drawBehind] from an animated index, so the travel costs a redraw per frame and not a
- * recomposition of five tabs.
- *
- * The dashboard's own `.detail-tab` keeps a static `border-bottom` here. That is a web idiom, not a
- * shared decision -- on a native surface the platform's tab behaviour wins, the same way the nav
- * bar and chips are real Material components rather than ports of the dashboard's rail.
+ * Scrollable, label-width tabs with a travelling 3dp signal indicator and a 1dp baseline.
+ * Measured tab bounds let the indicator interpolate across labels of different widths.
  */
 @Composable
 internal fun InspectorTabRow(
@@ -164,6 +176,7 @@ internal fun InspectorTabRow(
 ) {
     val colors = DevConsoleTheme.colors
     val selectedIndex = tabs.indexOfFirst { it.selected }
+    val tabBounds = remember { mutableStateMapOf<Int, Pair<Float, Float>>() }
     // Held at the last real selection while nothing is selected, so the bar never flies to tab 0
     // and back during the frame a gated tab is being swapped out from under it.
     val travel = remember { Animatable(selectedIndex.coerceAtLeast(0).toFloat()) }
@@ -171,60 +184,82 @@ internal fun InspectorTabRow(
     LaunchedEffect(selectedIndex, travelSpec) {
         if (selectedIndex >= 0) travel.animateTo(selectedIndex.toFloat(), travelSpec)
     }
-    Row(
+    Box(
         modifier =
             modifier.fillMaxWidth().drawBehind {
                 val strokeWidth = 1.dp.toPx()
                 val hairlineY = size.height - strokeWidth / 2
                 drawLine(colors.line, Offset(0f, hairlineY), Offset(size.width, hairlineY), strokeWidth)
-                if (selectedIndex < 0 || tabs.isEmpty()) return@drawBehind
-                val tabWidth = size.width / tabs.size
-                val indicatorWidth = tabWidth * TAB_INDICATOR_FRACTION
-                val centerX = tabWidth * travel.value + tabWidth / 2
-                val indicatorHeight = 2.dp.toPx()
-                val indicatorY = size.height - indicatorHeight / 2
-                drawLine(
-                    color = colors.signal,
-                    start = Offset(centerX - indicatorWidth / 2, indicatorY),
-                    end = Offset(centerX + indicatorWidth / 2, indicatorY),
-                    strokeWidth = indicatorHeight,
-                    cap = StrokeCap.Round,
-                )
             },
     ) {
-        tabs.forEach { tab ->
-            // Animated so the label meets the bar rather than snapping ahead of it.
-            val labelColor by
-                animateColorAsState(
-                    targetValue = if (tab.selected) colors.signal else colors.muted,
-                    animationSpec = feedbackSpec(),
-                    label = "tabLabel",
-                )
-            Box(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .height(52.dp)
-                        .clickable(onClick = tab.onClick, role = Role.Tab)
-                        .semantics(mergeDescendants = true) { selected = tab.selected },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    tab.label,
-                    color = labelColor,
-                    style = MaterialTheme.typography.titleSmall,
-                )
+        // Padding before the draw: tab bounds come from positionInParent, which is measured
+        // inside this padding, so the indicator must draw in the same space or it lands 16dp left.
+        Row(
+            modifier =
+                Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp)
+                    .drawWithContent {
+                        drawContent()
+                        if (selectedIndex < 0 || tabs.isEmpty()) return@drawWithContent
+                        val index = travel.value.coerceIn(0f, tabs.lastIndex.toFloat())
+                        val fromIndex = index.toInt()
+                        val from = tabBounds[fromIndex] ?: return@drawWithContent
+                        val to = tabBounds[(fromIndex + 1).coerceAtMost(tabs.lastIndex)] ?: from
+                        val fraction = index - fromIndex
+                        val left = from.first + (to.first - from.first) * fraction
+                        val width = from.second + (to.second - from.second) * fraction
+                        val radius = CornerRadius(2.dp.toPx())
+                        val path =
+                            Path().apply {
+                                addRoundRect(
+                                    RoundRect(
+                                        left = left,
+                                        top = size.height - 3.dp.toPx(),
+                                        right = left + width,
+                                        bottom = size.height,
+                                        topLeftCornerRadius = radius,
+                                        topRightCornerRadius = radius,
+                                    ),
+                                )
+                            }
+                        drawPath(path, colors.signal)
+                    },
+            horizontalArrangement = Arrangement.spacedBy(22.dp),
+        ) {
+            tabs.forEachIndexed { index, tab ->
+                // Animated so the label meets the bar rather than snapping ahead of it.
+                val labelColor by
+                    animateColorAsState(
+                        targetValue = if (tab.selected) colors.signal else colors.muted,
+                        animationSpec = feedbackSpec(),
+                        label = "tabLabel",
+                    )
+                Box(
+                    modifier =
+                        Modifier
+                            .height(48.dp)
+                            .onGloballyPositioned {
+                                tabBounds[index] = it.positionInParent().x to it.size.width.toFloat()
+                            }.clickable(onClick = tab.onClick, role = Role.Tab)
+                            .semantics(mergeDescendants = true) { selected = tab.selected },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        tab.label,
+                        color = labelColor,
+                        fontSize = 14.sp,
+                        fontWeight = if (tab.selected) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
 }
 
-/** Indicator width as a share of one tab's width -- the 14%-a-side inset the mock specifies. */
-private const val TAB_INDICATOR_FRACTION = 0.72f
-
 /**
- * Search field on the shared 16dp gutter: a surface-2 [OutlinedTextField] with its indicator lines
- * suppressed, shaped by [DevConsoleShapes]' `medium`. Callers wrap it in
+ * Panel search field on the shared 16dp gutter, with a signal outline when focused. Callers use
  * `LazyListScope.stickyHeader` when it needs to stick to the top of a scrolling list -- this
  * component is scroll-container agnostic.
  */
@@ -238,7 +273,7 @@ internal fun InspectorSearchBar(
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp).height(52.dp),
         placeholder = { Text(placeholder) },
         leadingIcon = {
             InspectorGlyphIcon(
@@ -249,22 +284,23 @@ internal fun InspectorSearchBar(
             )
         },
         singleLine = true,
-        shape = MaterialTheme.shapes.medium,
+        shape = RoundedCornerShape(12.dp),
         colors =
-            TextFieldDefaults.colors(
-                focusedContainerColor = DevConsoleTheme.colors.surface2,
-                unfocusedContainerColor = DevConsoleTheme.colors.surface2,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
+            OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = DevConsoleTheme.colors.panel,
+                unfocusedContainerColor = DevConsoleTheme.colors.panel,
+                focusedBorderColor = DevConsoleTheme.colors.signal,
+                unfocusedBorderColor = DevConsoleTheme.colors.line,
                 focusedTextColor = DevConsoleTheme.colors.ink,
                 unfocusedTextColor = DevConsoleTheme.colors.ink,
-                focusedPlaceholderColor = DevConsoleTheme.colors.text3,
-                unfocusedPlaceholderColor = DevConsoleTheme.colors.text3,
+                focusedPlaceholderColor = DevConsoleTheme.colors.muted,
+                unfocusedPlaceholderColor = DevConsoleTheme.colors.muted,
+                cursorColor = DevConsoleTheme.colors.signal,
             ),
     )
 }
 
-/** Extended FAB: flag icon + bold label. Pair with [EvidenceFabScrollClearance]. */
+/** Quiet surface pill with a flag icon. Pair with [EvidenceFabScrollClearance]. */
 @Composable
 internal fun EvidenceFab(
     label: String,
@@ -274,10 +310,10 @@ internal fun EvidenceFab(
     Row(
         modifier =
             modifier
-                .height(56.dp)
-                .shadow(DevConsoleElevation.level3, MaterialTheme.shapes.extraLarge)
-                .clip(MaterialTheme.shapes.extraLarge)
-                .background(DevConsoleTheme.colors.signal)
+                .height(48.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(DevConsoleTheme.colors.panel)
+                .border(1.dp, DevConsoleTheme.colors.line, RoundedCornerShape(24.dp))
                 .clickable(onClick = onClick, role = Role.Button)
                 .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -286,10 +322,10 @@ internal fun EvidenceFab(
         InspectorGlyphIcon(
             InspectorGlyph.Flag,
             contentDescription = null,
-            tint = DevConsoleTheme.colors.signalInk,
+            tint = DevConsoleTheme.colors.ink,
             size = 19.dp,
         )
-        Text(label, color = DevConsoleTheme.colors.signalInk, fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = DevConsoleTheme.colors.ink, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -297,13 +333,11 @@ internal fun EvidenceFab(
 internal val EvidenceFabScrollClearance = 104.dp
 
 /**
- * Icon tint for a nav destination. The selected item sits on a signal-filled indicator pill, so its
- * icon takes `signalInk` (the on-signal role) rather than `signal` itself -- shared by the bar and
- * the rail so the two can never drift apart.
+ * Signal marks the selected nav destination on both the bar and rail.
  */
 @Composable
 private fun navItemIconColor(selected: Boolean): Color =
-    if (selected) DevConsoleTheme.colors.signalInk else DevConsoleTheme.colors.muted
+    if (selected) DevConsoleTheme.colors.signal else DevConsoleTheme.colors.muted
 
 /** One destination in [InspectorBottomNav]. */
 internal data class InspectorNavItem(
@@ -313,35 +347,79 @@ internal data class InspectorNavItem(
     val icon: @Composable () -> Unit,
 )
 
+/**
+ * The bottom bar, drawn by hand rather than with Material's NavigationBar: that one animates every
+ * item's colours through composition, recomposing the whole bar on each frame of a switch. Here the
+ * pill fades in the draw phase and only the two items whose selection changed recompose.
+ */
 @Composable
 internal fun InspectorNavigationBar(
     items: List<InspectorNavItem>,
     modifier: Modifier = Modifier,
 ) {
-    NavigationBar(
-        modifier = modifier,
-        containerColor = DevConsoleTheme.colors.panel,
+    val colors = DevConsoleTheme.colors
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(colors.panel)
+                .drawWithContent {
+                    drawContent()
+                    val strokeWidth = 1.dp.toPx()
+                    drawLine(colors.line, Offset(0f, strokeWidth / 2), Offset(size.width, strokeWidth / 2), strokeWidth)
+                }.windowInsetsPadding(NavigationBarDefaults.windowInsets)
+                .height(80.dp)
+                .selectableGroup(),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        items.forEach { item ->
-            NavigationBarItem(
-                selected = item.selected,
-                onClick = item.onClick,
-                icon = {
-                    CompositionLocalProvider(LocalContentColor provides navItemIconColor(item.selected)) {
-                        item.icon()
-                    }
-                },
-                label = { Text(item.label) },
-                colors =
-                    NavigationBarItemDefaults.colors(
-                        indicatorColor = DevConsoleTheme.colors.signal,
-                        selectedIconColor = DevConsoleTheme.colors.signalInk,
-                        selectedTextColor = DevConsoleTheme.colors.ink,
-                        unselectedIconColor = DevConsoleTheme.colors.muted,
-                        unselectedTextColor = DevConsoleTheme.colors.muted,
-                    ),
-            )
+        items.forEach { item -> key(item.label) { InspectorNavBarItem(item, Modifier.weight(1f)) } }
+    }
+}
+
+@Composable
+private fun InspectorNavBarItem(
+    item: InspectorNavItem,
+    modifier: Modifier = Modifier,
+) {
+    val colors = DevConsoleTheme.colors
+    val pillAlpha = remember { Animatable(if (item.selected) 1f else 0f) }
+    val pillSpec = feedbackSpec<Float>()
+    LaunchedEffect(item.selected) { pillAlpha.animateTo(if (item.selected) 1f else 0f, pillSpec) }
+    val interactionSource = remember { MutableInteractionSource() }
+    Column(
+        modifier =
+            modifier
+                .fillMaxHeight()
+                .selectable(
+                    selected = item.selected,
+                    onClick = item.onClick,
+                    role = Role.Tab,
+                    interactionSource = interactionSource,
+                    indication = null,
+                ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(width = 64.dp, height = 32.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .drawBehind { drawRect(colors.signalSoft, alpha = pillAlpha.value) }
+                    .indication(interactionSource, ripple()),
+            contentAlignment = Alignment.Center,
+        ) {
+            CompositionLocalProvider(LocalContentColor provides navItemIconColor(item.selected)) { item.icon() }
         }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            item.label,
+            color = if (item.selected) colors.signal else colors.muted,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            fontWeight = if (item.selected) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
+        )
     }
 }
 
@@ -363,12 +441,17 @@ internal fun InspectorNavigationRail(
                         item.icon()
                     }
                 },
-                label = { Text(item.label) },
+                label = {
+                    Text(
+                        item.label,
+                        fontWeight = if (item.selected) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                },
                 colors =
                     NavigationRailItemDefaults.colors(
-                        indicatorColor = DevConsoleTheme.colors.signal,
-                        selectedIconColor = DevConsoleTheme.colors.signalInk,
-                        selectedTextColor = DevConsoleTheme.colors.ink,
+                        indicatorColor = DevConsoleTheme.colors.signalSoft,
+                        selectedIconColor = DevConsoleTheme.colors.signal,
+                        selectedTextColor = DevConsoleTheme.colors.signal,
                         unselectedIconColor = DevConsoleTheme.colors.muted,
                         unselectedTextColor = DevConsoleTheme.colors.muted,
                     ),

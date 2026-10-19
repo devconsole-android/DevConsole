@@ -3,6 +3,7 @@ package io.devconsole.server.ktor
 import io.devconsole.api.BrowserSecurity
 import io.devconsole.api.CaptureRule
 import io.devconsole.api.CaptureRuleEngine
+import io.devconsole.api.NetworkProtection
 import io.devconsole.api.ScreenshotResult
 import io.devconsole.composer.ComposerBinaryBody
 import io.devconsole.composer.ComposerBodyType
@@ -190,10 +191,11 @@ class DevConsoleModuleConfig {
     var allowedHosts: Set<String> = setOf("localhost", "127.0.0.1")
 
     /**
-     * Browser authentication policy. The standalone Ktor module keeps its historical secure
-     * default; the public full SDK explicitly supplies [BrowserSecurity.NONE] by default.
+     * Browser authentication is opt-in, matching the public full SDK.
      */
-    var browserSecurity: BrowserSecurity = BrowserSecurity.SESSION_CODE
+    var browserSecurity: BrowserSecurity = BrowserSecurity.NONE
+
+    var networkProtection: NetworkProtection = NetworkProtection()
 
     var streamHub: EventStreamHub = EventStreamHub()
     var timeline: Timeline = InMemoryTimeline(emptyList(), CursorCodec(ByteArray(16).also(SecureRandom()::nextBytes)))
@@ -208,14 +210,14 @@ class DevConsoleModuleConfig {
      * available to any authenticated session; every rule-mutation route (create, delete, per-rule
      * enable/disable) answers 403 while this is false.
      */
-    var mocksEditable: Boolean = false
+    var mocksEditable: Boolean = true
     var captureRules: CaptureRuleEngine = CaptureRuleEngine()
 
     /**
      * Mirrors `EditingCapabilities.captureRules`. Listing exclusions stays available to any
      * authenticated session; every mutation route answers 403 while this is false.
      */
-    var captureRulesEditable: Boolean = false
+    var captureRulesEditable: Boolean = true
     var featureFlags: SessionFeatureFlags = SessionFeatureFlags(emptyList())
 
     /**
@@ -223,9 +225,9 @@ class DevConsoleModuleConfig {
      * session whenever the `state` capture category is enabled; the flag-override route answers 403
      * while this is false.
      */
-    var featureFlagsEditable: Boolean = false
+    var featureFlagsEditable: Boolean = true
     var stateRegistry: StateRegistry = StateRegistry()
-    var stateMutationsEnabled: Boolean = false
+    var stateMutationsEnabled: Boolean = true
 
     /**
      * Remote Config snapshots, **already redacted** by the caller. `:sdk:full` owns that boundary
@@ -236,7 +238,7 @@ class DevConsoleModuleConfig {
 
     /** Reads (file/entry listing) always work; [preferencesEditable] mirrors `EditingCapabilities.preferences`. */
     var preferencesInspector: PreferencesInspector? = null
-    var preferencesEditable: Boolean = false
+    var preferencesEditable: Boolean = true
 
     /**
      * Reads (database/table listing, row paging, read-only SQL) always work; [databaseEditable] mirrors
@@ -244,11 +246,11 @@ class DevConsoleModuleConfig {
      * refused with `DatabaseExecResult.WriteBlocked` while this is false, exactly like the Compose adapter.
      */
     var databaseInspector: DatabaseInspector? = null
-    var databaseEditable: Boolean = false
+    var databaseEditable: Boolean = true
 
     /** Reads (root/entry listing, bounded preview) always work; [filesEditable] mirrors `EditingCapabilities.files`. */
     var fileInspector: FileInspector? = null
-    var filesEditable: Boolean = false
+    var filesEditable: Boolean = true
     var composerExecutor: ComposerExecutor = ComposerExecutor(UrlConnectionComposerTransport())
     var composerCollections: ComposerCollectionStore = InMemoryComposerCollectionStore()
     var pushStore: PushStore = InMemoryPushStore()
@@ -299,18 +301,17 @@ class DevConsoleModuleConfig {
 
     /**
      * The Composer lets an authenticated session make the device issue arbitrary outbound HTTP
-     * requests, effectively turning it into a proxy into whatever network it sits on. It is off
-     * unless a host opts in; every `/api/v1/composer` route answers 404 while disabled.
+     * requests. Enabled by default; every `/api/v1/composer` route answers 404 while disabled.
      */
-    var composerEnabled: Boolean = false
+    var composerEnabled: Boolean = true
 
     /**
-     * Hosts the Composer may issue outbound requests to. Every destination, including redirects,
-     * must be explicitly listed; an empty set denies all requests.
+     * Hosts the Composer may issue outbound requests to, including redirects.
+     * An empty set permits any host; a non-empty set restricts destinations to exact matches.
      */
     var composerAllowedHosts: Set<String> = emptySet()
 
-    var composerHostsEditable: Boolean = false
+    var composerHostsEditable: Boolean = true
 
     internal var sharedComposerHosts: ComposerHostAllowlist? = null
 }
@@ -327,6 +328,8 @@ fun Application.devConsoleModule(
     configure: DevConsoleModuleConfig.() -> Unit = {},
 ) {
     val config = DevConsoleModuleConfig().apply(configure)
+    val networkProtection = config.networkProtection
+    attributes.put(NETWORK_PROTECTION_KEY, networkProtection)
     sessionAuthority.configureBrowserAuthentication(config.browserSecurity == BrowserSecurity.SESSION_CODE)
     val allowedHosts = config.allowedHosts
     val streamHub = config.streamHub
@@ -447,7 +450,7 @@ fun Application.devConsoleModule(
             // future XSS would use to exfiltrate to an attacker-controlled WebSocket server -- down to
             // just the one endpoint the dashboard is actually allowed to talk to.
             val webSocketSource =
-                if (hostAllowed) {
+                if (parsedHost != null && (!networkProtection.hostAndOriginChecks || hostAllowed)) {
                     val uriHost = if (':' in host) "[$host]" else host // re-bracket an IPv6 literal
                     val portSuffix = parsedHost.port?.let { ":$it" }.orEmpty()
                     "'self' ws://$uriHost$portSuffix"
@@ -474,7 +477,7 @@ fun Application.devConsoleModule(
             )
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
 
-            if (!hostAllowed) {
+            if (networkProtection.hostAndOriginChecks && !hostAllowed) {
                 call.respondText("{\"code\":\"ORIGIN_REJECTED\"}", status = HttpStatusCode.Forbidden)
                 finish()
                 return@intercept
@@ -525,7 +528,7 @@ fun Application.devConsoleModule(
                         else -> null
                     }
                 }
-            if (limiter != null && !limiter.allow(browserSession.id)) {
+            if (networkProtection.rateLimiting && limiter != null && !limiter.allow(browserSession.id)) {
                 path.commandAuditIdentity(method)?.let { (commandType, target) ->
                     commandAuditLog.recordControlFailure(browserSession.id, commandType, target)
                 }
@@ -655,7 +658,10 @@ fun Application.devConsoleModule(
                 metadata.captureCategories.joinToString(",") { "\"${it.escapeJson()}\"" }
             val body =
                 metadata.json().dropLast(1) +
-                    ",\"endpoint\":$endpointJson,\"redaction\":{\"sensitiveFieldNames\":[$redactedNames]}," +
+                    ",\"endpoint\":$endpointJson," +
+                    "\"redaction\":{\"enabled\":${redaction.isEnabled()},\"sensitiveFieldNames\":[$redactedNames]}," +
+                    "\"networkProtection\":{\"rateLimiting\":${networkProtection.rateLimiting}," +
+                    "\"hostAndOriginChecks\":${networkProtection.hostAndOriginChecks}}," +
                     "\"composer\":{\"enabled\":$composerEnabled,\"allowedHosts\":[$allowedHosts]}," +
                     "\"captureCategories\":[$captureCategories]}"
             call.respondText(body, contentType = io.ktor.http.ContentType.Application.Json)
@@ -687,7 +693,9 @@ fun Application.devConsoleModule(
         }
         post("/api/v1/auth/session-code/exchange") {
             // Keyed by source IP rather than session id: exchange runs before any session exists.
-            if (!sessionCodeAttemptLimiter.allow(call.request.origin.remoteHost)) {
+            if (sessionAuthority.isBrowserAuthenticationRequired() &&
+                !sessionCodeAttemptLimiter.allow(call.request.origin.remoteHost)
+            ) {
                 call.respondText("{\"code\":\"RATE_LIMITED\"}", status = HttpStatusCode.TooManyRequests)
                 return@post
             }
@@ -858,7 +866,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
                 return@get
             }
-            if (!exportLimiter.allow(session.id)) {
+            if (networkProtection.rateLimiting && !exportLimiter.allow(session.id)) {
                 call.respondText("{\"code\":\"RATE_LIMITED\"}", status = HttpStatusCode.TooManyRequests)
                 return@get
             }
@@ -2657,7 +2665,7 @@ fun Application.devConsoleModule(
                 } catch (rejected: io.devconsole.composer.ComposerDestinationRejectedException) {
                     recordComposerCapture(
                         request = resolvedRequest,
-                        secretValues = request.secretValues(),
+                        secretValues = if (redaction.isEnabled()) request.secretValues() else emptyList(),
                         response = null,
                         error = rejected,
                         correlationId = correlationId,
@@ -2678,7 +2686,7 @@ fun Application.devConsoleModule(
                 } catch (failure: Throwable) {
                     recordComposerCapture(
                         request = resolvedRequest,
-                        secretValues = request.secretValues(),
+                        secretValues = if (redaction.isEnabled()) request.secretValues() else emptyList(),
                         response = null,
                         error = failure,
                         correlationId = correlationId,
@@ -2707,7 +2715,7 @@ fun Application.devConsoleModule(
             val transaction =
                 recordComposerCapture(
                     request = resolvedRequest,
-                    secretValues = request.secretValues(),
+                    secretValues = if (redaction.isEnabled()) request.secretValues() else emptyList(),
                     response = execution.response,
                     error = null,
                     correlationId = correlationId,
@@ -2723,12 +2731,12 @@ fun Application.devConsoleModule(
                 session.id,
                 "composer.execute",
                 method,
-                mapOf("url" to url.withoutQuery()),
+                mapOf("url" to if (redaction.isEnabled()) url.withoutQuery() else url),
             )
             call.respondText(
                 "{\"correlationId\":\"${correlationId.escapeJson()}\"," +
                     "\"executor\":\"${executorLabel.escapeJson()}\"," +
-                    "\"request\":${execution.requestMetadata}," +
+                    "\"request\":${request.toRedactedMetadata(redaction)}," +
                     "\"response\":{\"statusCode\":${execution.response.statusCode}," +
                     "\"durationMs\":${execution.response.durationMs ?: "null"}," +
                     "${transaction.capture.response.composerResultJson()}}}",
@@ -2745,7 +2753,8 @@ fun Application.devConsoleModule(
                     "{\"host\":\"${entry.host.escapeJson()}\",\"source\":\"${entry.source.name.lowercase()}\"}"
                 }
             call.respondText(
-                "{\"editable\":${composerHosts.editable},\"data\":[$hosts]}",
+                "{\"editable\":${composerHosts.editable},\"anyHost\":${composerHosts.permitsAnyHost}," +
+                    "\"data\":[$hosts]}",
                 contentType = io.ktor.http.ContentType.Application.Json,
             )
         }
@@ -3425,7 +3434,7 @@ fun Application.devConsoleModule(
                 } catch (rejected: io.devconsole.composer.ComposerDestinationRejectedException) {
                     recordComposerCapture(
                         request = resolvedRequest,
-                        secretValues = request.secretValues(),
+                        secretValues = if (redaction.isEnabled()) request.secretValues() else emptyList(),
                         response = null,
                         error = rejected,
                         correlationId = correlationId,
@@ -3445,7 +3454,7 @@ fun Application.devConsoleModule(
                 } catch (failure: Throwable) {
                     recordComposerCapture(
                         request = resolvedRequest,
-                        secretValues = request.secretValues(),
+                        secretValues = if (redaction.isEnabled()) request.secretValues() else emptyList(),
                         response = null,
                         error = failure,
                         correlationId = correlationId,
@@ -3461,7 +3470,7 @@ fun Application.devConsoleModule(
                 }
             recordComposerCapture(
                 request = resolvedRequest,
-                secretValues = request.secretValues(),
+                secretValues = if (redaction.isEnabled()) request.secretValues() else emptyList(),
                 response = execution.response,
                 error = null,
                 correlationId = correlationId,
@@ -3475,10 +3484,12 @@ fun Application.devConsoleModule(
                 session.id,
                 "network.resend",
                 captured.method,
-                mapOf("url" to url.withoutQuery()),
+                mapOf("url" to if (redaction.isEnabled()) url.withoutQuery() else url),
             )
             call.respondText(
-                "{\"correlationId\":\"${correlationId.escapeJson()}\",\"request\":${execution.requestMetadata}," +
+                "{\"correlationId\":\"${correlationId.escapeJson()}\",\"request\":${request.toRedactedMetadata(
+                    redaction,
+                )}," +
                     "\"response\":{\"statusCode\":${execution.response.statusCode}," +
                     "\"durationMs\":${execution.response.durationMs ?: "null"}}}",
                 contentType = io.ktor.http.ContentType.Application.Json,
@@ -3614,7 +3625,7 @@ fun Application.devConsoleModule(
                 } else {
                     origin != null && origin != expectedOrigin
                 }
-            if (originRejected) {
+            if (networkProtection.hostAndOriginChecks && originRejected) {
                 commandAuditLog.recordControlFailure(session.id, "session.stop", "server")
                 call.respondText("{\"code\":\"ORIGIN_REJECTED\"}", status = HttpStatusCode.Forbidden)
                 return@post
@@ -3637,7 +3648,10 @@ fun Application.devConsoleModule(
             // origin is rejected; a legitimate non-browser client (bearer token, no Origin header)
             // is allowed through, so absent-Origin is permitted while a mismatched one is not.
             val origin = call.request.headers[HttpHeaders.Origin]
-            if (origin != null && origin != "http://${call.request.headers[HttpHeaders.Host].orEmpty()}") {
+            if (networkProtection.hostAndOriginChecks &&
+                origin != null &&
+                origin != "http://${call.request.headers[HttpHeaders.Host].orEmpty()}"
+            ) {
                 close(CloseReason(CloseReason.Codes.VIOLATED_POLICY.code, "ORIGIN_REJECTED"))
                 return@webSocket
             }
@@ -3693,7 +3707,7 @@ private const val STREAM_AUTH_RECHECK_MS = 100L
  * not from every route the device happens to have. Android's local-network runtime permission
  * (where applicable) is gated upstream, by the caller, before `start` is ever invoked in LAN mode.
  */
-@Suppress("LongParameterList") // Every capture engine/inspector the dashboard can reach is injected here.
+@Suppress("LongParameterList", "TooManyFunctions") // Every inspector is injected here; each policy has a with-copy.
 class KtorLocalServerEngine(
     private val sessionAuthority: SessionAuthority = SessionAuthority(),
     private val sessionCodeAuthority: SessionCodeAuthority = SessionCodeAuthority(sessionAuthority),
@@ -3707,24 +3721,24 @@ class KtorLocalServerEngine(
     /** Already-redacted Remote Config snapshots; see [DevConsoleModuleConfig.remoteConfigSnapshots]. */
     private val remoteConfigSnapshots: () -> List<RemoteConfigSnapshot> = { emptyList() },
     featureFlags: SessionFeatureFlags = SessionFeatureFlags(emptyList()),
-    featureFlagsEditable: Boolean = false,
+    featureFlagsEditable: Boolean = true,
     private val mockEngine: MockEngine = MockEngine(emptyList()),
-    mocksEditable: Boolean = false,
+    mocksEditable: Boolean = true,
     private val captureRules: CaptureRuleEngine = CaptureRuleEngine(),
-    captureRulesEditable: Boolean = false,
+    captureRulesEditable: Boolean = true,
     private val preferencesInspector: PreferencesInspector? = null,
-    preferencesEditable: Boolean = false,
+    preferencesEditable: Boolean = true,
     private val databaseInspector: DatabaseInspector? = null,
-    databaseEditable: Boolean = false,
+    databaseEditable: Boolean = true,
     private val fileInspector: FileInspector? = null,
-    filesEditable: Boolean = false,
+    filesEditable: Boolean = true,
     /** Supplied by the platform facade so events can be persisted; defaults to in-memory. */
     private val timeline: Timeline =
         InMemoryTimeline(emptyList(), CursorCodec(ByteArray(16).also(SecureRandom()::nextBytes))),
-    composerEnabled: Boolean = false,
+    composerEnabled: Boolean = true,
     composerAllowedHosts: Set<String> = emptySet(),
-    composerHostsEditable: Boolean = false,
-    stateMutationsEnabled: Boolean = false,
+    composerHostsEditable: Boolean = true,
+    stateMutationsEnabled: Boolean = true,
     redactionPolicy: RedactionPolicy = RedactionPolicy.default(),
     private val pushSimulator: PushSimulator? = null,
     private val commandAuditLog: CommandAuditLog = InMemoryCommandAuditLog(),
@@ -3765,7 +3779,11 @@ class KtorLocalServerEngine(
 
     /** Applied before the next server start; a running Ktor application captures its mode. */
     @Volatile
-    private var browserSecurity: BrowserSecurity = BrowserSecurity.SESSION_CODE
+    private var browserSecurity: BrowserSecurity = BrowserSecurity.NONE
+
+    /** Applied before the next server start, matching browser authentication reconfiguration. */
+    @Volatile
+    private var networkProtection: NetworkProtection = NetworkProtection()
 
     @Volatile
     private var attachmentReader: suspend (String) -> ByteArray? = { null }
@@ -3785,6 +3803,11 @@ class KtorLocalServerEngine(
     fun withBrowserSecurity(value: BrowserSecurity): KtorLocalServerEngine =
         apply {
             browserSecurity = value
+        }
+
+    fun withNetworkProtection(value: NetworkProtection): KtorLocalServerEngine =
+        apply {
+            networkProtection = value
         }
 
     @Volatile
@@ -3817,13 +3840,13 @@ class KtorLocalServerEngine(
         composerAllowedHosts: Set<String>,
         stateMutationsEnabled: Boolean,
         redactionPolicy: RedactionPolicy,
-        composerHostsEditable: Boolean = false,
-        mocksEditable: Boolean = false,
-        captureRulesEditable: Boolean = false,
-        preferencesEditable: Boolean = false,
-        databaseEditable: Boolean = false,
-        filesEditable: Boolean = false,
-        featureFlagsEditable: Boolean = false,
+        composerHostsEditable: Boolean = true,
+        mocksEditable: Boolean = true,
+        captureRulesEditable: Boolean = true,
+        preferencesEditable: Boolean = true,
+        databaseEditable: Boolean = true,
+        filesEditable: Boolean = true,
+        featureFlagsEditable: Boolean = true,
     ) {
         if (!composerHosts.hasConfiguration(composerAllowedHosts, composerHostsEditable)) {
             composerHosts = ComposerHostAllowlist(composerAllowedHosts, composerHostsEditable)
@@ -3942,6 +3965,7 @@ class KtorLocalServerEngine(
                                     this.pushSimulator = this@KtorLocalServerEngine.pushSimulator
                                     this.commandAuditLog = this@KtorLocalServerEngine.commandAuditLog
                                     this.redactionPolicy = configuration.redactionPolicy
+                                    this.networkProtection = this@KtorLocalServerEngine.networkProtection
                                     this.attachmentReader = this@KtorLocalServerEngine.attachmentReader
                                     this.attachmentMetadataReader = this@KtorLocalServerEngine.attachmentMetadataReader
                                     this.retainedCaptures = this@KtorLocalServerEngine.retainedCaptures
@@ -4471,19 +4495,20 @@ private fun SessionAuthority.bearerSession(authorization: String?) =
             ?.let { token -> sessionForToken(token) }
     }
 
+private val NETWORK_PROTECTION_KEY = io.ktor.util.AttributeKey<NetworkProtection>("devconsole.networkProtection")
+
 private fun io.ktor.server.application.ApplicationCall.isOriginAndCsrfAuthorized(
     authority: SessionAuthority,
 ): Boolean {
     val expectedOrigin = "http://${request.headers[HttpHeaders.Host].orEmpty()}"
     val origin = request.headers[HttpHeaders.Origin]
+    val checkOrigin = application.attributes[NETWORK_PROTECTION_KEY].hostAndOriginChecks
     return if (!authority.isBrowserAuthenticationRequired()) {
-        // Open mode removes credentials, not the browser's same-origin boundary. Browsers send an
-        // Origin on cross-site mutations, so reject a foreign value while keeping curl/CLI clients
-        // (which normally omit Origin) usable without inventing a replacement secret.
-        origin == null || origin == expectedOrigin
+        // Origin validation is independent of authentication; open CLI clients may omit Origin.
+        !checkOrigin || origin == null || origin == expectedOrigin
     } else {
         authority.bearerSession(request.headers[HttpHeaders.Authorization])?.let { session ->
-            origin == expectedOrigin && request.headers[CSRF_HEADER] == session.csrfToken
+            (!checkOrigin || origin == expectedOrigin) && request.headers[CSRF_HEADER] == session.csrfToken
         } ?: false
     }
 }
@@ -5336,7 +5361,7 @@ private fun parseAgentFrame(text: String): Parameters? =
 
 private fun String.withoutQuery(): String = substringBefore('?')
 
-/** Composer is a device-side proxy, so every destination must be explicitly allowlisted. */
+/** No app-configured host permits any host; otherwise every destination must be allowlisted. */
 private fun ComposerHostAllowlist.permitsHostOf(url: String): Boolean = permits(url.hostOrEmpty())
 
 private fun String.isHttpUrl(): Boolean =
@@ -5829,17 +5854,8 @@ private fun StateValue.json(): String =
             } ?: "null"}}"
     }
 
-private fun io.ktor.server.application.ApplicationCall.isReadMutationAuthorized(authority: SessionAuthority): Boolean {
-    val expectedOrigin = "http://${request.headers[HttpHeaders.Host].orEmpty()}"
-    val origin = request.headers[HttpHeaders.Origin]
-    return if (!authority.isBrowserAuthenticationRequired()) {
-        origin == null || origin == expectedOrigin
-    } else {
-        authority.bearerSession(request.headers[HttpHeaders.Authorization])?.let { session ->
-            origin == expectedOrigin && request.headers[CSRF_HEADER] == session.csrfToken
-        } ?: false
-    }
-}
+private fun io.ktor.server.application.ApplicationCall.isReadMutationAuthorized(authority: SessionAuthority): Boolean =
+    isOriginAndCsrfAuthorized(authority)
 
 // ============================================================================================
 // Evidence snapshot materialization (A -- see the design spec's "Snapshot at flag time" section).

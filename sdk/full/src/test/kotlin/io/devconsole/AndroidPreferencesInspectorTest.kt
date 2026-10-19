@@ -23,7 +23,7 @@ import org.robolectric.annotation.Config
 class AndroidPreferencesInspectorTest {
     private val application: Application = ApplicationProvider.getApplicationContext()
     private val inspector =
-        AndroidPreferencesInspector(application, RedactionEngine(RedactionPolicy.default()))
+        AndroidPreferencesInspector(application, RedactionEngine(RedactionPolicy.recommended()))
 
     @Test
     fun `files lists typed entries from the app shared preferences`() {
@@ -61,6 +61,25 @@ class AndroidPreferencesInspectorTest {
         val countEntry = file.entries.first { it.key == "count" }
         assertEquals("3", countEntry.value)
         assertFalse(countEntry.redacted)
+    }
+
+    @Test
+    fun `default policy preserves token looking preference values`() {
+        application
+            .getSharedPreferences("unmasked_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putString("access_token", "raw-token")
+            .commit()
+        val unmasked = AndroidPreferencesInspector(application, RedactionEngine(RedactionPolicy.default()))
+        val entry =
+            unmasked
+                .files()
+                .first { it.name == "unmasked_prefs" }
+                .entries
+                .single()
+
+        assertEquals("raw-token", entry.value)
+        assertFalse(entry.redacted)
     }
 
     @Test

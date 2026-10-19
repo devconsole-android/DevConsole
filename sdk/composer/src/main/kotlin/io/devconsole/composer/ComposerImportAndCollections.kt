@@ -120,7 +120,7 @@ interface ComposerCollectionStore {
     fun remove(id: String): Boolean
 }
 
-/** Ephemeral store; secret variable values are intentionally stripped before retaining a collection. */
+/** Ephemeral store; the configured policy controls masking, including secret variables. */
 class InMemoryComposerCollectionStore(
     private val redaction: RedactionEngine = RedactionEngine(RedactionPolicy.default()),
 ) : ComposerCollectionStore {
@@ -137,7 +137,7 @@ class InMemoryComposerCollectionStore(
                 .copy(
                     variables =
                         redactedRequest.variables.map { variable ->
-                            if (variable.secret) variable.copy(value = "") else variable
+                            if (variable.secret && redaction.isEnabled()) variable.copy(value = "") else variable
                         },
                 ).detached()
         val stored = ComposerCollection(UUID.randomUUID().toString(), redaction.redactText(name.trim()), safeRequest)

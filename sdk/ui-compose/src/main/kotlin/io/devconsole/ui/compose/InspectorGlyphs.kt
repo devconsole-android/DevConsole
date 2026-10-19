@@ -3,11 +3,9 @@
  * @since 04/08/26
  */
 @file:Suppress("FunctionNaming", "MagicNumber", "MatchingDeclarationName")
-@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package io.devconsole.ui.compose
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,17 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.invisibleToUser
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,16 +37,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * The small, hand-authored glyph set the shared components need (search, chevron, check, alert,
- * flag, copy). There is no icon library dependency in this module; the glyphs are bespoke (not
- * Material Symbols), with coordinates below on a 16x16 viewBox `<path>` data.
+ * The small glyph set the shared components need (search, chevron, check, alert, flag, copy). Each
+ * maps to one of the module's `devconsole_ic_*` vector drawables -- the same 24dp, 1.5-stroke set the
+ * web dashboard's sprite ships -- so the two surfaces draw identical icons.
  */
 internal enum class InspectorGlyph { Search, ChevronDown, Check, Alert, Flag, Copy, Expand }
 
 /** DESIGN.md's disabled treatment: the whole control at half opacity, container and content alike. */
 private const val DISABLED_PILL_ALPHA = 0.5f
-private const val GLYPH_VIEWBOX = 16f
-private const val GLYPH_STROKE_WIDTH = 1.4f
 
 /**
  * Renders one [InspectorGlyph]. Pass [contentDescription] only when this icon is the sole
@@ -76,96 +64,19 @@ internal fun InspectorGlyphIcon(
     size: Dp = 18.dp,
     rotationDegrees: Float = 0f,
 ) {
-    Canvas(
-        modifier =
-            modifier
-                .size(size)
-                .rotate(rotationDegrees)
-                .then(
-                    if (contentDescription != null) {
-                        Modifier.semantics { this.contentDescription = contentDescription }
-                    } else {
-                        Modifier.semantics { invisibleToUser() }
-                    },
-                ),
-    ) {
-        drawInspectorGlyph(glyph, tint)
-    }
+    DevConsoleIcon(glyph.drawableRes(), contentDescription, modifier.rotate(rotationDegrees), tint, size)
 }
 
-@Suppress("LongMethod") // One draw routine per glyph shape, all in one when -- see ObserveGlyph's own suppression.
-private fun DrawScope.drawInspectorGlyph(
-    glyph: InspectorGlyph,
-    tint: Color,
-) {
-    val scale = size.width / GLYPH_VIEWBOX
-    val stroke =
-        Stroke(
-            width = size.width * (GLYPH_STROKE_WIDTH / GLYPH_VIEWBOX),
-            cap = StrokeCap.Round,
-            join = StrokeJoin.Round,
-        )
-    val path = Path()
-    when (glyph) {
-        InspectorGlyph.Search -> {
-            drawCircle(color = tint, radius = 4.2f * scale, center = Offset(7f * scale, 7f * scale), style = stroke)
-            path.moveTo(10.2f * scale, 10.2f * scale)
-            path.lineTo(14f * scale, 14f * scale)
-        }
-        InspectorGlyph.ChevronDown -> {
-            path.moveTo(4f * scale, 6.5f * scale)
-            path.lineTo(8f * scale, 10.5f * scale)
-            path.lineTo(12f * scale, 6.5f * scale)
-        }
-        InspectorGlyph.Check -> {
-            path.moveTo(3f * scale, 8.5f * scale)
-            path.lineTo(6.2f * scale, 11.5f * scale)
-            path.lineTo(13f * scale, 4.5f * scale)
-        }
-        InspectorGlyph.Alert -> {
-            path.moveTo(8f * scale, 2.5f * scale)
-            path.lineTo(14.5f * scale, 13.5f * scale)
-            path.lineTo(1.5f * scale, 13.5f * scale)
-            path.close()
-            path.moveTo(8f * scale, 6.6f * scale)
-            path.lineTo(8f * scale, 9.6f * scale)
-            drawCircle(color = tint, radius = stroke.width / 2f, center = Offset(8f * scale, 11.6f * scale))
-        }
-        InspectorGlyph.Flag -> {
-            path.moveTo(4f * scale, 14f * scale)
-            path.lineTo(4f * scale, 2.5f * scale)
-            path.lineTo(12f * scale, 2.5f * scale)
-            path.lineTo(10f * scale, 5.5f * scale)
-            path.lineTo(12f * scale, 8.5f * scale)
-            path.lineTo(4f * scale, 8.5f * scale)
-        }
-        InspectorGlyph.Copy -> {
-            path.addRoundRect(
-                RoundRect(6.8f * scale, 5.5f * scale, 13.5f * scale, 12.2f * scale, 1.3f * scale, 1.3f * scale),
-            )
-            path.addRoundRect(
-                RoundRect(3.3f * scale, 3f * scale, 10.3f * scale, 10f * scale, 1.3f * scale, 1.3f * scale),
-            )
-        }
-        InspectorGlyph.Expand -> {
-            // Four open corner brackets -- a fullscreen/expand affordance, disconnected on purpose
-            // (no closed outline) so it reads distinct from Copy's two overlapping rectangles.
-            path.moveTo(2f * scale, 5.5f * scale)
-            path.lineTo(2f * scale, 2f * scale)
-            path.lineTo(5.5f * scale, 2f * scale)
-            path.moveTo(10.5f * scale, 2f * scale)
-            path.lineTo(14f * scale, 2f * scale)
-            path.lineTo(14f * scale, 5.5f * scale)
-            path.moveTo(14f * scale, 10.5f * scale)
-            path.lineTo(14f * scale, 14f * scale)
-            path.lineTo(10.5f * scale, 14f * scale)
-            path.moveTo(5.5f * scale, 14f * scale)
-            path.lineTo(2f * scale, 14f * scale)
-            path.lineTo(2f * scale, 10.5f * scale)
-        }
+private fun InspectorGlyph.drawableRes(): Int =
+    when (this) {
+        InspectorGlyph.Search -> R.drawable.devconsole_ic_search
+        InspectorGlyph.ChevronDown -> R.drawable.devconsole_ic_chevron_down
+        InspectorGlyph.Check -> R.drawable.devconsole_ic_check
+        InspectorGlyph.Alert -> R.drawable.devconsole_ic_crashes
+        InspectorGlyph.Flag -> R.drawable.devconsole_ic_evidence
+        InspectorGlyph.Copy -> R.drawable.devconsole_ic_copy
+        InspectorGlyph.Expand -> R.drawable.devconsole_ic_expand
     }
-    drawPath(path, color = tint, style = stroke)
-}
 
 /** A 48dp (or [size]) round icon-only button. Every call site must supply a real [contentDescription]. */
 @Suppress("LongParameterList") // Size/color/icon vary per call site (top area, header, section copy...).

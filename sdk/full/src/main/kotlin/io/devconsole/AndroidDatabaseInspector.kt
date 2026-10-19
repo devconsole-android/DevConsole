@@ -144,7 +144,7 @@ internal class AndroidDatabaseInspector(
                 android.database.Cursor.FIELD_TYPE_BLOB -> "[blob ${getBlob(index).size} bytes]"
                 else -> getString(index).orEmpty()
             }
-        if (column.looksSensitiveColumn()) return redaction.replacement()
+        if (redaction.isEnabled() && column.looksSensitiveColumn()) return redaction.replacement()
         return redaction.redactFields(mapOf(column to raw)).getValue(column)
     }
 

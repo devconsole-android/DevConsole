@@ -7,9 +7,9 @@ import kotlin.test.assertTrue
 
 class ComposerHostsEditableConfigTest {
     @Test
-    fun `the allowlist is read-only unless the app opts in`() {
-        assertFalse(DevConsoleConfig.default().composerHostsEditable)
-        assertFalse(
+    fun `the allowlist is editable unless the app opts out`() {
+        assertTrue(DevConsoleConfig.default().composerHostsEditable)
+        assertTrue(
             DevConsoleConfig
                 .Builder()
                 .composerEnabled(true)
@@ -40,9 +40,9 @@ class ComposerHostsEditableConfigTest {
 
     @Test
     fun `runtime equivalence notices a changed flag`() {
-        val off = DevConsoleConfig.default()
+        val editable = DevConsoleConfig.default()
 
-        assertFalse(off.runtimeEquivalentTo(off.withComposerHostsEditable(true)))
-        assertTrue(off.runtimeEquivalentTo(off.withComposerHostsEditable(false)))
+        assertFalse(editable.runtimeEquivalentTo(editable.withComposerHostsEditable(false)))
+        assertTrue(editable.runtimeEquivalentTo(editable.withComposerHostsEditable(true)))
     }
 }

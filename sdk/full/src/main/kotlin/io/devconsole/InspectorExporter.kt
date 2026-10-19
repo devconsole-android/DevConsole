@@ -15,6 +15,7 @@ import io.devconsole.network.NetworkTransaction
 import io.devconsole.network.NetworkTransactionStore
 import io.devconsole.network.resolveExportSelection
 import io.devconsole.security.RedactionEngine
+import io.devconsole.security.RedactionPolicy
 import io.devconsole.server.api.ServerMetadata
 import io.devconsole.storage.api.StoredEvent
 import io.devconsole.timeline.InMemoryTimelineAnnotations
@@ -135,7 +136,7 @@ internal class AndroidInspectorExporter(
             val timelineResult =
                 runBlocking {
                     val annotations = sessionExportSources.annotationsSupplier()
-                    EventExportWriter().writeAsync(
+                    EventExportWriter(exportRedaction ?: RedactionEngine(RedactionPolicy.default())).writeAsync(
                         ExportRequest(sessionId = sessionId, events = events, destination = timelinePart)
                             .withAnnotations(events.associate { it.id to annotations.get(it.id) })
                             .withAttachments(collectAttachments(events)),

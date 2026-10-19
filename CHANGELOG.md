@@ -35,9 +35,9 @@ joined this list.)
   (`COMPOSER_HOST_REJECTED` vs a private-network refusal, `AGENT_UNAVAILABLE`, `AGENT_TIMEOUT`,
   `EXECUTION_FAILED` with a `detail`). The Execute button is re-enabled after a failed request
   instead of staying disabled.
-- **Composer hosts can be added from the dashboard.** With `DevConsoleConfig.composerHostsEditable`
-  on (off by default), the Host allowlist card takes a hostname and a rejected request offers an
-  "Allow <host>" button, so trying another API no longer needs a rebuild. Added hosts last for the
+- **Composer hosts can be added from the dashboard.** When the app sets `composerAllowedHosts`,
+  `DevConsoleConfig.composerHostsEditable` (on by default) lets the Host allowlist card take a
+  hostname, and a rejected request offers an "Allow <host>" button, so trying another API no longer needs a rebuild. Added hosts last for the
   current run only, are audited, and cannot override hosts set by the app. The in-app Composer
   screen uses the same live list.
 - `sdk:composer` exposes `ResolvedComposerRequest.wireBody()` so every transport encodes bodies

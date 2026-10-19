@@ -30,7 +30,7 @@ class DevConsoleOkHttpInterceptorNoopTest {
             val store = InMemoryNetworkTransactionStore(NetworkCursorCodec(ByteArray(16) { it.toByte() }))
             val recorder =
                 NetworkTransactionRecorder(
-                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                    factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())),
                     store = store,
                     executor = Executor(Runnable::run),
                 )

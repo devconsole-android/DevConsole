@@ -68,7 +68,7 @@ class CapabilityGateMatrixTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     mocksEditable = target == Capability.MOCKS
                     captureRulesEditable = target == Capability.CAPTURE_RULES
                     preferencesEditable = target == Capability.PREFERENCES

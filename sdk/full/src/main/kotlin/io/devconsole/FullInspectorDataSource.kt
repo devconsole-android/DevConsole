@@ -376,6 +376,7 @@ internal class FullInspectorDataSource(
             retention = retentionSupplier(),
             keepAlivePromptNeeded = keepAlivePromptSupplier(),
             captureCategories = categories,
+            redactionEnabled = (config?.redactionPolicy ?: RedactionPolicy.default()).hasRules(),
         )
     }
 
@@ -907,10 +908,10 @@ private fun InspectorTrafficQuery.toEngineQuery(): NetworkTransactionQuery {
     return NetworkTransactionQuery(limit = SNAPSHOT_TRANSACTION_LIMIT, methods = methods).withFilters(filters)
 }
 
-/** Exact-host allow-list match, mirroring the server's Composer host gate. */
+/** Empty permits any host; otherwise use an exact-host allow-list match. */
 private fun Set<String>.permitsHostOf(url: String): Boolean {
     val host = url.hostOrEmpty().lowercase()
-    return host.isNotEmpty() && any { it.lowercase() == host }
+    return host.isNotEmpty() && (isEmpty() || any { it.lowercase() == host })
 }
 
 private fun String.hostOrEmpty(): String = runCatching { URI(this).host.orEmpty() }.getOrDefault("")

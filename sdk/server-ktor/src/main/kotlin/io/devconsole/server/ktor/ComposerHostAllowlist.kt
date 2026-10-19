@@ -11,6 +11,9 @@ internal class ComposerHostAllowlist(
         configuredHosts.map { it.trim().lowercase() }.filter(String::isNotEmpty).toSortedSet()
     private val sessionHosts: MutableSet<String> = Collections.newSetFromMap(ConcurrentHashMap())
 
+    /** An app that configures no hosts opts out of the allowlist, so session hosts never narrow it. */
+    val permitsAnyHost: Boolean = appHosts.isEmpty()
+
     enum class Source { APP, SESSION }
 
     data class Entry(
@@ -47,7 +50,7 @@ internal class ComposerHostAllowlist(
 
     fun permits(host: String): Boolean {
         val name = host.lowercase()
-        return name.isNotEmpty() && (name in appHosts || name in sessionHosts)
+        return name.isNotEmpty() && (permitsAnyHost || name in appHosts || name in sessionHosts)
     }
 
     fun entries(): List<Entry> =

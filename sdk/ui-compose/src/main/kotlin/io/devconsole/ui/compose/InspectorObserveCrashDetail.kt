@@ -79,29 +79,17 @@ private fun crashSections(
             dumpBody,
             copyDescription = "Copy stack trace",
             onCopy = dumpCopy,
+            tab = InspectorDetailTab.STACK_TRACE,
         ),
     )
 }
 
 private fun crashFooterActions(
     colors: DevConsoleColors,
-    isFlagged: Boolean,
-    onToggleFlag: () -> Unit,
     copyPayload: String,
     copyText: (String) -> Unit,
 ): List<InspectorFooterAction> =
     listOf(
-        InspectorFooterAction(
-            label = if (isFlagged) "Flagged as evidence" else "Flag as evidence",
-            onClick = onToggleFlag,
-            weight = 2f,
-            icon = {
-                val tint = if (isFlagged) colors.signal else colors.signalInk
-                InspectorGlyphIcon(InspectorGlyph.Flag, contentDescription = null, tint = tint, size = 18.dp)
-            },
-            containerColor = if (isFlagged) colors.signalSoft else colors.signal,
-            contentColor = if (isFlagged) colors.signal else colors.signalInk,
-        ),
         InspectorFooterAction(
             label = "Copy",
             onClick = { copyText(copyPayload) },
@@ -144,15 +132,22 @@ internal fun crashDetailContent(
                 leadColor = leadColor,
                 leadContainerColor = leadBg,
                 title = crash.summary,
-                subtitle = "$threadLabel · $kindLabel",
-                status = formatCaptureClockTime(crash.timestampEpochMs),
+                subtitle = "$kindLabel · $threadLabel · ${formatCaptureClockTime(crash.timestampEpochMs)}",
+                status = "",
                 statusColor = colors.muted,
                 actions =
                     listOf(
                         InspectorTopAction(
-                            contentDescription = "Copy crash report",
-                            onClick = { copyText(copyPayload) },
-                            icon = copyIconAction(colors.muted),
+                            contentDescription = if (isFlagged) "Flagged as evidence" else "Flag as evidence",
+                            onClick = onToggleFlag,
+                            icon = {
+                                InspectorGlyphIcon(
+                                    InspectorGlyph.Flag,
+                                    null,
+                                    tint = if (isFlagged) colors.ink else colors.muted,
+                                    size = 20.dp,
+                                )
+                            },
                         ),
                         InspectorTopAction(
                             contentDescription = "Share crash report",
@@ -165,6 +160,6 @@ internal fun crashDetailContent(
         // General, breadcrumbs and the dump all open by default -- this screen exists to answer "what
         // happened and what led up to it" at a glance, not to require expanding every section first.
         initiallyOpenSectionKeys = setOf("general", "crumbs", "dump"),
-        footerActions = crashFooterActions(colors, isFlagged, onToggleFlag, copyPayload, copyText),
+        footerActions = crashFooterActions(colors, copyPayload, copyText),
     )
 }

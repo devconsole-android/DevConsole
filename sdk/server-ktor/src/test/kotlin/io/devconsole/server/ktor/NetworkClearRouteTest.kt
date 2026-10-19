@@ -48,7 +48,7 @@ class NetworkClearRouteTest {
     fun `clearing requires an authenticated session`() =
         testApplication {
             val store = networkStore("tx-1")
-            application { devConsoleModule(SessionAuthority()) { networkTransactions = store } }
+            application { protectedDevConsoleModule(SessionAuthority()) { networkTransactions = store } }
 
             val response = client.delete("/api/v1/network/transactions") { header(HttpHeaders.Host, "localhost") }
 
@@ -65,7 +65,7 @@ class NetworkClearRouteTest {
             val audit = InMemoryCommandAuditLog()
             val store = networkStore("tx-1")
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = store
                     commandAuditLog = audit
                 }
@@ -92,7 +92,7 @@ class NetworkClearRouteTest {
             val audit = InMemoryCommandAuditLog()
             val store = networkStore("tx-1", "tx-2")
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = store
                     commandAuditLog = audit
                 }
@@ -119,7 +119,7 @@ class NetworkClearRouteTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val store = networkStore("tx-1", "tx-2")
-            application { devConsoleModule(sessions, sessionCodes) { networkTransactions = store } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { networkTransactions = store } }
             val session = approvedSession(sessions, sessionCodes)
             val before = client.get("/api/v1/network/transactions") { authHeaders(session) }
             assertTrue(before.bodyAsText().contains("tx-1"))
@@ -143,7 +143,7 @@ class NetworkClearRouteTest {
             val audit = InMemoryCommandAuditLog()
             val store = networkStore("tx-1")
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = store
                     commandAuditLog = audit
                     metadata = ServerMetadata(captureCategories = listOf("logs"))
@@ -170,7 +170,7 @@ class NetworkClearRouteTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val store = networkStore()
-            application { devConsoleModule(sessions, sessionCodes) { networkTransactions = store } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { networkTransactions = store } }
             val session = approvedSession(sessions, sessionCodes)
 
             val response = client.delete("/api/v1/network/transactions") { controlHeaders(session) }
@@ -188,7 +188,7 @@ private fun networkStore(vararg ids: String): InMemoryNetworkTransactionStore =
                     startedAtEpochMs = index.toLong() + 1,
                     completedAtEpochMs = index.toLong() + 2,
                     capture =
-                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+                        NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                             NetworkRequestInput("GET", "https://api.test/$id"),
                             NetworkResponseInput(200),
                         ),

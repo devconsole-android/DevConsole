@@ -70,12 +70,23 @@ class ComposerHostAllowlistTest {
 
     @Test
     fun `invalid input is not added and the session list is bounded`() {
-        val list = ComposerHostAllowlist(emptySet(), editable = true)
+        val list = ComposerHostAllowlist(setOf("acme.com"), editable = true)
 
         assertEquals(ComposerHostAllowlist.AddResult.Invalid, list.add("*.acme.com"))
         repeat(ComposerHostAllowlist.MAX_SESSION_HOSTS) { list.add("host$it.example") }
         assertEquals(ComposerHostAllowlist.AddResult.LimitReached, list.add("one-too-many.example"))
         assertFalse(list.permits("one-too-many.example"))
+    }
+
+    @Test
+    fun `an app that configures no hosts permits any host and session hosts never narrow it`() {
+        val list = ComposerHostAllowlist(emptySet(), editable = true)
+
+        assertTrue(list.permitsAnyHost)
+        assertTrue(list.permits("api.acme.com"))
+        assertEquals(ComposerHostAllowlist.AddResult.AlreadyAllowed("acme.com"), list.add("acme.com"))
+        assertTrue(list.permits("other.example"))
+        assertFalse(list.permits(""))
     }
 
     @Test

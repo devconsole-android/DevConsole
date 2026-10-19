@@ -53,7 +53,7 @@ private fun frameSections(
     sizeLabel: String,
     copyText: (String) -> Unit,
 ): List<InspectorDetailSectionSpec> {
-    val leadColor = if (frame.direction == "RECEIVED") colors.put else colors.signal
+    val leadColor = colors.ink
     val generalEntries =
         buildList {
             add(InspectorKeyValue("direction", frame.direction, leadColor))
@@ -70,7 +70,7 @@ private fun frameSections(
         listOf(
             InspectorKeyValue("protocol", socket.protocolLabel()),
             InspectorKeyValue("url", socket.url),
-            InspectorKeyValue("state", socket.state, if (socket.state == "OPEN") colors.signal else colors.muted),
+            InspectorKeyValue("state", socket.state),
             InspectorKeyValue("opened", formatCaptureClockTime(socket.openedAtEpochMs)),
             InspectorKeyValue("frames", "${socket.sentCount} sent · ${socket.receivedCount} received"),
         )
@@ -91,7 +91,7 @@ private fun frameSections(
             colors = colors,
             copyText = copyText,
             copyDescription = "Copy payload",
-        ),
+        ).copy(tab = InspectorDetailTab.PAYLOAD),
         InspectorDetailSectionSpec(
             InspectorExchangeSection.SECONDARY_HEADERS.key,
             "Connection",
@@ -143,7 +143,7 @@ internal fun frameDetailContent(
     shareText: (String, String) -> Unit,
 ): ObserveDetailContent {
     val received = frame.direction == "RECEIVED"
-    val leadColor = if (received) colors.put else colors.signal
+    val leadColor = colors.ink
     val leadBg = if (received) colors.putSoft else colors.signalSoft
     val sizeLabel = socketFrameSizeLabel(frame)
     val frameJson = frameToJsonSnippet(socket, frame)
@@ -159,16 +159,13 @@ internal fun frameDetailContent(
                 leadColor = leadColor,
                 leadContainerColor = leadBg,
                 title = title,
-                subtitle = "${formatCaptureClockTime(frame.timestampEpochMs)} · ${frame.frameType} · $sizeLabel",
-                status = sizeLabel,
+                subtitle = "${frame.direction} · ${frame.frameType} · $sizeLabel · ${formatCaptureClockTime(
+                    frame.timestampEpochMs,
+                )}",
+                status = "",
                 statusColor = colors.ink,
                 actions =
                     listOf(
-                        InspectorTopAction(
-                            contentDescription = "Copy frame payload",
-                            onClick = { copyText(frame.preview.orEmpty()) },
-                            icon = copyIconAction(colors.muted),
-                        ),
                         InspectorTopAction(
                             contentDescription = "Share frame as JSON",
                             onClick = { shareText(frameJson, "Share frame JSON") },
@@ -177,7 +174,8 @@ internal fun frameDetailContent(
                     ),
             ),
         sections = frameSections(socket, frame, colors, sizeLabel, copyText),
-        initiallyOpenSectionKeys = setOf(InspectorExchangeSection.PRIMARY_BODY.key),
+        initiallyOpenSectionKeys =
+            setOf("general", InspectorExchangeSection.PRIMARY_BODY.key, InspectorExchangeSection.SECONDARY_HEADERS.key),
         footerActions = frameFooterActions(socket, frame, colors, copyText, shareText),
     )
 }

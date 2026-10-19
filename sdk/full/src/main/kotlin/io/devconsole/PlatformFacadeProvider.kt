@@ -939,6 +939,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 filesEditable = config.editingCapabilities.files,
             )
             serverEngine.withBrowserSecurity(config.browserSecurity)
+            serverEngine.withNetworkProtection(config.networkProtection)
         }
     }
 
@@ -1013,6 +1014,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             sessionsProvider = { sessionStore?.sessions().orEmpty() },
             screenshotCapture = ::captureScreenshot,
         ).withRetainedCaptures(RetainedCaptureQuery({ eventStore }, runtime::currentSessionId))
+            .withNetworkProtection(config.networkProtection)
             .withBrowserSecurity(config.browserSecurity)
             .withAttachmentReader { attachmentId -> roomAttachmentStore?.read(attachmentId) }
             .withAttachmentMetadataReader { attachmentId -> roomAttachmentStore?.metadata(attachmentId) }

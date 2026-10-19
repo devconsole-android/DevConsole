@@ -265,9 +265,10 @@ a redacted field is already masked. Failures: `409 AGENT_UNAVAILABLE` (unknown/d
 COMPOSER_HOST_REJECTED`. `GET /api/v1/composer/agents` (auth) lists
 `{id, name, os, version, address, connectedAtEpochMs}`.
 
-`GET /api/v1/composer/hosts` (auth) answers `{editable, data: [{host, source}]}` with `source` of `app`
-or `session`. When `editable` is true (the app set `composerHostsEditable`), `POST /api/v1/composer/hosts`
-(form field `host`, bearer + CSRF, 30 changes per minute) adds a host for the current server run and
+`GET /api/v1/composer/hosts` (auth) answers `{editable, anyHost, data: [{host, source}]}` with `source` of
+`app` or `session`. `anyHost` is true when the app configured no hosts: every host is permitted and session
+hosts are not needed. When `editable` is true (`composerHostsEditable`, on by default), `POST /api/v1/composer/hosts`
+(form field `host`, bearer + CSRF, 30 changes per minute with rate limiting on) adds a host for the current server run and
 `DELETE /api/v1/composer/hosts/{host}` removes a session host. Errors: `403 COMPOSER_HOSTS_READ_ONLY`,
 `400 VALIDATION_FAILED` (not a plain hostname), `409 COMPOSER_HOST_LIMIT`, `409 COMPOSER_HOST_SET_BY_APP`.
 `GET /api/v1/meta` lists session hosts in `composer.allowedHosts` too.

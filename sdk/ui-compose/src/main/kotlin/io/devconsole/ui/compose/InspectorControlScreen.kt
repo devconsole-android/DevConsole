@@ -2,6 +2,7 @@
  * @author Shakib
  * @since 04/08/26
  */
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @file:Suppress("FunctionNaming", "MagicNumber", "UnusedPrivateMember", "TooManyFunctions")
 
 package io.devconsole.ui.compose
@@ -9,6 +10,7 @@ package io.devconsole.ui.compose
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,13 +21,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchColors
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -38,20 +43,26 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.devconsole.api.CaptureCategory
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /**
  * Stateful entry point wired into the CONTROL destination. Theme is owned by [DevConsoleWorkspace]
@@ -66,13 +77,17 @@ internal fun ControlRoute(
     viewModel: InspectorViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var heroCollapsed by rememberSaveable { mutableStateOf(true) } // starts collapsed
     var editorTarget by remember { mutableStateOf<MockRuleEditorTarget?>(null) }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) { viewModel.dispatch(InspectorAction.Refresh) }
+    LifecycleStartEffect(Unit) {
+        viewModel.dispatch(InspectorAction.Refresh)
+        onStopOrDispose { }
+    }
     LaunchedEffect(state.lastCommandResult) {
         state.lastCommandResult?.let { result ->
             scope.launch { snackbarHostState.showSnackbar(result.toFlashMessage()) }
@@ -85,7 +100,7 @@ internal fun ControlRoute(
     }
     LaunchedEffect(editorTarget) { onDetailOverlayOpen(editorTarget != null) }
     KeepAliveNotificationPromptEffect(
-        promptNeeded = state.keepAlivePromptNeeded,
+        promptNeeded = state.keepAlivePromptNeeded && lifecycleState.isAtLeast(Lifecycle.State.STARTED),
         snackbarHostState = snackbarHostState,
         onPermissionResult = { viewModel.dispatch(InspectorAction.NotificationPermissionGranted) },
     )
@@ -112,10 +127,17 @@ internal fun ControlRoute(
                 // the draft before the result (and any rejection) is even known.
                 onSave = { rule -> viewModel.dispatch(InspectorAction.UpsertMockRule(rule)) },
                 onCancel = { editorTarget = null },
+                onDelete = {
+                    val id = (target as? MockRuleEditorTarget.Edit)?.rule?.id
+                    if (id != null) {
+                        editorTarget = null
+                        pendingDeleteId = id
+                    }
+                },
             )
         }
     }
-    pendingDeleteId?.let { id ->
+    pendingDeleteId?.takeIf { lifecycleState.isAtLeast(Lifecycle.State.STARTED) }?.let { id ->
         MockRuleDeleteConfirmDialog(
             ruleId = id,
             onConfirm = {
@@ -166,9 +188,7 @@ private fun toggleControlFlag(
 }
 
 /**
- * Stateless, previewable Control surface: hero, mock-rule rows, flag rows, and the composer-absent
- * note. The composer/capture-rules cards the old screen had are gone -- the Control view shows
- * neither ("Composer is intentionally absent" below).
+ * Stateless, previewable Control surface with grouped mock rules and feature flags.
  */
 @Composable
 @Suppress("LongParameterList") // One callback per real interaction this screen dispatches.
@@ -185,111 +205,58 @@ internal fun ControlScreen(
     modifier: Modifier = Modifier,
 ) {
     val colors = DevConsoleTheme.colors
-    val overrides = rememberControlOverrides(state)
+    val switchColors = controlSwitchColors(colors)
     Column(modifier = modifier.fillMaxSize().background(colors.ground)) {
         InspectorTopArea(
-            subLine = "Mocks and flags",
+            subLine = "",
             title = "Control",
             actions = listOf(themeToggleTopAction(onToggleTheme)),
         )
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 16.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
         ) {
-            item { ControlHero(overrides, heroCollapsed, onToggleHero, colors) }
-            item { Spacer(Modifier.height(16.dp)) }
             // Mock rules are the MOCKS category's control surface -- when the host didn't enable it
             // at init, the section (header, New-rule affordance and rows) does not exist at all,
             // rather than rendering with a permanently-empty/disabled list.
             if (state.captures(CaptureCategory.MOCKS)) {
-                item { MockRulesHeader(onNewMockRule, colors) }
+                item(contentType = "mock_rules_header") { MockRulesHeader(onNewMockRule, colors) }
                 if (state.mockRules.isEmpty()) {
-                    item { MockRulesEmptyNote(colors) }
+                    item(contentType = "mock_rules_empty") { MockRulesEmptyNote(colors) }
                 } else {
-                    items(state.mockRules, key = { it.id }) { rule ->
-                        MockRuleRow(rule, onToggleMockRule, onEditMockRule, onDeleteMockRule, colors)
+                    itemsIndexed(
+                        items = state.mockRules,
+                        key = { _, rule -> rule.id },
+                        contentType = { _, _ -> "mock_rule" },
+                    ) { index, rule ->
+                        Column(Modifier.groupedPanelItem(GroupPosition.of(index, state.mockRules.size))) {
+                            MockRuleRow(rule, onToggleMockRule, onEditMockRule, onDeleteMockRule, colors, switchColors)
+                        }
                     }
                 }
-                item { Spacer(Modifier.height(8.dp)) }
+                item(contentType = "mock_rules_spacer") { Spacer(Modifier.height(8.dp)) }
             }
             // Flags belong to the STATE category; `state.featureFlags` is already emptied by the
             // data source when STATE is off, but the explicit gate keeps this defensive against a
             // directly-navigated route the way DATA's sections are (see InspectorDataScreen).
             if (state.captures(CaptureCategory.STATE) && state.featureFlags.isNotEmpty()) {
-                item { GroupLabel("Flags") }
-                items(state.featureFlags, key = { it.key }) { flag ->
-                    FlagRow(flag, colors) { onToggleFlag(flag) }
+                item(contentType = "feature_flags_header") { GroupLabel("Feature flags") }
+                itemsIndexed(
+                    items = state.featureFlags,
+                    key = { _, flag -> flag.key },
+                    contentType = { _, _ -> "feature_flag" },
+                ) { index, flag ->
+                    Column(Modifier.groupedPanelItem(GroupPosition.of(index, state.featureFlags.size))) {
+                        FlagRow(flag, colors, switchColors) { onToggleFlag(flag) }
+                    }
                 }
-                item { Spacer(Modifier.height(8.dp)) }
+                item(contentType = "feature_flags_spacer") { Spacer(Modifier.height(8.dp)) }
             }
             // Remote Config used to render here, beside flags. It moved to the Observe surface's
             // Config tab (see RemoteConfigTabContent): it is read-only, so nothing on it was ever
             // a control, and a value big enough to need reading in full needed a detail screen
             // this list had no way to open.
-            item {
-                WarnNote(
-                    "Composer is intentionally absent — typing URLs on a phone is hostile, so " +
-                        "cloning a request hands off to the dashboard.",
-                )
-            }
         }
-    }
-}
-
-/** Real, computed count of active overrides. */
-private data class ControlOverrides(
-    val activeCount: Int,
-    val total: Int,
-    val sub: String,
-)
-
-@Composable
-private fun rememberControlOverrides(state: InspectorState): ControlOverrides =
-    remember(state.mockRules, state.featureFlags) {
-        val enabledMocks = state.mockRules.count { it.enabled }
-        val overriddenFlags = state.featureFlags.count { it.isOverridden }
-        val total = state.mockRules.size + state.featureFlags.size
-        val sub =
-            if (enabledMocks > 0 || overriddenFlags > 0) {
-                val parts =
-                    buildList {
-                        if (enabledMocks > 0) add("$enabledMocks mock rule${if (enabledMocks == 1) "" else "s"}")
-                        if (overriddenFlags > 0) {
-                            add("$overriddenFlags flag${if (overriddenFlags == 1) "" else "s"} overridden locally")
-                        }
-                    }
-                "${parts.joinToString(" and ")} — the app is not in its default state."
-            } else {
-                "Nothing is overridden — the app matches its default configuration."
-            }
-        ControlOverrides(enabledMocks + overriddenFlags, total, sub)
-    }
-
-@Composable
-private fun ControlHero(
-    overrides: ControlOverrides,
-    collapsed: Boolean,
-    onToggleCollapse: () -> Unit,
-    colors: DevConsoleColors,
-) {
-    if (collapsed) {
-        HeroBar(
-            value = overrides.activeCount.toString(),
-            label = "of ${overrides.total} overrides active",
-            onExpand = onToggleCollapse,
-            valueColor = colors.put,
-            labelColor = colors.put,
-        )
-    } else {
-        HeroCard(
-            label = "Active overrides",
-            value = overrides.activeCount.toString(),
-            valueSuffix = "of ${overrides.total}",
-            subtitle = overrides.sub,
-            labelColor = colors.put,
-            valueColor = colors.put,
-            onCollapse = onToggleCollapse,
-        )
     }
 }
 
@@ -304,29 +271,21 @@ private fun MockRulesHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         GroupLabel("Mock rules", modifier = Modifier.weight(1f))
-        androidx.compose.material3.OutlinedButton(
-            onClick = onNewRule,
-        ) {
-            Text("New rule", fontSize = 13.sp, color = colors.ink)
+        IconButton(onClick = onNewRule, modifier = Modifier.padding(end = 12.dp)) {
+            DevConsoleIcon(R.drawable.devconsole_ic_composer, "New rule", Modifier, colors.muted, 22.dp)
         }
     }
 }
 
 @Composable
 private fun MockRulesEmptyNote(colors: DevConsoleColors) {
-    Text(
-        "No mock rules yet — tap New rule to add one.",
-        color = colors.muted,
-        fontSize = 13.sp,
-        modifier = Modifier.padding(start = 8.dp, bottom = 16.dp),
-    )
+    InspectorEmptyState(EmptySpot.Mocks, "No mock rules yet — tap New rule to add one.", spotSize = 64.dp)
 }
 
 /**
  * Tap opens the edit sheet; enable/disable moved onto the trailing [Switch] so it no longer
- * competes with the row's own tap target for "toggle" vs "edit" intent. Delete is a separate small
- * destructive action below the row, matching FilesSection's SHARE/DEL convention for a row that
- * already does something else on tap.
+ * competes with the row's own tap target for "toggle" vs "edit" intent. Delete keeps its own
+ * labelled icon action alongside the switch.
  */
 @Composable
 private fun MockRuleRow(
@@ -335,75 +294,97 @@ private fun MockRuleRow(
     onEdit: (InspectorMockRuleUi) -> Unit,
     onDelete: (String) -> Unit,
     colors: DevConsoleColors,
+    switchColors: SwitchColors,
 ) {
-    val leadColor = if (rule.enabled) colors.signal else colors.text3
-    val leadBg = if (rule.enabled) colors.signalSoft else colors.surface3
-    val match =
-        buildString {
-            append(rule.method ?: "*")
-            append(' ')
-            append(rule.pathPattern)
-            append(" → ")
-            append(rule.statusCode)
-            if (rule.actionLabel.isNotBlank()) append(" · ${rule.actionLabel}")
-            if (rule.hitCount > 0) {
-                append(" · ${rule.hitCount} hit${if (rule.hitCount == 1L) "" else "s"}")
-                rule.lastHitEpochMs?.let { append(" · ${formatRelativeHitTime(it)}") }
+    val subtitleText =
+        remember(rule) {
+            val match =
+                buildString {
+                    append("returns ")
+                    append(rule.statusCode)
+                    // "Static response (200)" only repeats the status already printed above.
+                    if (rule.actionLabel.isNotBlank() && !rule.actionLabel.startsWith("Static response")) {
+                        append(" · ${rule.actionLabel}")
+                    }
+                    if (rule.hitCount > 0) {
+                        append(" · ${rule.hitCount} hit${if (rule.hitCount == 1L) "" else "s"}")
+                        rule.lastHitEpochMs?.let { append(" · ${formatRelativeHitTime(it)}") }
+                    }
+                }
+            buildAnnotatedString {
+                append("returns ")
+                withStyle(
+                    SpanStyle(
+                        color =
+                            when (rule.statusCode) {
+                                in 500..599 -> colors.error
+                                in 400..499 -> colors.warn
+                                else -> colors.muted
+                            },
+                    ),
+                ) { append(rule.statusCode.toString()) }
+                append(match.substringAfter("returns ${rule.statusCode}"))
             }
         }
-    Column {
-        TonalListRow(
-            leadText = if (rule.enabled) "ON" else "OFF",
-            leadColor = leadColor,
-            leadContainerColor = leadBg,
-            title = rule.id,
-            subtitle = match,
-            trailValue = rule.scope.lowercase(Locale.US),
-            trailValueColor = colors.muted,
-            trailContent = {
-                Switch(
-                    checked = rule.enabled,
-                    onCheckedChange = { checked -> onToggle(rule.id, checked) },
-                    modifier =
-                        Modifier.semantics {
-                            contentDescription =
-                                "${if (rule.enabled) "Disable" else "Enable"} mock rule ${rule.id}"
-                        },
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { onEdit(rule) },
+                onLongClick = { onDelete(rule.id) },
+                onLongClickLabel = "Delete mock rule",
+            ).semantics { contentDescription = "Edit mock rule ${rule.id}" }
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    rule.method ?: "ANY",
+                    Modifier.width(64.dp),
+                    color = colors.muted,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 14.sp,
                 )
-            },
-            onClick = { onEdit(rule) },
-            // The trailing Switch is its own actionable control -- keep it out of the row's merged
-            // semantics node so TalkBack exposes both the row's "edit" tap and the switch's toggle.
-            mergeDescendants = false,
-        )
-        Row(modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)) {
-            MockRuleDeleteAction(rule.id, colors) { onDelete(rule.id) }
+                Text(
+                    rule.pathPattern,
+                    color = colors.ink,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                subtitleText,
+                color = colors.muted,
+                fontSize = 12.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
+        Switch(
+            checked = rule.enabled,
+            onCheckedChange = { checked -> onToggle(rule.id, checked) },
+            colors = switchColors,
+            modifier =
+                Modifier.semantics {
+                    contentDescription = "${if (rule.enabled) "Disable" else "Enable"} mock rule ${rule.id}"
+                },
+        )
     }
 }
 
 @Composable
-private fun MockRuleDeleteAction(
-    ruleId: String,
-    colors: DevConsoleColors,
-    onClick: () -> Unit,
-) {
-    Text(
-        "DELETE",
-        color = colors.error,
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Bold,
-        fontSize = 11.5.sp,
-        modifier =
-            Modifier
-                .minimumInteractiveComponentSize()
-                .clip(RoundedCornerShape(6.dp))
-                .background(colors.errorSoft)
-                .clickable(onClick = onClick, role = Role.Button)
-                .padding(horizontal = 10.dp, vertical = 8.dp)
-                .semantics { contentDescription = "Delete mock rule $ruleId" },
+private fun controlSwitchColors(colors: DevConsoleColors): SwitchColors =
+    SwitchDefaults.colors(
+        checkedTrackColor = colors.signal,
+        checkedThumbColor = colors.signalInk,
+        uncheckedTrackColor = colors.surface3,
+        uncheckedThumbColor = colors.muted,
+        uncheckedBorderColor = colors.borderStrong,
     )
-}
 
 @Composable
 private fun MockRuleDeleteConfirmDialog(
@@ -460,49 +441,33 @@ private fun formatRelativeHitTime(epochMs: Long): String {
 private fun FlagRow(
     flag: InspectorFeatureFlagUi,
     colors: DevConsoleColors,
+    switchColors: SwitchColors,
     onClick: () -> Unit,
 ) {
     val isBool = flag.type == "BOOLEAN"
     val isOn = flag.value == "true"
-    val leadColor =
-        if (flag.isOverridden) {
-            colors.warn
-        } else if (isBool && isOn) {
-            colors.signal
-        } else {
-            colors.text3
-        }
-    val leadBg =
-        if (flag.isOverridden) {
-            colors.warnSoft
-        } else if (isBool && isOn) {
-            colors.signalSoft
-        } else {
-            colors.surface3
-        }
-    val sub =
-        buildString {
-            append("flag")
-            // Non-boolean flags carry their real value in the sub-line -- an ON/OFF badge would lie.
-            if (!isBool) append(" · ${flag.value}")
-            if (flag.isOverridden) append(" · overridden locally")
-            if (flag.description.isNotBlank()) append(" · ${flag.description}")
-        }
     TonalListRow(
-        leadText =
-            if (!isBool) {
-                "VAL"
-            } else if (isOn) {
-                "ON"
-            } else {
-                "OFF"
-            },
-        leadColor = leadColor,
-        leadContainerColor = leadBg,
+        leadText = "",
+        leadColor = colors.muted,
+        leadContainerColor = colors.panel,
         title = flag.key,
-        subtitle = sub,
-        trailValue = if (flag.isOverridden) "local" else "remote",
-        trailValueColor = if (flag.isOverridden) colors.warn else colors.muted,
+        subtitle =
+            listOfNotNull(
+                if (!isBool) flag.value else null,
+                if (flag.isOverridden) "overridden" else null,
+            ).joinToString(" · "),
+        trailValue = "",
+        trailContent = {
+            if (isBool) {
+                Switch(
+                    checked = isOn,
+                    onCheckedChange = { onClick() },
+                    colors = switchColors,
+                    modifier = Modifier.semantics { contentDescription = "Toggle feature flag ${flag.key}" },
+                )
+            }
+        },
+        mergeDescendants = false,
         onClick = onClick,
     )
 }
