@@ -31,6 +31,7 @@ import io.devconsole.mocks.MockRuleStats
 import io.devconsole.mocks.MockScope
 import io.devconsole.network.BodyPreview
 import io.devconsole.network.CaptureBodyMetadata
+import io.devconsole.network.CapturedResponse
 import io.devconsole.network.ExportSelection
 import io.devconsole.network.InMemoryNetworkTransactionStore
 import io.devconsole.network.NetworkCaptureFactory
@@ -122,6 +123,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Parameters
+import io.ktor.http.parseQueryString
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
@@ -153,6 +155,7 @@ import io.ktor.util.decodeBase64Bytes
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
+import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -362,6 +365,7 @@ fun Application.devConsoleModule(
     val boundEndpoint = config.boundEndpoint
     val composerEnabled = config.composerEnabled
     val composerAllowedHosts = config.composerAllowedHosts
+    val composerAgents = ComposerAgentRegistry()
     val exportDirectory = config.exportDirectory
     // Shared by the session-code exchange route (POST /api/v1/auth/session-code/exchange), which
     // runs before any session exists and so must be keyed by source IP rather than session id.
@@ -2566,6 +2570,18 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"COMPOSER_HOST_REJECTED\"}", status = HttpStatusCode.Forbidden)
                 return@post
             }
+            val executor = parameters["executor"].orEmpty().ifBlank { COMPOSER_EXECUTOR_DEVICE }
+            val agent = composerAgents.findByExecutor(executor)
+            if (executor != COMPOSER_EXECUTOR_DEVICE && agent == null) {
+                commandAuditLog.recordControlFailure(session.id, "composer.execute", "agent")
+                call.respondText(
+                    "{\"code\":\"AGENT_UNAVAILABLE\"}",
+                    status = HttpStatusCode.Conflict,
+                    contentType = io.ktor.http.ContentType.Application.Json,
+                )
+                return@post
+            }
+            val executorLabel = agent?.info?.executorLabel ?: COMPOSER_EXECUTOR_DEVICE
             val correlationId = UUID.randomUUID().toString()
             val startedAtEpochMs = System.currentTimeMillis()
             val resolvedRequest =
@@ -2576,10 +2592,56 @@ fun Application.devConsoleModule(
                 }
             val execution =
                 try {
-                    composerExecutor.execute(
-                        request,
-                        composerAllowedHosts::permitsHostOf,
+                    val selectedExecutor =
+                        agent?.let { ComposerExecutor(RemoteAgentComposerTransport(it)) } ?: composerExecutor
+                    withContext(Dispatchers.IO) {
+                        selectedExecutor.execute(
+                            request,
+                            composerAllowedHosts::permitsHostOf,
+                        )
+                    }
+                } catch (unavailable: ComposerAgentUnavailableException) {
+                    recordComposerCapture(
+                        request = resolvedRequest,
+                        secretValues = request.secretValues(),
+                        response = null,
+                        error = unavailable,
+                        correlationId = correlationId,
+                        browserSessionId = session.id,
+                        startedAtEpochMs = startedAtEpochMs,
+                        networkTransactions = networkTransactions,
+                        timeline = timeline,
+                        redaction = redaction,
+                        executor = executorLabel,
                     )
+                    commandAuditLog.recordControlFailure(session.id, "composer.execute", url.hostOrEmpty())
+                    call.respondText(
+                        "{\"code\":\"AGENT_UNAVAILABLE\"}",
+                        status = HttpStatusCode.Conflict,
+                        contentType = io.ktor.http.ContentType.Application.Json,
+                    )
+                    return@post
+                } catch (timedOut: ComposerAgentTimeoutException) {
+                    recordComposerCapture(
+                        request = resolvedRequest,
+                        secretValues = request.secretValues(),
+                        response = null,
+                        error = timedOut,
+                        correlationId = correlationId,
+                        browserSessionId = session.id,
+                        startedAtEpochMs = startedAtEpochMs,
+                        networkTransactions = networkTransactions,
+                        timeline = timeline,
+                        redaction = redaction,
+                        executor = executorLabel,
+                    )
+                    commandAuditLog.recordControlFailure(session.id, "composer.execute", url.hostOrEmpty())
+                    call.respondText(
+                        "{\"code\":\"AGENT_TIMEOUT\"}",
+                        status = HttpStatusCode.GatewayTimeout,
+                        contentType = io.ktor.http.ContentType.Application.Json,
+                    )
+                    return@post
                 } catch (rejected: io.devconsole.composer.ComposerDestinationRejectedException) {
                     recordComposerCapture(
                         request = resolvedRequest,
@@ -2592,6 +2654,7 @@ fun Application.devConsoleModule(
                         networkTransactions = networkTransactions,
                         timeline = timeline,
                         redaction = redaction,
+                        executor = executorLabel,
                     )
                     commandAuditLog.recordControlFailure(
                         session.id,
@@ -2612,23 +2675,37 @@ fun Application.devConsoleModule(
                         networkTransactions = networkTransactions,
                         timeline = timeline,
                         redaction = redaction,
+                        executor = executorLabel,
                     )
                     commandAuditLog.recordControlFailure(session.id, "composer.execute", url.hostOrEmpty())
-                    call.respondText("{\"code\":\"EXECUTION_FAILED\"}", status = HttpStatusCode.BadGateway)
+                    val detail =
+                        failure.message
+                            ?.redactComposerSecrets(request.secretValues(), redaction.replacement())
+                            ?.let { redaction.redactText(it) }
+                            ?.take(MAX_COMPOSER_ERROR_DETAIL_CHARS)
+                            ?.takeIf(String::isNotBlank)
+                    call.respondText(
+                        "{\"code\":\"EXECUTION_FAILED\"" +
+                            (detail?.let { ",\"detail\":\"${it.escapeJson()}\"" }.orEmpty()) + "}",
+                        status = HttpStatusCode.BadGateway,
+                        contentType = io.ktor.http.ContentType.Application.Json,
+                    )
                     return@post
                 }
-            recordComposerCapture(
-                request = resolvedRequest,
-                secretValues = request.secretValues(),
-                response = execution.response,
-                error = null,
-                correlationId = correlationId,
-                browserSessionId = session.id,
-                startedAtEpochMs = startedAtEpochMs,
-                networkTransactions = networkTransactions,
-                timeline = timeline,
-                redaction = redaction,
-            )
+            val transaction =
+                recordComposerCapture(
+                    request = resolvedRequest,
+                    secretValues = request.secretValues(),
+                    response = execution.response,
+                    error = null,
+                    correlationId = correlationId,
+                    browserSessionId = session.id,
+                    startedAtEpochMs = startedAtEpochMs,
+                    networkTransactions = networkTransactions,
+                    timeline = timeline,
+                    redaction = redaction,
+                    executor = executorLabel,
+                )
             // Query strings routinely carry credentials, and the audit log is readable over HTTP.
             commandAuditLog.recordControlSuccess(
                 session.id,
@@ -2637,11 +2714,84 @@ fun Application.devConsoleModule(
                 mapOf("url" to url.withoutQuery()),
             )
             call.respondText(
-                "{\"correlationId\":\"${correlationId.escapeJson()}\",\"request\":${execution.requestMetadata}," +
+                "{\"correlationId\":\"${correlationId.escapeJson()}\"," +
+                    "\"executor\":\"${executorLabel.escapeJson()}\"," +
+                    "\"request\":${execution.requestMetadata}," +
                     "\"response\":{\"statusCode\":${execution.response.statusCode}," +
-                    "\"durationMs\":${execution.response.durationMs ?: "null"}}}",
+                    "\"durationMs\":${execution.response.durationMs ?: "null"}," +
+                    "${transaction.capture.response.composerResultJson()}}}",
                 contentType = io.ktor.http.ContentType.Application.Json,
             )
+        }
+        get("/api/v1/composer/agents") {
+            if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) == null) {
+                call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
+                return@get
+            }
+            val agents =
+                composerAgents.list().joinToString(",") { agent ->
+                    "{\"id\":\"${agent.id.escapeJson()}\",\"name\":\"${agent.name.escapeJson()}\"," +
+                        "\"os\":\"${agent.os.escapeJson()}\",\"version\":\"${agent.version.escapeJson()}\"," +
+                        "\"address\":\"${agent.address.escapeJson()}\"," +
+                        "\"connectedAtEpochMs\":${agent.connectedAtEpochMs}}"
+                }
+            call.respondText("{\"data\":[$agents]}", contentType = io.ktor.http.ContentType.Application.Json)
+        }
+        webSocket("/api/v1/composer/agent") {
+            // Only browsers send Origin on a handshake; refusing it keeps web pages from registering as agents
+            if (call.request.headers[HttpHeaders.Origin] != null) {
+                close(CloseReason(CloseReason.Codes.VIOLATED_POLICY.code, "ORIGIN_REJECTED"))
+                return@webSocket
+            }
+            val session = sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization])
+            if (session == null) {
+                close(CloseReason(CloseReason.Codes.VIOLATED_POLICY.code, "AUTH_REQUIRED"))
+                return@webSocket
+            }
+            maxFrameSize = MAX_COMPOSER_AGENT_FRAME_BYTES
+            val hello = (incoming.receiveCatching().getOrNull() as? Frame.Text)?.readText()?.let(::parseAgentFrame)
+            if (hello == null || hello["type"] != ComposerAgentFrames.HELLO) {
+                close(CloseReason(CloseReason.Codes.CANNOT_ACCEPT.code, "HELLO_REQUIRED"))
+                return@webSocket
+            }
+            val connection =
+                composerAgents.register(
+                    name = hello["name"].orEmpty(),
+                    os = hello["os"].orEmpty(),
+                    version = hello["version"].orEmpty(),
+                    address = call.request.origin.remoteHost,
+                    sendFrame = { frame -> send(Frame.Text(frame)) },
+                )
+            if (connection == null) {
+                close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER.code, "TOO_MANY_AGENTS"))
+                return@webSocket
+            }
+            commandAuditLog.recordControlSuccess(
+                session.id,
+                "composer.agent.connect",
+                connection.info.name,
+                mapOf("os" to connection.info.os, "address" to connection.info.address),
+            )
+            try {
+                send(
+                    Frame.Text(
+                        ComposerAgentFrames.encode(
+                            "type" to ComposerAgentFrames.WELCOME,
+                            "agentId" to connection.info.id,
+                        ),
+                    ),
+                )
+                for (frame in incoming) {
+                    if (!sessionAuthority.isAuthorized(session.token)) {
+                        close(CloseReason(CloseReason.Codes.VIOLATED_POLICY.code, "AUTH_REVOKED"))
+                        break
+                    }
+                    if (frame is Frame.Text) parseAgentFrame(frame.readText())?.let(connection::handleReply)
+                }
+            } finally {
+                composerAgents.unregister(connection)
+                commandAuditLog.recordControlSuccess(session.id, "composer.agent.disconnect", connection.info.name)
+            }
         }
         get("/api/v1/composer/collections") {
             if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) == null) {
@@ -4906,7 +5056,8 @@ private fun recordComposerCapture(
     networkTransactions: NetworkTransactionStore,
     timeline: Timeline,
     redaction: RedactionEngine,
-) {
+    executor: String = COMPOSER_EXECUTOR_DEVICE,
+): NetworkTransaction {
     val replacement = redaction.replacement()
     // The human-readable marker contains angle brackets, which are not legal in a raw URI.
     // Percent-encode it before the capture factory parses the URL.
@@ -4966,7 +5117,7 @@ private fun recordComposerCapture(
                                 ?.bytes
                                 ?.size
                                 ?.toLong(),
-                    tags = mapOf("source" to "composer"),
+                    tags = mapOf("source" to "composer", "executor" to executor),
                 ),
             ),
             NetworkResponseInput(
@@ -4996,6 +5147,25 @@ private fun recordComposerCapture(
         )
     runCatching { networkTransactions.record(transaction) }
     runCatching { timeline.appendComposerExecution(browserSessionId, transaction) }
+    return transaction
+}
+
+private fun CapturedResponse?.composerResultJson(): String {
+    val headers =
+        this
+            ?.headers
+            .orEmpty()
+            .entries
+            .joinToString(",") { (name, value) -> "\"${name.escapeJson()}\":\"${value.escapeJson()}\"" }
+    val body =
+        when (val preview = this?.body) {
+            is BodyPreview.Text ->
+                "\"body\":\"${preview.value.escapeJson()}\",\"bodyTruncated\":${preview.truncated}"
+            is BodyPreview.Binary ->
+                "\"body\":null,\"bodyOmitted\":\"binary\",\"bodyBytes\":${preview.length}"
+            else -> "\"body\":null"
+        }
+    return "\"headers\":{$headers},$body"
 }
 
 private fun Map<String, String>.contentTypeOrNull(): String? =
@@ -5037,6 +5207,10 @@ private fun Timeline.appendComposerExecution(
     )
 }
 
+private const val MAX_COMPOSER_AGENT_FRAME_BYTES = 8L * 1024L * 1024L
+private const val MAX_COMPOSER_AGENT_FRAME_PARAMS = 2_000
+private const val COMPOSER_EXECUTOR_DEVICE = "device"
+private const val MAX_COMPOSER_ERROR_DETAIL_CHARS = 200
 private const val DEFAULT_COMPOSER_TIMEOUT_MS = 15_000
 private const val MAX_COMPOSER_TIMEOUT_MS = 120_000
 private const val MAX_COMPOSER_FIELDS = 100
@@ -5047,6 +5221,9 @@ private const val MAX_COMPOSER_BINARY_BASE64_CHARS = 3 * 1024 * 1024
 private const val MAX_COMPOSER_FORM_CHARS = 3 * 1024 * 1024
 
 /** Drops any query string before the URL reaches the audit log, which is readable over HTTP. */
+private fun parseAgentFrame(text: String): Parameters? =
+    runCatching { parseQueryString(text, limit = MAX_COMPOSER_AGENT_FRAME_PARAMS) }.getOrNull()
+
 private fun String.withoutQuery(): String = substringBefore('?')
 
 /** Composer is a device-side proxy, so every destination must be explicitly allowlisted. */
