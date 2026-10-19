@@ -15,6 +15,78 @@ transaction (see [NETWORK_INSPECTOR.md](NETWORK_INSPECTOR.md)). The browser rout
 and is independent of the in-app inspector's own composer UI, which is instead gated by the host's
 `EditingCapabilities.requestExecution` flag. See [THREAT_MODEL.md](THREAT_MODEL.md).
 
+### Calling an API with an access token (and why there is no CORS)
+
+The browser never calls your API. The dashboard posts the request to the DevConsole server on the
+device, and the device (or a host computer, below) makes the real call, so the same-origin policy
+that produces CORS errors in a browser is not involved. Put the token in a header and keep its value
+in a secret variable so it is hidden in captures and never saved:
+
+```
+Headers:           Authorization: Bearer {{token}}
+Secret variables:  token=eyJhbGciOi...
+```
+
+If a request is refused, the result panel says why:
+
+| Code | Meaning | Fix |
+|------|---------|-----|
+| `COMPOSER_DISABLED` (404) | Composer is off in the app | `composerEnabled(true)` |
+| `COMPOSER_HOST_REJECTED` (403) | Host not in `composerAllowedHosts`, **or** the phone refuses it because it resolves to a private/VPN/localhost address | Add the host to the allowlist; for private addresses use "Run on" a computer |
+| `AGENT_UNAVAILABLE` (409) | The chosen computer disconnected | Restart `devconsole-agent`, press *Refresh Run On* |
+| `AGENT_TIMEOUT` (504) | The computer accepted the request but never answered | Check the agent terminal |
+| `EXECUTION_FAILED` (502) | The target could not be reached; `detail` has the reason | Check URL, DNS, TLS |
+
+The result panel shows the status, timing, where it ran, the response headers and the response body
+(secret values and redaction-policy fields are masked, exactly as in the Network page).
+
+### Adding a host without rebuilding
+
+`composerAllowedHosts` is fixed when the app is built. To try another API without a rebuild, opt in
+with `composerHostsEditable(true)`. The Composer's **Host allowlist** card then has an *Allow host*
+box (a pasted URL is reduced to its hostname), and a request rejected with `COMPOSER_HOST_REJECTED`
+shows an **Allow \<host\>** button. Hosts added this way last until DevConsole stops, can be removed
+from the same card, and are audited as `composer.host.add` / `composer.host.remove`. Hosts set by the
+app cannot be removed from the dashboard, wildcards are not accepted, and at most 50 can be added.
+
+The in-app Composer screen consults the same live list, so a host allowed from the dashboard also works
+there while the server runs; with the server stopped it falls back to `composerAllowedHosts`. In the
+samples, `compose-app` and `views-java-app` turn this on and `foundation-app` keeps its locked-down
+defaults, where the card reads "The app fixes this list".
+
+Leave it off for anything reachable by other people: every added host widens where the device will send
+requests, and in the default open mode that is anyone who can open the dashboard.
+
+### Run on a host computer (macOS, Linux, Windows)
+
+Some APIs are reachable only from your computer: a backend on `localhost`, an internal host behind a
+VPN, a private IP. The phone refuses private-network targets and cannot see your VPN, so run the
+request on the computer instead. `devconsole-agent` is a small Java program (JDK 17+) that connects
+**to** the phone, so nothing on the computer listens for connections.
+
+```bash
+./gradlew :tools:composer-agent:installDist
+# macOS / Linux
+tools/composer-agent/build/install/devconsole-agent/bin/devconsole-agent \
+    --device http://localhost:8080 --code 123456
+# Windows
+tools\composer-agent\build\install\devconsole-agent\bin\devconsole-agent.bat --device http://localhost:8080 --code 123456
+```
+
+`--device` is whatever address you open the dashboard at: `http://localhost:<port>` after
+`adb forward tcp:<port> tcp:<port>` (use `BindingMode.LOOPBACK`), or the phone's LAN address
+(`BindingMode.LAN`/`AUTO`). `--code` is the one-time session code from the dashboard's Overview page;
+it is not needed in the default open mode. Other options: `--name` (label in the menu),
+`--allow-host` (only run requests to these hosts) and `--block-private` (refuse localhost/private
+addresses).
+
+The agent then appears under **Composer → Run on**. Everything else is unchanged: the host
+allowlist, rate limit, audit log, redaction and the Network/Timeline entry (tagged
+`executor=agent:<name>`) all stay on the device. The agent only performs the final HTTP call, and
+the phone re-issues every redirect hop so credentials never follow a redirect to another origin.
+The device allowlist (`composerAllowedHosts`) still applies to computer-run requests; the agent is a
+second, local lock, not a bypass.
+
 Composer executions appear as first-class network events tagged `source=composer`, so they show up
 in the Timeline and Network pages like any other captured request. Imported cURL and saved
 collections never persist secret variable values by default.

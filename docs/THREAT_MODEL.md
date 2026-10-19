@@ -253,6 +253,24 @@ If you ship debug-signed builds to QA, to a customer, or to an internal distribu
 builds carry the permission and the full runtime. That is a shipping decision worth making
 deliberately rather than discovering in a review.
 
+**A connected Composer agent receives your real credentials.** When you choose "Run on" a computer,
+the phone sends that computer the fully resolved request, including the `Authorization` header with
+the real token. The route that registers an agent refuses any handshake with an `Origin` header (so a
+web page cannot enlist itself), needs the session in `SESSION_CODE` mode, and shows each agent's name,
+OS and **source address** in the menu -- but in the default open mode anything that can reach the
+port can register. Only pick an agent you recognise, prefer `BrowserSecurity.SESSION_CODE` on shared
+networks, and note the agent is opt-in on both sides: `composerEnabled` must be on and a person must
+start `devconsole-agent`. The device allowlist still decides which hosts any agent may be asked to
+call; `--allow-host`/`--block-private` on the agent are an additional local lock. Unlike the phone's
+own transport, the agent reaches localhost/private/VPN addresses by default -- that is its purpose.
+
+**`composerHostsEditable` hands the allowlist to anyone with the dashboard.** It is off by default.
+When on, an authenticated session (anyone who can open the dashboard, in the default open mode) can
+add hosts that the device -- and any connected Composer agent -- will then call with whatever headers
+the request carries. Added hosts are session-only, capped, never override the app's own list, and
+every add or remove is in the command audit log. Enable it for debug builds on networks you control,
+and use `BrowserSecurity.SESSION_CODE` anywhere else.
+
 **The bug report bundle, HAR export, Postman export, evidence bundle, and Android session ZIP are
 full-fidelity dumps.** `GET /api/v1/report`, `GET /api/v1/network/har`, and
 `GET /api/v1/network/postman` return the captured timeline and network trail as downloadable files;
