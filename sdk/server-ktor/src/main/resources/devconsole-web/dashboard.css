@@ -624,6 +624,27 @@ button.ghost { background: transparent; }
 .card-shell-head { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 0 8px; border-bottom: 1px solid var(--line); }
 .card-shell-head .ic { width: 14px; height: 14px; }
 .card-shell-title { margin: 0; font-size: 14px; text-transform: none; letter-spacing: 0; font-weight: 700; flex: 1; }
+.card-shell-actions { display: flex; align-items: center; gap: 6px; }
+@keyframes composerSpin { to { transform: rotate(360deg); } }
+@keyframes composerFieldPulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 3px var(--signal-soft), 0 0 0 1px var(--signal); }
+}
+.empty-state-actions { justify-content: center; margin-top: 0; padding: 4px 0 8px; }
+.host-add-row { display: flex; gap: 8px; }
+.host-add-row input { flex: 1; min-width: 0; }
+.host-list { display: flex; flex-direction: column; margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; max-height: 280px; overflow-y: auto; }
+.host-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.host-row:last-child { border-bottom: 0; }
+.host-row-name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-family: var(--font-mono); color: var(--text); }
+.host-row-tag { font-size: 11px; color: var(--text-3); }
+.host-row.is-added .host-row-tag { color: var(--signal); }
+.host-row.is-removed .host-row-name { text-decoration: line-through; color: var(--text-3); }
+.host-row.is-removed .host-row-tag { color: var(--error); }
+.host-list-empty { padding: 14px 12px; color: var(--text-3); }
+.host-dialog-error { margin: 8px 0 0; color: var(--error); white-space: pre-line; }
+button.is-refreshing .ic { animation: composerSpin 0.8s linear infinite; }
+.field.field-highlight select { border-color: var(--signal); animation: composerFieldPulse 0.9s ease-in-out 3; }
 .card-shell-badge { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--text-3); }
 .card-shell-body { flex: 1; display: flex; flex-direction: column; padding: 14px 0 0; }
 /* --d-card-pad, not a literal 16px: this is the consumer that token was declared for, and until

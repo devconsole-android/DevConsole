@@ -782,6 +782,9 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 mockEngineInstance,
                 captureRuleEngineInstance,
                 configSupplier = { activeConfig },
+                composerHostPermit = { url ->
+                    if (::serverEngine.isInitialized) serverEngine.permitsComposerHost(url) else null
+                },
                 socketStore = socketStore,
                 pushStore = pushStore,
                 timelineSupplier = { cachedTimeline },
@@ -925,6 +928,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 featureFlags = featureFlags,
                 composerEnabled = config.composerEnabled,
                 composerAllowedHosts = config.composerAllowedHosts,
+                composerHostsEditable = config.composerHostsEditable,
                 stateMutationsEnabled = config.stateMutationsEnabled,
                 redactionPolicy = config.redactionPolicy,
                 mocksEditable = mocksEditable,
@@ -998,6 +1002,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 ),
             composerEnabled = config.composerEnabled,
             composerAllowedHosts = config.composerAllowedHosts,
+            composerHostsEditable = config.composerHostsEditable,
             stateMutationsEnabled = config.stateMutationsEnabled,
             redactionPolicy = config.redactionPolicy,
             pushSimulator = pushSimulator,

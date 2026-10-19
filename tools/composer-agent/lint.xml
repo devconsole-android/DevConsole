@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- Desktop JDK 17 program (java.net.http does not exist on Android); Android API levels do not apply -->
+    <issue id="NewApi" severity="ignore" />
+    <issue id="InlinedApi" severity="ignore" />
+</lint>

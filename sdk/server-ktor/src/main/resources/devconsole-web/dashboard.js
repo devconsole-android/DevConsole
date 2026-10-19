@@ -6416,7 +6416,11 @@
     const gate = $('composerGate');
     if (r.status === 404) {
       gate.hidden = false;
-      gate.innerHTML = gateBannerHtml({ title: 'Request execution is disabled', body: 'The host app turned off the requestExecution capability for this build, so Composer is unavailable. Nothing here can be sent.', code: 'COMPOSER_DISABLED' });
+      gate.innerHTML = gateBannerHtml({
+        title: 'Composer is turned off in this app',
+        body: 'Set composerEnabled(true) in the app\'s DevConsole config, and list the hosts it may call with composerAllowedHosts, to send requests from here.',
+        code: 'COMPOSER_DISABLED',
+      });
       return;
     }
     gate.hidden = true;
@@ -6439,21 +6443,451 @@
       });
     }
   }
-  /** GET /api/v1/meta reports the composer capability (`{enabled, allowedHosts}`, sorted hosts).
-   * Also primes `composerCapabilityEnabled`, the same capability Network's "Resend" action gates
-   * on (Resend re-executes through this same composer transport, so it shares Composer's on/off
-   * switch). An empty allowlist DENIES every host (permitsHostOf matches against the configured
-   * set; nothing configured means nothing matches) — say that honestly. */
+  const COMPOSER_DEVICE_EXECUTOR = 'device';
+  const COMPOSER_AGENT_PREFIX = 'agent:';
+  const COMPOSER_BODY_LINE_LIMIT = 2000;
+  const COMPOSER_REFRESH_MIN_MS = 1000;
+  const COMPOSER_HIGHLIGHT_MS = 2700;
+  let composerAgents = [];
+  let composerAllowedHostList = [];
+  let composerHostsEditable = false;
+  let composerHostEntries = [];
+  let rejectedComposerHost = '';
+
+  function hostnameOf(url) {
+    try {
+      return new URL(url).hostname.toLowerCase();
+    } catch {
+      return '';
+    }
+  }
+  const isComposerHostAllowed = (host) => composerAllowedHostList.some((allowed) => allowed.toLowerCase() === host);
+
   async function loadComposerHostAllowlist() {
     if (!token) return;
-    const r = await fetch('/api/v1/meta', { headers: auth() });
-    if (!r.ok) return;
-    const composer = (await r.json()).composer || {};
-    composerCapabilityEnabled = composer.enabled === true;
-    const hosts = composer.allowedHosts || [];
-    $('composerAllowedHosts').innerHTML = hosts.length
-      ? cardRowsHtml(hosts.map((h) => ({ k: h, v: 'allowed', tone: 'signal' })))
-      : '<p class="card-lede">No allowlist configured — every composer/resend host is refused until the host app allows some.</p>';
+    const [metaResponse, hostsResponse] = await Promise.all([
+      fetch('/api/v1/meta', { headers: auth() }),
+      fetch('/api/v1/composer/hosts', { headers: auth() }),
+    ]);
+    if (metaResponse.ok) composerCapabilityEnabled = ((await metaResponse.json()).composer || {}).enabled === true;
+    if (!hostsResponse.ok) return;
+    const { editable, data } = await hostsResponse.json();
+    const hosts = data || [];
+    composerHostsEditable = editable === true;
+    composerHostEntries = hosts;
+    composerAllowedHostList = hosts.map((entry) => entry.host);
+    renderComposerHostList(hosts);
+  }
+  function renderComposerHostList(hosts) {
+    const canEdit = composerHostsEditable && hasSession();
+    const list = $('composerAllowedHosts');
+    if (hosts.length) {
+      list.innerHTML = cardRowsHtml(
+        hosts.map((entry) => ({
+          k: entry.host,
+          v: entry.source === 'session' ? 'added this session' : 'set by the app',
+          tone: 'signal',
+          tag: canEdit && entry.source === 'session' ? 'REMOVE' : false,
+          tagTone: 'error',
+        })),
+      );
+    } else {
+      const hint = composerHostsEditable ? 'Add one below.' : 'The host app has to allow some.';
+      list.innerHTML = `<p class="card-lede">No hosts allowed yet, so every Composer host is refused. ${hint}</p>`;
+    }
+    if (canEdit) {
+      list.querySelectorAll('.card-row').forEach((row, index) => {
+        if (hosts[index].source !== 'session') return;
+        row.style.cursor = 'pointer';
+        row.title = 'Remove this host from the allowlist';
+        row.onclick = () => removeComposerHost(hosts[index].host);
+      });
+    }
+    $('composerHostEditor').hidden = !canEdit;
+    updateComposerAllowHostButton();
+    syncRejectedHostPanel();
+    $('composerHostNote').textContent = composerHostsEditable
+      ? 'Hosts added here last until DevConsole stops. You can paste a full URL; only the hostname is kept.'
+      : 'The app fixes this list. Turn on composerHostsEditable in its DevConsole config to add hosts here.';
+  }
+
+  const COMPOSER_HOST_ERRORS = {
+    VALIDATION_FAILED: 'That is not a valid hostname. Use a name like api.example.com, without wildcards.',
+    COMPOSER_HOSTS_READ_ONLY: 'The app does not allow changing the allowlist (composerHostsEditable is off).',
+    COMPOSER_HOST_LIMIT: 'Too many session hosts. Remove one first.',
+    COMPOSER_HOST_SET_BY_APP: 'That host is set by the app and cannot be removed here.',
+    RATE_LIMITED: 'Too many changes. Wait a moment.',
+  };
+  async function errorCodeOf(response) {
+    const body = await response.json().catch(() => ({}));
+    return body.code;
+  }
+  async function requestAddComposerHost(input) {
+    const response = await fetch('/api/v1/composer/hosts', {
+      method: 'POST',
+      headers: { ...controlHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ host: input }),
+    });
+    if (response.ok) return response.json();
+    const code = await errorCodeOf(response);
+    return { error: COMPOSER_HOST_ERRORS[code] || `Could not add the host (${response.status}).` };
+  }
+  async function requestRemoveComposerHost(host) {
+    const response = await fetch('/api/v1/composer/hosts/' + encodeURIComponent(host), {
+      method: 'DELETE',
+      headers: controlHeaders(),
+    });
+    if (response.ok) return { error: null };
+    const code = await errorCodeOf(response);
+    return { error: COMPOSER_HOST_ERRORS[code] || `Could not remove the host (${response.status}).` };
+  }
+  async function addComposerHost(input) {
+    if (!hasSession() || !input.trim()) return false;
+    const result = await requestAddComposerHost(input);
+    if (result.error) {
+      toast(result.error, 'error');
+      return false;
+    }
+    toast(result.added ? `Allowed ${result.host} until DevConsole stops.` : `${result.host} is already allowed.`);
+    await loadComposerHostAllowlist();
+    return true;
+  }
+  async function removeComposerHost(host) {
+    if (!hasSession()) return;
+    const { error } = await requestRemoveComposerHost(host);
+    if (error) {
+      toast(error, 'error');
+      return;
+    }
+    toast(`Removed ${host}.`);
+    await loadComposerHostAllowlist();
+  }
+  async function confirmAndAllowComposerHost(host) {
+    const message = `The device and any connected computer will be able to send requests to ${host} until DevConsole stops.`;
+    if (!(await openConfirm(`Allow ${host}?`, message, 'Allow host'))) return false;
+    return addComposerHost(host);
+  }
+  function updateComposerAllowHostButton() {
+    $('composerAllowHost').hidden = !(composerHostsEditable && hasSession());
+  }
+  async function addComposerHostFromInput() {
+    const input = $('composerHostInput');
+    if (await addComposerHost(input.value)) input.value = '';
+  }
+
+  const HOSTNAME_LABEL_PATTERN = /^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$/;
+  const MAX_HOSTNAME_LENGTH = 253;
+  let composerHostDraft = [];
+  let composerHostsDialogOpener = null;
+
+  function hostnameFromInput(input) {
+    const withoutScheme = input.trim().toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, '');
+    const authority = withoutScheme.split(/[/?#]/)[0];
+    const host = authority.slice(authority.lastIndexOf('@') + 1).replace(/:\d{1,5}$/, '');
+    const labelsValid = host.split('.').every((label) => HOSTNAME_LABEL_PATTERN.test(label));
+    return host && host.length <= MAX_HOSTNAME_LENGTH && labelsValid ? host : '';
+  }
+  const draftFromServer = () =>
+    composerHostEntries.map((entry) => ({ host: entry.host, source: entry.source, status: 'kept' }));
+  const draftHostsWithStatus = (status) => composerHostDraft.filter((entry) => entry.status === status);
+  function setComposerHostsDialogError(messages) {
+    const box = $('composerHostsModalError');
+    box.hidden = messages.length === 0;
+    box.textContent = messages.join('\n');
+  }
+  const COMPOSER_HOST_ROW_ACTIONS = { kept: 'Remove', added: 'Discard', removed: 'Undo' };
+  const COMPOSER_HOST_ROW_TAGS = { kept: 'this session', added: 'new', removed: 'will be removed' };
+  function composerHostRowHtml(entry, index) {
+    const fromApp = entry.source === 'app';
+    const tag = fromApp ? 'set by the app' : COMPOSER_HOST_ROW_TAGS[entry.status];
+    const action = fromApp
+      ? ''
+      : `<button type="button" class="xs" data-host-index="${index}">${COMPOSER_HOST_ROW_ACTIONS[entry.status]}</button>`;
+    return `<div class="host-row is-${entry.status}"><span class="host-row-name">${esc(entry.host)}</span><span class="host-row-tag">${tag}</span>${action}</div>`;
+  }
+  function renderComposerHostsDialog() {
+    $('composerHostsModalList').innerHTML = composerHostDraft.length
+      ? composerHostDraft.map(composerHostRowHtml).join('')
+      : '<div class="host-list-empty">No hosts are allowed yet.</div>';
+    $('composerHostsModalSave').disabled = composerHostDraft.every((entry) => entry.status === 'kept');
+  }
+  function addHostToDraft() {
+    const input = $('composerHostsModalInput');
+    const host = hostnameFromInput(input.value);
+    if (!host) {
+      setComposerHostsDialogError(['Enter a valid hostname like api.example.com, without wildcards.']);
+      return;
+    }
+    const existing = composerHostDraft.find((entry) => entry.host === host);
+    if (existing && existing.status !== 'removed') {
+      setComposerHostsDialogError([`${host} is already in the list.`]);
+      return;
+    }
+    if (existing) existing.status = 'kept';
+    else composerHostDraft.push({ host, source: 'session', status: 'added' });
+    input.value = '';
+    setComposerHostsDialogError([]);
+    renderComposerHostsDialog();
+    input.focus();
+  }
+  function toggleDraftHost(index) {
+    const entry = composerHostDraft[index];
+    if (!entry || entry.source === 'app') return;
+    if (entry.status === 'added') composerHostDraft.splice(index, 1);
+    else entry.status = entry.status === 'removed' ? 'kept' : 'removed';
+    renderComposerHostsDialog();
+  }
+  function openComposerHostsDialog() {
+    const overlay = $('composerHostsModal');
+    const urlHost = hostnameOf($('composerUrl').value);
+    composerHostDraft = draftFromServer();
+    $('composerHostsModalInput').value = urlHost && !isComposerHostAllowed(urlHost) ? urlHost : '';
+    setComposerHostsDialogError([]);
+    renderComposerHostsDialog();
+    composerHostsDialogOpener = document.activeElement;
+    overlay.hidden = false;
+    document.addEventListener('keydown', composerHostsDialogKeydown);
+    overlay.addEventListener('click', composerHostsDialogOverlayClick);
+    $('composerHostsModalInput').focus();
+  }
+  function closeComposerHostsDialog() {
+    const overlay = $('composerHostsModal');
+    if (overlay.hidden) return;
+    overlay.hidden = true;
+    document.removeEventListener('keydown', composerHostsDialogKeydown);
+    overlay.removeEventListener('click', composerHostsDialogOverlayClick);
+    composerHostsDialogOpener?.focus?.();
+    composerHostsDialogOpener = null;
+  }
+  function composerHostsDialogOverlayClick(event) {
+    if (event.target === $('composerHostsModal')) closeComposerHostsDialog();
+  }
+  function composerHostsDialogKeydown(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeComposerHostsDialog();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = [...$('composerHostsModal').querySelectorAll('button, input')].filter((el) => !el.disabled && el.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+  async function saveComposerHostsDialog() {
+    const added = draftHostsWithStatus('added');
+    const removed = draftHostsWithStatus('removed');
+    const saveButton = $('composerHostsModalSave');
+    const saveLabel = saveButton.querySelector('span');
+    const failures = [];
+    saveButton.disabled = true;
+    saveLabel.textContent = 'Saving…';
+    for (const entry of added) {
+      const { error } = await requestAddComposerHost(entry.host);
+      if (error) failures.push(`${entry.host}: ${error}`);
+    }
+    for (const entry of removed) {
+      const { error } = await requestRemoveComposerHost(entry.host);
+      if (error) failures.push(`${entry.host}: ${error}`);
+    }
+    await loadComposerHostAllowlist();
+    saveLabel.textContent = 'Save';
+    if (failures.length) {
+      composerHostDraft = draftFromServer();
+      renderComposerHostsDialog();
+      setComposerHostsDialogError(failures);
+      return;
+    }
+    closeComposerHostsDialog();
+    toast(`Allowed hosts saved: ${added.length} added, ${removed.length} removed.`);
+  }
+
+  function composerExecutorLabel(executor) {
+    if (!executor || executor === COMPOSER_DEVICE_EXECUTOR) return 'This device (Android)';
+    const agent = composerAgents.find((candidate) => COMPOSER_AGENT_PREFIX + candidate.id === executor);
+    return agent ? agent.name : executor.slice(COMPOSER_AGENT_PREFIX.length);
+  }
+  function composerAgentHint() {
+    if (composerAgents.length) {
+      const noun = composerAgents.length === 1 ? 'computer' : 'computers';
+      return `${composerAgents.length} ${noun} connected. Requests sent to one use its network, VPN and localhost.`;
+    }
+    const codeFlag = openAccess ? '' : ' --code <session code>';
+    return (
+      'To run requests from your Mac, Linux or Windows computer (VPN, localhost or private APIs the phone ' +
+      `cannot reach), start: devconsole-agent --device http://${location.host}${codeFlag}`
+    );
+  }
+  async function loadComposerAgents() {
+    if (!token) return false;
+    const response = await fetch('/api/v1/composer/agents', { headers: auth() });
+    if (!response.ok) return false;
+    composerAgents = (await response.json()).data || [];
+    const select = $('composerExecutor');
+    const previousChoice = select.value;
+    const addOption = (value, label) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      select.appendChild(option);
+    };
+    select.innerHTML = '';
+    addOption(COMPOSER_DEVICE_EXECUTOR, composerExecutorLabel(COMPOSER_DEVICE_EXECUTOR));
+    composerAgents.forEach((agent) => {
+      addOption(COMPOSER_AGENT_PREFIX + agent.id, `${agent.name} — ${agent.os} (${agent.address})`);
+    });
+    const stillAvailable = [...select.options].some((option) => option.value === previousChoice);
+    select.value = stillAvailable ? previousChoice : COMPOSER_DEVICE_EXECUTOR;
+    $('composerAgentHint').textContent = composerAgentHint();
+    return true;
+  }
+  const waitMs = (duration) => new Promise((resolve) => setTimeout(resolve, duration));
+  function highlightRunOnField() {
+    const field = $('composerExecutorField');
+    field.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    field.classList.add('field-highlight');
+    setTimeout(() => field.classList.remove('field-highlight'), COMPOSER_HIGHLIGHT_MS);
+  }
+  async function refreshRunOn() {
+    const button = $('composerAgentsRefresh');
+    const label = button.querySelector('span');
+    button.disabled = true;
+    button.classList.add('is-refreshing');
+    label.textContent = 'Refreshing…';
+    const [loaded] = await Promise.all([loadComposerAgents().catch(() => false), waitMs(COMPOSER_REFRESH_MIN_MS)]);
+    button.disabled = false;
+    button.classList.remove('is-refreshing');
+    label.textContent = 'Refresh Run On';
+    if (!loaded) {
+      toast('Could not look for computers. Check the connection to the device and try again.', 'error');
+    } else if (composerAgents.length) {
+      toast('Done. Open the "Run on" menu (first field in the Request card) and select where to run.');
+      highlightRunOnField();
+    } else {
+      toast('No computer found yet. Start devconsole-agent, then press Refresh Run On again.');
+    }
+  }
+
+  const COMPOSER_ERRORS = {
+    COMPOSER_DISABLED: ['Composer is turned off in the app', 'Set DevConsoleConfig.composerEnabled = true to send requests.'],
+    AGENT_UNAVAILABLE: ['That computer is not connected', 'Start devconsole-agent again, then press "Refresh Run On".'],
+    AGENT_TIMEOUT: ['The computer did not answer in time', 'It stopped responding while running the request. Check the agent terminal.'],
+    VALIDATION_FAILED: ['The request is not valid', 'Check the method, an absolute http(s) URL, and the header and query lines (Name: value).'],
+    RATE_LIMITED: ['Too many requests', 'Composer allows 20 executions per minute. Wait a moment and try again.'],
+    CSRF_INVALID: ['Session expired', 'Reconnect from the Overview page, then run the request again.'],
+    AUTH_REQUIRED: ['Session expired', 'Reconnect from the Overview page, then run the request again.'],
+  };
+  function hostRejectedText(host) {
+    if (isComposerHostAllowed(host)) {
+      return [
+        `The phone refuses ${host}`,
+        'It resolves to a private, VPN or localhost address, which the phone will not call. ' +
+          'Choose "Run on" → your computer instead.',
+      ];
+    }
+    const nextStep = composerHostsEditable
+      ? `Allow "${host}" with the button above or in the Host allowlist card.`
+      : `Add "${host}" to DevConsoleConfig.composerAllowedHosts in the app, or turn on composerHostsEditable to add hosts here.`;
+    return [`Host not allowed: ${host || 'unknown'}`, `${nextStep} The device enforces the list whichever computer runs the request.`];
+  }
+  function composerErrorText(code, httpStatus, result, requestUrl) {
+    if (code === 'COMPOSER_HOST_REJECTED') return hostRejectedText(hostnameOf(requestUrl));
+    if (code === 'EXECUTION_FAILED') {
+      return ['The request could not be completed', result.detail || 'The target could not be reached.'];
+    }
+    return COMPOSER_ERRORS[code] || [`Request failed (${code || 'HTTP ' + httpStatus})`, ''];
+  }
+  function appendAllowHostButton(box, result, requestUrl) {
+    const host = hostnameOf(requestUrl);
+    const canOfferAllow =
+      result.code === 'COMPOSER_HOST_REJECTED' &&
+      composerHostsEditable &&
+      hasSession() &&
+      host &&
+      !isComposerHostAllowed(host);
+    if (!canOfferAllow) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'primary';
+    button.textContent = `Allow ${host}`;
+    button.onclick = () => confirmAndAllowComposerHost(host);
+    const buttons = document.createElement('div');
+    buttons.className = 'card-buttons empty-state-actions';
+    buttons.appendChild(button);
+    box.querySelector('.empty-title').after(buttons);
+    rejectedComposerHost = host;
+  }
+  function showRejectedHostAllowed(host) {
+    rejectedComposerHost = '';
+    renderEmpty($('composerResult'), 'check', `${host} is allowed`, 'Press Execute request to run it again.');
+  }
+  function syncRejectedHostPanel() {
+    if (rejectedComposerHost && isComposerHostAllowed(rejectedComposerHost)) {
+      showRejectedHostAllowed(rejectedComposerHost);
+    }
+  }
+  function showComposerResult() {
+    $('composerResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function composerTextLines(text) {
+    const allLines = text.split('\n');
+    const lines = allLines
+      .slice(0, COMPOSER_BODY_LINE_LIMIT)
+      .map((line) => ({ pad: '', k: '', v: line, cls: 'json-string' }));
+    const hiddenCount = allLines.length - COMPOSER_BODY_LINE_LIMIT;
+    if (hiddenCount > 0) lines.push({ pad: '', k: '', v: `… ${hiddenCount} more lines`, cls: 'json-null' });
+    return lines;
+  }
+  function composerBodyHtml(response) {
+    if (response.bodyOmitted === 'binary') {
+      return `<p class="card-lede">Binary body (${esc(String(response.bodyBytes))} bytes) is not shown.</p>`;
+    }
+    if (!response.body) return '<p class="card-lede">Empty body.</p>';
+    let lines;
+    try {
+      lines = formatJsonLines(JSON.parse(response.body));
+    } catch {
+      lines = composerTextLines(response.body);
+    }
+    return codeBlockHtml(lines, true, 'Response body');
+  }
+  function renderComposerResult(httpStatus, result, requestUrl) {
+    const box = $('composerResult');
+    rejectedComposerHost = '';
+    const { response } = result;
+    if (!response) {
+      const [title, subtitle] = composerErrorText(result.code, httpStatus, result, requestUrl);
+      renderEmpty(box, 'alert', title, subtitle);
+      appendAllowHostButton(box, result, requestUrl);
+      showComposerResult();
+      return;
+    }
+    const duration = response.durationMs == null ? '—' : `${response.durationMs} ms`;
+    const summary = cardRowsHtml([
+      { k: 'Status', v: String(response.statusCode), tone: statusTone(response.statusCode) },
+      { k: 'Time', v: duration, tone: 'ink' },
+      { k: 'Ran on', v: composerExecutorLabel(result.executor), tone: 'signal' },
+    ]);
+    const headers = response.headers || {};
+    const headersHtml = Object.keys(headers).length
+      ? '<p class="card-lede mt-10">Response headers</p>' +
+        codeBlockHtml(formatJsonLines(headers), false, 'Response headers')
+      : '';
+    const truncation = response.bodyTruncated ? ' (truncated preview)' : '';
+    box.innerHTML =
+      summary +
+      headersHtml +
+      `<p class="card-lede mt-10">Response body${truncation}</p>` +
+      composerBodyHtml(response);
+    showComposerResult();
   }
   const appendComposerPairs = (body, name, value) =>
     value
@@ -6495,24 +6929,34 @@
       body.set('binaryFileName', file.name);
       body.set('binaryContentType', file.type || 'application/octet-stream');
     }
+    const executor = $('composerExecutor').value;
+    body.set('executor', executor);
     $('composerRun').disabled = true;
-    renderEmpty($('composerResult'), 'send', 'Executing…', 'Running with the SDK-owned client.');
-    const r = await fetch('/api/v1/composer/execute', {
-      method: 'POST',
-      headers: { ...controlHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    });
-    let result;
+    renderEmpty($('composerResult'), 'send', 'Executing…', `Running on ${composerExecutorLabel(executor)}.`);
     try {
-      result = await r.json();
-    } catch {
-      result = { code: 'INVALID_RESPONSE' };
-    }
-    renderJson($('composerResult'), result);
-    $('composerRun').disabled = false;
-    if (r.ok) {
-      loadNetwork();
-      load();
+      const response = await fetch('/api/v1/composer/execute', {
+        method: 'POST',
+        headers: { ...controlHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      });
+      const result = await response.json().catch(() => ({ code: 'INVALID_RESPONSE' }));
+      renderComposerResult(response.status, result, $('composerUrl').value);
+      if (response.ok) {
+        loadNetwork();
+        load();
+      } else if (result.code === 'AGENT_UNAVAILABLE') {
+        loadComposerAgents();
+      }
+    } catch (error) {
+      const reason = error && error.message ? error.message : 'network error';
+      renderEmpty(
+        $('composerResult'),
+        'alert',
+        'Could not reach the device',
+        `The dashboard lost its connection to the phone (${reason}). Check the USB or Wi-Fi link and try again.`,
+      );
+    } finally {
+      $('composerRun').disabled = false;
     }
   }
   async function importCurl() {
@@ -7730,7 +8174,7 @@
       files: loadFileRoots,
       push: loadPush,
       crashes: loadCrashes,
-      composer: () => Promise.all([loadComposerCollections(), loadComposerHostAllowlist()]),
+      composer: () => Promise.all([loadComposerCollections(), loadComposerHostAllowlist(), loadComposerAgents()]),
       mocks: loadMocks,
       captureRules: loadCaptureRules,
       sdkHealth: loadSdkHealth,
@@ -7998,6 +8442,24 @@
     $('composerImport').onclick = importCurl;
     $('composerCollectionSave').onclick = saveComposerCollection;
     $('composerCollections').onclick = loadComposerCollections;
+    $('composerAgentsRefresh').onclick = refreshRunOn;
+    $('composerHostAdd').onclick = addComposerHostFromInput;
+    $('composerAllowHost').onclick = openComposerHostsDialog;
+    $('composerHostsModalClose').onclick = closeComposerHostsDialog;
+    $('composerHostsModalCancel').onclick = closeComposerHostsDialog;
+    $('composerHostsModalSave').onclick = saveComposerHostsDialog;
+    $('composerHostsModalAdd').onclick = addHostToDraft;
+    $('composerHostsModalInput').onkeydown = (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        addHostToDraft();
+      }
+    };
+    $('composerHostsModalList').onclick = (event) => {
+      const button = event.target.closest('[data-host-index]');
+      if (button) toggleDraftHost(Number(button.dataset.hostIndex));
+    };
+    $('composerHostInput').onkeydown = (event) => { if (event.key === 'Enter') addComposerHostFromInput(); };
 
     $('mockDisable').onclick = toggleMockEngine;
     $('mockNewRule').onclick = () => openMockRuleDialog(null);

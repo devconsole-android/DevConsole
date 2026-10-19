@@ -546,13 +546,19 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     <!-- COMPOSER -->
     <section class="view" id="composerView">
-      <div class="view-head"><h1 class="view-title">Composer</h1><p class="view-hint">Execute requests with the SDK-owned client, import cURL, and save ephemeral collections.</p></div>
+      <div class="view-head"><h1 class="view-title">Composer</h1><p class="view-hint">Run requests on the device or on a connected computer — never in the browser, so CORS does not apply. Import cURL and save ephemeral collections.</p></div>
       <div id="composerGate" role="status" aria-live="polite" aria-atomic="true" hidden></div>
       <div class="cards-grid">
         <section class="card-shell" data-contained="true" data-span="2">
-          <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-composer"/></svg><h2 class="card-shell-title">Request</h2></div>
+          <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-composer"/></svg><h2 class="card-shell-title">Request</h2>
+            <div class="card-shell-actions">
+              <button type="button" id="composerAllowHost" class="xs" title="Add or remove allowed hosts" hidden><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg>Allow host</button>
+              <button type="button" id="composerAgentsRefresh" class="xs" title="Look for computers running devconsole-agent"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg><span>Refresh Run On</span></button>
+            </div>
+          </div>
           <div class="card-shell-body">
           <div class="card-fields filter-grid filter-grid-flush">
+            <label class="field" id="composerExecutorField"><span>Run on</span><select id="composerExecutor"><option value="device">This device (Android)</option></select></label>
             <label class="field"><span>HTTP method</span><select id="composerMethod"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option></select></label>
             <label class="field"><span>URL</span><input id="composerUrl" type="url" placeholder="https://api.example.test/orders"></label>
             <label class="field"><span>Body type</span><select id="composerBodyType"><option value="NONE">None</option><option value="TEXT">Text</option><option value="JSON">JSON</option><option value="FORM_URL_ENCODED">Form URL encoded</option><option value="MULTIPART">Multipart</option><option value="BINARY_FILE">Binary file</option></select></label>
@@ -568,6 +574,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <label class="field"><span>Secret variables (memory only)</span><textarea id="composerSecrets" rows="3"></textarea></label>
           </div>
           <div class="card-buttons"><button type="button" id="composerRun" class="primary" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-send"/></svg>Execute request</button></div>
+          <p class="card-lede mt-10" id="composerAgentHint"></p>
           </div>
         </section>
         <section class="card-shell" data-contained="true">
@@ -598,6 +605,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-shield"/></svg><h2 class="card-shell-title">Host allowlist</h2></div>
           <div class="card-shell-body">
           <div id="composerAllowedHosts">Loading…</div>
+          <div id="composerHostEditor" class="mt-10" hidden>
+            <label class="field"><span>Add host</span><input id="composerHostInput" placeholder="api.example.com" autocomplete="off" spellcheck="false"></label>
+            <div class="card-buttons"><button type="button" id="composerHostAdd"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg>Add host</button></div>
+          </div>
+          <p class="card-lede mt-10" id="composerHostNote"></p>
           </div>
         </section>
       </div>
@@ -656,6 +668,30 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </section>
    </div>
   </main>
+</div>
+
+<div class="modal-overlay" id="composerHostsModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="composerHostsModalTitle">
+    <div class="modal-header">
+      <span class="modal-title" id="composerHostsModalTitle"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-shield"/></svg>Allowed hosts</span>
+      <button type="button" class="modal-close" id="composerHostsModalClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <label class="field"><span>Add host</span>
+        <span class="host-add-row">
+          <input id="composerHostsModalInput" placeholder="api.example.com" autocomplete="off" spellcheck="false">
+          <button type="button" id="composerHostsModalAdd">Add</button>
+        </span>
+      </label>
+      <p class="host-dialog-error" id="composerHostsModalError" role="alert" hidden></p>
+      <div class="host-list" id="composerHostsModalList"></div>
+      <p class="card-lede mt-10">Changes apply when you press Save and last until DevConsole stops.</p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" id="composerHostsModalCancel">Cancel</button>
+      <button type="button" id="composerHostsModalSave" class="primary" disabled><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg><span>Save</span></button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="confirmModal" hidden>

@@ -394,7 +394,7 @@ class MainActivity : ComponentActivity() {
             .withCrashPolicy(CrashPolicy(anrThresholdMs = DEMO_ANR_THRESHOLD_MS))
             .withOpenTriggers(
                 OpenTriggers(shakeToOpen = true, shakeIntensity = ShakeIntensity.MEDIUM, floatingButton = true),
-            )
+            ).withComposerHostsEditable(true)
     // Feature 2 demo (capture-category selection at init): uncommenting the line below scopes
     // capture down to only SOCKET + MQTT. Every other category -- NETWORK, PUSH, LOGS, CRASHES,
     // STATE, INSPECTION, MOCKS -- is then hidden (not merely emptied out) and disabled in both
