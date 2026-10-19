@@ -121,6 +121,7 @@ internal class FullInspectorDataSource(
     private val captureRuleEngine: CaptureRuleEngine = CaptureRuleEngine(),
     private val composerExecutor: ComposerExecutor = ComposerExecutor(UrlConnectionComposerTransport()),
     private val configSupplier: () -> DevConsoleConfig?,
+    private val composerHostPermit: (String) -> Boolean? = { null },
     private val socketStore: SocketStore = InMemorySocketStore(),
     private val pushStore: PushStore = InMemoryPushStore(),
     private val timelineSupplier: () -> Timeline? = { null },
@@ -513,7 +514,7 @@ internal class FullInspectorDataSource(
         val config = configSupplier()
         return when {
             config?.editingCapabilities?.requestExecution != true -> InspectorCommandResult.Disabled("requestExecution")
-            !config.composerEnabled || !config.composerAllowedHosts.permitsHostOf(request.url) ->
+            !config.composerEnabled || !permitsComposerHost(config, request.url) ->
                 InspectorCommandResult.Invalid("Destination host is not allowed")
             else -> dispatch(request, config)
         }
@@ -536,7 +537,7 @@ internal class FullInspectorDataSource(
                 body = request.body,
             )
         return try {
-            val execution = composerExecutor.execute(composerRequest, config.composerAllowedHosts::permitsHostOf)
+            val execution = composerExecutor.execute(composerRequest) { url -> permitsComposerHost(config, url) }
             InspectorCommandResult.Success(
                 summary = "${request.method} ${request.url} -> ${execution.response.statusCode}",
                 statusCode = execution.response.statusCode,
@@ -548,6 +549,11 @@ internal class FullInspectorDataSource(
             InspectorCommandResult.Failed(failure.message ?: failure.javaClass.simpleName)
         }
     }
+
+    private fun permitsComposerHost(
+        config: DevConsoleConfig,
+        url: String,
+    ): Boolean = composerHostPermit(url) ?: config.composerAllowedHosts.permitsHostOf(url)
 
     override fun setMocksEnabled(enabled: Boolean): InspectorCommandResult {
         if (configSupplier()?.editingCapabilities?.mocks != true) return InspectorCommandResult.Disabled("mocks")

@@ -309,6 +309,10 @@ class DevConsoleModuleConfig {
      * must be explicitly listed; an empty set denies all requests.
      */
     var composerAllowedHosts: Set<String> = emptySet()
+
+    var composerHostsEditable: Boolean = false
+
+    internal var sharedComposerHosts: ComposerHostAllowlist? = null
 }
 
 // Two of the "throws" detekt counts here are the `throw cancelled` rethrows inside the Plugins- and
@@ -364,7 +368,8 @@ fun Application.devConsoleModule(
     val sdkHealth = config.sdkHealth
     val boundEndpoint = config.boundEndpoint
     val composerEnabled = config.composerEnabled
-    val composerAllowedHosts = config.composerAllowedHosts
+    val composerHosts =
+        config.sharedComposerHosts ?: ComposerHostAllowlist(config.composerAllowedHosts, config.composerHostsEditable)
     val composerAgents = ComposerAgentRegistry()
     val exportDirectory = config.exportDirectory
     // Shared by the session-code exchange route (POST /api/v1/auth/session-code/exchange), which
@@ -372,6 +377,7 @@ fun Application.devConsoleModule(
     val sessionCodeAttemptLimiter = SlidingWindowRateLimiter(maxEvents = 5, windowMs = 60_000)
     val readQueryLimiter = SlidingWindowRateLimiter(maxEvents = 120, windowMs = 60_000)
     val composerLimiter = SlidingWindowRateLimiter(maxEvents = 20, windowMs = 60_000)
+    val composerHostMutationLimiter = SlidingWindowRateLimiter(maxEvents = 30, windowMs = 60_000)
     val mockMutationLimiter = SlidingWindowRateLimiter(maxEvents = 30, windowMs = 60_000)
     val captureRuleMutationLimiter = SlidingWindowRateLimiter(maxEvents = 30, windowMs = 60_000)
     val preferencesMutationLimiter = SlidingWindowRateLimiter(maxEvents = 30, windowMs = 60_000)
@@ -492,6 +498,7 @@ fun Application.devConsoleModule(
                 browserSession?.let {
                     when {
                         path == "/api/v1/composer/execute" -> composerLimiter
+                        path.startsWith("/api/v1/composer/hosts") && method != "GET" -> composerHostMutationLimiter
                         path.startsWith("/api/v1/network/transactions/") && path.endsWith("/resend") -> composerLimiter
                         path.startsWith("/api/v1/mocks") && method != "GET" -> mockMutationLimiter
                         path.startsWith("/api/v1/capture-rules") && method != "GET" -> captureRuleMutationLimiter
@@ -638,7 +645,12 @@ fun Application.devConsoleModule(
                 }
                     ?: "null"
             val redactedNames = redactionPolicy.sensitiveFieldNames.joinToString(",") { "\"${it.escapeJson()}\"" }
-            val allowedHosts = composerAllowedHosts.sorted().joinToString(",") { "\"${it.escapeJson()}\"" }
+            val allowedHosts =
+                composerHosts
+                    .entries()
+                    .map { it.host }
+                    .sorted()
+                    .joinToString(",") { "\"${it.escapeJson()}\"" }
             val captureCategories =
                 metadata.captureCategories.joinToString(",") { "\"${it.escapeJson()}\"" }
             val body =
@@ -2565,7 +2577,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
                 return@post
             }
-            if (!composerAllowedHosts.permitsHostOf(url)) {
+            if (!composerHosts.permitsHostOf(url)) {
                 commandAuditLog.recordControlFailure(session.id, "composer.execute", url.hostOrEmpty())
                 call.respondText("{\"code\":\"COMPOSER_HOST_REJECTED\"}", status = HttpStatusCode.Forbidden)
                 return@post
@@ -2597,7 +2609,7 @@ fun Application.devConsoleModule(
                     withContext(Dispatchers.IO) {
                         selectedExecutor.execute(
                             request,
-                            composerAllowedHosts::permitsHostOf,
+                            composerHosts::permitsHostOf,
                         )
                     }
                 } catch (unavailable: ComposerAgentUnavailableException) {
@@ -2722,6 +2734,86 @@ fun Application.devConsoleModule(
                     "${transaction.capture.response.composerResultJson()}}}",
                 contentType = io.ktor.http.ContentType.Application.Json,
             )
+        }
+        get("/api/v1/composer/hosts") {
+            if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) == null) {
+                call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
+                return@get
+            }
+            val hosts =
+                composerHosts.entries().joinToString(",") { entry ->
+                    "{\"host\":\"${entry.host.escapeJson()}\",\"source\":\"${entry.source.name.lowercase()}\"}"
+                }
+            call.respondText(
+                "{\"editable\":${composerHosts.editable},\"data\":[$hosts]}",
+                contentType = io.ktor.http.ContentType.Application.Json,
+            )
+        }
+        post("/api/v1/composer/hosts") {
+            val session =
+                call.composerExecutionControlSession(
+                    sessionAuthority,
+                    commandAuditLog,
+                    composerEnabled = true,
+                    commandType = "composer.host.add",
+                    target = "host",
+                ) ?: return@post
+            if (!composerHosts.editable) {
+                commandAuditLog.recordControlFailure(session.id, "composer.host.add", "host")
+                call.respondText("{\"code\":\"COMPOSER_HOSTS_READ_ONLY\"}", status = HttpStatusCode.Forbidden)
+                return@post
+            }
+            val requested = call.receiveParameters()["host"].orEmpty()
+            when (val result = composerHosts.add(requested)) {
+                is ComposerHostAllowlist.AddResult.Added -> {
+                    commandAuditLog.recordControlSuccess(session.id, "composer.host.add", result.host)
+                    call.respondText(
+                        "{\"host\":\"${result.host.escapeJson()}\",\"added\":true}",
+                        contentType = io.ktor.http.ContentType.Application.Json,
+                    )
+                }
+                is ComposerHostAllowlist.AddResult.AlreadyAllowed ->
+                    call.respondText(
+                        "{\"host\":\"${result.host.escapeJson()}\",\"added\":false}",
+                        contentType = io.ktor.http.ContentType.Application.Json,
+                    )
+                ComposerHostAllowlist.AddResult.Invalid -> {
+                    commandAuditLog.recordControlFailure(session.id, "composer.host.add", "host")
+                    call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
+                }
+                ComposerHostAllowlist.AddResult.LimitReached -> {
+                    commandAuditLog.recordControlFailure(session.id, "composer.host.add", "host")
+                    call.respondText("{\"code\":\"COMPOSER_HOST_LIMIT\"}", status = HttpStatusCode.Conflict)
+                }
+            }
+        }
+        delete("/api/v1/composer/hosts/{host}") {
+            val host = call.parameters["host"].orEmpty()
+            val session =
+                call.composerExecutionControlSession(
+                    sessionAuthority,
+                    commandAuditLog,
+                    composerEnabled = true,
+                    commandType = "composer.host.remove",
+                    target = host,
+                ) ?: return@delete
+            if (!composerHosts.editable) {
+                commandAuditLog.recordControlFailure(session.id, "composer.host.remove", host)
+                call.respondText("{\"code\":\"COMPOSER_HOSTS_READ_ONLY\"}", status = HttpStatusCode.Forbidden)
+                return@delete
+            }
+            when (composerHosts.remove(host)) {
+                ComposerHostAllowlist.RemoveResult.Removed -> {
+                    commandAuditLog.recordControlSuccess(session.id, "composer.host.remove", host.lowercase())
+                    call.respondText("{\"removed\":true}", contentType = io.ktor.http.ContentType.Application.Json)
+                }
+                ComposerHostAllowlist.RemoveResult.SetByApp -> {
+                    commandAuditLog.recordControlFailure(session.id, "composer.host.remove", host)
+                    call.respondText("{\"code\":\"COMPOSER_HOST_SET_BY_APP\"}", status = HttpStatusCode.Conflict)
+                }
+                ComposerHostAllowlist.RemoveResult.NotFound ->
+                    call.respondText("{\"code\":\"NOT_FOUND\"}", status = HttpStatusCode.NotFound)
+            }
         }
         get("/api/v1/composer/agents") {
             if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) == null) {
@@ -3303,7 +3395,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
                 return@post
             }
-            if (!composerAllowedHosts.permitsHostOf(url)) {
+            if (!composerHosts.permitsHostOf(url)) {
                 commandAuditLog.recordControlFailure(session.id, "network.resend", url.hostOrEmpty())
                 call.respondText("{\"code\":\"COMPOSER_HOST_REJECTED\"}", status = HttpStatusCode.Forbidden)
                 return@post
@@ -3328,7 +3420,7 @@ fun Application.devConsoleModule(
                 try {
                     composerExecutor.execute(
                         request,
-                        composerAllowedHosts::permitsHostOf,
+                        composerHosts::permitsHostOf,
                     )
                 } catch (rejected: io.devconsole.composer.ComposerDestinationRejectedException) {
                     recordComposerCapture(
@@ -3631,6 +3723,7 @@ class KtorLocalServerEngine(
         InMemoryTimeline(emptyList(), CursorCodec(ByteArray(16).also(SecureRandom()::nextBytes))),
     composerEnabled: Boolean = false,
     composerAllowedHosts: Set<String> = emptySet(),
+    composerHostsEditable: Boolean = false,
     stateMutationsEnabled: Boolean = false,
     redactionPolicy: RedactionPolicy = RedactionPolicy.default(),
     private val pushSimulator: PushSimulator? = null,
@@ -3695,12 +3788,18 @@ class KtorLocalServerEngine(
         }
 
     @Volatile
+    private var composerHosts = ComposerHostAllowlist(composerAllowedHosts, composerHostsEditable)
+
+    fun permitsComposerHost(url: String): Boolean = composerHosts.permitsHostOf(url)
+
+    @Volatile
     private var runtimeConfiguration =
         RuntimeConfiguration(
             featureFlags = featureFlags,
             featureFlagsEditable = featureFlagsEditable,
             composerEnabled = composerEnabled,
             composerAllowedHosts = composerAllowedHosts,
+            composerHostsEditable = composerHostsEditable,
             stateMutationsEnabled = stateMutationsEnabled,
             redactionPolicy = redactionPolicy,
             mocksEditable = mocksEditable,
@@ -3718,6 +3817,7 @@ class KtorLocalServerEngine(
         composerAllowedHosts: Set<String>,
         stateMutationsEnabled: Boolean,
         redactionPolicy: RedactionPolicy,
+        composerHostsEditable: Boolean = false,
         mocksEditable: Boolean = false,
         captureRulesEditable: Boolean = false,
         preferencesEditable: Boolean = false,
@@ -3725,12 +3825,16 @@ class KtorLocalServerEngine(
         filesEditable: Boolean = false,
         featureFlagsEditable: Boolean = false,
     ) {
+        if (!composerHosts.hasConfiguration(composerAllowedHosts, composerHostsEditable)) {
+            composerHosts = ComposerHostAllowlist(composerAllowedHosts, composerHostsEditable)
+        }
         runtimeConfiguration =
             RuntimeConfiguration(
                 featureFlags = featureFlags,
                 featureFlagsEditable = featureFlagsEditable,
                 composerEnabled = composerEnabled,
                 composerAllowedHosts = composerAllowedHosts,
+                composerHostsEditable = composerHostsEditable,
                 stateMutationsEnabled = stateMutationsEnabled,
                 redactionPolicy = redactionPolicy,
                 mocksEditable = mocksEditable,
@@ -3831,6 +3935,8 @@ class KtorLocalServerEngine(
                                     this.stateMutationsEnabled = configuration.stateMutationsEnabled
                                     this.composerEnabled = configuration.composerEnabled
                                     this.composerAllowedHosts = configuration.composerAllowedHosts
+                                    this.composerHostsEditable = configuration.composerHostsEditable
+                                    this.sharedComposerHosts = composerHosts
                                     this.composerExecutor = this@KtorLocalServerEngine.composerExecutor
                                     this.composerCollections = this@KtorLocalServerEngine.composerCollections
                                     this.pushSimulator = this@KtorLocalServerEngine.pushSimulator
@@ -3889,6 +3995,7 @@ class KtorLocalServerEngine(
         val featureFlagsEditable: Boolean,
         val composerEnabled: Boolean,
         val composerAllowedHosts: Set<String>,
+        val composerHostsEditable: Boolean,
         val stateMutationsEnabled: Boolean,
         val redactionPolicy: RedactionPolicy,
         val mocksEditable: Boolean,
@@ -4282,6 +4389,9 @@ private fun String.commandAuditIdentity(method: String): Pair<String, String>? =
     when {
         this == "/api/v1/composer/execute" -> "composer.execute" to "request"
         this == "/api/v1/composer/import" -> "composer.import" to "curl"
+        this == "/api/v1/composer/hosts" && method == "POST" -> "composer.host.add" to "host"
+        startsWith("/api/v1/composer/hosts/") && method == "DELETE" ->
+            "composer.host.remove" to substringAfterLast('/')
         this == "/api/v1/composer/collections" && method == "POST" -> "composer.collection.save" to "collection"
         startsWith("/api/v1/composer/collections/") && method == "DELETE" ->
             "composer.collection.delete" to substringAfterLast('/')
@@ -5227,10 +5337,7 @@ private fun parseAgentFrame(text: String): Parameters? =
 private fun String.withoutQuery(): String = substringBefore('?')
 
 /** Composer is a device-side proxy, so every destination must be explicitly allowlisted. */
-private fun Set<String>.permitsHostOf(url: String): Boolean {
-    val host = url.hostOrEmpty().lowercase()
-    return host.isNotEmpty() && any { it.lowercase() == host }
-}
+private fun ComposerHostAllowlist.permitsHostOf(url: String): Boolean = permits(url.hostOrEmpty())
 
 private fun String.isHttpUrl(): Boolean =
     runCatching {

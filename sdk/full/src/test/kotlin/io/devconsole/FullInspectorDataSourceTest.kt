@@ -1014,6 +1014,54 @@ class FullInspectorDataSourceTest {
     }
 
     @Test
+    fun `execute honours a host the live allowlist permits even when the config does not list it`() {
+        val config = configWith(requestExecution = true, composerEnabled = true, composerAllowedHosts = emptySet())
+        val transport = RecordingComposerTransport(ComposerResponse(statusCode = 200))
+        val source =
+            FullInspectorDataSource(
+                networkStore(),
+                MockEngine(emptyList()),
+                composerExecutor = ComposerExecutor(transport),
+                configSupplier = { config },
+                composerHostPermit = { url -> url.contains("session-added.example.test") },
+            )
+
+        val allowed =
+            source.execute(
+                InspectorComposerRequest(method = "GET", url = "https://session-added.example.test/a"),
+            )
+        val refused = source.execute(InspectorComposerRequest(method = "GET", url = "https://other.example.test/a"))
+
+        assertTrue(allowed is InspectorCommandResult.Success)
+        assertTrue(refused is InspectorCommandResult.Invalid)
+    }
+
+    @Test
+    fun `execute falls back to the configured hosts while no live allowlist is available`() {
+        val config =
+            configWith(
+                requestExecution = true,
+                composerEnabled = true,
+                composerAllowedHosts = setOf("allowed.example.test"),
+            )
+        val transport = RecordingComposerTransport(ComposerResponse(statusCode = 200))
+        val source =
+            FullInspectorDataSource(
+                networkStore(),
+                MockEngine(emptyList()),
+                composerExecutor = ComposerExecutor(transport),
+                configSupplier = { config },
+                composerHostPermit = { null },
+            )
+
+        val allowed = source.execute(InspectorComposerRequest(method = "GET", url = "https://allowed.example.test/a"))
+        val refused = source.execute(InspectorComposerRequest(method = "GET", url = "https://other.example.test/a"))
+
+        assertTrue(allowed is InspectorCommandResult.Success)
+        assertTrue(refused is InspectorCommandResult.Invalid)
+    }
+
+    @Test
     fun `execute dispatches through the composer executor for an allow-listed host`() {
         val mockEngine = MockEngine(emptyList())
         val config =
