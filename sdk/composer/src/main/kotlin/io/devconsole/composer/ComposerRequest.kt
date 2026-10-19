@@ -221,6 +221,44 @@ data class ResolvedComposerRequest(
     val followRedirects: Boolean,
 )
 
+class ComposerWireBody(
+    val bytes: ByteArray,
+    val contentType: String,
+)
+
+fun ResolvedComposerRequest.wireBody(): ComposerWireBody? =
+    when (bodyType) {
+        ComposerBodyType.NONE -> null
+        ComposerBodyType.TEXT -> ComposerWireBody(body.orEmpty().encodeToByteArray(), "text/plain; charset=utf-8")
+        ComposerBodyType.JSON ->
+            ComposerWireBody(body.orEmpty().encodeToByteArray(), "application/json; charset=utf-8")
+        ComposerBodyType.FORM_URL_ENCODED ->
+            ComposerWireBody(body.orEmpty().encodeToByteArray(), "application/x-www-form-urlencoded; charset=utf-8")
+        ComposerBodyType.BINARY_FILE ->
+            ComposerWireBody(
+                binaryBody?.bytes ?: ByteArray(0),
+                binaryBody?.contentType ?: "application/octet-stream",
+            )
+        ComposerBodyType.MULTIPART -> multipartWireBody()
+    }
+
+private fun ResolvedComposerRequest.multipartWireBody(): ComposerWireBody {
+    val boundary = "DevConsole-${System.nanoTime()}"
+    val bytes =
+        buildString {
+            multipartParts.forEach { part ->
+                append("--$boundary\r\n")
+                append("Content-Disposition: form-data; name=\"").append(part.name).append('"')
+                part.fileName?.let { append("; filename=\"").append(it).append('"') }
+                append("\r\n")
+                part.contentType?.let { append("Content-Type: ").append(it).append("\r\n") }
+                append("\r\n").append(part.value).append("\r\n")
+            }
+            append("--$boundary--\r\n")
+        }.encodeToByteArray()
+    return ComposerWireBody(bytes, "multipart/form-data; boundary=$boundary")
+}
+
 data class ComposerResponse(
     val statusCode: Int,
     val headers: Map<String, String> = emptyMap(),
