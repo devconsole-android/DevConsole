@@ -7,5 +7,5 @@ android { namespace = "io.devconsole.composer" }
 
 dependencies {
     implementation(project(":sdk:security"))
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:5.5.0")
 }

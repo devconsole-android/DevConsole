@@ -24,13 +24,13 @@ dependencies {
     implementation(project(":sdk:remote-config"))
     implementation(project(":sdk:export"))
     implementation(project(":sdk:storage-api"))
-    implementation("io.ktor:ktor-server-core:3.0.3")
-    implementation("io.ktor:ktor-server-cio:3.0.3")
-    implementation("io.ktor:ktor-server-websockets:3.0.3")
-    testImplementation("io.ktor:ktor-server-test-host:3.0.3")
-    testImplementation("io.ktor:ktor-client-websockets:3.0.3")
+    implementation("io.ktor:ktor-server-core:3.6.0")
+    implementation("io.ktor:ktor-server-cio:3.6.0")
+    implementation("io.ktor:ktor-server-websockets:3.6.0")
+    testImplementation("io.ktor:ktor-server-test-host:3.6.0")
+    testImplementation("io.ktor:ktor-client-websockets:3.6.0")
     testImplementation(project(":tools:composer-agent"))
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:5.5.0")
 }
 
 val dashboardAssetFiles: List<File> =
