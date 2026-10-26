@@ -27,6 +27,7 @@ public final class io/devconsole/server/ktor/DevConsoleModuleConfig {
 	public final fun getFeatureFlagsEditable ()Z
 	public final fun getFileInspector ()Lio/devconsole/server/api/FileInspector;
 	public final fun getFilesEditable ()Z
+	public final fun getLocationPings ()Lkotlin/jvm/functions/Function0;
 	public final fun getMetadata ()Lio/devconsole/server/api/ServerMetadata;
 	public final fun getMockEngine ()Lio/devconsole/mocks/MockEngine;
 	public final fun getMocksEditable ()Z
@@ -69,6 +70,7 @@ public final class io/devconsole/server/ktor/DevConsoleModuleConfig {
 	public final fun setFeatureFlagsEditable (Z)V
 	public final fun setFileInspector (Lio/devconsole/server/api/FileInspector;)V
 	public final fun setFilesEditable (Z)V
+	public final fun setLocationPings (Lkotlin/jvm/functions/Function0;)V
 	public final fun setMetadata (Lio/devconsole/server/api/ServerMetadata;)V
 	public final fun setMockEngine (Lio/devconsole/mocks/MockEngine;)V
 	public final fun setMocksEditable (Z)V
@@ -118,6 +120,7 @@ public final class io/devconsole/server/ktor/KtorLocalServerEngine : io/devconso
 	public final fun withAttachmentMetadataReader (Lkotlin/jvm/functions/Function2;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
 	public final fun withAttachmentReader (Lkotlin/jvm/functions/Function2;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
 	public final fun withBrowserSecurity (Lio/devconsole/api/BrowserSecurity;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
+	public final fun withLocationPings (Lkotlin/jvm/functions/Function0;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
 	public final fun withRetainedCaptures (Lio/devconsole/storage/api/RetainedCaptureQuery;)Lio/devconsole/server/ktor/KtorLocalServerEngine;
 }
 
