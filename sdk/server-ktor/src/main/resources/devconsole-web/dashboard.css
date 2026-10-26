@@ -1622,3 +1622,83 @@ body.mode-simple .shortcut-row.adv-only .shortcut-adv-note { display: inline; }
 .crumb.crumb-sev-error { border-left-color: var(--error); }
 .crumb.crumb-sev-warn { border-left-color: var(--warn); }
 .crumb-empty { font-size: 11.5px; color: var(--muted); padding: 4px 0 8px; }
+
+#locationPingsView.active { flex: 1 1 0%; min-height: 0; display: flex; flex-direction: column; }
+.tone-text-success { color: var(--success); }
+.lp-streams { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.lp-streams:empty { display: none; }
+.lp-stream {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px 0 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel); cursor: pointer; font-size: 12px;
+}
+.lp-stream:hover { border-color: var(--border-strong); }
+.lp-stream.on { border-color: var(--success); background: var(--success-soft); }
+.lp-stream input, .lp-check input { width: auto; margin: 0; padding: 0; accent-color: var(--signal); }
+.lp-stream-name { font-weight: 600; color: var(--ink); }
+.lp-stream-path { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.lp-check {
+  display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 11px 0 9px;
+  border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 12px; cursor: pointer; user-select: none;
+}
+.lp-check:hover { color: var(--ink); border-color: var(--border-strong); }
+.lp-check[hidden] { display: none; }
+#lpStream { min-width: 140px; height: 32px; padding-top: 0; padding-bottom: 0; }
+.lp-track-field select { min-width: 220px; max-width: 360px; height: 32px; padding-top: 0; padding-bottom: 0; }
+.lp-note { margin-bottom: 10px; padding: 8px 12px; border: 1px solid var(--warn); border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 12px; }
+#lpMetrics { margin-bottom: 12px; }
+.lp-body { flex: 1 1 auto; min-height: 420px; display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.lp-map-wrap { position: relative; flex: 1 1 auto; min-width: 0; }
+.lp-map { position: absolute; inset: 0; background: var(--surface-3); }
+.lp-empty { position: absolute; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center; padding: 24px; background: color-mix(in srgb, var(--ground) 82%, transparent); }
+.lp-empty[hidden] { display: none; }
+.lp-legend {
+  position: absolute; top: 10px; right: 10px; z-index: 450; display: flex; flex-wrap: wrap; gap: 12px;
+  padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 11.5px; color: var(--muted);
+}
+.lp-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.lp-dot { display: inline-block; width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; vertical-align: middle; }
+.lp-sent { background: var(--success); }
+.lp-failed { background: var(--error); }
+.lp-dropped { background: var(--warn); }
+.lp-offline { background: var(--muted); }
+.lp-text-sent { color: var(--success); }
+.lp-text-failed { color: var(--error); }
+.lp-text-dropped { color: var(--warn); }
+.lp-text-offline { color: var(--muted); }
+.lp-list { flex: 0 0 360px; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
+.lp-list-head, .lp-row { display: grid; grid-template-columns: 10ch 1fr 1fr 9ch; gap: 8px; align-items: center; padding: 7px 12px; }
+.lp-list-head { border-bottom: 1px solid var(--line); background: var(--surface-2); font-size: 10.5px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.lp-list-head [hidden], .lp-row [hidden] { display: none; }
+.lp-list-body { flex: 1 1 auto; overflow-y: auto; }
+.lp-row {
+  width: 100%; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent;
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-align: left;
+}
+.lp-row:hover { background: var(--surface-2); color: var(--ink); border-color: var(--line); }
+.lp-row.selected { background: var(--signal-soft); color: var(--ink); box-shadow: inset 3px 0 0 var(--signal); }
+.lp-row-index { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-weight: 600; }
+.lp-row-app { color: var(--text-3); font-weight: 400; }
+.lp-row-status { text-align: right; }
+.lp-list-more { padding: 12px; font-size: 11.5px; color: var(--muted); text-align: center; }
+.lp-gap-label.leaflet-tooltip {
+  padding: 1px 5px; border: 0; border-radius: 4px; box-shadow: none;
+  background: rgba(0, 0, 0, 0.72); color: #fff; font: 600 10.5px var(--font-mono);
+}
+.lp-gap-label.leaflet-tooltip::before { display: none; }
+.lp-ping-rows { display: grid; max-height: 60vh; overflow-y: auto; margin-bottom: 12px; }
+.lp-ping-row { display: grid; grid-template-columns: 160px 1fr; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font: 12px var(--font-mono); }
+.lp-ping-label { color: var(--text-3); }
+.lp-ping-value { color: var(--ink); word-break: break-word; display: inline-flex; align-items: center; gap: 6px; }
+#locationPingsView .leaflet-container { font-family: var(--font-ui); background: var(--surface-3); }
+#locationPingsView .leaflet-bar a { background: var(--panel); color: var(--ink); border-bottom-color: var(--line); }
+#locationPingsView .leaflet-bar a:hover { background: var(--surface-2); color: var(--signal); }
+.lp-map-credit { padding-left: 12px; border-left: 1px solid var(--line); color: var(--text-3); text-decoration: none; white-space: nowrap; }
+.lp-map-credit:hover { color: var(--signal); }
+:root:not([data-theme="light"]) #locationPingsView .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.7); }
+@media (max-width: 900px) {
+  .lp-body { flex-direction: column; min-height: 0; }
+  .lp-map-wrap { flex: 0 0 auto; height: 55vh; min-height: 320px; }
+  .lp-list { flex: 0 0 auto; max-height: 50vh; border-left: 0; border-top: 1px solid var(--line); }
+  .lp-track-field select { min-width: 0; max-width: 100%; }
+  .lp-legend { left: 10px; right: auto; top: auto; bottom: 28px; }
+}

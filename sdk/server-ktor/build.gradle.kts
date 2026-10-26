@@ -33,7 +33,7 @@ dependencies {
 }
 
 val dashboardAssetFiles: List<File> =
-    listOf("index.html", "dashboard.css", "dashboard.js")
+    listOf("index.html", "dashboard.css", "dashboard.js", "location-pings.js", "leaflet.js", "leaflet.css")
         .map { name -> layout.projectDirectory.file("src/main/resources/devconsole-web/$name").asFile }
 val dashboardManifest = layout.buildDirectory.file("generated/devconsole-web/asset-manifest.json")
 

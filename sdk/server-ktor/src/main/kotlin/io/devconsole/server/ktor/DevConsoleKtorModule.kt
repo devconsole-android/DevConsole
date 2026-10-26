@@ -467,7 +467,8 @@ fun Application.devConsoleModule(
                 // the dashboard has no <form> elements and never submits one natively (see
                 // dashboard.js/index.html -- every mutation goes through fetch()).
                 "default-src 'self'; script-src 'self'; " +
-                    "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src $webSocketSource; " +
+                    "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: $MAP_TILE_SOURCE; " +
+                    "connect-src $webSocketSource; " +
                     "base-uri 'self'; frame-ancestors 'none'; form-action 'none'",
             )
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
@@ -613,6 +614,16 @@ fun Application.devConsoleModule(
         get("/assets/dashboard.js") {
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respondText(DashboardAssets.js(), contentType = io.ktor.http.ContentType.Text.JavaScript)
+        }
+        get("/assets/location-pings.js") {
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respondText(DashboardAssets.locationPingsJs(), contentType = io.ktor.http.ContentType.Text.JavaScript)
+        }
+        get("/assets/leaflet.js") {
+            call.respondText(DashboardAssets.leafletJs(), contentType = io.ktor.http.ContentType.Text.JavaScript)
+        }
+        get("/assets/leaflet.css") {
+            call.respondText(DashboardAssets.leafletCss(), contentType = io.ktor.http.ContentType.Text.CSS)
         }
         // Browsers request the favicon before -- and independently of -- any session, so it is
         // unauthenticated for the same reason the two assets above are.
@@ -4758,6 +4769,8 @@ private fun pruneStaleExports(
         }.count(File::delete)
 
 private const val STALE_EXPORT_MAX_AGE_MS = 60L * 60L * 1000L
+
+private const val MAP_TILE_SOURCE = "https://tile.openstreetmap.org"
 
 private fun locationPingOverviewJson(store: LocationPingStore?): String {
     if (store == null) return "{\"configured\":false,\"streams\":[],\"tracks\":[]}"
