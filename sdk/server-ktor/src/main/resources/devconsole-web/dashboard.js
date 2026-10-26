@@ -1352,7 +1352,7 @@
   // (see applyCaptureCategoryGating and the Sockets protocol-chip logic in renderSocketChips).
   // ================================================================
   const CATEGORY_RAIL = {
-    network: { ids: ['viewNetwork'], views: ['network'] },
+    network: { ids: ['viewNetwork', 'viewLocationPings'], views: ['network', 'locationPings'] },
     socket: { ids: ['viewSockets'], views: ['socket'] },
     mqtt: { ids: ['viewSockets'], views: ['socket'] },
     push: { ids: ['viewPush'], views: ['push'] },
@@ -5035,6 +5035,21 @@
   let remoteConfigQuery = '';
   let remoteConfigSourceFilter = 'all';
   const REMOTE_CONFIG_SOURCE_TONE = { remote: 'signal', override: 'warn', default: 'muted', static: 'muted', unknown: 'muted' };
+  function loadLocationPings() {
+    if (!window.DevConsoleLocationPings) return undefined;
+    return window.DevConsoleLocationPings.load({
+      hasSession,
+      auth,
+      controlHeaders,
+      toast,
+      openConfirm,
+      esc,
+      copyToClipboard,
+      isVisible: () => currentView === 'locationPings',
+      setNavCount: (count) => setNavCount('navCountLocationPings', count),
+    });
+  }
+
   async function loadRemoteConfig() {
     if (!hasSession()) return loadRemoteConfigImpl();
     return runViewLoader('remoteConfig', () => loadRemoteConfigImpl());
@@ -8557,6 +8572,7 @@
       timeline: 'timelineView',
       network: 'networkView',
       socket: 'socketView',
+      locationPings: 'locationPingsView',
       state: 'stateView',
       remoteConfig: 'remoteConfigView',
       preferences: 'preferencesView',
@@ -8580,6 +8596,7 @@
       timeline: 'viewTimeline',
       network: 'viewNetwork',
       socket: 'viewSockets',
+      locationPings: 'viewLocationPings',
       state: 'viewState',
       remoteConfig: 'viewRemoteConfig',
       preferences: 'viewPreferences',
@@ -8615,6 +8632,7 @@
       timeline: load,
       network: loadNetwork,
       socket: loadSockets,
+      locationPings: loadLocationPings,
       state: loadState,
       remoteConfig: loadRemoteConfig,
       preferences: loadPreferences,
@@ -8949,6 +8967,7 @@
     $('viewTimeline').onclick = () => show('timeline');
     $('viewNetwork').onclick = () => show('network');
     $('viewSockets').onclick = () => show('socket');
+    $('viewLocationPings').onclick = () => show('locationPings');
     $('viewState').onclick = () => show('state');
     $('viewRemoteConfig').onclick = () => show('remoteConfig');
     $('viewPush').onclick = () => show('push');

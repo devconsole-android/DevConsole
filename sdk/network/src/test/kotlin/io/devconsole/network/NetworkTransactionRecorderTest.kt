@@ -225,6 +225,48 @@ class NetworkTransactionRecorderTest {
         assertEquals("attachment-response", transaction.capture.response?.attachmentId)
     }
 
+    @Test
+    fun `completion observer sees raw completed requests even when the capture gate excludes them`() {
+        val observed = CopyOnWriteArrayList<Pair<String, Int?>>()
+        val recorder =
+            NetworkTransactionRecorder(
+                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                store = InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray())),
+            ).withCaptureGate { _, _ -> false }
+                .withCompletionObserver { request, response -> observed += request.url to response?.statusCode }
+
+        recorder.record(
+            NetworkRequestInput("POST", "https://api.test/pings?token=raw"),
+            NetworkResponseInput(201),
+            100,
+            125,
+        )
+        recorder.record(
+            NetworkRequestInput("POST", "https://api.test/streaming"),
+            NetworkResponseInput(200),
+            100,
+            null,
+            "tx",
+        )
+
+        assertEquals(listOf("https://api.test/pings?token=raw" to 201), observed.toList())
+    }
+
+    @Test
+    fun `completion observer is not called by a disabled recorder`() {
+        val observed = CopyOnWriteArrayList<String>()
+        val recorder =
+            NetworkTransactionRecorder(
+                factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+                store = InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray())),
+                enabled = false,
+            ).withCompletionObserver { request, _ -> observed += request.url }
+
+        recorder.record(NetworkRequestInput("POST", "https://api.test/pings"), NetworkResponseInput(201), 100, 125)
+
+        assertTrue(observed.isEmpty())
+    }
+
     private fun awaitTransaction(
         store: NetworkTransactionStore,
         id: String,

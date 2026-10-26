@@ -1,0 +1,250 @@
+public final class io/devconsole/locationping/InMemoryLocationPingSwitches : io/devconsole/locationping/LocationPingSwitches {
+	public fun <init> ()V
+	public fun isEnabled (Ljava/lang/String;)Z
+	public fun setEnabled (Ljava/lang/String;Z)V
+}
+
+public final class io/devconsole/locationping/LocationPingDeleteResult {
+	public fun <init> (II)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun copy (II)Lio/devconsole/locationping/LocationPingDeleteResult;
+	public static synthetic fun copy$default (Lio/devconsole/locationping/LocationPingDeleteResult;IIILjava/lang/Object;)Lio/devconsole/locationping/LocationPingDeleteResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFilesDeleted ()I
+	public final fun getFilesLeft ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/locationping/LocationPingOutcome {
+	public static final field Companion Lio/devconsole/locationping/LocationPingOutcome$Companion;
+	public static fun answered (I)Lio/devconsole/locationping/LocationPingOutcome;
+	public static fun droppedOnDevice ()Lio/devconsole/locationping/LocationPingOutcome;
+	public static fun noConnection ()Lio/devconsole/locationping/LocationPingOutcome;
+}
+
+public final class io/devconsole/locationping/LocationPingOutcome$Answered : io/devconsole/locationping/LocationPingOutcome {
+	public fun <init> (I)V
+	public final fun component1 ()I
+	public final fun copy (I)Lio/devconsole/locationping/LocationPingOutcome$Answered;
+	public static synthetic fun copy$default (Lio/devconsole/locationping/LocationPingOutcome$Answered;IILjava/lang/Object;)Lio/devconsole/locationping/LocationPingOutcome$Answered;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getStatusCode ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/locationping/LocationPingOutcome$Companion {
+	public final fun answered (I)Lio/devconsole/locationping/LocationPingOutcome;
+	public final fun droppedOnDevice ()Lio/devconsole/locationping/LocationPingOutcome;
+	public final fun noConnection ()Lio/devconsole/locationping/LocationPingOutcome;
+}
+
+public final class io/devconsole/locationping/LocationPingOutcome$DroppedOnDevice : io/devconsole/locationping/LocationPingOutcome {
+	public static final field INSTANCE Lio/devconsole/locationping/LocationPingOutcome$DroppedOnDevice;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/locationping/LocationPingOutcome$NoConnection : io/devconsole/locationping/LocationPingOutcome {
+	public static final field INSTANCE Lio/devconsole/locationping/LocationPingOutcome$NoConnection;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/locationping/LocationPingPoint {
+	public fun <init> (IDDJDLjava/lang/Long;Ljava/lang/Double;Lio/devconsole/locationping/LocationPingOutcome;Ljava/lang/String;Ljava/util/Map;)V
+	public final fun component1 ()I
+	public final fun component10 ()Ljava/util/Map;
+	public final fun component2 ()D
+	public final fun component3 ()D
+	public final fun component4 ()J
+	public final fun component5 ()D
+	public final fun component6 ()Ljava/lang/Long;
+	public final fun component7 ()Ljava/lang/Double;
+	public final fun component8 ()Lio/devconsole/locationping/LocationPingOutcome;
+	public final fun component9 ()Ljava/lang/String;
+	public final fun copy (IDDJDLjava/lang/Long;Ljava/lang/Double;Lio/devconsole/locationping/LocationPingOutcome;Ljava/lang/String;Ljava/util/Map;)Lio/devconsole/locationping/LocationPingPoint;
+	public static synthetic fun copy$default (Lio/devconsole/locationping/LocationPingPoint;IDDJDLjava/lang/Long;Ljava/lang/Double;Lio/devconsole/locationping/LocationPingOutcome;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lio/devconsole/locationping/LocationPingPoint;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAppState ()Ljava/lang/String;
+	public final fun getDeviceTimeEpochMs ()J
+	public final fun getDeviceTimeGapSeconds ()D
+	public final fun getFields ()Ljava/util/Map;
+	public final fun getFixTimeEpochMs ()Ljava/lang/Long;
+	public final fun getFixTimeGapSeconds ()Ljava/lang/Double;
+	public final fun getIndex ()I
+	public final fun getLatitude ()D
+	public final fun getLongitude ()D
+	public final fun getOutcome ()Lio/devconsole/locationping/LocationPingOutcome;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/locationping/LocationPingSchema {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/locationping/LocationPingSchema;
+	public static synthetic fun copy$default (Lio/devconsole/locationping/LocationPingSchema;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/locationping/LocationPingSchema;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAppStateKey ()Ljava/lang/String;
+	public final fun getDeviceTimeKey ()Ljava/lang/String;
+	public final fun getFixTimeKey ()Ljava/lang/String;
+	public final fun getGroupIdKey ()Ljava/lang/String;
+	public final fun getGroupLabel ()Ljava/lang/String;
+	public final fun getLatitudeKey ()Ljava/lang/String;
+	public final fun getLongitudeKey ()Ljava/lang/String;
+	public final fun getPingListKey ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/locationping/LocationPingStorage {
+	public fun <init> (JJLjava/lang/String;)V
+	public final fun component1 ()J
+	public final fun component2 ()J
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (JJLjava/lang/String;)Lio/devconsole/locationping/LocationPingStorage;
+	public static synthetic fun copy$default (Lio/devconsole/locationping/LocationPingStorage;JJLjava/lang/String;ILjava/lang/Object;)Lio/devconsole/locationping/LocationPingStorage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLastError ()Ljava/lang/String;
+	public final fun getMaxBytes ()J
+	public final fun getUsedBytes ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/locationping/LocationPingStore {
+	public static final field FILE_DATE_PATTERN Ljava/lang/String;
+	public static final field MAX_GROUP_ID_LENGTH I
+	public static final field MAX_POINTS_PER_TRACK I
+	public static final field TRACK_FILE_EXTENSION Ljava/lang/String;
+	public fun <init> (Ljava/io/File;)V
+	public fun <init> (Ljava/io/File;Lio/devconsole/locationping/LocationPingSwitches;)V
+	public fun <init> (Ljava/io/File;Lio/devconsole/locationping/LocationPingSwitches;Lkotlin/jvm/functions/Function1;)V
+	public fun <init> (Ljava/io/File;Lio/devconsole/locationping/LocationPingSwitches;Lkotlin/jvm/functions/Function1;Ljava/util/concurrent/Executor;)V
+	public fun <init> (Ljava/io/File;Lio/devconsole/locationping/LocationPingSwitches;Lkotlin/jvm/functions/Function1;Ljava/util/concurrent/Executor;Lkotlin/jvm/functions/Function0;)V
+	public fun <init> (Ljava/io/File;Lio/devconsole/locationping/LocationPingSwitches;Lkotlin/jvm/functions/Function1;Ljava/util/concurrent/Executor;Lkotlin/jvm/functions/Function0;Ljava/util/TimeZone;)V
+	public synthetic fun <init> (Ljava/io/File;Lio/devconsole/locationping/LocationPingSwitches;Lkotlin/jvm/functions/Function1;Ljava/util/concurrent/Executor;Lkotlin/jvm/functions/Function0;Ljava/util/TimeZone;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun configure (Lio/devconsole/locationping/LocationPingTracking;)V
+	public final fun delete (Ljava/util/Set;)Lio/devconsole/locationping/LocationPingDeleteResult;
+	public static synthetic fun delete$default (Lio/devconsole/locationping/LocationPingStore;Ljava/util/Set;ILjava/lang/Object;)Lio/devconsole/locationping/LocationPingDeleteResult;
+	public final fun deleteTrack (Ljava/lang/String;Ljava/lang/String;)Z
+	public final fun getTracking ()Lio/devconsole/locationping/LocationPingTracking;
+	public final fun isEnabled (Ljava/lang/String;)Z
+	public static synthetic fun isEnabled$default (Lio/devconsole/locationping/LocationPingStore;Ljava/lang/String;ILjava/lang/Object;)Z
+	public final fun record (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/locationping/LocationPingOutcome;)Z
+	public final fun recordNetworkPing (Ljava/lang/String;[BLjava/lang/Integer;)V
+	public final fun setEnabled (Ljava/lang/String;Z)Z
+	public final fun storage ()Lio/devconsole/locationping/LocationPingStorage;
+	public final fun streams ()Ljava/util/List;
+	public final fun track (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/locationping/LocationPingTrackDetail;
+	public final fun tracks ()Ljava/util/List;
+}
+
+public final class io/devconsole/locationping/LocationPingStream {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/locationping/LocationPingStream;
+	public static synthetic fun copy$default (Lio/devconsole/locationping/LocationPingStream;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/locationping/LocationPingStream;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getName ()Ljava/lang/String;
+	public final fun getPath ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/locationping/LocationPingStreamStatus {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Z)Lio/devconsole/locationping/LocationPingStreamStatus;
+	public static synthetic fun copy$default (Lio/devconsole/locationping/LocationPingStreamStatus;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)Lio/devconsole/locationping/LocationPingStreamStatus;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnabled ()Z
+	public final fun getName ()Ljava/lang/String;
+	public final fun getPath ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/locationping/LocationPingSwitches {
+	public abstract fun isEnabled (Ljava/lang/String;)Z
+	public abstract fun setEnabled (Ljava/lang/String;Z)V
+}
+
+public final class io/devconsole/locationping/LocationPingTrack {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JJ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()J
+	public final fun component6 ()J
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JJ)Lio/devconsole/locationping/LocationPingTrack;
+	public static synthetic fun copy$default (Lio/devconsole/locationping/LocationPingTrack;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JJILjava/lang/Object;)Lio/devconsole/locationping/LocationPingTrack;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCapturedDate ()Ljava/lang/String;
+	public final fun getFile ()Ljava/lang/String;
+	public final fun getGroupId ()Ljava/lang/String;
+	public final fun getLastModifiedEpochMs ()J
+	public final fun getSizeBytes ()J
+	public final fun getStream ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/locationping/LocationPingTrackDetail {
+	public fun <init> (Lio/devconsole/locationping/LocationPingTrack;Ljava/util/List;Z)V
+	public final fun component1 ()Lio/devconsole/locationping/LocationPingTrack;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Z
+	public final fun copy (Lio/devconsole/locationping/LocationPingTrack;Ljava/util/List;Z)Lio/devconsole/locationping/LocationPingTrackDetail;
+	public static synthetic fun copy$default (Lio/devconsole/locationping/LocationPingTrackDetail;Lio/devconsole/locationping/LocationPingTrack;Ljava/util/List;ZILjava/lang/Object;)Lio/devconsole/locationping/LocationPingTrackDetail;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPoints ()Ljava/util/List;
+	public final fun getTrack ()Lio/devconsole/locationping/LocationPingTrack;
+	public final fun getTruncated ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/locationping/LocationPingTracking {
+	public static final field Companion Lio/devconsole/locationping/LocationPingTracking$Companion;
+	public static final field DEFAULT_MAX_STORAGE_BYTES J
+	public fun <init> ()V
+	public fun <init> (Ljava/util/List;Lio/devconsole/locationping/LocationPingSchema;J)V
+	public synthetic fun <init> (Ljava/util/List;Lio/devconsole/locationping/LocationPingSchema;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Lio/devconsole/locationping/LocationPingSchema;
+	public final fun component3 ()J
+	public final fun copy (Ljava/util/List;Lio/devconsole/locationping/LocationPingSchema;J)Lio/devconsole/locationping/LocationPingTracking;
+	public static synthetic fun copy$default (Lio/devconsole/locationping/LocationPingTracking;Ljava/util/List;Lio/devconsole/locationping/LocationPingSchema;JILjava/lang/Object;)Lio/devconsole/locationping/LocationPingTracking;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxStorageBytes ()J
+	public final fun getSchema ()Lio/devconsole/locationping/LocationPingSchema;
+	public final fun getStreams ()Ljava/util/List;
+	public fun hashCode ()I
+	public final fun isConfigured ()Z
+	public final fun stream (Ljava/lang/String;)Lio/devconsole/locationping/LocationPingStream;
+	public final fun streamFor (Ljava/lang/String;)Lio/devconsole/locationping/LocationPingStream;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/locationping/LocationPingTracking$Companion {
+}
+

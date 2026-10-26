@@ -29,6 +29,8 @@ import io.devconsole.api.StopReason
 import io.devconsole.core.DevConsoleRuntime
 import io.devconsole.core.EventBatchWriter
 import io.devconsole.core.RuntimeGate
+import io.devconsole.locationping.LocationPingOutcome
+import io.devconsole.locationping.LocationPingStore
 import io.devconsole.logs.LogRecorder
 import io.devconsole.logs.LogSink
 import io.devconsole.mocks.MockEngine
@@ -206,6 +208,11 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             .withAttachmentSink(::persistNetworkAttachment)
             .withCaptureGate { method, url ->
                 categoryEnabled(CaptureCategory.NETWORK) && captureRuleEngineInstance.allowsCapture(method, url)
+            }.withCompletionObserver { request, response ->
+                if (categoryEnabled(CaptureCategory.NETWORK)) {
+                    val answeredStatus = response?.takeIf { it.error == null }?.statusCode
+                    locationPingStore?.recordNetworkPing(request.url, request.body, answeredStatus)
+                }
             }
     private val socketRecorderInstance =
         SocketRecorder(redaction, socketStore)
@@ -249,6 +256,8 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     @Volatile private var lastStarted: StartResult.Started? = null
 
     @Volatile private var activeConfig: DevConsoleConfig? = null
+
+    @Volatile private var locationPingStore: LocationPingStore? = null
 
     private val crashCapture =
         CrashCapture(
@@ -745,6 +754,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             config.remoteConfigProviders.forEach { provider -> safely { remoteConfigRegistry.register(provider) } }
         }
         featureFlags = SessionFeatureFlags(config.featureFlags)
+        configureLocationPings(application, config)
         buildOrReconfigureServerEngine(
             application,
             config,
@@ -763,6 +773,19 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             crashCapture.install()
         }
         return result
+    }
+
+    private fun configureLocationPings(
+        application: Application,
+        config: DevConsoleConfig,
+    ) {
+        val store =
+            locationPingStore ?: LocationPingStore(
+                rootDirectory = File(application.filesDir, LOCATION_PING_DIRECTORY),
+                switches = AndroidLocationPingSwitches(application),
+                redactFields = { fields -> redaction.redactFields(fields) },
+            ).also { locationPingStore = it }
+        store.configure(config.locationPingTracking)
     }
 
     /**
@@ -843,6 +866,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 republishKeepAliveNotification = ::republishKeepAliveNotification,
                 keepAlivePromptSupplier = ::keepAlivePromptNeeded,
                 serverStartPermissionSupplier = ::serverStartPermissionNeeded,
+                locationPingStoreSupplier = { locationPingStore },
             ),
         )
     }
@@ -1015,6 +1039,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             screenshotCapture = ::captureScreenshot,
         ).withRetainedCaptures(RetainedCaptureQuery({ eventStore }, runtime::currentSessionId))
             .withNetworkProtection(config.networkProtection)
+            .withLocationPings { locationPingStore }
             .withBrowserSecurity(config.browserSecurity)
             .withAttachmentReader { attachmentId -> roomAttachmentStore?.read(attachmentId) }
             .withAttachmentMetadataReader { attachmentId -> roomAttachmentStore?.metadata(attachmentId) }
@@ -1403,6 +1428,15 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
         return runCatching { flags.booleanValue(key) }.getOrDefault(false)
     }
 
+    override fun recordLocationPing(
+        url: String,
+        body: String,
+        outcome: LocationPingOutcome,
+    ): Boolean = categoryEnabled(CaptureCategory.NETWORK) && locationPingStore?.record(url, body, outcome) == true
+
+    override fun isLocationPingTrackingEnabled(streamName: String?): Boolean =
+        categoryEnabled(CaptureCategory.NETWORK) && locationPingStore?.isEnabled(streamName) == true
+
     override fun featureFlagStringValue(key: String): String {
         val flags = if (::featureFlags.isInitialized) featureFlags else return ""
         return runCatching { flags.value(key) }.getOrDefault("")
@@ -1634,6 +1668,8 @@ private fun io.devconsole.api.RetentionPolicy.toInspectorRetentionUi(): Inspecto
     InspectorRetentionUi(maxSessions = maxSessions, maxAgeMs = maxAgeMs, maxBytes = maxBytes)
 
 private const val CURSOR_SECRET_BYTES = 16
+
+private const val LOCATION_PING_DIRECTORY = "devconsole/location-pings"
 
 private fun randomCursorSecret(): ByteArray = ByteArray(CURSOR_SECRET_BYTES).also(SecureRandom()::nextBytes)
 

@@ -25,6 +25,11 @@ import io.devconsole.export.EvidenceBundleContent
 import io.devconsole.export.ExportRequest
 import io.devconsole.export.ExportResult
 import io.devconsole.export.ExportScope
+import io.devconsole.locationping.LocationPingOutcome
+import io.devconsole.locationping.LocationPingPoint
+import io.devconsole.locationping.LocationPingStore
+import io.devconsole.locationping.LocationPingTrack
+import io.devconsole.locationping.LocationPingTrackDetail
 import io.devconsole.mocks.MockAction
 import io.devconsole.mocks.MockEngine
 import io.devconsole.mocks.MockRule
@@ -236,6 +241,8 @@ class DevConsoleModuleConfig {
      */
     var remoteConfigSnapshots: () -> List<RemoteConfigSnapshot> = { emptyList() }
 
+    var locationPings: () -> LocationPingStore? = { null }
+
     /** Reads (file/entry listing) always work; [preferencesEditable] mirrors `EditingCapabilities.preferences`. */
     var preferencesInspector: PreferencesInspector? = null
     var preferencesEditable: Boolean = true
@@ -367,6 +374,7 @@ fun Application.devConsoleModule(
     val sessionSnapshotProvider = config.sessionSnapshotProvider
     val sessionsProvider = config.sessionsProvider
     val screenshotCapture = config.screenshotCapture
+    val locationPings = config.locationPings
     val metadata = config.metadata
     val sdkHealth = config.sdkHealth
     val boundEndpoint = config.boundEndpoint
@@ -472,7 +480,8 @@ fun Application.devConsoleModule(
                 // the dashboard has no <form> elements and never submits one natively (see
                 // dashboard.js/index.html -- every mutation goes through fetch()).
                 "default-src 'self'; script-src 'self'; " +
-                    "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src $webSocketSource; " +
+                    "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: $MAP_TILE_SOURCE; " +
+                    "connect-src $webSocketSource; " +
                     "base-uri 'self'; frame-ancestors 'none'; form-action 'none'",
             )
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
@@ -619,6 +628,16 @@ fun Application.devConsoleModule(
         get("/assets/dashboard.js") {
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
             call.respondText(DashboardAssets.js(), contentType = io.ktor.http.ContentType.Text.JavaScript)
+        }
+        get("/assets/location-pings.js") {
+            call.response.headers.append(HttpHeaders.CacheControl, "no-store")
+            call.respondText(DashboardAssets.locationPingsJs(), contentType = io.ktor.http.ContentType.Text.JavaScript)
+        }
+        get("/assets/leaflet.js") {
+            call.respondText(DashboardAssets.leafletJs(), contentType = io.ktor.http.ContentType.Text.JavaScript)
+        }
+        get("/assets/leaflet.css") {
+            call.respondText(DashboardAssets.leafletCss(), contentType = io.ktor.http.ContentType.Text.CSS)
         }
         // Browsers request the favicon before -- and independently of -- any session, so it is
         // unauthenticated for the same reason the two assets above are.
@@ -1281,6 +1300,114 @@ fun Application.devConsoleModule(
             networkTransactions.clear()
             commandAuditLog.recordControlSuccess(session.id, "network.clear", "transactions")
             call.respondText("{\"status\":\"cleared\"}", contentType = io.ktor.http.ContentType.Application.Json)
+        }
+        get("/api/v1/location-pings") {
+            if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) == null) {
+                call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
+                return@get
+            }
+            if (!categoryEnabled("network")) {
+                call.respondCategoryDisabled("network")
+                return@get
+            }
+            call.respondText(
+                locationPingOverviewJson(locationPings()),
+                contentType = io.ktor.http.ContentType.Application.Json,
+            )
+        }
+        get("/api/v1/location-pings/track") {
+            if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) == null) {
+                call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
+                return@get
+            }
+            if (!categoryEnabled("network")) {
+                call.respondCategoryDisabled("network")
+                return@get
+            }
+            val stream = call.request.queryParameters["stream"].orEmpty()
+            val file = call.request.queryParameters["file"].orEmpty()
+            val detail = locationPings()?.track(stream, file)
+            if (detail == null) {
+                call.respondText("{\"code\":\"NOT_FOUND\"}", status = HttpStatusCode.NotFound)
+                return@get
+            }
+            call.respondText(detail.json(), contentType = io.ktor.http.ContentType.Application.Json)
+        }
+        put("/api/v1/location-pings/streams/{name}") {
+            val name = call.parameters["name"].orEmpty()
+            val session =
+                call.captureControlSession(sessionAuthority, commandAuditLog, "location-pings.toggle", name)
+                    ?: return@put
+            if (!categoryEnabled("network")) {
+                commandAuditLog.recordControlFailure(session.id, "location-pings.toggle", name)
+                call.respondCategoryDisabled("network")
+                return@put
+            }
+            val enabled =
+                call
+                    .receiveText()
+                    .trim()
+                    .trim('"')
+                    .toBooleanStrictOrNull()
+            val updated = enabled != null && locationPings()?.setEnabled(name, enabled) == true
+            if (!updated) {
+                commandAuditLog.recordControlFailure(session.id, "location-pings.toggle", name)
+                call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
+                return@put
+            }
+            commandAuditLog.recordControlSuccess(
+                session.id,
+                "location-pings.toggle",
+                name,
+                mapOf(
+                    "enabled" to "$enabled",
+                ),
+            )
+            call.respondText(
+                "{\"status\":\"updated\",\"enabled\":$enabled}",
+                contentType = io.ktor.http.ContentType.Application.Json,
+            )
+        }
+        delete("/api/v1/location-pings/track") {
+            val stream = call.request.queryParameters["stream"].orEmpty()
+            val file = call.request.queryParameters["file"].orEmpty()
+            val session =
+                call.captureControlSession(sessionAuthority, commandAuditLog, "location-pings.delete", "$stream/$file")
+                    ?: return@delete
+            if (!categoryEnabled("network")) {
+                commandAuditLog.recordControlFailure(session.id, "location-pings.delete", "$stream/$file")
+                call.respondCategoryDisabled("network")
+                return@delete
+            }
+            if (locationPings()?.deleteTrack(stream, file) != true) {
+                commandAuditLog.recordControlFailure(session.id, "location-pings.delete", "$stream/$file")
+                call.respondText("{\"code\":\"NOT_FOUND\"}", status = HttpStatusCode.NotFound)
+                return@delete
+            }
+            commandAuditLog.recordControlSuccess(session.id, "location-pings.delete", "$stream/$file")
+            call.respondText("{\"status\":\"deleted\"}", contentType = io.ktor.http.ContentType.Application.Json)
+        }
+        delete("/api/v1/location-pings") {
+            val streams =
+                call.request.queryParameters
+                    .getAll("stream")
+                    ?.filter(String::isNotBlank)
+                    ?.toSet()
+            val target = streams?.sorted()?.joinToString(",") ?: "all"
+            val session =
+                call.captureControlSession(sessionAuthority, commandAuditLog, "location-pings.delete", target)
+                    ?: return@delete
+            if (!categoryEnabled("network")) {
+                commandAuditLog.recordControlFailure(session.id, "location-pings.delete", target)
+                call.respondCategoryDisabled("network")
+                return@delete
+            }
+            val result = locationPings()?.delete(streams)
+            commandAuditLog.recordControlSuccess(session.id, "location-pings.delete", target)
+            call.respondText(
+                "{\"filesDeleted\":${result?.filesDeleted ?: 0},\"filesLeft\":${result?.filesLeft ?: 0}}",
+                contentType = io.ktor.http.ContentType.Application.Json,
+            )
         }
         get("/api/v1/retained-events") {
             if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) == null) {
@@ -3799,6 +3926,11 @@ class KtorLocalServerEngine(
             retainedCaptures = query
         }
 
+    @Volatile
+    private var locationPings: () -> LocationPingStore? = { null }
+
+    fun withLocationPings(store: () -> LocationPingStore?): KtorLocalServerEngine = apply { locationPings = store }
+
     /** Sets the browser authentication policy used by the next server start. */
     fun withBrowserSecurity(value: BrowserSecurity): KtorLocalServerEngine =
         apply {
@@ -3974,6 +4106,7 @@ class KtorLocalServerEngine(
                                     this.sessionSnapshotProvider = this@KtorLocalServerEngine.sessionSnapshotProvider
                                     this.sessionsProvider = this@KtorLocalServerEngine.sessionsProvider
                                     this.screenshotCapture = this@KtorLocalServerEngine.screenshotCapture
+                                    this.locationPings = this@KtorLocalServerEngine.locationPings
                                     boundEndpoint = { currentEndpoint }
                                 }
                             }.start(wait = false)
@@ -4921,6 +5054,64 @@ private fun pruneStaleExports(
         }.count(File::delete)
 
 private const val STALE_EXPORT_MAX_AGE_MS = 60L * 60L * 1000L
+
+private const val MAP_TILE_SOURCE = "https://tile.openstreetmap.org"
+
+private fun locationPingOverviewJson(store: LocationPingStore?): String {
+    if (store == null) return "{\"configured\":false,\"streams\":[],\"tracks\":[]}"
+    val tracking = store.tracking
+    val streams =
+        store.streams().joinToString(",") { stream ->
+            "{\"name\":\"${stream.name.escapeJson()}\",\"path\":\"${stream.path.escapeJson()}\"," +
+                "\"enabled\":${stream.enabled}}"
+        }
+    val schema = tracking.schema
+    val storage = store.storage()
+    val lastError = storage.lastError?.let { "\"${it.escapeJson()}\"" } ?: "null"
+    return "{\"configured\":${tracking.isConfigured},\"streams\":[$streams]," +
+        "\"schema\":{\"groupLabel\":\"${schema.groupLabel.escapeJson()}\"," +
+        "\"hasFixTime\":${schema.fixTimeKey != null},\"hasAppState\":${schema.appStateKey != null}}," +
+        "\"storage\":{\"usedBytes\":${storage.usedBytes},\"maxBytes\":${storage.maxBytes},\"lastError\":$lastError}," +
+        "\"tracks\":[${store.tracks().joinToString(",") { it.json() }}]}"
+}
+
+private fun LocationPingTrack.json(): String =
+    "{\"stream\":\"${stream.escapeJson()}\",\"file\":\"${file.escapeJson()}\"," +
+        "\"groupId\":\"${groupId.escapeJson()}\",\"capturedDate\":\"${capturedDate.escapeJson()}\"," +
+        "\"sizeBytes\":$sizeBytes,\"lastModifiedEpochMs\":$lastModifiedEpochMs}"
+
+private fun LocationPingTrackDetail.json(): String =
+    "{\"track\":${track.json()},\"truncated\":$truncated,\"points\":[${points.joinToString(",") { it.json() }}]}"
+
+private fun LocationPingPoint.json(): String {
+    val statusCode = (outcome as? LocationPingOutcome.Answered)?.statusCode
+    val fieldsJson =
+        fields.entries.joinToString(
+            ",",
+        ) { (key, value) -> "\"${key.escapeJson()}\":\"${value.escapeJson()}\"" }
+    return "{\"index\":$index,\"lat\":$latitude,\"lng\":$longitude," +
+        "\"deviceTime\":$deviceTimeEpochMs,\"deviceGapSeconds\":$deviceTimeGapSeconds," +
+        "\"fixTime\":${fixTimeEpochMs ?: "null"},\"fixGapSeconds\":${fixTimeGapSeconds ?: "null"}," +
+        "\"status\":\"${outcome.wireName()}\",\"statusCode\":${statusCode ?: "null"}," +
+        "\"appState\":${appState?.let { "\"${it.escapeJson()}\"" } ?: "null"},\"fields\":{$fieldsJson}}"
+}
+
+private fun LocationPingOutcome.wireName(): String =
+    when (this) {
+        is LocationPingOutcome.Answered ->
+            if (statusCode / HTTP_STATUS_CLASS_SIZE ==
+                HTTP_SUCCESS_CLASS
+            ) {
+                "sent"
+            } else {
+                "failed"
+            }
+        LocationPingOutcome.DroppedOnDevice -> "dropped"
+        LocationPingOutcome.NoConnection -> "offline"
+    }
+
+private const val HTTP_STATUS_CLASS_SIZE = 100
+private const val HTTP_SUCCESS_CLASS = 2
 
 private fun String.escapeJson(): String =
     buildString(length + 16) {

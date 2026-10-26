@@ -14,6 +14,7 @@ import io.devconsole.api.ScreenshotResult
 import io.devconsole.api.StartRequest
 import io.devconsole.api.StartResult
 import io.devconsole.api.StopReason
+import io.devconsole.locationping.LocationPingOutcome
 import io.devconsole.logs.LogRecorder
 import io.devconsole.logs.LogSink
 import io.devconsole.mocks.MockEngine
@@ -109,6 +110,14 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     override fun featureFlagValue(key: String): Boolean = declaredDefault(key).toBoolean()
 
     override fun featureFlagStringValue(key: String): String = declaredDefault(key)
+
+    override fun recordLocationPing(
+        url: String,
+        body: String,
+        outcome: LocationPingOutcome,
+    ): Boolean = false
+
+    override fun isLocationPingTrackingEnabled(streamName: String?): Boolean = false
 
     private fun declaredDefault(key: String): String = flags.firstOrNull { it.key == key }?.defaultValue.orEmpty()
 }

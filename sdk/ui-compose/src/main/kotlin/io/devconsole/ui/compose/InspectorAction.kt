@@ -68,6 +68,11 @@ sealed interface InspectorAction {
         val enabled: Boolean,
     ) : InspectorAction
 
+    data class SetLocationPingStreamEnabled(
+        val name: String,
+        val enabled: Boolean,
+    ) : InspectorAction
+
     data class UpsertMockRule(
         val rule: InspectorMockRuleUi,
     ) : InspectorAction

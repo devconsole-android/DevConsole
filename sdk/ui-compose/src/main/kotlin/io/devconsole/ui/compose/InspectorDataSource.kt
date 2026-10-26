@@ -508,6 +508,13 @@ data class InspectorSnapshot(
     val captureCategories: Set<CaptureCategory> = CaptureCategory.all(),
     /** Whether the host opted in to a redaction policy with any rule; off by default. */
     val redactionEnabled: Boolean = false,
+    val locationPingStreams: List<InspectorLocationPingStreamUi> = emptyList(),
+)
+
+data class InspectorLocationPingStreamUi(
+    val name: String,
+    val path: String,
+    val enabled: Boolean,
 )
 
 data class InspectorComposerRequest(
@@ -614,6 +621,11 @@ interface InspectorDataSource {
     fun execute(request: InspectorComposerRequest): InspectorCommandResult
 
     fun setMocksEnabled(enabled: Boolean): InspectorCommandResult
+
+    fun setLocationPingStreamEnabled(
+        name: String,
+        enabled: Boolean,
+    ): InspectorCommandResult = InspectorCommandResult.Unavailable
 
     /** Ungated read, mirroring the other listing methods; only the mutations below are gated. */
     fun mockRules(): List<InspectorMockRuleUi> = snapshot().mockRules

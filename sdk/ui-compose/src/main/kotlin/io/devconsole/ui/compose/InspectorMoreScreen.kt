@@ -30,6 +30,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -197,6 +198,7 @@ internal data class MoreActions(
     val onCaptureScreenshot: () -> Unit,
     val onRevoke: (String) -> Unit,
     val onSelectSession: (String) -> Unit,
+    val onSetLocationPingStream: (String, Boolean) -> Unit = { _, _ -> },
 )
 
 @Composable
@@ -226,6 +228,9 @@ private fun rememberMoreActions(
             onCaptureScreenshot = { viewModel.dispatch(InspectorAction.CaptureScreenshot) },
             onRevoke = { id -> viewModel.dispatch(InspectorAction.RevokePrincipal(id)) },
             onSelectSession = { id -> viewModel.dispatch(InspectorAction.SelectSession(id)) },
+            onSetLocationPingStream = { name, enabled ->
+                viewModel.dispatch(InspectorAction.SetLocationPingStreamEnabled(name, enabled))
+            },
         )
     }
 }
@@ -319,6 +324,21 @@ internal fun MoreScreen(
             }
             item(key = "more_export_runs", contentType = "export_row") {
                 RetainedRunsRow(state, actions, colors)
+            }
+            if (state.locationPingStreams.isNotEmpty()) {
+                item(key = "more_location_pings_title", contentType = "panel_title") {
+                    MorePanelTitle("Location pings")
+                }
+                state.locationPingStreams.forEachIndexed { position, stream ->
+                    if (position > 0) {
+                        item(key = "more_location_pings_div_${stream.name}", contentType = "divider") {
+                            GroupedPanelDivider()
+                        }
+                    }
+                    item(key = "more_location_pings_${stream.name}", contentType = "settings_row") {
+                        LocationPingStreamRow(stream, actions)
+                    }
+                }
             }
             item(key = "more_settings_title", contentType = "panel_title") {
                 MorePanelTitle("Settings")
@@ -673,6 +693,27 @@ private fun CaptureScreenshotRow(actions: MoreActions) {
         title = "Capture screenshot",
         description = "The foreground screen, unredacted — off by default",
         onClick = actions.onCaptureScreenshot,
+    )
+}
+
+@Composable
+private fun LocationPingStreamRow(
+    stream: InspectorLocationPingStreamUi,
+    actions: MoreActions,
+) {
+    MorePanelRow(
+        title = stream.name,
+        description = "${stream.path} · ${if (stream.enabled) "recording" else "off"}",
+        metaContent = {
+            Switch(
+                checked = stream.enabled,
+                onCheckedChange = { checked -> actions.onSetLocationPingStream(stream.name, checked) },
+                modifier =
+                    Modifier.semantics {
+                        contentDescription = "${if (stream.enabled) "Stop" else "Start"} recording ${stream.name} pings"
+                    },
+            )
+        },
     )
 }
 

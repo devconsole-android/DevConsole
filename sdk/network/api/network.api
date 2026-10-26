@@ -299,6 +299,10 @@ public final class io/devconsole/network/NetworkCaptureLimits {
 public final class io/devconsole/network/NetworkCaptureLimits$Companion {
 }
 
+public abstract interface class io/devconsole/network/NetworkCompletionObserver {
+	public abstract fun onCompleted (Lio/devconsole/network/NetworkRequestInput;Lio/devconsole/network/NetworkResponseInput;)V
+}
+
 public final class io/devconsole/network/NetworkCursorCodec {
 	public fun <init> ([B)V
 	public final fun decode (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Integer;
@@ -544,6 +548,7 @@ public final class io/devconsole/network/NetworkTransactionRecorder {
 	public final fun record (Lio/devconsole/network/NetworkRequestInput;Lio/devconsole/network/NetworkResponseInput;JLjava/lang/Long;Ljava/lang/String;)V
 	public final fun withAttachmentSink (Lio/devconsole/network/NetworkAttachmentSink;)Lio/devconsole/network/NetworkTransactionRecorder;
 	public final fun withCaptureGate (Lio/devconsole/network/NetworkCaptureGate;)Lio/devconsole/network/NetworkTransactionRecorder;
+	public final fun withCompletionObserver (Lio/devconsole/network/NetworkCompletionObserver;)Lio/devconsole/network/NetworkTransactionRecorder;
 	public final fun withSessionIdProvider (Lkotlin/jvm/functions/Function0;)Lio/devconsole/network/NetworkTransactionRecorder;
 }
 
