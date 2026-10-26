@@ -863,6 +863,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 republishKeepAliveNotification = ::republishKeepAliveNotification,
                 keepAlivePromptSupplier = ::keepAlivePromptNeeded,
                 serverStartPermissionSupplier = ::serverStartPermissionNeeded,
+                locationPingStoreSupplier = { locationPingStore },
             ),
         )
     }

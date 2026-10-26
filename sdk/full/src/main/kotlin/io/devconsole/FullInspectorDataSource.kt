@@ -15,6 +15,7 @@ import io.devconsole.api.ScreenshotResult
 import io.devconsole.composer.ComposerDestinationRejectedException
 import io.devconsole.composer.ComposerExecutor
 import io.devconsole.composer.UrlConnectionComposerTransport
+import io.devconsole.locationping.LocationPingStore
 import io.devconsole.logs.LogLevel
 import io.devconsole.mocks.MockAction
 import io.devconsole.mocks.MockEngine
@@ -82,6 +83,7 @@ import io.devconsole.ui.compose.InspectorFileEntryUi
 import io.devconsole.ui.compose.InspectorFileListingUi
 import io.devconsole.ui.compose.InspectorFilePreviewUi
 import io.devconsole.ui.compose.InspectorHealthUi
+import io.devconsole.ui.compose.InspectorLocationPingStreamUi
 import io.devconsole.ui.compose.InspectorLogUi
 import io.devconsole.ui.compose.InspectorMockRuleUi
 import io.devconsole.ui.compose.InspectorPreferenceEntryUi
@@ -189,6 +191,7 @@ internal class FullInspectorDataSource(
      * [InspectorDataSource.onNotificationPermissionGranted] for why a grant alone shows nothing.
      */
     private val republishKeepAliveNotification: () -> Unit = {},
+    private val locationPingStoreSupplier: () -> LocationPingStore? = { null },
 ) : InspectorDataSource,
     InspectorServerStartPermissionProvider {
     override fun onNotificationPermissionGranted() = republishKeepAliveNotification()
@@ -375,8 +378,21 @@ internal class FullInspectorDataSource(
             retention = retentionSupplier(),
             keepAlivePromptNeeded = keepAlivePromptSupplier(),
             captureCategories = categories,
+            locationPingStreams =
+                if (CaptureCategory.NETWORK in
+                    categories
+                ) {
+                    locationPingStoreSupplier().streamsUi()
+                } else {
+                    emptyList()
+                },
         )
     }
+
+    override fun setLocationPingStreamEnabled(
+        name: String,
+        enabled: Boolean,
+    ): InspectorCommandResult = locationPingStoreSupplier().switchStream(name, enabled)
 
     private fun transactionsFor(
         categories: Set<CaptureCategory>,
@@ -1421,4 +1437,18 @@ private fun StoredEvent.evidenceCrashSnapshotJson(): String =
         append(",\"summary\":\"").append(summary.escapeJson()).append('"')
         payloadJson?.let { append(",\"payload\":").append(it) }
         append('}')
+    }
+
+private fun LocationPingStore?.streamsUi(): List<InspectorLocationPingStreamUi> =
+    this?.streams().orEmpty().map { InspectorLocationPingStreamUi(it.name, it.path, it.enabled) }
+
+private fun LocationPingStore?.switchStream(
+    name: String,
+    enabled: Boolean,
+): InspectorCommandResult =
+    when {
+        this == null -> InspectorCommandResult.Unavailable
+        !setEnabled(name, enabled) -> InspectorCommandResult.Invalid("Unknown location ping stream $name")
+        enabled -> InspectorCommandResult.Success(summary = "Recording $name pings")
+        else -> InspectorCommandResult.Success(summary = "Stopped recording $name pings")
     }

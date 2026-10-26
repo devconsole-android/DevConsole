@@ -21,10 +21,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,6 +42,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -178,6 +182,7 @@ internal data class MoreActions(
     val onCaptureScreenshot: () -> Unit,
     val onRevoke: (String) -> Unit,
     val onSelectSession: (String) -> Unit,
+    val onSetLocationPingStream: (String, Boolean) -> Unit = { _, _ -> },
 )
 
 @Composable
@@ -204,6 +209,9 @@ private fun rememberMoreActions(
         onCaptureScreenshot = { viewModel.dispatch(InspectorAction.CaptureScreenshot) },
         onRevoke = { id -> viewModel.dispatch(InspectorAction.RevokePrincipal(id)) },
         onSelectSession = { id -> viewModel.dispatch(InspectorAction.SelectSession(id)) },
+        onSetLocationPingStream = { name, enabled ->
+            viewModel.dispatch(InspectorAction.SetLocationPingStreamEnabled(name, enabled))
+        },
     )
 
 /**
@@ -310,6 +318,13 @@ internal fun MoreScreen(
             item { BrowserSessionsRow(state, actions, colors) }
             item { RetentionRow(state, colors) }
             item { Spacer(Modifier.height(8.dp)) }
+            if (state.locationPingStreams.isNotEmpty()) {
+                item { GroupLabel("Location pings") }
+                items(state.locationPingStreams, key = { stream -> "location-ping-${stream.name}" }) { stream ->
+                    LocationPingStreamRow(stream, actions, colors)
+                }
+                item { Spacer(Modifier.height(8.dp)) }
+            }
             item { GroupLabel("SDK health") }
             sdkHealthRows(state.health, colors)
         }
@@ -763,6 +778,34 @@ private fun CaptureScreenshotRow(
         trailValue = "Capture",
         trailValueColor = colors.put,
         onClick = actions.onCaptureScreenshot,
+    )
+}
+
+@Composable
+private fun LocationPingStreamRow(
+    stream: InspectorLocationPingStreamUi,
+    actions: MoreActions,
+    colors: DevConsoleColors,
+) {
+    TonalListRow(
+        leadText = if (stream.enabled) "REC" else "OFF",
+        leadColor = if (stream.enabled) colors.put else colors.muted,
+        leadContainerColor = if (stream.enabled) colors.putSoft else colors.surface3,
+        title = stream.name,
+        subtitle = stream.path,
+        trailValue = "",
+        trailContent = {
+            Switch(
+                checked = stream.enabled,
+                onCheckedChange = { checked -> actions.onSetLocationPingStream(stream.name, checked) },
+                modifier =
+                    Modifier.semantics {
+                        contentDescription = "${if (stream.enabled) "Stop" else "Start"} recording ${stream.name} pings"
+                    },
+            )
+        },
+        onClick = { actions.onSetLocationPingStream(stream.name, !stream.enabled) },
+        mergeDescendants = false,
     )
 }
 
