@@ -645,6 +645,13 @@ fun interface NetworkCaptureGate {
     ): Boolean
 }
 
+fun interface NetworkCompletionObserver {
+    fun onCompleted(
+        request: NetworkRequestInput,
+        response: NetworkResponseInput?,
+    )
+}
+
 /**
  * Bridges redacted capture to the bounded transaction store without affecting host behavior.
  * When [enabled] is false, [record] returns immediately without building a capture or touching
@@ -680,6 +687,8 @@ class NetworkTransactionRecorder(
 
     @Volatile private var captureGate: NetworkCaptureGate? = null
 
+    @Volatile private var completionObserver: NetworkCompletionObserver? = null
+
     /** Lazy so a disabled recorder never allocates the buffer; [record] returns before touching it. */
     private val queue: LinkedBlockingQueue<PendingRecord> by lazy { LinkedBlockingQueue(maxQueueSize) }
 
@@ -698,6 +707,9 @@ class NetworkTransactionRecorder(
 
     /** Installs the capture-exclusion gate; without one every enabled recording is captured. */
     fun withCaptureGate(gate: NetworkCaptureGate): NetworkTransactionRecorder = apply { captureGate = gate }
+
+    fun withCompletionObserver(observer: NetworkCompletionObserver): NetworkTransactionRecorder =
+        apply { completionObserver = observer }
 
     fun record(
         request: NetworkRequestInput,
@@ -727,10 +739,13 @@ class NetworkTransactionRecorder(
         transactionId: String?,
     ) {
         val gate = captureGate
+        if (!enabled) return
+        if (completedAtEpochMs != null) {
+            completionObserver?.let { observer -> runCatching { observer.onCompleted(request, response) } }
+        }
         // A gate failure must never suppress capture silently, so an exception means "capture".
         val allowed =
-            enabled &&
-                (gate == null || runCatching { gate.allowsCapture(request.method, request.url) }.getOrDefault(true))
+            gate == null || runCatching { gate.allowsCapture(request.method, request.url) }.getOrDefault(true)
         if (!allowed) return
         val item =
             PendingRecord(
