@@ -9,31 +9,47 @@ package io.devconsole.ui.compose
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.devconsole.api.CaptureCategory
@@ -45,9 +61,8 @@ import java.util.Locale
  *
  * The [InspectorState.pendingShareFilePath] side effect (launching the system Share sheet) is
  * handled once, at [DevConsoleWorkspace]'s top level, not here -- that path is set by export
- * actions on the MORE destination as well as file shares on this one, and only the currently
- * selected destination's composable is part of the composition, so a `LaunchedEffect` here would
- * never fire for a share requested while MORE is showing.
+ * actions on the MORE destination as well as file shares on this one. One workspace consumer
+ * handles shares even while several destination routes remain composed.
  */
 @Composable
 internal fun DataRoute(
@@ -57,7 +72,10 @@ internal fun DataRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var heroCollapsed by rememberSaveable { mutableStateOf(true) }
-    LaunchedEffect(Unit) { viewModel.dispatch(InspectorAction.Refresh) }
+    LifecycleStartEffect(Unit) {
+        viewModel.dispatch(InspectorAction.Refresh)
+        onStopOrDispose { }
+    }
     DataScreen(
         state = state,
         heroCollapsed = heroCollapsed,
@@ -109,10 +127,8 @@ internal fun shareFileFromPath(
 }
 
 /**
- * Stateless, previewable Data surface: hero, read-only prefs rows, and the
- * existing Database/Files drill-ins restyled as [TonalListRow]s. Feature-flag editing moved to
- * Control's compact toggle rows; per this screen's own note ("Read-only on device"), Data no longer
- * offers an inline value editor at all.
+ * Stateless, previewable Data surface: landing list of sources (Preferences, Database, Files,
+ * App state) and real drill-in sub-screens for each source.
  */
 @Composable
 @Suppress("LongParameterList") // One callback group per real interaction this screen dispatches.
@@ -124,49 +140,194 @@ internal fun DataScreen(
     fileActions: FileBrowserActions,
     databaseActions: DatabaseBrowserActions,
     modifier: Modifier = Modifier,
+    initialSource: String? = null,
 ) {
     val colors = DevConsoleTheme.colors
     val hero = rememberDataHero(state)
-    // imePadding() so the SQL console's OutlinedTextField (DatabaseSection -> SqlConsoleCard) isn't
-    // rendered underneath the soft keyboard -- same precedent as InspectorDetailScaffold.kt -- a
-    // no-op when the IME is hidden. Applied here, at the route's outer container, rather than deep
-    // inside DatabaseSection, so the whole LazyColumn shrinks and its own bringIntoView behavior
-    // scrolls the focused field above the keyboard instead of just the field's own bounds moving.
+    var activeSource by rememberSaveable { mutableStateOf(initialSource) }
+
+    val active = availableDataSource(activeSource, state)
+
+    BackHandler(enabled = active != null) {
+        activeSource = null
+    }
+
+    val fadeSpec = feedbackSpec<Float>()
+    // imePadding() keeps the SQL console above the soft keyboard; a no-op while the IME is hidden.
     Column(modifier = modifier.fillMaxSize().background(colors.ground).imePadding()) {
+        AnimatedContent(
+            targetState = active,
+            transitionSpec = { fadeIn(animationSpec = fadeSpec) togetherWith fadeOut(animationSpec = fadeSpec) },
+            label = "dataSourceScreen",
+            modifier = Modifier.fillMaxSize(),
+        ) { sourceKey ->
+            when (sourceKey) {
+                null ->
+                    DataSourceList(state, hero, heroCollapsed, onToggleHero, onToggleTheme, colors) {
+                        activeSource = it
+                    }
+                "preferences" -> {
+                    DataSourceSubScreen(title = "Preferences", onBack = { activeSource = null }) {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
+                        ) {
+                            dataPreferenceRows(state, colors)
+                        }
+                    }
+                }
+                "database" -> {
+                    DataSourceSubScreen(title = "Database", onBack = { activeSource = null }) {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(top = 4.dp, bottom = 16.dp),
+                        ) {
+                            DatabaseSection(
+                                state = state,
+                                canWrite = state.capabilities.database,
+                                actions = databaseActions,
+                            )
+                        }
+                    }
+                }
+                "files" -> {
+                    DataSourceSubScreen(title = "Files", onBack = { activeSource = null }) {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(top = 4.dp, bottom = 16.dp),
+                        ) {
+                            FilesSection(
+                                state = state,
+                                canEdit = state.capabilities.files,
+                                actions = fileActions,
+                            )
+                        }
+                    }
+                }
+                "state" -> {
+                    DataSourceSubScreen(title = "App state", onBack = { activeSource = null }) {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(top = 4.dp, bottom = 16.dp),
+                        ) {
+                            DataStateProviders(state, colors)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The opened source, or null once it is no longer offered (capture turned off, providers gone). */
+private fun availableDataSource(
+    source: String?,
+    state: InspectorState,
+): String? =
+    when (source) {
+        "preferences", "database", "files" -> source.takeIf { state.captures(CaptureCategory.INSPECTION) }
+        "state" -> source.takeIf { state.stateProviders.isNotEmpty() }
+        else -> null
+    }
+
+@Composable
+private fun DataSourceList(
+    state: InspectorState,
+    hero: DataHeroInfo,
+    heroCollapsed: Boolean,
+    onToggleHero: () -> Unit,
+    onToggleTheme: () -> Unit,
+    colors: DevConsoleColors,
+    onOpenSource: (String) -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
         InspectorTopArea(
-            subLine = "Preferences · database · files",
+            subLine = "",
             title = "Data",
             actions = listOf(themeToggleTopAction(onToggleTheme)),
         )
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 16.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
         ) {
-            item { DataHero(hero, heroCollapsed, onToggleHero, colors) }
-            item { Spacer(Modifier.height(16.dp)) }
-            dataPreferenceRows(state, colors)
+            if (hero.blindSpot) {
+                item {
+                    Box(modifier = Modifier.padding(bottom = 8.dp)) {
+                        DataHero(hero, heroCollapsed, onToggleHero, colors)
+                    }
+                }
+            }
             item {
-                Column {
-                    Box(modifier = Modifier.padding(top = 4.dp)) {
-                        FilesSection(state = state, canEdit = state.capabilities.files, actions = fileActions)
+                GroupedPanel {
+                    if (state.captures(CaptureCategory.INSPECTION)) {
+                        DataSourceRow(
+                            "Preferences",
+                            "${state.preferenceFiles.size} files",
+                            R.drawable.devconsole_ic_preferences,
+                        ) {
+                            onOpenSource("preferences")
+                        }
+                        GroupedPanelDivider()
+                        DataSourceRow(
+                            "Database",
+                            state.databaseListing?.let { "${it.name} · ${it.tables.size} tables" }
+                                ?: "${state.databases.size} databases",
+                            R.drawable.devconsole_ic_database,
+                        ) {
+                            onOpenSource("database")
+                        }
+                        GroupedPanelDivider()
+                        DataSourceRow(
+                            "Files",
+                            state.fileListing?.let { "${it.entries.size} items" }
+                                ?: "${state.fileRoots.size} roots",
+                            R.drawable.devconsole_ic_files,
+                        ) {
+                            onOpenSource("files")
+                        }
                     }
-                    Box(modifier = Modifier.padding(top = 16.dp)) {
-                        DatabaseSection(
-                            state = state,
-                            canWrite = state.capabilities.database,
-                            actions = databaseActions,
-                        )
+                    if (state.stateProviders.isNotEmpty()) {
+                        if (state.captures(CaptureCategory.INSPECTION)) GroupedPanelDivider()
+                        DataSourceRow(
+                            "App state",
+                            state.stateProviders.size.let { "$it ${if (it == 1) "provider" else "providers"}" },
+                            R.drawable.devconsole_ic_mocks,
+                        ) {
+                            onOpenSource("state")
+                        }
                     }
-                    DataStateProviders(state, colors)
-                    WarnNote(
-                        modifier = Modifier.padding(top = 16.dp),
-                        text =
-                            "Read-only on device. Editing lives on the dashboard, where there is a " +
-                                "keyboard and a wider undo.",
-                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DataSourceRow(
+    label: String,
+    meta: String,
+    icon: Int,
+    onClick: () -> Unit,
+) {
+    val colors = DevConsoleTheme.colors
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        DevConsoleIcon(icon, null, Modifier, colors.muted, 22.dp)
+        Text(label, color = colors.ink, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Text(meta, color = colors.muted, fontFamily = FontFamily.Monospace, fontSize = 12.sp, textAlign = TextAlign.End)
+        DevConsoleIcon(R.drawable.devconsole_ic_chevron_right, null, Modifier, colors.muted, 18.dp)
     }
 }
 
@@ -180,9 +341,22 @@ private fun LazyListScope.dataPreferenceRows(
     colors: DevConsoleColors,
 ) {
     if (!state.captures(CaptureCategory.INSPECTION)) return
+    if (state.preferenceFiles.isEmpty()) {
+        item { InspectorEmptyState(EmptySpot.Folder, "No SharedPreferences files found.") }
+        return
+    }
     state.preferenceFiles.forEach { file ->
         item { GroupLabel(file.name) }
-        items(file.entries, key = { "${file.name}/${it.key}" }) { entry -> PreferenceRow(entry, colors) }
+        if (file.entries.isEmpty()) {
+            item {
+                GroupedPanel { Text("No preferences.", color = colors.muted, modifier = Modifier.padding(16.dp)) }
+            }
+        }
+        itemsIndexed(file.entries, key = { _, entry -> "${file.name}/${entry.key}" }) { index, entry ->
+            Column(Modifier.groupedPanelItem(GroupPosition.of(index, file.entries.size))) {
+                PreferenceRow(entry, colors, state.redactionEnabled)
+            }
+        }
         item { Spacer(Modifier.height(8.dp)) }
     }
 }
@@ -191,18 +365,29 @@ private fun LazyListScope.dataPreferenceRows(
 private fun PreferenceRow(
     entry: InspectorPreferenceEntryUi,
     colors: DevConsoleColors,
+    redactionEnabled: Boolean,
 ) {
     val style = prefRowStyle(entry, colors)
-    TonalListRow(
-        leadText = prefTypeLabel(entry.type),
-        leadColor = style.leadColor,
-        leadContainerColor = style.leadBg,
-        title = entry.key,
-        subtitle = if (entry.redacted) "••••••••••••••••" else entry.value,
-        trailValue = style.trailValue,
-        trailValueColor = style.trailColor,
-        containerColor = style.rowBg,
-    )
+    // "verbatim" only means something once the host opted in to redaction; by default every value is shown.
+    val showTokenNote = looksLikeTokenKey(entry.key) && (entry.redacted || redactionEnabled)
+    Row(
+        Modifier.fillMaxWidth().padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(entry.key, color = colors.ink, fontFamily = FontFamily.Monospace, fontSize = 15.sp)
+            if (showTokenNote) Text(style.trailValue, color = style.trailColor, fontSize = 13.sp)
+        }
+        Text(
+            if (entry.redacted) "••••••••••••••••" else entry.value,
+            color = colors.muted,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 13.sp,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
+        )
+    }
 }
 
 private data class PrefRowStyle(
@@ -257,9 +442,11 @@ private data class DataHeroInfo(
 
 @Composable
 private fun rememberDataHero(state: InspectorState): DataHeroInfo =
-    remember(state.preferenceFiles, state.databases, state.fileRoots) {
+    remember(state.preferenceFiles, state.databases, state.fileRoots, state.redactionEnabled) {
         val entries = state.preferenceFiles.flatMap { it.entries }
-        val blindSpots = entries.filter { looksLikeTokenKey(it.key) && !it.redacted }
+        // With redaction off (the default) every value is shown on purpose, so nothing is a blind spot.
+        val blindSpots =
+            if (state.redactionEnabled) entries.filter { looksLikeTokenKey(it.key) && !it.redacted } else emptyList()
         val maskedTokenLike = entries.filter { looksLikeTokenKey(it.key) && it.redacted }
         if (blindSpots.isNotEmpty()) {
             dataBlindSpotHero(blindSpots, maskedTokenLike)
@@ -332,12 +519,17 @@ private fun DataHero(
 private fun DataStateProviders(
     state: InspectorState,
     colors: DevConsoleColors,
+    modifier: Modifier = Modifier,
 ) {
     if (state.stateProviders.isEmpty()) return
-    Column(modifier = Modifier.padding(top = 16.dp)) {
+    Column(modifier = modifier) {
         GroupLabel("State providers")
-        state.stateProviders.forEach { provider ->
-            provider.entries.forEach { entry -> StateEntryTonalRow(provider.id, entry, colors) }
+        GroupedPanel {
+            val entries = state.stateProviders.flatMap { provider -> provider.entries.map { provider.id to it } }
+            entries.forEachIndexed { index, (id, entry) ->
+                if (index > 0) GroupedPanelDivider()
+                StateEntryTonalRow(id, entry, colors)
+            }
         }
     }
 }
@@ -349,12 +541,12 @@ private fun StateEntryTonalRow(
     colors: DevConsoleColors,
 ) {
     TonalListRow(
-        leadText = "VAR",
+        leadText = "",
         leadColor = colors.put,
         leadContainerColor = colors.putSoft,
         title = "$providerId.${entry.key}",
-        subtitle = if (entry.redacted) "redacted" else entry.value,
-        trailValue = if (entry.redacted) "hidden" else "read",
+        subtitle = if (entry.redacted) "redacted" else "",
+        trailValue = if (entry.redacted) "••••••••" else entry.value,
         trailValueColor = colors.muted,
     )
 }

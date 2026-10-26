@@ -23,7 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -108,7 +108,7 @@ internal fun TrafficTabContent(
     ui: ObserveUiState,
     actions: ObserveActions,
 ) {
-    if (state.transactions.isEmpty()) {
+    if (state.transactions.isEmpty() && !ui.searchOpen && !ui.trafficFiltersOpen) {
         TrafficEmptyState()
         return
     }
@@ -121,15 +121,7 @@ internal fun TrafficTabContent(
     val selectionModeActive = state.selectedTransactionIds.isNotEmpty()
     BackHandler(enabled = selectionModeActive, onBack = actions.onClearTransactionSelection)
 
-    Box(Modifier.fillMaxSize()) {
-        TrafficList(stats, ui, actions, colors, TrafficSelection(state.selectedTransactionIds, selectionModeActive))
-        EvidenceFab(
-            label =
-                if (ui.flaggedTransactionIds.isEmpty()) "Flag" else "Evidence · ${ui.flaggedTransactionIds.size}",
-            onClick = actions.onOpenEvidenceTray,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp),
-        )
-    }
+    TrafficList(stats, ui, actions, colors, TrafficSelection(state.selectedTransactionIds, selectionModeActive))
 }
 
 /** The traffic tab's selection state, bundled so [TrafficList] doesn't grow a parameter per field. */
@@ -149,43 +141,48 @@ private fun TrafficList(
     val arrivals = rememberArrivals(stats.rowsNewestFirst.map { it.id })
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
     ) {
-        stickyHeader {
-            if (selection.modeActive) {
-                TrafficSelectionBar(
-                    selectedCount = selection.ids.size,
-                    actions =
-                        TrafficSelectionActions(
-                            onSelectAllFiltered = {
-                                actions.onSelectAllFilteredTransactions(
-                                    stats.rowsNewestFirst.mapTo(mutableSetOf()) { it.id },
-                                )
-                            },
-                            onExportHar = actions.onExportHar,
-                            onExportPostman = actions.onExportPostman,
-                            onClear = actions.onClearTransactionSelection,
-                        ),
-                    colors = colors,
-                )
-            } else {
-                InspectorSearchBar(
-                    query = ui.trafficSearch,
-                    onQueryChange = actions.onTrafficSearchChange,
-                    placeholder = "Search path, host or payload",
-                )
+        if (selection.modeActive || ui.searchOpen) {
+            stickyHeader {
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    if (selection.modeActive) {
+                        TrafficSelectionBar(
+                            selectedCount = selection.ids.size,
+                            actions =
+                                TrafficSelectionActions(
+                                    onSelectAllFiltered = {
+                                        actions.onSelectAllFilteredTransactions(
+                                            stats.rowsNewestFirst.mapTo(mutableSetOf()) { it.id },
+                                        )
+                                    },
+                                    onExportHar = actions.onExportHar,
+                                    onExportPostman = actions.onExportPostman,
+                                    onClear = actions.onClearTransactionSelection,
+                                ),
+                            colors = colors,
+                        )
+                    }
+                    if (ui.searchOpen) {
+                        InspectorSearchBar(
+                            query = ui.trafficSearch,
+                            onQueryChange = actions.onTrafficSearchChange,
+                            placeholder = "Search path, host or payload",
+                        )
+                    }
+                }
             }
         }
-        item { Spacer(Modifier.height(16.dp)) }
-        item { TrafficHero(stats, ui, colors, actions) }
-        item { Spacer(Modifier.height(16.dp)) }
-        item { TrafficChips(stats, ui.trafficChip, actions) }
-        item { Spacer(Modifier.height(16.dp)) }
-        item {
-            val suffix = if (ui.trafficChip == "all") " captures · newest first" else " matching · newest first"
-            GroupLabel("${stats.rowsNewestFirst.size}$suffix")
+        if (stats.failCount > 0) {
+            item { TrafficHero(stats, ui, colors, actions) }
+            item { Spacer(Modifier.height(12.dp)) }
         }
-        items(stats.rowsNewestFirst, key = { it.id }) { transaction ->
+        if (ui.trafficFiltersOpen) {
+            item { TrafficChips(stats, ui.trafficChip, actions) }
+            item { Spacer(Modifier.height(12.dp)) }
+        }
+        if (stats.rowsNewestFirst.isEmpty()) item { ObserveTabEmptyState("No matching captures.", EmptySpot.Search) }
+        itemsIndexed(stats.rowsNewestFirst, key = { _, transaction -> transaction.id }) { index, transaction ->
             TrafficRow(
                 transaction = transaction,
                 isFlagged = transaction.id in ui.flaggedTransactionIds,
@@ -194,7 +191,7 @@ private fun TrafficList(
                 colors = colors,
                 actions = actions,
                 isArrival = transaction.id in arrivals,
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem().groupedPanelItem(GroupPosition.of(index, stats.rowsNewestFirst.size)),
             )
         }
     }
@@ -273,7 +270,7 @@ private fun TrafficSelectionActionRow(
         InspectorPillButton(
             label = "HAR",
             onClick = actions.onExportHar,
-            containerColor = colors.put,
+            containerColor = colors.signal,
             contentColor = colors.ground,
             labelFontSize = 12.5.sp,
             icon = { ExportPillIcon(colors) },
@@ -281,7 +278,7 @@ private fun TrafficSelectionActionRow(
         InspectorPillButton(
             label = "Postman",
             onClick = actions.onExportPostman,
-            containerColor = colors.put,
+            containerColor = colors.signal,
             contentColor = colors.ground,
             labelFontSize = 12.5.sp,
             icon = { ExportPillIcon(colors) },
@@ -324,7 +321,7 @@ private fun TrafficHero(
     if (ui.trafficHeroCollapsed) {
         HeroBar(
             value = stats.failCount.toString(),
-            label = "of ${stats.total} requests failing",
+            label = "requests failing",
             onExpand = actions.onToggleTrafficHero,
             valueColor = if (failing) colors.error else colors.ink,
             labelColor = if (failing) colors.error else colors.text3,
@@ -371,14 +368,12 @@ private fun TrafficRow(
     modifier: Modifier = Modifier,
     isArrival: Boolean = false,
 ) {
-    val (leadColor, leadBg) = methodTint(transaction.method, colors)
-    val mockedSuffix = if (transaction.isMocked) " · mocked" else ""
     Column(modifier = modifier.fillMaxWidth()) {
         TonalListRow(
             isArrival = isArrival,
-            leadText = methodLeadText(transaction.method),
-            leadColor = leadColor,
-            leadContainerColor = leadBg,
+            leadText = transaction.method,
+            leadColor = colors.muted,
+            leadContainerColor = Color.Transparent,
             // breakingAnywhere: without it the line breaker leaves the first line half empty and
             // moves the whole query down (see the helper's own note).
             title = transaction.pathWithQuery().breakingAnywhere(),
@@ -386,12 +381,11 @@ private fun TrafficRow(
             // runs past two on a phone, and the part that gets cut is the query -- the very thing
             // that tells two captures of the same endpoint apart.
             titleMaxLines = 4,
-            subtitle = "${transaction.host} · ${formatCaptureClockTime(transaction.startedAtEpochMs)}$mockedSuffix",
+            subtitle = if (transaction.isMocked) "mocked" else "",
             trailValue = transaction.statusCode?.toString() ?: "ERR",
             trailValueColor = statusTint(transaction.statusCode, colors),
             trailSubtitle =
                 when {
-                    transaction.statusCode == null -> "timeout"
                     transaction.durationMs != null -> "${transaction.durationMs} ms"
                     else -> null
                 },
@@ -399,7 +393,7 @@ private fun TrafficRow(
                 if (isSelected) {
                     colors.surface2
                 } else if (isFlagged) {
-                    colors.signalSoft
+                    colors.surface2
                 } else {
                     Color.Transparent
                 },
@@ -430,10 +424,6 @@ private fun TrafficRow(
             // to stay out of the row's merged semantics node so TalkBack exposes both the row's
             // tap/long-press action and the checkbox's toggle independently.
             mergeDescendants = !selectionModeActive,
-        )
-        androidx.compose.material3.HorizontalDivider(
-            modifier = Modifier.padding(start = 76.dp),
-            color = colors.line,
         )
     }
 }
@@ -470,9 +460,6 @@ private fun TrafficRowSelectionCheckbox(
 @Composable
 private fun TrafficEmptyState() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            "No traffic captured yet.",
-            color = DevConsoleTheme.colors.muted,
-        )
+        InspectorEmptyState(EmptySpot.Traffic, "No traffic captured yet.")
     }
 }

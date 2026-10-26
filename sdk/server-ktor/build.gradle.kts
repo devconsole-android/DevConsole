@@ -30,6 +30,8 @@ dependencies {
     implementation("io.ktor:ktor-server-websockets:3.0.3")
     testImplementation("io.ktor:ktor-server-test-host:3.0.3")
     testImplementation("io.ktor:ktor-client-websockets:3.0.3")
+    testImplementation(project(":tools:composer-agent"))
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }
 
 val dashboardAssetFiles: List<File> =

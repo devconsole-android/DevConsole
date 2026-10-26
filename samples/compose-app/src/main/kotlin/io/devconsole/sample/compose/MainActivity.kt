@@ -80,10 +80,8 @@ import io.devconsole.api.BrowserEndpoint
 import io.devconsole.api.CrashPolicy
 import io.devconsole.api.DevConsoleConfig
 import io.devconsole.api.DevConsoleState
-import io.devconsole.api.EditingCapabilities
 import io.devconsole.api.InspectorOpenResult
 import io.devconsole.api.OpenTriggers
-import io.devconsole.api.ScreenshotPolicy
 import io.devconsole.api.ScreenshotResult
 import io.devconsole.api.ShakeIntensity
 import io.devconsole.api.StartRequest
@@ -327,27 +325,23 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Capability-flag matrix across the three samples (see each MainActivity's own comment for
-     * the rest of the row): compose-app is the full showcase, so every [EditingCapabilities] flag
-     * is unlocked -- the Data rail (preferences/database/files), mocks, capture rules, and the
-     * request composer are all live and editable from the browser and the in-app inspector -- and
-     * the two server-side gates that sit outside that enum, `composerEnabled` (with a host
-     * allowlist) and `stateMutationsEnabled`, are opted into as well.
-     * foundation-app leaves every flag at its `false` default to demonstrate the locked-down,
-     * read-only posture a production-adjacent debug build might ship with. views-java-app sits in
-     * between: mocks and capture rules are editable, but preferences/database/files stay read-only.
+     * This showcase relies on the SDK defaults: all editing capabilities, Composer, state
+     * mutations, and screenshots are enabled. Redaction and network protection are opt-in.
+     * foundation-app explicitly selects read-only capabilities and disables screenshots.
      * [OpenTriggers] follows the same gradient: this sample opts into both shake-to-open and the
      * floating button, views-java-app enables shake only, and foundation-app leaves both off.
      *
-     * Screenshot capture is off by default across the whole SDK -- [ScreenshotPolicy.enabled]
-     * defaults to `false` because a screenshot can't be redacted. This sample is the one that opts
-     * in, via [ScreenshotPolicy], so its "Capture screenshot" button renders a real
-     * [ScreenshotResult.Captured]; foundation-app leaves the default alone and shows the refusal
-     * verbatim instead -- seeing both side by side is the fastest way to understand the gate.
+     * Screenshots are enabled by default and cannot be redacted. The capture button renders a real
+     * [ScreenshotResult.Captured]; foundation-app explicitly disables capture to show the refusal.
      * [CrashPolicy.anrThresholdMs] is also shortened here (see [DEMO_ANR_THRESHOLD_MS]) purely so
      * the hazard-zone ANR button below trips the watchdog quickly during a demo.
      */
     private fun buildConfig() =
+        // Optional hardening (imports: io.devconsole.api.*, io.devconsole.security.RedactionPolicy):
+        // DevConsoleConfig(redactionPolicy = RedactionPolicy.recommended())
+        //     .withNetworkProtection(NetworkProtection.recommended())
+        //     .withEditingCapabilities(EditingCapabilities.readOnly())
+        //     .withBrowserSecurity(BrowserSecurity.SESSION_CODE)
         DevConsoleConfig(
             stateProviders =
                 listOf(
@@ -363,13 +357,6 @@ class MainActivity : ComponentActivity() {
                         description = "Shows the order-history placeholder in the sample UI",
                     ),
                 ),
-            // The Composer makes the device issue outbound requests, so it stays off unless the
-            // host opts in. This showcase opts in, but confines it to the hosts the sample itself
-            // talks to -- an empty allowlist denies every destination, so naming them is required.
-            composerEnabled = true,
-            composerAllowedHosts = setOf("jsonplaceholder.typicode.com", "example.test", "postman-echo.com"),
-            // Lets the dashboard drive registered state mutations; state is read-only otherwise.
-            stateMutationsEnabled = true,
         ).withRemoteConfigProviders(
             listOf(SampleRemoteConfigProvider()),
         ).withBrowserConfig(
@@ -379,22 +366,10 @@ class MainActivity : ComponentActivity() {
             // URLs depending on where you pressed start. LAN carries the exposure spelled out at
             // that call site and in docs/THREAT_MODEL.md.
             BrowserConfig(binding = BrowserBinding.LAN),
-        ).withEditingCapabilities(
-            EditingCapabilities
-                .builder()
-                .preferences(true)
-                .database(true)
-                .files(true)
-                .mocks(true)
-                .captureRules(true)
-                .featureFlags(true)
-                .requestExecution(true)
-                .build(),
-        ).withScreenshotPolicy(ScreenshotPolicy(enabled = true))
-            .withCrashPolicy(CrashPolicy(anrThresholdMs = DEMO_ANR_THRESHOLD_MS))
+        ).withCrashPolicy(CrashPolicy(anrThresholdMs = DEMO_ANR_THRESHOLD_MS))
             .withOpenTriggers(
                 OpenTriggers(shakeToOpen = true, shakeIntensity = ShakeIntensity.MEDIUM, floatingButton = true),
-            )
+            ).withComposerHostsEditable(true)
     // Feature 2 demo (capture-category selection at init): uncommenting the line below scopes
     // capture down to only SOCKET + MQTT. Every other category -- NETWORK, PUSH, LOGS, CRASHES,
     // STATE, INSPECTION, MOCKS -- is then hidden (not merely emptied out) and disabled in both
@@ -598,7 +573,7 @@ class MainActivity : ComponentActivity() {
                 )
                 CapabilityCard(
                     title = "Capture screenshot",
-                    subtitle = "ScreenshotPolicy.enabled = true here -- foundation-app shows the default-off refusal",
+                    subtitle = "Screenshots are enabled by default -- foundation-app explicitly disables capture",
                     onClick = { scope.launch { lastResponse = captureScreenshot() } },
                 )
                 CapabilityCard(
@@ -756,7 +731,7 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Exercises every [ScreenshotResult] variant Kotlin's exhaustive `when` demands. Because this
-     * sample's [buildConfig] opts into [ScreenshotPolicy], the ordinary path here is
+     * sample's [buildConfig] uses the default screenshot policy, the ordinary path here is
      * [ScreenshotResult.Captured] -- the other branches exist for completeness and are the ones
      * foundation-app actually reaches from its default-off policy.
      */
@@ -806,7 +781,7 @@ private fun seedSampleData(context: Context) {
         .putBoolean("darkModeEnabled", true)
         .putFloat("checkoutProgress", 0.65f)
         // Two non-secret values that together show how key-based redaction actually behaves.
-        // "access_token" is on RedactionPolicy.default()'s name list, so the inspector masks it.
+        // "access_token" is visible by default; RedactionPolicy.recommended() opts into masking it.
         .putString("access_token", "sample-not-a-real-token-4f9c2b")
         // "authToken" is NOT on that list. Redaction matches field names exactly, so this one is
         // shown verbatim -- the allowlist blind spot docs/THREAT_MODEL.md warns about, made

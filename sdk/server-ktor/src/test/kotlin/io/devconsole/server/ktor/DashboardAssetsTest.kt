@@ -186,18 +186,19 @@ class DashboardAssetsTest {
     }
 
     @Test
-    fun `dashboard uses the graphite cobalt design tokens`() {
+    fun `dashboard uses the graphite signal green design tokens`() {
         val css = DashboardAssets.css().lowercase()
 
         listOf(
-            "--ground: #111317",
-            "--panel: #171a20",
-            "--surface-2: #1d2129",
-            "--ink: #eceef2",
-            "--signal: #72a7ff",
+            "--ground: #111413",
+            "--panel: #181c1a",
+            "--surface-2: #1e2320",
+            "--ink: #ecebe4",
+            "--signal: #b7ed65",
+            "--signal: #2f7a1f",
         ).forEach { token -> assertTrue("missing $token", css.contains(token)) }
 
-        listOf("#b7ed65", "#427526", "terminal-green", "instrument panel").forEach { legacy ->
+        listOf("#72a7ff", "#245da8", "#111317", "terminal-green", "instrument panel").forEach { legacy ->
             assertFalse("legacy design value remains: $legacy", css.contains(legacy))
         }
     }
@@ -302,5 +303,118 @@ class DashboardAssetsTest {
 
         assertTrue(fn.contains("execCommand('copy')"))
         assertTrue(fn.contains("isSecureContext"))
+    }
+
+    /**
+     * Composer runs requests on the device or on a connected host computer, never in the browser, so
+     * the selector must exist, be sent with every execution, and a failed `fetch` must not leave the
+     * Execute button disabled (the old behaviour after any network error).
+     */
+    @Test
+    fun `composer offers a run-on selector and always re-enables execute`() {
+        val script = DashboardAssets.js()
+        val run =
+            script
+                .substringAfter("async function runComposer()")
+                .substringBefore("async function importCurl()")
+
+        assertTrue(DashboardAssets.index().contains("id=\"composerExecutor\""))
+        assertTrue(DashboardAssets.index().contains("id=\"composerAgentsRefresh\""))
+        assertTrue(script.contains("/api/v1/composer/agents"))
+        assertTrue(run.contains("const executor = \$('composerExecutor').value"))
+        assertTrue(run.contains("body.set('executor', executor)"))
+        assertTrue(run.contains("finally {"))
+        assertTrue(run.contains("\$('composerRun').disabled = false"))
+    }
+
+    @Test
+    fun `composer result shows response headers and body and explains host rejections`() {
+        val script = DashboardAssets.js()
+
+        assertTrue(script.contains("function renderComposerResult("))
+        assertTrue(script.contains("'Response body'"))
+        assertTrue(script.contains("COMPOSER_HOST_REJECTED"))
+        assertTrue(script.contains("AGENT_UNAVAILABLE"))
+    }
+
+    /**
+     * "Host not allowed" used to be a dead end that required editing the app and rebuilding. When the
+     * app opts in (`composerHostsEditable`) the allowlist card gets an Add box and a rejected request
+     * a one-click "Allow <host>" -- both must only appear when the server says the list is editable.
+     */
+    @Test
+    fun `composer allowlist can be edited from the dashboard when the app allows it`() {
+        val script = DashboardAssets.js()
+        val index = DashboardAssets.index()
+
+        assertTrue(index.contains("id=\"composerHostInput\""))
+        assertTrue(index.contains("id=\"composerHostAdd\""))
+        assertTrue(index.contains("id=\"composerHostEditor\" class=\"mt-10\" hidden"))
+        assertTrue(script.contains("/api/v1/composer/hosts"))
+        assertTrue(script.contains("composerHostsEditable = editable === true"))
+        assertTrue(script.contains("\$('composerHostEditor').hidden = !canEdit"))
+        assertTrue(script.contains("function appendAllowHostButton("))
+        assertTrue(script.contains("composerHostsEditable &&"))
+    }
+
+    @Test
+    fun `request card header carries the refresh and allow host actions on the right`() {
+        val header =
+            DashboardAssets
+                .index()
+                .substringAfter("<h2 class=\"card-shell-title\">Request</h2>")
+                .substringBefore("<div class=\"card-shell-body\">")
+
+        assertTrue(header.contains("class=\"card-shell-actions\""))
+        assertTrue(header.contains("id=\"composerAllowHost\""))
+        assertTrue(header.contains("id=\"composerAgentsRefresh\""))
+        assertTrue(DashboardAssets.css().contains(".card-shell-actions"))
+        assertTrue(header.contains("Refresh Run On"))
+        assertTrue(DashboardAssets.js().contains("function updateComposerAllowHostButton("))
+        assertTrue(DashboardAssets.js().contains("onclick = refreshRunOn"))
+    }
+
+    @Test
+    fun `allow host button opens a dialog that stages adds and removes until save`() {
+        val script = DashboardAssets.js()
+        val index = DashboardAssets.index()
+
+        assertTrue(index.contains("id=\"composerHostsModal\""))
+        assertTrue(index.contains("id=\"composerHostsModalSave\""))
+        assertTrue(index.contains("id=\"composerHostsModalList\""))
+        assertTrue(script.contains("\$('composerAllowHost').onclick = openComposerHostsDialog"))
+        assertTrue(script.contains("function addHostToDraft("))
+        assertTrue(script.contains("function toggleDraftHost("))
+        assertTrue(script.contains("async function saveComposerHostsDialog("))
+        assertTrue(script.contains("composerHostDraft.every((entry) => entry.status === 'kept')"))
+    }
+
+    @Test
+    fun `host rejection puts the allow button right under the title and scrolls the result into view`() {
+        val script = DashboardAssets.js()
+
+        assertTrue(script.contains("box.querySelector('.empty-title').after(buttons)"))
+        assertTrue(script.contains("function showComposerResult()"))
+        assertTrue(DashboardAssets.css().contains(".empty-state-actions"))
+    }
+
+    @Test
+    fun `allow button disappears once the rejected host is allowed from anywhere`() {
+        val script = DashboardAssets.js()
+
+        assertTrue(script.contains("function syncRejectedHostPanel()"))
+        assertTrue(script.contains("function showRejectedHostAllowed(host)"))
+        assertTrue(script.contains("button.onclick = () => confirmAndAllowComposerHost(host)"))
+        assertTrue(script.contains("is allowed`, 'Press Execute request to run it again.'"))
+        assertTrue(script.substringAfter("function renderComposerHostList(").contains("syncRejectedHostPanel()"))
+    }
+
+    @Test
+    fun `disabled composer banner names composerEnabled, the setting that actually turns it on`() {
+        val script = DashboardAssets.js()
+
+        assertTrue(script.contains("title: 'Composer is turned off in this app'"))
+        assertTrue(script.contains("composerEnabled(true)"))
+        assertFalse(script.contains("turned off the requestExecution capability"))
     }
 }

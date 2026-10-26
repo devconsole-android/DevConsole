@@ -19,15 +19,25 @@ data class RedactionPolicy(
     /** Normalized once here so every lookup can compare against a lower-cased name. */
     internal val normalizedFieldNames: Set<String> = sensitiveFieldNames.mapTo(mutableSetOf(), String::lowercase)
 
-    companion object {
-        /**
-         * Memoized so every `default()` caller shares one instance. [textPatterns] holds [Regex]
-         * values, which compare by reference, so a fresh policy per call would make two otherwise
-         * identical configs (e.g. [io.devconsole.api.DevConsoleConfig]) unequal.
-         */
-        private val DEFAULT: RedactionPolicy by lazy { buildDefault() }
+    /** Whether this policy masks anything at all; [none] has no rules. */
+    fun hasRules(): Boolean = sensitiveFieldNames.isNotEmpty() || textPatterns.isNotEmpty()
 
-        fun default(): RedactionPolicy = DEFAULT
+    companion object {
+        private val NONE = RedactionPolicy(sensitiveFieldNames = emptySet(), textPatterns = emptyList())
+
+        // Regex instances compare by reference, so share the recommended policy across callers.
+        private val RECOMMENDED: RedactionPolicy by lazy { buildDefault() }
+
+        /** Out-of-the-box policy: no field or text masking. */
+        @JvmStatic
+        fun default(): RedactionPolicy = none()
+
+        @JvmStatic
+        fun none(): RedactionPolicy = NONE
+
+        /** Opt-in built-in sensitive-field rules. */
+        @JvmStatic
+        fun recommended(): RedactionPolicy = RECOMMENDED
 
         private fun buildDefault(): RedactionPolicy =
             RedactionPolicy(
@@ -88,7 +98,10 @@ class RedactionEngine(
         jsonSecretField = compiledJsonSecretField
     }
 
-    /** The active policy's marker for a value that must never cross a redaction boundary. */
+    /** Whether the active policy has any field or text rule. */
+    fun isEnabled(): Boolean = policy.hasRules()
+
+    /** The active policy's marker for a value withheld at a redaction boundary. */
     fun replacement(): String = policy.replacement
 
     fun redactFields(fields: Map<String, String>): Map<String, String> =
@@ -142,6 +155,8 @@ class RedactionEngine(
             }
 
         private fun jsonSecretFieldFor(policy: RedactionPolicy): Regex {
+            // An empty alternation would match an empty JSON key; none() must mask nothing.
+            if (policy.normalizedFieldNames.isEmpty()) return Regex("(?!)")
             val sensitiveNamePattern = policy.normalizedFieldNames.joinToString("|") { Regex.escape(it) }
             return Regex(
                 "(\\\"(?:$sensitiveNamePattern)\\\"\\s*:\\s*)(?:\\\"(?:\\\\.|[^\\\"])*\\\"|[^,}\\s]+)",

@@ -106,8 +106,14 @@ class EventBatchWriterTest {
     private fun event(
         summary: String,
         severity: EventSeverity = EventSeverity.INFO,
-    ) = EventPipeline(UUID.randomUUID(), 2)
-        .publish(EventDraft("network", "request", severity, summary))
+    ) = EventPipeline(
+        UUID.randomUUID(),
+        2,
+        io.devconsole.security.RedactionEngine(
+            io.devconsole.security.RedactionPolicy
+                .recommended(),
+        ),
+    ).publish(EventDraft("network", "request", severity, summary))
 
     private class RecordingEventStore : EventStore {
         val batches = mutableListOf<List<StoredEvent>>()

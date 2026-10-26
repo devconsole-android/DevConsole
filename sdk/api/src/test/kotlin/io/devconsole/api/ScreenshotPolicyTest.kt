@@ -11,10 +11,10 @@ import org.junit.Test
 
 class ScreenshotPolicyTest {
     @Test
-    fun `defaults match the design spec, including being off by default`() {
+    fun `screenshots are enabled by default with bounded dimensions and bytes`() {
         val policy = ScreenshotPolicy()
 
-        assertFalse(policy.enabled)
+        assertTrue(policy.enabled)
         assertEquals(1080, policy.maxLongestEdgePx)
         assertEquals(2L * 1024 * 1024, policy.maxBytes)
         assertTrue(policy.validationErrors().isEmpty())
@@ -93,7 +93,7 @@ class ScreenshotPolicyTest {
     }
 
     @Test
-    fun `default DevConsoleConfig keeps screenshot capture disabled`() {
-        assertFalse(DevConsoleConfig.default().screenshotPolicy.enabled)
+    fun `default DevConsoleConfig enables screenshot capture`() {
+        assertTrue(DevConsoleConfig.default().screenshotPolicy.enabled)
     }
 }

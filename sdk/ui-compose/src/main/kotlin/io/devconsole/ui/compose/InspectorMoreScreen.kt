@@ -7,23 +7,27 @@
 package io.devconsole.ui.compose
 
 import android.content.res.Configuration
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -34,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,21 +47,29 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.devconsole.api.ScreenshotResult
 import io.devconsole.ui.compose.qr.ConnectUrlQrCode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /**
  * The empty-selection ("export everything") HAR/Postman subtitle. This in-app export path never
@@ -78,7 +91,6 @@ private const val LAN_BINDING = "LAN"
 private const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
 private const val SERVER_STATE_RUNNING = "Running"
 private const val SERVER_STATE_PERMISSION_REQUIRED = "PermissionRequired"
-private const val ACTIVE_SESSION_STATUS = "ACTIVE"
 // Byte-size and MS_PER_* constants live in InspectorObserveFormat.kt (formatByteSize/MS_PER_SECOND
 // etc.) -- this file used to duplicate both; see that file's own doc.
 
@@ -94,22 +106,23 @@ internal fun MoreRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pendingServerStartPermission by viewModel.serverStartPermission.collectAsStateWithLifecycle()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val lifecycleState by lifecycle.currentStateAsState()
     val clipboard = LocalClipboardManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    var heroCollapsed by rememberSaveable { mutableStateOf(true) }
     var qrUrl by remember { mutableStateOf<String?>(null) }
     val showMessage: (String) -> Unit = { message -> scope.launch { snackbarHostState.showSnackbar(message) } }
 
-    LaunchedEffect(Unit) { viewModel.dispatch(InspectorAction.Refresh) }
-    // A one-shot Refresh above leaves the URL card and uptime frozen at whatever they were the
-    // moment this screen opened. Session codes expire on their own (shorter) TTL and the bind
-    // address can change independently of this screen -- poll while visible so both stay live
-    // instead of silently going stale for as long as the operator stays here.
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(MORE_SCREEN_REFRESH_INTERVAL_MS)
+    // Session codes expire and the bind address can change independently of this screen. Refresh
+    // on each show and poll only while started so a hidden keep-alive destination stays idle.
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.dispatch(InspectorAction.Refresh)
+            while (true) {
+                delay(MORE_SCREEN_REFRESH_INTERVAL_MS)
+                viewModel.dispatch(InspectorAction.Refresh)
+            }
         }
     }
     LaunchedEffect(state.lastCommandResult) {
@@ -129,7 +142,7 @@ internal fun MoreRoute(
     // the background at all -- and this is the screen someone is on when they start it and go
     // looking for that notification. The prompt is a no-op on any screen once granted or dismissed.
     KeepAliveNotificationPromptEffect(
-        promptNeeded = state.keepAlivePromptNeeded,
+        promptNeeded = state.keepAlivePromptNeeded && lifecycleState.isAtLeast(Lifecycle.State.STARTED),
         snackbarHostState = snackbarHostState,
         onPermissionResult = { viewModel.dispatch(InspectorAction.NotificationPermissionGranted) },
     )
@@ -137,7 +150,7 @@ internal fun MoreRoute(
     val serverStartPermission =
         pendingServerStartPermission ?: LOCAL_NETWORK_PERMISSION.takeIf { legacyPermissionRequired }
     ServerPermissionPromptEffect(
-        permission = serverStartPermission,
+        permission = serverStartPermission.takeIf { lifecycleState.isAtLeast(Lifecycle.State.STARTED) },
         snackbarHostState = snackbarHostState,
         onPermissionResult = { granted ->
             if (pendingServerStartPermission != null) {
@@ -155,19 +168,22 @@ internal fun MoreRoute(
     Box(modifier = modifier.fillMaxSize()) {
         MoreScreen(
             state = state,
-            heroCollapsed = heroCollapsed,
-            onToggleHero = { heroCollapsed = !heroCollapsed },
+            heroCollapsed = true,
+            onToggleHero = {},
             onToggleTheme = onToggleTheme,
             actions = rememberMoreActions(viewModel, clipboard, showMessage) { url -> qrUrl = url },
         )
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
-    qrUrl?.let { url -> QrDialog(url, onDismiss = { qrUrl = null }) }
+    // Dialogs own a separate window, so unplacing the destination alone cannot hide them.
+    qrUrl?.takeIf { lifecycleState.isAtLeast(Lifecycle.State.STARTED) }?.let { url ->
+        QrDialog(url, onDismiss = { qrUrl = null })
+    }
 }
 
 /**
  * Grouped callbacks [MoreScreen] dispatches. [onSetServerRunning] takes the *desired* next state
- * (the hero's CTA already knows the current one) rather than a bare toggle, since the CTA's own
+ * (the server button already knows the current one) rather than a bare toggle, since its own
  * label/icon already flip on [InspectorHealthUi.state] -- this just carries the CTA's intent.
  */
 @Suppress("LongParameterList") // One real interaction per field; see doc above.
@@ -191,28 +207,33 @@ private fun rememberMoreActions(
     clipboard: ClipboardManager,
     showMessage: (String) -> Unit,
     onShowQr: (String) -> Unit,
-): MoreActions =
-    MoreActions(
-        onSetServerRunning = { running -> viewModel.dispatch(InspectorAction.SetServerRunning(running)) },
-        onCopyUrl = { url ->
-            clipboard.setText(AnnotatedString(url))
-            showMessage("$url copied")
-        },
-        onCopyCode = { code ->
-            clipboard.setText(AnnotatedString(code))
-            showMessage("Session code $code copied")
-        },
-        onShowQr = onShowQr,
-        onExportHar = { viewModel.dispatch(InspectorAction.ExportHar) },
-        onExportPostman = { viewModel.dispatch(InspectorAction.ExportPostman) },
-        onExportSessionZip = { viewModel.dispatch(InspectorAction.ExportSessionZip) },
-        onCaptureScreenshot = { viewModel.dispatch(InspectorAction.CaptureScreenshot) },
-        onRevoke = { id -> viewModel.dispatch(InspectorAction.RevokePrincipal(id)) },
-        onSelectSession = { id -> viewModel.dispatch(InspectorAction.SelectSession(id)) },
-        onSetLocationPingStream = { name, enabled ->
-            viewModel.dispatch(InspectorAction.SetLocationPingStreamEnabled(name, enabled))
-        },
-    )
+): MoreActions {
+    val currentShowMessage by rememberUpdatedState(showMessage)
+    val currentOnShowQr by rememberUpdatedState(onShowQr)
+    return remember(viewModel, clipboard) {
+        MoreActions(
+            onSetServerRunning = { running -> viewModel.dispatch(InspectorAction.SetServerRunning(running)) },
+            onCopyUrl = { url ->
+                clipboard.setText(AnnotatedString(url))
+                currentShowMessage("$url copied")
+            },
+            onCopyCode = { code ->
+                clipboard.setText(AnnotatedString(code))
+                currentShowMessage("Session code $code copied")
+            },
+            onShowQr = { url -> currentOnShowQr(url) },
+            onExportHar = { viewModel.dispatch(InspectorAction.ExportHar) },
+            onExportPostman = { viewModel.dispatch(InspectorAction.ExportPostman) },
+            onExportSessionZip = { viewModel.dispatch(InspectorAction.ExportSessionZip) },
+            onCaptureScreenshot = { viewModel.dispatch(InspectorAction.CaptureScreenshot) },
+            onRevoke = { id -> viewModel.dispatch(InspectorAction.RevokePrincipal(id)) },
+            onSelectSession = { id -> viewModel.dispatch(InspectorAction.SelectSession(id)) },
+            onSetLocationPingStream = { name, enabled ->
+                viewModel.dispatch(InspectorAction.SetLocationPingStreamEnabled(name, enabled))
+            },
+        )
+    }
+}
 
 /**
  * The QR is a fixed-size square and the dialog is wider than it, so it needs to be told to centre:
@@ -247,13 +268,8 @@ private fun QrDialog(
 private val QR_DIALOG_TOP_PADDING = 24.dp
 private val QR_DIALOG_BOTTOM_PADDING = 12.dp
 
-/**
- * Stateless, previewable More surface: hero, [InspectorUrlCard], and Export rows. Session/browser/
- * retention detail -- real capability the old screen had that the compact row list has no room
- * for -- lives behind the RUN/WEB/KEEP rows as inline `rememberSaveable` expand-in-place sections
- * rather than being dropped.
- */
-@Suppress("LongParameterList") // One callback group + hero-collapse state; see doc above.
+/** Grouped More surface with expandable session, retention and SDK health details. */
+@Suppress("LongParameterList", "UNUSED_PARAMETER") // Preserve the destination signature.
 @Composable
 internal fun MoreScreen(
     state: InspectorState,
@@ -264,366 +280,330 @@ internal fun MoreScreen(
     modifier: Modifier = Modifier,
 ) {
     val colors = DevConsoleTheme.colors
-    // A ticking clock, not a snapshot re-read on screen entry -- otherwise the uptime value freezes
-    // at whatever it was the moment this screen last (re)opened instead of counting up live.
-    var nowEpochMs by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1_000)
-            nowEpochMs = System.currentTimeMillis()
-        }
-    }
-    val hero = rememberMoreHero(state, nowEpochMs)
+    val running = state.health?.state == SERVER_STATE_RUNNING
     Column(modifier = modifier.fillMaxSize().background(colors.ground)) {
         InspectorTopArea(
-            subLine = "Server, session and export",
+            subLine = "",
             title = "More",
             actions = listOf(themeToggleTopAction(onToggleTheme)),
         )
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 16.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            if (state.serverControlSupported) {
-                item { ServerControlCard(hero.running, actions.onSetServerRunning, colors) }
-                item { Spacer(Modifier.height(16.dp)) }
+            item(key = "more_browser_dashboard", contentType = "browser_dashboard") {
+                BrowserDashboardPanel(state, running, actions, colors)
             }
-            item {
-                MoreHero(
-                    info = hero,
-                    collapsed = heroCollapsed,
-                    onToggleCollapse = onToggleHero,
-                    colors = colors,
-                )
+            item(key = "more_export_title", contentType = "panel_title") {
+                MorePanelTitle("Export")
             }
-            item { Spacer(Modifier.height(16.dp)) }
-            item { MoreUrlCard(state, hero.running, actions, colors) }
-            if (!hero.running) {
-                item { Spacer(Modifier.height(16.dp)) }
-                item {
-                    WarnNote(
-                        "Captures are paused while the server is stopped — the SDK keeps its retained " +
-                            "buffer but publishes nothing.",
-                    )
-                }
+            item(key = "more_export_har", contentType = "export_row") {
+                ExportHarRow(state, actions)
             }
-            item { Spacer(Modifier.height(16.dp)) }
-            item { LanWarningBanner(state.browser) }
-            item { GroupLabel("Export") }
-            item { ExportHarRow(state, actions, colors) }
-            item { ExportPostmanRow(state, actions, colors) }
-            item { ExportZipRow(state, colors, actions) }
-            item { CaptureScreenshotRow(colors, actions) }
-            item { RetainedRunsRow(state, actions, colors) }
-            item { BrowserSessionsRow(state, actions, colors) }
-            item { RetentionRow(state, colors) }
-            item { Spacer(Modifier.height(8.dp)) }
+            item(key = "more_export_div_1", contentType = "divider") {
+                GroupedPanelDivider()
+            }
+            item(key = "more_export_postman", contentType = "export_row") {
+                ExportPostmanRow(state, actions)
+            }
+            item(key = "more_export_div_2", contentType = "divider") {
+                GroupedPanelDivider()
+            }
+            item(key = "more_export_zip", contentType = "export_row") {
+                ExportZipRow(state, actions)
+            }
+            item(key = "more_export_div_3", contentType = "divider") {
+                GroupedPanelDivider()
+            }
+            item(key = "more_export_screenshot", contentType = "export_row") {
+                CaptureScreenshotRow(actions)
+            }
+            item(key = "more_export_div_4", contentType = "divider") {
+                GroupedPanelDivider()
+            }
+            item(key = "more_export_runs", contentType = "export_row") {
+                RetainedRunsRow(state, actions, colors)
+            }
             if (state.locationPingStreams.isNotEmpty()) {
-                item { GroupLabel("Location pings") }
-                items(state.locationPingStreams, key = { stream -> "location-ping-${stream.name}" }) { stream ->
-                    LocationPingStreamRow(stream, actions, colors)
+                item(key = "more_location_pings_title", contentType = "panel_title") {
+                    MorePanelTitle("Location pings")
                 }
-                item { Spacer(Modifier.height(8.dp)) }
+                state.locationPingStreams.forEachIndexed { position, stream ->
+                    if (position > 0) {
+                        item(key = "more_location_pings_div_${stream.name}", contentType = "divider") {
+                            GroupedPanelDivider()
+                        }
+                    }
+                    item(key = "more_location_pings_${stream.name}", contentType = "settings_row") {
+                        LocationPingStreamRow(stream, actions)
+                    }
+                }
             }
-            item { GroupLabel("SDK health") }
-            sdkHealthRows(state.health, colors)
+            item(key = "more_settings_title", contentType = "panel_title") {
+                MorePanelTitle("Settings")
+            }
+            item(key = "more_settings_health", contentType = "settings_row") {
+                SdkHealthRow(state.health)
+            }
+            item(key = "more_settings_div_1", contentType = "divider") {
+                GroupedPanelDivider()
+            }
+            item(key = "more_settings_retention", contentType = "settings_row") {
+                RetentionRow(state, colors)
+            }
+            item(key = "more_settings_div_2", contentType = "divider") {
+                GroupedPanelDivider()
+            }
+            item(key = "more_settings_sessions", contentType = "settings_row") {
+                BrowserSessionsRow(state, actions, colors)
+            }
         }
     }
 }
 
-/**
- * Real, computed More hero: [InspectorHealthUi.state] for running/stopped, active session uptime,
- * real browser count.
- */
-private data class MoreHeroInfo(
-    val running: Boolean,
-    val value: String,
-    val of: String,
-    val sub: String,
-    val bar: String,
-)
-
-/** Not `remember`-memoized: [nowEpochMs] ticks every second (see [MoreScreen]) so uptime counts up live. */
 @Composable
-private fun rememberMoreHero(
-    state: InspectorState,
-    nowEpochMs: Long,
-): MoreHeroInfo {
-    val running = state.health?.state == SERVER_STATE_RUNNING
-    return if (running) moreHeroRunning(state, nowEpochMs) else moreHeroStopped()
-}
-
-private fun moreHeroRunning(
-    state: InspectorState,
-    nowEpochMs: Long,
-): MoreHeroInfo {
-    val active = state.sessions.firstOrNull { it.status == ACTIVE_SESSION_STATUS }
-    val uptime = active?.let { formatUptime(nowEpochMs - it.startedAtEpochMs) } ?: "—"
-    val attached = state.browser?.principals?.size ?: 0
-    val sub =
-        "Accepting browser connections on this Wi-Fi network. " +
-            "$attached browser${if (attached == 1) "" else "s"} attached."
-    return MoreHeroInfo(true, uptime, "uptime", sub, "uptime · server running")
-}
-
-private fun moreHeroStopped(): MoreHeroInfo =
-    MoreHeroInfo(
-        running = false,
-        value = "—",
-        of = "not listening",
-        sub = "No port is open and nothing is being captured. Start the server to attach a browser.",
-        bar = "server stopped",
-    )
-
-@Composable
-private fun MoreHero(
-    info: MoreHeroInfo,
-    collapsed: Boolean,
-    onToggleCollapse: () -> Unit,
-    colors: DevConsoleColors,
-) {
-    val accentColor = if (info.running) colors.signal else colors.text3
-    val valueColor = if (info.running) colors.signal else colors.muted
-    if (collapsed) {
-        HeroBar(
-            value = info.value,
-            label = info.bar,
-            onExpand = onToggleCollapse,
-            valueColor = valueColor,
-            labelColor = accentColor,
-        )
-        return
-    }
-    HeroCard(
-        label = if (info.running) "Server running" else "Server stopped",
-        value = info.value,
-        valueSuffix = info.of,
-        subtitle = info.sub,
-        labelColor = accentColor,
-        valueColor = valueColor,
-        valueFontFamily = FontFamily.Monospace,
-        onCollapse = onToggleCollapse,
-        // Start/Stop lives in the dedicated ServerControlCard above this hero, not in a hero CTA.
+private fun MorePanelTitle(title: String) {
+    Text(
+        title,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
+        color = DevConsoleTheme.colors.ink,
+        fontSize = 17.sp,
+        fontWeight = FontWeight.SemiBold,
     )
 }
 
-/**
- * The dedicated Start/Stop pair at the top of More -- the same affordance the sample apps put on
- * their home screens, on the SDK's own surface. Rendered only when this build actually wires
- * [InspectorDataSource.setServerRunning]; a control that can never do anything is worse than none
- * (same honesty rule as the push Replay toast).
- */
+/** Plain grouped row with a readable label and a muted mono value. */
 @Composable
-private fun ServerControlCard(
-    running: Boolean,
-    onSetServerRunning: (Boolean) -> Unit,
-    colors: DevConsoleColors,
+private fun MorePanelRow(
+    title: String,
+    meta: String = "",
+    description: String = "",
+    onClick: (() -> Unit)? = null,
+    metaContent: (@Composable () -> Unit)? = null,
 ) {
-    Column(
+    val colors = DevConsoleTheme.colors
+    Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(MaterialTheme.shapes.large)
-                .background(if (running) colors.signalSoft else colors.surface2)
-                .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+                .heightIn(min = 56.dp)
+                .semantics(mergeDescendants = true) {
+                    if (description.isNotBlank()) contentDescription = "$title. $description"
+                }.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            if (running) "Server is running" else "Server is stopped",
-            color = colors.ink,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            // No per-state color swaps: InspectorPillButton owns the disabled treatment now, and
-            // dimming an already-muted color twice pushed these below the contrast floor.
-            InspectorPillButton(
-                label = "Start server",
-                onClick = { onSetServerRunning(true) },
-                modifier = Modifier.weight(1f),
-                enabled = !running,
-            )
-            InspectorPillButton(
-                label = "Stop",
-                onClick = { onSetServerRunning(false) },
-                modifier = Modifier.weight(1f),
-                enabled = running,
-                outlined = true,
-                contentColor = colors.ink,
-            )
+        Text(title, modifier = Modifier.weight(1f), color = colors.ink, fontSize = 16.sp)
+        if (metaContent != null) {
+            metaContent()
+        } else if (meta.isNotBlank()) {
+            Text(meta, color = colors.muted, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+        }
+        if (onClick != null) {
+            DevConsoleIcon(R.drawable.devconsole_ic_chevron_right, null, Modifier, colors.muted, 18.dp)
         }
     }
 }
 
-/** The URL card: running vs. stopped variants. */
 @Composable
-private fun MoreUrlCard(
+private fun BrowserDashboardPanel(
     state: InspectorState,
     running: Boolean,
     actions: MoreActions,
     colors: DevConsoleColors,
 ) {
     val browser = state.browser
-    when {
-        // The device's live address no longer matches what the server bound to -- the URL
-        // is dead either way, so say so honestly instead of showing it as if still connectable.
-        running && browser?.bindAddressChanged == true ->
-            StaleAddressUrlCard(state.serverControlSupported, actions, colors)
-        running && browser?.sessionCodeUrl != null && browser.sessionCode != null ->
-            if (browser.sessionCode.isBlank()) {
-                RunningOpenUrlCard(browser.sessionCodeUrl, actions, colors)
-            } else {
-                RunningUrlCard(
-                    browser.sessionCodeUrl,
-                    browser.sessionCode,
-                    browser.sessionCodeRemainingTtlMs,
-                    actions,
-                    colors,
+    val stale = running && browser?.bindAddressChanged == true
+    val url = browser?.sessionCodeUrl?.takeIf { running && !stale && browser.sessionCode != null }
+    GroupedPanel {
+        MorePanelTitle("Browser dashboard")
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ServerStatusLine(running, browser?.endpoint, colors)
+            if (stale) {
+                WarnNote(
+                    "The device's network address changed while the server was running. Stop the " +
+                        "server, then start it again to reconnect at the new address.",
                 )
             }
-        else -> StoppedUrlCard(state.serverControlSupported, actions, colors)
+            if (url != null) {
+                val uriHandler = LocalUriHandler.current
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    ConnectUrlQrCode(
+                        url,
+                        modifier =
+                            Modifier
+                                .size(96.dp)
+                                .clickable(onClickLabel = "QR", role = Role.Button) { actions.onShowQr(url) }
+                                .semantics { contentDescription = "QR" },
+                    )
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        InspectorUrlCard(
+                            dotColor = colors.signal,
+                            label = "",
+                            url = url,
+                            subtitle = "",
+                            actions =
+                                listOf(
+                                    InspectorUrlAction(
+                                        "Copy URL",
+                                        { actions.onCopyUrl(url) },
+                                        colors.panel,
+                                        colors.muted,
+                                        icon = { UrlActionCopyIcon(colors.muted) },
+                                    ),
+                                    InspectorUrlAction(
+                                        "Open URL",
+                                        { uriHandler.openUri(url) },
+                                        colors.panel,
+                                        colors.muted,
+                                        icon = {
+                                            DevConsoleIcon(
+                                                R.drawable.devconsole_ic_open_external,
+                                                null,
+                                                Modifier,
+                                                colors.muted,
+                                                18.dp,
+                                            )
+                                        },
+                                    ),
+                                ),
+                        )
+                        if (state.serverControlSupported) ServerControlButton(true, actions)
+                    }
+                }
+                browser?.let { SessionCodeLine(it, actions, colors) }
+            } else {
+                if (!stale) {
+                    Text(
+                        if (running) {
+                            "Waiting for a browser URL."
+                        } else {
+                            "The URL appears here once the server is running."
+                        },
+                        color = colors.muted,
+                        fontSize = 13.sp,
+                    )
+                }
+                if (state.serverControlSupported) ServerControlButton(running, actions)
+            }
+            LanWarningBanner(browser)
+        }
     }
 }
 
 @Composable
-private fun StaleAddressUrlCard(
-    serverControlSupported: Boolean,
-    actions: MoreActions,
+private fun ServerStatusLine(
+    running: Boolean,
+    endpoint: String?,
     colors: DevConsoleColors,
 ) {
-    InspectorUrlCard(
-        dotColor = colors.warn,
-        dotPulsing = true,
-        label = "Server address changed",
-        url = "—",
-        subtitle =
-            "The device's network address changed while the server was running. Stop the " +
-                "server, then start it again to reconnect at the new address.",
-        actions =
-            if (serverControlSupported) {
-                listOf(
-                    InspectorUrlAction(
-                        "Stop server",
-                        { actions.onSetServerRunning(false) },
-                        colors.surface3,
-                        colors.warn,
-                    ),
-                )
-            } else {
-                emptyList()
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(if (running) colors.signal else colors.muted))
+        Text(
+            buildAnnotatedString {
+                append(if (running) "Running" else "Stopped")
+                endpoint?.takeIf { running }?.let {
+                    append(" on ")
+                    withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(it) }
+                }
             },
+            color = colors.muted,
+            fontSize = 14.sp,
+        )
+    }
+}
+
+@Composable
+private fun SessionCodeLine(
+    browser: InspectorBrowserUi,
+    actions: MoreActions,
+    colors: DevConsoleColors,
+) {
+    val code = browser.sessionCode?.takeIf { it.isNotBlank() } ?: return
+    val rotation = browser.sessionCodeRemainingTtlMs?.let { " · rotates in ${formatDuration(it)}" }.orEmpty()
+    Text(
+        "Session code $code$rotation",
+        modifier = Modifier.clickable(onClickLabel = "Code") { actions.onCopyCode(code) },
+        color = colors.muted,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 12.sp,
     )
 }
 
 @Composable
-private fun RunningUrlCard(
-    url: String,
-    code: String,
-    remainingTtlMs: Long?,
+private fun ServerControlButton(
+    running: Boolean,
     actions: MoreActions,
-    colors: DevConsoleColors,
 ) {
-    val rotation = remainingTtlMs?.let { " · rotates in ${formatDuration(it)}" }.orEmpty()
-    InspectorUrlCard(
-        dotColor = colors.signal,
-        dotPulsing = true,
-        label = "Open in a browser",
-        url = url,
-        subtitle = "Session code $code$rotation. Plaintext on your LAN — debug builds only.",
-        actions = runningUrlCardActions(url, code, actions, colors),
-    )
+    val colors = DevConsoleTheme.colors
+    if (running) {
+        OutlinedButton(
+            onClick = { actions.onSetServerRunning(false) },
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, colors.signal),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.signal),
+        ) {
+            Text("Stop server", fontSize = 14.sp)
+        }
+    } else {
+        Button(
+            onClick = { actions.onSetServerRunning(true) },
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = colors.signal, contentColor = colors.signalInk),
+        ) {
+            Text("Start server", fontSize = 14.sp)
+        }
+    }
 }
 
 @Composable
-private fun RunningOpenUrlCard(
-    url: String,
-    actions: MoreActions,
-    colors: DevConsoleColors,
-) {
-    InspectorUrlCard(
-        dotColor = colors.signal,
-        dotPulsing = true,
-        label = "Open in a browser",
-        url = url,
-        subtitle = "No session code required. Plaintext on your LAN — use SESSION_CODE on shared networks.",
-        actions =
-            listOf(
-                InspectorUrlAction(
-                    "Copy URL",
-                    { actions.onCopyUrl(url) },
-                    colors.signal,
-                    colors.signalInk,
-                    flex = 1.5f,
-                    icon = { UrlActionCopyIcon(colors.signalInk) },
-                ),
-                InspectorUrlAction(
-                    "QR",
-                    { actions.onShowQr(url) },
-                    colors.surface3,
-                    colors.ink,
-                    icon = { UrlActionEyeIcon(colors.ink) },
-                ),
-            ),
-    )
-}
-
-private fun runningUrlCardActions(
-    url: String,
-    code: String,
-    actions: MoreActions,
-    colors: DevConsoleColors,
-): List<InspectorUrlAction> =
-    listOf(
-        InspectorUrlAction(
-            "Copy URL",
-            { actions.onCopyUrl(url) },
-            colors.signal,
-            colors.signalInk,
-            // 2f squeezed the secondary pills until their labels clipped.
-            flex = 1.5f,
-            icon = { UrlActionCopyIcon(colors.signalInk) },
-        ),
-        InspectorUrlAction(
-            "Code",
-            { actions.onCopyCode(code) },
-            colors.surface3,
-            colors.ink,
-            icon = { UrlActionCopyIcon(colors.ink) },
-        ),
-        InspectorUrlAction(
-            "QR",
-            { actions.onShowQr(url) },
-            colors.surface3,
-            colors.ink,
-            icon = { UrlActionEyeIcon(colors.ink) },
-        ),
-    )
-
-@Composable
-private fun StoppedUrlCard(
-    serverControlSupported: Boolean,
-    actions: MoreActions,
-    colors: DevConsoleColors,
-) {
-    InspectorUrlCard(
-        dotColor = colors.borderStrong,
-        label = "No address",
-        url = "—",
-        subtitle = "The URL appears here once the server is running.",
-        actions =
-            if (serverControlSupported) {
-                listOf(
-                    InspectorUrlAction(
-                        "Start server to get a URL",
-                        { actions.onSetServerRunning(true) },
-                        colors.surface3,
-                        colors.muted,
-                    ),
+private fun SdkHealthRow(health: InspectorHealthUi?) {
+    val colors = DevConsoleTheme.colors
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    MorePanelRow(
+        "SDK health",
+        onClick = { expanded = !expanded },
+        metaContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    health?.state ?: "Unavailable",
+                    color = if (health?.state == SERVER_STATE_RUNNING) colors.signal else colors.muted,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
                 )
-            } else {
-                emptyList()
-            },
+                health?.let {
+                    Text(
+                        " · ${it.droppedEventCount} dropped",
+                        color = colors.muted,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        },
     )
+    if (expanded) {
+        if (health == null) {
+            MorePanelRow("SDK health is unavailable.")
+        } else {
+            GroupedPanelDivider()
+            HealthTonalRow("State", health.state)
+            GroupedPanelDivider()
+            HealthTonalRow("Initializations", health.initializationCount.toString())
+            GroupedPanelDivider()
+            HealthTonalRow("Published events", health.publishedEventCount.toString())
+            GroupedPanelDivider()
+            HealthTonalRow("Dropped events", health.droppedEventCount.toString())
+        }
+    }
 }
 
 @Composable
@@ -631,54 +611,15 @@ private fun UrlActionCopyIcon(tint: Color) {
     InspectorGlyphIcon(InspectorGlyph.Copy, contentDescription = null, tint = tint, size = 15.dp)
 }
 
-@Composable
-private fun UrlActionEyeIcon(tint: Color) {
-    ControlGlyphIcon(ControlGlyph.Eye, contentDescription = null, tint = tint, size = 15.dp)
-}
-
-/**
- * Prominent, non-dismissible warning shown only when the server is bound to LAN rather than
- * loopback -- see docs/THREAT_MODEL.md: the dashboard is plaintext HTTP, and on LAN anyone sharing
- * the network can observe the bearer token and every captured request. Restyled onto the token
- * palette (error-soft, same shape as [WarnNote]) rather than dropped -- this is a real safety
- * signal the app still needs.
- */
+/** Preserve the LAN-only caveat without introducing another panel. */
 @Composable
 private fun LanWarningBanner(browser: InspectorBrowserUi?) {
     if (browser?.binding != LAN_BINDING) return
-    val colors = DevConsoleTheme.colors
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-                .clip(MaterialTheme.shapes.large)
-                .background(colors.errorSoft)
-                .padding(16.dp),
-    ) {
-        Text(
-            "LAN MODE — UNENCRYPTED",
-            color = colors.error,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            fontSize = 12.5.sp,
-        )
-        Text(
-            LOCAL_NETWORK_HTTP_WARNING,
-            color = colors.muted,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(top = 6.dp),
-        )
-        browser.endpoint?.let { endpoint ->
-            Text(
-                "Bound at $endpoint",
-                color = colors.muted,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.5.sp,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-    }
+    Text(
+        "Plain HTTP on your Wi-Fi. Use loopback on shared networks.",
+        color = DevConsoleTheme.colors.muted,
+        fontSize = 13.sp,
+    )
 }
 
 /** HAR/ZIP: real, direct export actions -- trail uses real counts (transactions/sessions), never a fabricated size. */
@@ -686,7 +627,6 @@ private fun LanWarningBanner(browser: InspectorBrowserUi?) {
 private fun ExportHarRow(
     state: InspectorState,
     actions: MoreActions,
-    colors: DevConsoleColors,
 ) {
     val selection = state.selectedTransactionIds
     val subtitle =
@@ -695,15 +635,10 @@ private fun ExportHarRow(
         } else {
             "Redacted · ${selection.size} selected transaction(s)"
         }
-    TonalListRow(
-        leadText = "HAR",
-        leadColor = colors.put,
-        leadContainerColor = colors.putSoft,
-        title = "Export HAR",
-        subtitle = subtitle,
-        trailValue = state.transactions.size.toString(),
-        trailValueColor = colors.ink,
-        trailSubtitle = "txns",
+    MorePanelRow(
+        title = "HAR",
+        description = subtitle,
+        meta = if (selection.isEmpty()) "${state.transactions.size} txns" else "${selection.size} selected",
         onClick = actions.onExportHar,
     )
 }
@@ -713,7 +648,6 @@ private fun ExportHarRow(
 private fun ExportPostmanRow(
     state: InspectorState,
     actions: MoreActions,
-    colors: DevConsoleColors,
 ) {
     val selection = state.selectedTransactionIds
     val subtitle =
@@ -722,15 +656,10 @@ private fun ExportPostmanRow(
         } else {
             "Redacted · ${selection.size} selected transaction(s)"
         }
-    TonalListRow(
-        leadText = "PM",
-        leadColor = colors.put,
-        leadContainerColor = colors.putSoft,
-        title = "Export Postman collection",
-        subtitle = subtitle,
-        trailValue = state.transactions.size.toString(),
-        trailValueColor = colors.ink,
-        trailSubtitle = "txns",
+    MorePanelRow(
+        title = "Postman collection",
+        description = subtitle,
+        meta = if (selection.isEmpty()) "${state.transactions.size} txns" else "${selection.size} selected",
         onClick = actions.onExportPostman,
     )
 }
@@ -738,18 +667,12 @@ private fun ExportPostmanRow(
 @Composable
 private fun ExportZipRow(
     state: InspectorState,
-    colors: DevConsoleColors,
     actions: MoreActions,
 ) {
-    TonalListRow(
-        leadText = "ZIP",
-        leadColor = colors.put,
-        leadContainerColor = colors.putSoft,
-        title = "Export session",
-        subtitle = "Timeline, captures, health snapshot",
-        trailValue = state.sessions.size.toString(),
-        trailValueColor = colors.ink,
-        trailSubtitle = if (state.sessions.size == 1) "session" else "sessions",
+    MorePanelRow(
+        title = "Session ZIP",
+        description = "Timeline, captures, health snapshot",
+        meta = "${state.sessions.size} ${if (state.sessions.size == 1) "session" else "sessions"}",
         onClick = actions.onExportSessionZip,
     )
 }
@@ -765,18 +688,10 @@ private fun ExportZipRow(
  * gated control in this product.
  */
 @Composable
-private fun CaptureScreenshotRow(
-    colors: DevConsoleColors,
-    actions: MoreActions,
-) {
-    TonalListRow(
-        leadText = "SHOT",
-        leadColor = colors.put,
-        leadContainerColor = colors.putSoft,
+private fun CaptureScreenshotRow(actions: MoreActions) {
+    MorePanelRow(
         title = "Capture screenshot",
-        subtitle = "The foreground screen, unredacted — off by default",
-        trailValue = "Capture",
-        trailValueColor = colors.put,
+        description = "The foreground screen, unredacted — off by default",
         onClick = actions.onCaptureScreenshot,
     )
 }
@@ -785,16 +700,11 @@ private fun CaptureScreenshotRow(
 private fun LocationPingStreamRow(
     stream: InspectorLocationPingStreamUi,
     actions: MoreActions,
-    colors: DevConsoleColors,
 ) {
-    TonalListRow(
-        leadText = if (stream.enabled) "REC" else "OFF",
-        leadColor = if (stream.enabled) colors.put else colors.muted,
-        leadContainerColor = if (stream.enabled) colors.putSoft else colors.surface3,
+    MorePanelRow(
         title = stream.name,
-        subtitle = stream.path,
-        trailValue = "",
-        trailContent = {
+        description = "${stream.path} · ${if (stream.enabled) "recording" else "off"}",
+        metaContent = {
             Switch(
                 checked = stream.enabled,
                 onCheckedChange = { checked -> actions.onSetLocationPingStream(stream.name, checked) },
@@ -804,8 +714,6 @@ private fun LocationPingStreamRow(
                     },
             )
         },
-        onClick = { actions.onSetLocationPingStream(stream.name, !stream.enabled) },
-        mergeDescendants = false,
     )
 }
 
@@ -825,30 +733,41 @@ private fun RetainedRunsRow(
             val plural = if (state.sessions.size == 1) "" else "s"
             "${state.sessions.size} run$plural · oldest ${formatCaptureClockTime(oldest.startedAtEpochMs)}"
         }
-    TonalListRow(
-        leadText = "RUN",
-        leadColor = colors.muted,
-        leadContainerColor = colors.surface3,
+    MorePanelRow(
         title = "Retained runs",
-        subtitle = subtitle,
-        trailValue = "",
-        trailValueColor = colors.muted,
-        trailContent = { TonalRowExpandChevron(expanded) },
+        description = subtitle,
+        meta = state.sessions.size.toString(),
         onClick = { expanded = !expanded },
     )
     if (expanded) {
         Column(modifier = Modifier.padding(bottom = 8.dp)) {
             state.sessions.forEach { session ->
+                GroupedPanelDivider()
                 TonalListRow(
-                    leadText = session.status.take(3),
-                    leadColor = if (session.id == state.selectedSessionId) colors.signal else colors.muted,
-                    leadContainerColor =
-                        if (session.id == state.selectedSessionId) colors.signalSoft else colors.surface3,
+                    leadText = "",
+                    leadColor = colors.muted,
+                    leadContainerColor = colors.panel,
                     title = session.label,
-                    subtitle = "${session.recordCount} records · ${formatByteSize(session.estimatedBytes)}",
+                    subtitle = "${session.status} · ${session.recordCount} records · ${formatByteSize(
+                        session.estimatedBytes,
+                    )}",
                     trailValue = formatCaptureClockTime(session.startedAtEpochMs),
                     trailValueColor = colors.muted,
-                    containerColor = colors.surface3,
+                    trailContent =
+                        if (session.id == state.selectedSessionId) {
+                            (
+                                {
+                                    InspectorGlyphIcon(
+                                        InspectorGlyph.Check,
+                                        "Selected",
+                                        tint = colors.ink,
+                                        size = 18.dp,
+                                    )
+                                }
+                            )
+                        } else {
+                            null
+                        },
                     onClick = { actions.onSelectSession(session.id) },
                 )
             }
@@ -871,29 +790,24 @@ private fun BrowserSessionsRow(
         } else {
             "${principals.size} connected · ${principals.take(2).joinToString { it.label }}"
         }
-    TonalListRow(
-        leadText = "WEB",
-        leadColor = colors.muted,
-        leadContainerColor = colors.surface3,
+    MorePanelRow(
         title = "Browser sessions",
-        subtitle = subtitle,
-        trailValue = "",
-        trailValueColor = colors.muted,
-        trailContent = { TonalRowExpandChevron(expanded) },
+        description = subtitle,
+        meta = "${principals.size} connected",
         onClick = { expanded = !expanded },
     )
     if (expanded) {
         Column(modifier = Modifier.padding(bottom = 8.dp)) {
             principals.forEach { principal ->
+                GroupedPanelDivider()
                 TonalListRow(
-                    leadText = "REV",
-                    leadColor = colors.error,
-                    leadContainerColor = colors.errorSoft,
+                    leadText = "",
+                    leadColor = colors.muted,
+                    leadContainerColor = colors.panel,
                     title = principal.label,
                     subtitle = "${principal.sourceIp} · expires ${formatCaptureClockTime(principal.expiresAtEpochMs)}",
                     trailValue = "revoke",
                     trailValueColor = colors.error,
-                    containerColor = colors.surface3,
                     onClick = { actions.onRevoke(principal.id) },
                 )
             }
@@ -917,82 +831,47 @@ private fun RetentionRow(
             val age = formatDuration(retention.maxAgeMs)
             "${retention.maxSessions} sessions · $bytes · $age"
         }
-    TonalListRow(
-        leadText = "KEEP",
-        leadColor = colors.muted,
-        leadContainerColor = colors.surface3,
+    MorePanelRow(
         title = "Retention",
-        subtitle = subtitle,
-        trailValue = "",
-        trailValueColor = colors.muted,
-        trailContent = if (retention != null) ({ TonalRowExpandChevron(expanded) }) else null,
+        description = subtitle,
+        meta = retention?.let { formatDuration(it.maxAgeMs) }.orEmpty(),
         onClick = if (retention != null) ({ expanded = !expanded }) else null,
     )
     if (expanded && retention != null) {
         val used = state.sessions.sumOf { it.estimatedBytes }
         Column(modifier = Modifier.padding(bottom = 8.dp)) {
+            GroupedPanelDivider()
+            MorePanelRow("Session limit", retention.maxSessions.toString())
+            GroupedPanelDivider()
+            MorePanelRow("Storage limit", formatByteSize(retention.maxBytes))
+            GroupedPanelDivider()
             TonalListRow(
-                leadText = "USE",
+                leadText = "",
                 leadColor = colors.muted,
-                leadContainerColor = colors.surface3,
+                leadContainerColor = colors.panel,
                 title = "Storage used",
                 subtitle = "${state.sessions.size} of ${retention.maxSessions} sessions",
                 trailValue = formatByteSize(used),
                 trailValueColor = colors.ink,
-                containerColor = colors.surface3,
             )
         }
     }
-}
-
-/** Read-only mirror of the dashboard's SDK Health view, restyled as [TonalListRow]s. */
-private fun LazyListScope.sdkHealthRows(
-    health: InspectorHealthUi?,
-    colors: DevConsoleColors,
-) {
-    if (health == null) {
-        item { SectionEmptyText("SDK health is unavailable.") }
-        return
-    }
-    item { HealthTonalRow("State", health.state, colors) }
-    item { HealthTonalRow("Initializations", health.initializationCount.toString(), colors) }
-    item { HealthTonalRow("Published events", health.publishedEventCount.toString(), colors) }
-    item { HealthTonalRow("Dropped events", health.droppedEventCount.toString(), colors) }
 }
 
 @Composable
 private fun HealthTonalRow(
     label: String,
     value: String,
-    colors: DevConsoleColors,
 ) {
-    TonalListRow(
-        leadText = label.take(3).uppercase(Locale.US),
-        leadColor = colors.muted,
-        leadContainerColor = colors.surface3,
-        title = label,
-        subtitle = "SDK health counter",
-        trailValue = value,
-        trailValueColor = colors.ink,
-    )
+    MorePanelRow(title = label, meta = value)
 }
 
 private fun formatDuration(ms: Long): String =
     when {
-        ms >= MS_PER_DAY -> "${ms / MS_PER_DAY}d"
-        ms >= MS_PER_HOUR -> "${ms / MS_PER_HOUR}h"
+        ms >= MS_PER_HOUR -> "${ms / MS_PER_HOUR} h"
         ms >= MS_PER_MINUTE -> "${ms / MS_PER_MINUTE}m"
         else -> "${ms / MS_PER_SECOND}s"
     }
-
-/** `HH:MM:SS` uptime clock, computed from the active session's real start time. */
-private fun formatUptime(elapsedMs: Long): String {
-    val totalSeconds = elapsedMs / MS_PER_SECOND
-    val hours = totalSeconds / (MS_PER_HOUR / MS_PER_SECOND)
-    val minutes = (totalSeconds % (MS_PER_HOUR / MS_PER_SECOND)) / (MS_PER_MINUTE / MS_PER_SECOND)
-    val seconds = totalSeconds % (MS_PER_MINUTE / MS_PER_SECOND)
-    return "%02d:%02d:%02d".format(Locale.US, hours, minutes, seconds)
-}
 
 /** Hand-built fixture for [MoreScreenPreview]. */
 private fun moreScreenPreviewState() =
@@ -1020,12 +899,12 @@ private fun moreScreenPreviewState() =
         browser =
             InspectorBrowserUi(
                 binding = LAN_BINDING,
-                endpoint = "192.168.1.42:8787",
+                endpoint = "192.168.0.104:8080",
                 principals = listOf(InspectorBrowserPrincipalUi("p-1", "Chrome on Mac", "192.168.1.10", 0)),
-                sessionCodeUrl = "http://192.168.1.42:8787/#s=ABCD1234",
+                sessionCodeUrl = "http://192.168.0.104:8080/#s=ABCD1234",
                 sessionCode = "ABCD1234",
             ),
-        retention = InspectorRetentionUi(maxSessions = 5, maxAgeMs = MS_PER_DAY * 7, maxBytes = 50_000_000),
+        retention = InspectorRetentionUi(maxSessions = 5, maxAgeMs = MS_PER_DAY, maxBytes = 50_000_000),
     )
 
 private fun moreScreenPreviewActions() =

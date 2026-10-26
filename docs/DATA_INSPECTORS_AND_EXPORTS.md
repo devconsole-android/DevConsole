@@ -3,27 +3,15 @@
 This page covers the three pieces of the dashboard that read and act on the app sandbox rather
 than network/socket/push traffic: the **Data** inspectors (preferences, database, files), the
 device's **More** screen, and the **export** formats (HAR, Postman, and the Android session ZIP).
-All of it sits behind the same SESSION_CODE auth as everything else — see
-[PROTOCOL_REFERENCE.md](PROTOCOL_REFERENCE.md#2-auth-handshake-session_code) — and every mutating
-action additionally gates on the host's `EditingCapabilities`. Every one of them defaults to `false`
-except `mocks`, which ships editable because a mock rule writes nothing of the host's — it only
-short-circuits DevConsole's own interceptor. `EditingCapabilities.readOnly()` still refuses
-everything, mocks included. A host opts specific features in:
+Browser access is open by default. Opt into SESSION_CODE with
+`.withBrowserSecurity(BrowserSecurity.SESSION_CODE)`; every mutating action also checks the host's
+`EditingCapabilities`. Every capability defaults to `true`, including preferences, feature flags,
+database, files, mocks, request execution, and capture rules. Opt into read-only operation:
 
 ```kotlin
 DevConsole.initialize(
     application,
-    DevConsoleConfig(
-        editingCapabilities = EditingCapabilities(
-            preferences = true,
-            database = true,
-            files = true,
-            mocks = true,
-            captureRules = true,
-            featureFlags = true,
-            requestExecution = true,
-        ),
-    ),
+    DevConsoleConfig().withEditingCapabilities(EditingCapabilities.readOnly()),
 )
 ```
 
@@ -32,6 +20,13 @@ allowing raw SQL against its database. See
 [THREAT_MODEL.md](THREAT_MODEL.md#what-is-protected-and-against-what) for why this replaces a session-level
 role: every authenticated session is equivalent, and these flags bound *what the console can do*,
 not *who* can do it.
+
+Redaction is off by default; pass `redactionPolicy = RedactionPolicy.recommended()` to mask the
+built-in fields in inspectors and exports. Screenshots default to enabled and remain unredacted;
+disable them with `.withScreenshotPolicy(ScreenshotPolicy(enabled = false))`. Composer and state
+mutations also default to enabled. Rate limiting and Host/Origin checks default to off; enable both
+with `.withNetworkProtection(NetworkProtection.recommended())`. See the complete
+[layer/default table](SECURITY_AND_REDACTION.md#opt-in-security-layers).
 
 ## Preferences inspector
 
@@ -48,7 +43,7 @@ value. See [PROTOCOL_REFERENCE.md](PROTOCOL_REFERENCE.md#3-rest-routes) for the 
 Lists the app's SQLite databases and, per database, its tables with row counts (internal
 `sqlite_%` tables are excluded from the table/row browser). `GET
 /api/v1/database/{name}/tables/{table}` returns the first 200 rows with column-name-based
-redaction applied. The `database` capability is required for **every** statement against `POST
+redaction applied only when the policy is enabled. The `database` capability is required for **every** statement against `POST
 /api/v1/database/{name}/sql`, including `SELECT` — a caller who controls the SQL text can alias
 any column past name-based redaction (`SELECT password AS p ...`), so enabling this capability is
 enabling raw, unredacted database access over the session, not just "editing." The SQL console can
@@ -192,7 +187,7 @@ the 500-row cap directly in their subtitle whenever the export scope is "everyth
 all captured traffic (capped at the 500 most recent)"), so a capped export is never presented as
 if it were complete.
 
-**In-app exports are full-fidelity, redacted diagnostic artifacts, not throwaway files.** They
+**In-app exports are full-fidelity diagnostic artifacts using the configured redaction policy.** They
 persist under `filesDir/devconsole-exports` (pruned to the five most recent), which inherits your
 app's Android auto-backup settings unless you add your own backup-exclusion rule — see
 [THREAT_MODEL.md](THREAT_MODEL.md) for what that implies and why the SDK doesn't add the exclusion

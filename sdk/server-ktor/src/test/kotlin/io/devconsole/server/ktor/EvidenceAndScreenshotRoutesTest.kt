@@ -68,7 +68,7 @@ class EvidenceAndScreenshotRoutesTest {
     @Test
     fun `unauthenticated requests are rejected across every evidence and screenshot route`() =
         testApplication {
-            application { devConsoleModule(SessionAuthority()) }
+            application { protectedDevConsoleModule(SessionAuthority()) }
 
             val unauthenticated =
                 listOf(
@@ -95,7 +95,7 @@ class EvidenceAndScreenshotRoutesTest {
             val audit = InMemoryCommandAuditLog()
             val store = FakeEvidenceStore()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     evidenceStore = store
                     commandAuditLog = audit
                 }
@@ -127,7 +127,7 @@ class EvidenceAndScreenshotRoutesTest {
             val audit = InMemoryCommandAuditLog()
             val store = FakeEvidenceStore()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     evidenceStore = store
                     commandAuditLog = audit
                 }
@@ -153,7 +153,7 @@ class EvidenceAndScreenshotRoutesTest {
             val audit = InMemoryCommandAuditLog()
             val store = FakeEvidenceStore()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     evidenceStore = store
                     commandAuditLog = audit
                 }
@@ -181,7 +181,7 @@ class EvidenceAndScreenshotRoutesTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = approvedSession(sessions, sessionCodes)
 
             val listed = client.get("/api/v1/evidence") { authHeaders(session) }
@@ -203,7 +203,7 @@ class EvidenceAndScreenshotRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val store = FakeEvidenceStore()
-            application { devConsoleModule(sessions, sessionCodes) { evidenceStore = store } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { evidenceStore = store } }
             val session = approvedSession(sessions, sessionCodes)
 
             val response =
@@ -233,7 +233,7 @@ class EvidenceAndScreenshotRoutesTest {
             val timeline = InMemoryTimeline(emptyList(), CursorCodec(ByteArray(16)))
             timeline.append(timelineEvent(id = "log-1", pluginId = "logs", summary = "just a log line"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.timeline = timeline
                     evidenceStore = store
                 }
@@ -275,7 +275,7 @@ class EvidenceAndScreenshotRoutesTest {
             val timeline = InMemoryTimeline(emptyList(), CursorCodec(ByteArray(16)))
             timeline.append(timelineEvent(id = "event-1", summary = "x".repeat(600)))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.timeline = timeline
                     evidenceStore = store
                 }
@@ -299,7 +299,7 @@ class EvidenceAndScreenshotRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val store = FakeEvidenceStore()
-            application { devConsoleModule(sessions, sessionCodes) { evidenceStore = store } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { evidenceStore = store } }
             val session = approvedSession(sessions, sessionCodes)
 
             val response =
@@ -323,7 +323,7 @@ class EvidenceAndScreenshotRoutesTest {
             networkStore.record(networkTransaction("tx-1"))
             networkStore.record(networkTransaction("tx-2"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = networkStore
                     evidenceStore = store
                 }
@@ -355,7 +355,7 @@ class EvidenceAndScreenshotRoutesTest {
             val networkStore = InMemoryNetworkTransactionStore(NetworkCursorCodec(ByteArray(16)))
             repeat(3) { networkStore.record(networkTransaction("tx-$it")) }
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = networkStore
                     evidenceStore = store
                 }
@@ -399,7 +399,7 @@ class EvidenceAndScreenshotRoutesTest {
             val networkStore = InMemoryNetworkTransactionStore(NetworkCursorCodec(ByteArray(16)))
             networkStore.record(networkTransaction("tx-1"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = networkStore
                     evidenceStore = store
                 }
@@ -435,7 +435,7 @@ class EvidenceAndScreenshotRoutesTest {
                 networkTransaction("tx-1", startedAtEpochMs = 1_000, completedAtEpochMs = 1_250, status = 503),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = networkStore
                     evidenceStore = store
                 }
@@ -478,7 +478,7 @@ class EvidenceAndScreenshotRoutesTest {
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.timeline = timeline
                     evidenceStore = store
                 }
@@ -517,7 +517,7 @@ class EvidenceAndScreenshotRoutesTest {
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.timeline = timeline
                     evidenceStore = store
                 }
@@ -563,7 +563,7 @@ class EvidenceAndScreenshotRoutesTest {
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.timeline = timeline
                     evidenceStore = store
                     attachmentMetadataReader = { id ->
@@ -608,7 +608,7 @@ class EvidenceAndScreenshotRoutesTest {
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.timeline = timeline
                     evidenceStore = store
                     attachmentMetadataReader = { id ->
@@ -643,7 +643,7 @@ class EvidenceAndScreenshotRoutesTest {
             val networkStore = InMemoryNetworkTransactionStore(NetworkCursorCodec(ByteArray(16)))
             networkStore.record(networkTransaction("tx-1"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = networkStore
                     evidenceStore = store
                 }
@@ -681,7 +681,7 @@ class EvidenceAndScreenshotRoutesTest {
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.timeline = timeline
                     evidenceStore = store
                 }
@@ -734,7 +734,7 @@ class EvidenceAndScreenshotRoutesTest {
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.timeline = timeline
                     evidenceStore = store
                 }
@@ -777,7 +777,7 @@ class EvidenceAndScreenshotRoutesTest {
                 ),
             )
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.socketStore = socketStore
                     evidenceStore = store
                 }
@@ -807,7 +807,7 @@ class EvidenceAndScreenshotRoutesTest {
             val pushStore = InMemoryPushStore()
             pushStore.append(PushEvent(provider = "fcm", data = mapOf("k" to "v"), lifecycle = PushLifecycle.DISPLAYED))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.pushStore = pushStore
                     evidenceStore = store
                 }
@@ -835,7 +835,7 @@ class EvidenceAndScreenshotRoutesTest {
             val networkStore = InMemoryNetworkTransactionStore(NetworkCursorCodec(ByteArray(16)))
             networkStore.record(networkTransaction("tx-1"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     networkTransactions = networkStore
                     evidenceStore = store
                 }
@@ -881,7 +881,7 @@ class EvidenceAndScreenshotRoutesTest {
             val networkStore = InMemoryNetworkTransactionStore(NetworkCursorCodec(ByteArray(16)))
             networkStore.record(networkTransaction("tx-1"))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     this.timeline = timeline
                     this.networkTransactions = networkStore
                     this.exportDirectory = exportDirectory
@@ -947,7 +947,7 @@ class EvidenceAndScreenshotRoutesTest {
                 val sessionCodes = SessionCodeAuthority(sessions)
                 val audit = InMemoryCommandAuditLog()
                 application {
-                    devConsoleModule(sessions, sessionCodes) {
+                    protectedDevConsoleModule(sessions, sessionCodes) {
                         commandAuditLog = audit
                         screenshotCapture = { result }
                     }
@@ -968,7 +968,7 @@ class EvidenceAndScreenshotRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     screenshotCapture = {
                         ScreenshotResult.Captured(
                             attachmentId = "attach-1",
@@ -999,7 +999,7 @@ class EvidenceAndScreenshotRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             var captured = false
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     screenshotCapture = {
                         captured = true
                         ScreenshotResult.Captured("a", "e", 1, 1, 1)
@@ -1075,7 +1075,7 @@ private fun networkTransaction(
         startedAtEpochMs = startedAtEpochMs,
         completedAtEpochMs = completedAtEpochMs,
         capture =
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())).capture(
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
                 NetworkRequestInput("GET", "https://api.test/orders"),
                 NetworkResponseInput(status),
             ),

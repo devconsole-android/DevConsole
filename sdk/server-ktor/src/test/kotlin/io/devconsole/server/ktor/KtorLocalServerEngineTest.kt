@@ -54,7 +54,13 @@ class KtorLocalServerEngineTest {
     fun `falls forward through a requested loopback port range`() =
         runBlocking {
             ServerSocket(0).use { occupied ->
-                val engine = KtorLocalServerEngine()
+                val engine =
+                    KtorLocalServerEngine()
+                        .withBrowserSecurity(io.devconsole.api.BrowserSecurity.SESSION_CODE)
+                        .withNetworkProtection(
+                            io.devconsole.api.NetworkProtection
+                                .recommended(),
+                        )
                 try {
                     val result =
                         engine.start(
@@ -78,7 +84,13 @@ class KtorLocalServerEngineTest {
             // never terminates TLS), so the CSP's connect-src must name that exact host:port rather
             // than the old blanket "ws: wss:" (any host, any scheme) -- see the CSP-building comment
             // in devConsoleModule for the Safari same-origin-ws compatibility reasoning.
-            val engine = KtorLocalServerEngine()
+            val engine =
+                KtorLocalServerEngine()
+                    .withBrowserSecurity(io.devconsole.api.BrowserSecurity.SESSION_CODE)
+                    .withNetworkProtection(
+                        io.devconsole.api.NetworkProtection
+                            .recommended(),
+                    )
             val started = engine.start(StartRequest(BindingMode.LOOPBACK, 8520..8539))
             assertTrue(started is ServerStartResult.Started)
             started as ServerStartResult.Started
@@ -106,7 +118,13 @@ class KtorLocalServerEngineTest {
             // dashboard.js's WebSocket actually dials -- connect-src must follow that alias, not the
             // server's own bind address ("127.0.0.1"), or the ws:// upgrade is silently blocked
             // (worse in Safari, which doesn't reliably treat bare 'self' as covering it either).
-            val engine = KtorLocalServerEngine()
+            val engine =
+                KtorLocalServerEngine()
+                    .withBrowserSecurity(io.devconsole.api.BrowserSecurity.SESSION_CODE)
+                    .withNetworkProtection(
+                        io.devconsole.api.NetworkProtection
+                            .recommended(),
+                    )
             val started = engine.start(StartRequest(BindingMode.LOOPBACK, 8580..8599))
             assertTrue(started is ServerStartResult.Started)
             started as ServerStartResult.Started
@@ -137,7 +155,13 @@ class KtorLocalServerEngineTest {
             // death. This can't fault-inject a throwing embedded engine without a bigger refactor
             // (it's constructed inline inside start()), but it does prove the happy path actually
             // clears every piece of state stop() is responsible for, twice over.
-            val engine = KtorLocalServerEngine()
+            val engine =
+                KtorLocalServerEngine()
+                    .withBrowserSecurity(io.devconsole.api.BrowserSecurity.SESSION_CODE)
+                    .withNetworkProtection(
+                        io.devconsole.api.NetworkProtection
+                            .recommended(),
+                    )
 
             val first = engine.start(StartRequest(BindingMode.LOOPBACK, 8540..8559))
             assertTrue(first is ServerStartResult.Started)
@@ -154,7 +178,13 @@ class KtorLocalServerEngineTest {
     @Test
     fun `stop is a safe no-op when the engine was never started`() =
         runBlocking {
-            val engine = KtorLocalServerEngine()
+            val engine =
+                KtorLocalServerEngine()
+                    .withBrowserSecurity(io.devconsole.api.BrowserSecurity.SESSION_CODE)
+                    .withNetworkProtection(
+                        io.devconsole.api.NetworkProtection
+                            .recommended(),
+                    )
 
             // Must not throw even though `engine` (the private EmbeddedServer field) is null.
             engine.stop()
@@ -164,7 +194,13 @@ class KtorLocalServerEngineTest {
     @Test
     fun `LAN mode binds to a real non-loopback address`() =
         runBlocking {
-            val engine = KtorLocalServerEngine()
+            val engine =
+                KtorLocalServerEngine()
+                    .withBrowserSecurity(io.devconsole.api.BrowserSecurity.SESSION_CODE)
+                    .withNetworkProtection(
+                        io.devconsole.api.NetworkProtection
+                            .recommended(),
+                    )
             try {
                 val result = engine.start(StartRequest(BindingMode.LAN, 8180..8199))
 
@@ -181,7 +217,15 @@ class KtorLocalServerEngineTest {
     @Test
     fun `LAN mode reports no eligible network when no interface qualifies`() =
         runBlocking {
-            val engine = KtorLocalServerEngine(lanInterfaces = { emptyList() })
+            val engine =
+                KtorLocalServerEngine(lanInterfaces = {
+                    emptyList()
+                })
+                    .withBrowserSecurity(io.devconsole.api.BrowserSecurity.SESSION_CODE)
+                    .withNetworkProtection(
+                        io.devconsole.api.NetworkProtection
+                            .recommended(),
+                    )
             try {
                 val result = engine.start(StartRequest(BindingMode.LAN, 8180..8199))
 
@@ -218,7 +262,13 @@ class KtorLocalServerEngineTest {
     @Test
     fun `a fresh LAN engine reports no bind-address change against its own real interfaces`() =
         runBlocking {
-            val engine = KtorLocalServerEngine()
+            val engine =
+                KtorLocalServerEngine()
+                    .withBrowserSecurity(io.devconsole.api.BrowserSecurity.SESSION_CODE)
+                    .withNetworkProtection(
+                        io.devconsole.api.NetworkProtection
+                            .recommended(),
+                    )
             try {
                 engine.start(StartRequest(BindingMode.LAN, 8200..8219))
 
@@ -235,7 +285,11 @@ class KtorLocalServerEngineTest {
                 KtorLocalServerEngine(
                     composerEnabled = true,
                     stateMutationsEnabled = true,
-                )
+                ).withBrowserSecurity(io.devconsole.api.BrowserSecurity.SESSION_CODE)
+                    .withNetworkProtection(
+                        io.devconsole.api.NetworkProtection
+                            .recommended(),
+                    )
             val started = engine.start(StartRequest(BindingMode.LOOPBACK, 8460..8479))
             assertTrue(started is ServerStartResult.Started)
             started as ServerStartResult.Started
@@ -270,7 +324,10 @@ class KtorLocalServerEngineTest {
                     sessionAuthority = authority,
                     composerEnabled = true,
                     composerAllowedHosts = setOf("api.example.test"),
-                    redactionPolicy = RedactionPolicy.default().copy(sensitiveFieldNames = setOf("x-tenant-secret")),
+                    redactionPolicy =
+                        RedactionPolicy.recommended().copy(
+                            sensitiveFieldNames = setOf("x-tenant-secret"),
+                        ),
                     commandAuditLog = audit,
                     composerCollections = collections,
                     composerExecutor =
@@ -280,7 +337,11 @@ class KtorLocalServerEngineTest {
                                 ComposerResponse(statusCode = 202, body = "accepted")
                             },
                         ),
-                )
+                ).withBrowserSecurity(io.devconsole.api.BrowserSecurity.SESSION_CODE)
+                    .withNetworkProtection(
+                        io.devconsole.api.NetworkProtection
+                            .recommended(),
+                    )
             val started = engine.start(StartRequest(BindingMode.LOOPBACK, 8480..8499))
             assertTrue(started is ServerStartResult.Started)
             started as ServerStartResult.Started
@@ -337,10 +398,14 @@ class KtorLocalServerEngineTest {
                     pushSimulator =
                         PushSimulator(
                             PushSimulationCallback { PushLifecycle.DISPLAYED },
-                            PushRecorder(RedactionEngine(RedactionPolicy.default()), pushes),
+                            PushRecorder(RedactionEngine(RedactionPolicy.recommended()), pushes),
                         ),
                     annotations = annotations,
-                )
+                ).withBrowserSecurity(io.devconsole.api.BrowserSecurity.SESSION_CODE)
+                    .withNetworkProtection(
+                        io.devconsole.api.NetworkProtection
+                            .recommended(),
+                    )
             val started = engine.start(StartRequest(BindingMode.LOOPBACK, 8500..8519))
             assertTrue(started is ServerStartResult.Started)
             started as ServerStartResult.Started

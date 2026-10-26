@@ -43,7 +43,7 @@ class LocationPingRoutesTest {
     fun `the overview requires an authenticated session`() =
         testApplication {
             val store = storeWithOneRidePing()
-            application { devConsoleModule(SessionAuthority()) { locationPings = { store } } }
+            application { protectedDevConsoleModule(SessionAuthority()) { locationPings = { store } } }
 
             val response = client.get("/api/v1/location-pings") { header(HttpHeaders.Host, "localhost") }
 
@@ -56,7 +56,7 @@ class LocationPingRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val store = storeWithOneRidePing()
-            application { devConsoleModule(sessions, sessionCodes) { locationPings = { store } } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { locationPings = { store } } }
             val session = approvedSession(sessions, sessionCodes)
 
             val body = client.get("/api/v1/location-pings") { authHeaders(session) }.bodyAsText()
@@ -73,7 +73,7 @@ class LocationPingRoutesTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = approvedSession(sessions, sessionCodes)
 
             val response = client.get("/api/v1/location-pings") { authHeaders(session) }
@@ -88,7 +88,7 @@ class LocationPingRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val store = storeWithOneRidePing()
-            application { devConsoleModule(sessions, sessionCodes) { locationPings = { store } } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { locationPings = { store } } }
             val session = approvedSession(sessions, sessionCodes)
             val file = store.tracks().single().file
 
@@ -110,7 +110,7 @@ class LocationPingRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val store = storeWithOneRidePing()
-            application { devConsoleModule(sessions, sessionCodes) { locationPings = { store } } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { locationPings = { store } } }
             val session = approvedSession(sessions, sessionCodes)
 
             val response =
@@ -129,7 +129,7 @@ class LocationPingRoutesTest {
             val audit = InMemoryCommandAuditLog()
             val store = storeWithOneRidePing()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     locationPings = { store }
                     commandAuditLog = audit
                 }
@@ -164,7 +164,7 @@ class LocationPingRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val store = storeWithOneRidePing()
-            application { devConsoleModule(sessions, sessionCodes) { locationPings = { store } } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { locationPings = { store } } }
             val session = approvedSession(sessions, sessionCodes)
 
             val response =
@@ -182,7 +182,7 @@ class LocationPingRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             val store = storeWithOneRidePing()
-            application { devConsoleModule(sessions, sessionCodes) { locationPings = { store } } }
+            application { protectedDevConsoleModule(sessions, sessionCodes) { locationPings = { store } } }
             val session = approvedSession(sessions, sessionCodes)
 
             val body = client.delete("/api/v1/location-pings?stream=ride") { controlHeaders(session) }.bodyAsText()
@@ -198,7 +198,7 @@ class LocationPingRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val store = storeWithOneRidePing()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     locationPings = { store }
                     metadata = ServerMetadata(captureCategories = listOf("logs"))
                 }

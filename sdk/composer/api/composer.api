@@ -162,6 +162,10 @@ public final class io/devconsole/composer/ComposerRequest {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/devconsole/composer/ComposerRequestKt {
+	public static final fun wireBody (Lio/devconsole/composer/ResolvedComposerRequest;)Lio/devconsole/composer/ComposerWireBody;
+}
+
 public final class io/devconsole/composer/ComposerResponse {
 	public fun <init> (ILjava/util/Map;Ljava/lang/String;Ljava/lang/Long;)V
 	public synthetic fun <init> (ILjava/util/Map;Ljava/lang/String;Ljava/lang/Long;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -198,6 +202,12 @@ public final class io/devconsole/composer/ComposerVariable {
 	public final fun getValue ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/composer/ComposerWireBody {
+	public fun <init> ([BLjava/lang/String;)V
+	public final fun getBytes ()[B
+	public final fun getContentType ()Ljava/lang/String;
 }
 
 public final class io/devconsole/composer/InMemoryComposerCollectionStore : io/devconsole/composer/ComposerCollectionStore {

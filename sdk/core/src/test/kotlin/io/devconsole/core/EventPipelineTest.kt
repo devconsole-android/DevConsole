@@ -37,7 +37,16 @@ class EventPipelineTest {
     @Test
     fun `redacts event content before it reaches the observable bus`() =
         runTest {
-            val pipeline = EventPipeline(UUID.randomUUID(), capacity = 2)
+            val pipeline =
+                EventPipeline(
+                    UUID.randomUUID(),
+                    capacity = 2,
+                    redactionEngine =
+                        io.devconsole.security.RedactionEngine(
+                            io.devconsole.security.RedactionPolicy
+                                .recommended(),
+                        ),
+                )
 
             pipeline.publish(
                 EventDraft(

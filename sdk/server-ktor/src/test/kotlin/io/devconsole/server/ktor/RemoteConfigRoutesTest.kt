@@ -54,7 +54,7 @@ class RemoteConfigRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     remoteConfigSnapshots = { listOf(snapshot()) }
                 }
             }
@@ -71,7 +71,7 @@ class RemoteConfigRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     remoteConfigSnapshots = { listOf(snapshot()) }
                     metadata = ServerMetadata(captureCategories = listOf("network", "logs"))
                 }
@@ -90,7 +90,7 @@ class RemoteConfigRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     remoteConfigSnapshots = { listOf(snapshot()) }
                 }
             }
@@ -114,7 +114,7 @@ class RemoteConfigRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     remoteConfigSnapshots = {
                         listOf(
                             RemoteConfigSnapshot(
@@ -141,7 +141,7 @@ class RemoteConfigRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     remoteConfigSnapshots =
                         { listOf(snapshot(unavailableReason = "disabled-build", entries = emptyList())) }
                 }
@@ -158,7 +158,7 @@ class RemoteConfigRoutesTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            application { devConsoleModule(sessions, sessionCodes) {} }
+            application { protectedDevConsoleModule(sessions, sessionCodes) {} }
             val session = approvedSession(sessions, sessionCodes)
 
             val response = client.get("/api/v1/remote-config") { authed(session) }
@@ -173,7 +173,7 @@ class RemoteConfigRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     remoteConfigSnapshots = {
                         listOf(
                             snapshot(
@@ -197,7 +197,7 @@ class RemoteConfigRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     remoteConfigSnapshots = {
                         listOf(
                             snapshot(

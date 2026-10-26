@@ -140,7 +140,7 @@ class DevConsoleOkHttpMockInstallTest {
 
     private fun recorder() =
         NetworkTransactionRecorder(
-            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default())),
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())),
             InMemoryNetworkTransactionStore(NetworkCursorCodec("mock-install-test-key".encodeToByteArray())),
         )
 

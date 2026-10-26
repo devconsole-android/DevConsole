@@ -123,6 +123,7 @@ internal class FullInspectorDataSource(
     private val captureRuleEngine: CaptureRuleEngine = CaptureRuleEngine(),
     private val composerExecutor: ComposerExecutor = ComposerExecutor(UrlConnectionComposerTransport()),
     private val configSupplier: () -> DevConsoleConfig?,
+    private val composerHostPermit: (String) -> Boolean? = { null },
     private val socketStore: SocketStore = InMemorySocketStore(),
     private val pushStore: PushStore = InMemoryPushStore(),
     private val timelineSupplier: () -> Timeline? = { null },
@@ -378,6 +379,7 @@ internal class FullInspectorDataSource(
             retention = retentionSupplier(),
             keepAlivePromptNeeded = keepAlivePromptSupplier(),
             captureCategories = categories,
+            redactionEnabled = (config?.redactionPolicy ?: RedactionPolicy.default()).hasRules(),
             locationPingStreams =
                 if (CaptureCategory.NETWORK in
                     categories
@@ -529,7 +531,7 @@ internal class FullInspectorDataSource(
         val config = configSupplier()
         return when {
             config?.editingCapabilities?.requestExecution != true -> InspectorCommandResult.Disabled("requestExecution")
-            !config.composerEnabled || !config.composerAllowedHosts.permitsHostOf(request.url) ->
+            !config.composerEnabled || !permitsComposerHost(config, request.url) ->
                 InspectorCommandResult.Invalid("Destination host is not allowed")
             else -> dispatch(request, config)
         }
@@ -552,7 +554,7 @@ internal class FullInspectorDataSource(
                 body = request.body,
             )
         return try {
-            val execution = composerExecutor.execute(composerRequest, config.composerAllowedHosts::permitsHostOf)
+            val execution = composerExecutor.execute(composerRequest) { url -> permitsComposerHost(config, url) }
             InspectorCommandResult.Success(
                 summary = "${request.method} ${request.url} -> ${execution.response.statusCode}",
                 statusCode = execution.response.statusCode,
@@ -564,6 +566,11 @@ internal class FullInspectorDataSource(
             InspectorCommandResult.Failed(failure.message ?: failure.javaClass.simpleName)
         }
     }
+
+    private fun permitsComposerHost(
+        config: DevConsoleConfig,
+        url: String,
+    ): Boolean = composerHostPermit(url) ?: config.composerAllowedHosts.permitsHostOf(url)
 
     override fun setMocksEnabled(enabled: Boolean): InspectorCommandResult {
         if (configSupplier()?.editingCapabilities?.mocks != true) return InspectorCommandResult.Disabled("mocks")
@@ -917,10 +924,10 @@ private fun InspectorTrafficQuery.toEngineQuery(): NetworkTransactionQuery {
     return NetworkTransactionQuery(limit = SNAPSHOT_TRANSACTION_LIMIT, methods = methods).withFilters(filters)
 }
 
-/** Exact-host allow-list match, mirroring the server's Composer host gate. */
+/** Empty permits any host; otherwise use an exact-host allow-list match. */
 private fun Set<String>.permitsHostOf(url: String): Boolean {
     val host = url.hostOrEmpty().lowercase()
-    return host.isNotEmpty() && any { it.lowercase() == host }
+    return host.isNotEmpty() && (isEmpty() || any { it.lowercase() == host })
 }
 
 private fun String.hostOrEmpty(): String = runCatching { URI(this).host.orEmpty() }.getOrDefault("")

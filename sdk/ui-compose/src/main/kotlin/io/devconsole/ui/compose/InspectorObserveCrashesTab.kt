@@ -36,8 +36,8 @@ internal fun CrashesTabContent(
     actions: ObserveActions,
 ) {
     val colors = DevConsoleTheme.colors
-    if (state.crashes.isEmpty()) {
-        ObserveTabEmptyState("No crashes or ANRs captured yet.")
+    if (state.crashes.isEmpty() && !ui.searchOpen) {
+        ObserveTabEmptyState("No crashes or ANRs captured yet.", EmptySpot.CrashesClear)
         return
     }
     val searched =
@@ -58,27 +58,29 @@ internal fun CrashesTabContent(
     val arrivals = rememberArrivals(rowsNewestFirst.map { it.id })
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        // 16dp side / 12dp top padding with FAB clearance at the bottom, like every Observe tab's
-        // scroll container.
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
     ) {
-        stickyHeader {
-            InspectorSearchBar(
-                query = ui.crashesSearch,
-                onQueryChange = actions.onCrashesSearchChange,
-                placeholder = "Search summary, thread or dump",
-            )
+        if (ui.searchOpen) {
+            stickyHeader {
+                InspectorSearchBar(
+                    query = ui.crashesSearch,
+                    onQueryChange = actions.onCrashesSearchChange,
+                    placeholder = "Search summary, thread or dump",
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
         }
-        item { Spacer(Modifier.height(16.dp)) }
-        item { CrashesHero(state.crashes, ui, actions, colors) }
-        item { Spacer(Modifier.height(16.dp)) }
-        item { GroupLabel("Newest first") }
-        itemsIndexed(rowsNewestFirst, key = { _, crash -> crash.id }) { _, crash ->
+        if (state.crashes.isNotEmpty()) {
+            item { CrashesHero(state.crashes, ui, actions, colors) }
+            item { Spacer(Modifier.height(12.dp)) }
+        }
+        if (rowsNewestFirst.isEmpty()) item { ObserveTabEmptyState("No matching crashes.", EmptySpot.Search) }
+        itemsIndexed(rowsNewestFirst, key = { _, crash -> crash.id }) { index, crash ->
             CrashRow(
                 crash = crash,
                 isFlagged = crash.id in ui.flaggedCrashIds,
                 colors = colors,
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem().groupedPanelItem(GroupPosition.of(index, rowsNewestFirst.size)),
                 isArrival = crash.id in arrivals,
                 onClick = { actions.onOpenCrashDetail(crash.id) },
             )
@@ -128,25 +130,20 @@ private fun CrashRow(
     modifier: Modifier = Modifier,
     isArrival: Boolean = false,
 ) {
-    val (leadColor, leadBg) = logLevelTint(crash.kind, colors)
     val crumbCount = crash.breadcrumbs.size
     val crumbNoun = if (crumbCount == 1) "breadcrumb" else "breadcrumbs"
     Column(modifier = modifier.fillMaxWidth()) {
         TonalListRow(
             isArrival = isArrival,
-            leadText = logLevelShortLabel(crash.kind),
-            leadColor = leadColor,
-            leadContainerColor = leadBg,
+            leadText = if (crash.kind.equals("ANR", ignoreCase = true)) "ANR" else "CRASH",
+            leadColor = colors.muted,
+            leadContainerColor = Color.Transparent,
             title = if (crash.summary.length > 40) crash.summary.take(40) + "…" else crash.summary,
             subtitle = "${crash.thread.ifBlank { "unknown thread" }} · $crumbCount $crumbNoun",
             trailValue = formatCaptureClockTime(crash.timestampEpochMs),
             trailValueColor = colors.muted,
-            containerColor = if (isFlagged) colors.signalSoft else Color.Transparent,
+            containerColor = if (isFlagged) colors.surface2 else Color.Transparent,
             onClick = onClick,
-        )
-        androidx.compose.material3.HorizontalDivider(
-            modifier = Modifier.padding(start = 76.dp),
-            color = colors.line,
         )
     }
 }

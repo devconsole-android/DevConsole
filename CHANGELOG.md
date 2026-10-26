@@ -20,6 +20,29 @@ joined this list.)
 
 ## Unreleased
 
+### Added
+
+- **Composer can run a request on your computer, not just the phone.** A new `devconsole-agent`
+  (`tools/composer-agent`, JDK 17+, macOS/Linux/Windows) connects to the device and appears under
+  Composer -> **Run on**. Use it for APIs only the computer can reach (localhost, VPN, private IPs)
+  and for any authorized call without the browser in the loop. The device keeps the allowlist, rate
+  limit, audit, redaction and Network/Timeline capture (tagged `executor=agent:<name>`); the agent
+  only performs the final HTTP call, one redirect hop at a time. New routes:
+  `GET /api/v1/composer/agents` and the `/api/v1/composer/agent` socket; `POST
+  /api/v1/composer/execute` takes an optional `executor`.
+- **Composer shows the response.** The result now includes the redacted response headers and body
+  (previously only the status code and timing), and failures explain themselves
+  (`COMPOSER_HOST_REJECTED` vs a private-network refusal, `AGENT_UNAVAILABLE`, `AGENT_TIMEOUT`,
+  `EXECUTION_FAILED` with a `detail`). The Execute button is re-enabled after a failed request
+  instead of staying disabled.
+- **Composer hosts can be added from the dashboard.** When the app sets `composerAllowedHosts`,
+  `DevConsoleConfig.composerHostsEditable` (on by default) lets the Host allowlist card take a
+  hostname, and a rejected request offers an "Allow <host>" button, so trying another API no longer needs a rebuild. Added hosts last for the
+  current run only, are audited, and cannot override hosts set by the app. The in-app Composer
+  screen uses the same live list.
+- `sdk:composer` exposes `ResolvedComposerRequest.wireBody()` so every transport encodes bodies
+  identically.
+
 Nothing this plugin does should ever be the reason a release cannot be built. Everything below comes
 from one release APK build that the plugin stopped for reasons that had nothing to do with whether
 the DevConsole runtime leaked.

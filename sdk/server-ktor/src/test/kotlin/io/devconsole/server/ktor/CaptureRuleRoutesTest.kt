@@ -38,7 +38,7 @@ class CaptureRuleRoutesTest {
     @Test
     fun `unauthenticated requests are rejected across every capture-rule route`() =
         testApplication {
-            application { devConsoleModule(SessionAuthority()) }
+            application { protectedDevConsoleModule(SessionAuthority()) }
 
             val unauthenticated =
                 listOf(
@@ -64,7 +64,7 @@ class CaptureRuleRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val engine = CaptureRuleEngine(listOf(CaptureRule.of(id = "r", host = "api.example.test")))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     captureRules = engine
                     captureRulesEditable = true
                 }
@@ -91,7 +91,7 @@ class CaptureRuleRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val engine = CaptureRuleEngine()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     captureRules = engine
                     captureRulesEditable = false
                 }
@@ -125,7 +125,7 @@ class CaptureRuleRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val engine = CaptureRuleEngine()
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     captureRules = engine
                     captureRulesEditable = true
                 }
@@ -160,7 +160,7 @@ class CaptureRuleRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val engine = CaptureRuleEngine(listOf(CaptureRule.of(id = "r", host = "api.example.test")))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     captureRules = engine
                     captureRulesEditable = true
                 }
@@ -193,7 +193,7 @@ class CaptureRuleRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val engine = CaptureRuleEngine(listOf(CaptureRule.of(id = "r", host = "api.example.test")))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     captureRules = engine
                     captureRulesEditable = false
                 }
@@ -215,7 +215,7 @@ class CaptureRuleRoutesTest {
             val sessionCodes = SessionCodeAuthority(sessions)
             val engine = CaptureRuleEngine(listOf(CaptureRule.of(id = "r", host = "api.example.test")))
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     captureRules = engine
                     captureRulesEditable = true
                 }
@@ -237,7 +237,7 @@ class CaptureRuleRoutesTest {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     captureRules = CaptureRuleEngine()
                     captureRulesEditable = true
                 }

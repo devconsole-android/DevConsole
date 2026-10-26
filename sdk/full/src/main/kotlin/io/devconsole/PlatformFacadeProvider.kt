@@ -805,6 +805,9 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 mockEngineInstance,
                 captureRuleEngineInstance,
                 configSupplier = { activeConfig },
+                composerHostPermit = { url ->
+                    if (::serverEngine.isInitialized) serverEngine.permitsComposerHost(url) else null
+                },
                 socketStore = socketStore,
                 pushStore = pushStore,
                 timelineSupplier = { cachedTimeline },
@@ -949,6 +952,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 featureFlags = featureFlags,
                 composerEnabled = config.composerEnabled,
                 composerAllowedHosts = config.composerAllowedHosts,
+                composerHostsEditable = config.composerHostsEditable,
                 stateMutationsEnabled = config.stateMutationsEnabled,
                 redactionPolicy = config.redactionPolicy,
                 mocksEditable = mocksEditable,
@@ -959,6 +963,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 filesEditable = config.editingCapabilities.files,
             )
             serverEngine.withBrowserSecurity(config.browserSecurity)
+            serverEngine.withNetworkProtection(config.networkProtection)
         }
     }
 
@@ -1022,6 +1027,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 ),
             composerEnabled = config.composerEnabled,
             composerAllowedHosts = config.composerAllowedHosts,
+            composerHostsEditable = config.composerHostsEditable,
             stateMutationsEnabled = config.stateMutationsEnabled,
             redactionPolicy = config.redactionPolicy,
             pushSimulator = pushSimulator,
@@ -1032,6 +1038,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             sessionsProvider = { sessionStore?.sessions().orEmpty() },
             screenshotCapture = ::captureScreenshot,
         ).withRetainedCaptures(RetainedCaptureQuery({ eventStore }, runtime::currentSessionId))
+            .withNetworkProtection(config.networkProtection)
             .withLocationPings { locationPingStore }
             .withBrowserSecurity(config.browserSecurity)
             .withAttachmentReader { attachmentId -> roomAttachmentStore?.read(attachmentId) }

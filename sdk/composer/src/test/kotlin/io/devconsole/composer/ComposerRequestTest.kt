@@ -61,7 +61,7 @@ class ComposerRequestTest {
 
     @Test
     fun `redacted projection removes secrets from every persisted composer field`() {
-        val engine = RedactionEngine(RedactionPolicy.default())
+        val engine = RedactionEngine(RedactionPolicy.recommended())
         val request =
             ComposerRequest(
                 method = "POST",
@@ -150,7 +150,7 @@ class ComposerRequestTest {
     }
 
     @Test fun `stores collections without persisting variables marked secret`() {
-        val store = InMemoryComposerCollectionStore()
+        val store = InMemoryComposerCollectionStore(RedactionEngine(RedactionPolicy.recommended()))
         val saved =
             store.save(
                 "smoke",
@@ -172,5 +172,21 @@ class ComposerRequestTest {
                 .value,
         )
         assertEquals(saved.id, store.collections().single().id)
+    }
+
+    @Test
+    fun `default policy preserves secret variables and token fields in saved collections`() {
+        val request =
+            ComposerRequest(
+                method = "POST",
+                url = "https://api.test?token=raw-url-token",
+                body = """{"token":"raw-body-token"}""",
+                variables = listOf(ComposerVariable("token", "raw-variable", secret = true)),
+            )
+        val projected = request.redacted(RedactionEngine(RedactionPolicy.default()))
+        val saved = InMemoryComposerCollectionStore().save("default", request)
+
+        assertEquals(request, projected)
+        assertEquals(request, saved.request)
     }
 }

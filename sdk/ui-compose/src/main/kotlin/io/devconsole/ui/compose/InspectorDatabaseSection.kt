@@ -6,7 +6,6 @@
 
 package io.devconsole.ui.compose
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.OutlinedTextField
@@ -25,13 +25,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.devconsole.api.CaptureCategory
 
 /** Grouped callbacks for the Room/SQLite database browser and its SQL console. */
@@ -50,9 +51,8 @@ internal fun DatabaseSection(
     // Defensive: databases belong to the INSPECTION category -- see FilesSection's identical guard.
     if (!state.captures(CaptureCategory.INSPECTION)) return
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        TerminalSectionLabel("Databases")
         when {
-            state.databases.isEmpty() -> SectionEmptyText("No app databases found.")
+            state.databases.isEmpty() -> InspectorEmptyState(EmptySpot.Database, "No app databases found.")
             else -> {
                 DatabaseChips(
                     databases = state.databases,
@@ -63,9 +63,11 @@ internal fun DatabaseSection(
                     DatabaseTablesCard(listing = listing, onOpenTable = actions.onOpenTable)
                 }
                 state.queryResult?.let { result ->
-                    TerminalCard {
-                        TerminalSectionLabel("Table rows")
-                        QueryResultTable(result)
+                    GroupedPanel {
+                        Column(Modifier.padding(16.dp)) {
+                            Text("Table rows", color = DevConsoleTheme.colors.ink)
+                            QueryResultTable(result)
+                        }
                     }
                 }
                 SqlConsoleCard(
@@ -86,24 +88,22 @@ private fun DatabaseChips(
     onOpenDatabase: (String) -> Unit,
 ) {
     val colors = DevConsoleTheme.colors
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        databases.forEach { database ->
+    GroupedPanel {
+        databases.forEachIndexed { index, database ->
+            if (index > 0) GroupedPanelDivider()
             val isSelected = database == selected
-            val background = if (isSelected) colors.signal else colors.surface2
-            val foreground = if (isSelected) colors.signalInk else colors.muted
             Text(
                 text = database,
-                color = foreground,
+                color = colors.ink,
                 fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                style = TerminalType.labelSmall,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                fontSize = 14.sp,
                 modifier =
                     Modifier
                         .minimumInteractiveComponentSize()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(background)
+                        .fillMaxWidth()
                         .clickable { onOpenDatabase(database) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
                         .semantics { contentDescription = "Open database $database" },
             )
         }
@@ -128,17 +128,23 @@ private fun DatabaseTablesCard(
     listing: InspectorDatabaseListingUi,
     onOpenTable: (String, String) -> Unit,
 ) {
-    TerminalCard {
-        TerminalSectionLabel(listing.name)
-        DatabaseSizeSubtitle(listing)
+    GroupedPanel {
+        Column(Modifier.padding(16.dp)) {
+            Text(listing.name, color = DevConsoleTheme.colors.ink, fontFamily = FontFamily.Monospace)
+            DatabaseSizeSubtitle(listing)
+        }
         if (listing.tables.isEmpty()) {
             Text(
                 text = "No tables found.",
                 color = DevConsoleTheme.colors.muted,
                 style = TerminalType.bodySmall,
+                modifier = Modifier.padding(16.dp),
             )
         } else {
-            listing.tables.forEach { table -> DatabaseTableRow(listing.name, table, onOpenTable) }
+            listing.tables.forEach { table ->
+                GroupedPanelDivider()
+                DatabaseTableRow(listing.name, table, onOpenTable)
+            }
         }
     }
 }
@@ -153,20 +159,14 @@ private fun DatabaseTableRow(
     val colors = DevConsoleTheme.colors
     Column(modifier = Modifier.fillMaxWidth()) {
         TonalListRow(
-            leadText = "TBL",
+            leadText = "",
             leadColor = colors.put,
             leadContainerColor = colors.putSoft,
             title = table.name,
-            subtitle = database,
-            trailValue = table.rowCount.toString(),
-            trailValueColor = colors.ink,
-            trailSubtitle = if (table.rowCount == 1L) "row" else "rows",
-            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            subtitle = "",
+            trailValue = "${table.rowCount} ${if (table.rowCount == 1L) "row" else "rows"}",
+            trailValueColor = colors.muted,
             onClick = { onOpenTable(database, table.name) },
-        )
-        androidx.compose.material3.HorizontalDivider(
-            modifier = Modifier.padding(start = 76.dp),
-            color = colors.line,
         )
     }
 }
@@ -178,20 +178,33 @@ private fun QueryResultTable(result: InspectorQueryResultUi) {
         modifier = Modifier.horizontalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            text = result.columns.joinToString(" | "),
-            color = colors.signal,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            style = TerminalType.bodySmall,
-        )
+        Row {
+            result.columns.forEach { column ->
+                Text(
+                    column,
+                    color = colors.ink,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    style = TerminalType.bodySmall,
+                    modifier = Modifier.width(160.dp).padding(8.dp),
+                    textAlign = TextAlign.End,
+                )
+            }
+        }
         result.rows.forEach { row ->
-            Text(
-                text = row.joinToString(" | "),
-                color = colors.ink,
-                fontFamily = FontFamily.Monospace,
-                style = TerminalType.bodySmall,
-            )
+            GroupedPanelDivider()
+            Row {
+                row.forEach { value ->
+                    Text(
+                        value,
+                        color = colors.muted,
+                        fontFamily = FontFamily.Monospace,
+                        style = TerminalType.bodySmall,
+                        modifier = Modifier.width(160.dp).padding(8.dp),
+                        textAlign = TextAlign.End,
+                    )
+                }
+            }
         }
         if (result.truncated) {
             Text(
@@ -211,39 +224,41 @@ private fun SqlConsoleCard(
     onExecuteSql: (String, String) -> Unit,
 ) {
     val colors = DevConsoleTheme.colors
-    TerminalCard {
-        TerminalSectionLabel("SQL console")
-        var draft by remember { mutableStateOf("") }
-        OutlinedTextField(
-            value = draft,
-            onValueChange = { draft = it },
-            textStyle = TerminalType.bodySmall.copy(fontFamily = FontFamily.Monospace),
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "SQL statement input" },
-        )
-        if (!canWrite) {
-            CapabilityDisabledNotice(
-                text = "Read-only — enable the database capability to run write statements.",
+    GroupedPanel {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("SQL console", color = colors.ink)
+            var draft by remember { mutableStateOf("") }
+            OutlinedTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                textStyle = TerminalType.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                shape = RoundedCornerShape(12.dp),
+                colors =
+                    androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = colors.signal,
+                        unfocusedBorderColor = colors.line,
+                        focusedContainerColor = colors.panel,
+                        unfocusedContainerColor = colors.panel,
+                    ),
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "SQL statement input" },
             )
+            if (!canWrite) {
+                CapabilityDisabledNotice(
+                    text = "Read-only — enable the database capability to run write statements.",
+                )
+            }
+            val canRun = selectedDatabase != null && draft.isNotBlank()
+            if (canRun) {
+                InspectorPillButton(
+                    label = "RUN",
+                    onClick = { onExecuteSql(requireNotNull(selectedDatabase), draft) },
+                    containerColor = colors.signal,
+                    contentColor = colors.signalInk,
+                    modifier = Modifier.semantics { contentDescription = "Run SQL statement" },
+                )
+            }
+            sqlResult?.let { SqlResultView(it) }
         }
-        val canRun = selectedDatabase != null && draft.isNotBlank()
-        if (canRun) {
-            Text(
-                text = "RUN",
-                color = colors.signal,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                style = TerminalType.labelSmall,
-                modifier =
-                    Modifier
-                        .minimumInteractiveComponentSize()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(colors.surface2)
-                        .clickable { onExecuteSql(requireNotNull(selectedDatabase), draft) }
-                        .padding(horizontal = 10.dp, vertical = 8.dp)
-                        .semantics { contentDescription = "Run SQL statement" },
-            )
-        }
-        sqlResult?.let { SqlResultView(it) }
     }
 }
 

@@ -94,6 +94,9 @@ private val URL_BREAK_CHARS = "/?&=.-_,;:+%~@".toSet()
  */
 private const val JOINER_HEADROOM_DIVISOR = 4
 
+/** [breakingAnywhere]'s inverse: the plain string, for the accessibility tree and text matching. */
+internal fun String.withoutBreakControls(): String = if (WORD_JOINER in this) filterNot { it == WORD_JOINER } else this
+
 /**
  * Renders a URL as a single unbreakable run, so a row wrapping it fills every line to its edge
  * instead of leaving a ragged tail.
@@ -503,6 +506,8 @@ data class InspectorSnapshot(
     val keepAlivePromptNeeded: Boolean = false,
     /** Capture categories the host enabled at init; every list above is already filtered to this set. */
     val captureCategories: Set<CaptureCategory> = CaptureCategory.all(),
+    /** Whether the host opted in to a redaction policy with any rule; off by default. */
+    val redactionEnabled: Boolean = false,
     val locationPingStreams: List<InspectorLocationPingStreamUi> = emptyList(),
 )
 

@@ -6,23 +6,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FocusedConfigurationTest {
-    /**
-     * Mocks are the one editable-by-default surface. They write nothing of the host's -- a mock rule
-     * only ever short-circuits DevConsole's own interceptor -- so the read-only posture that protects
-     * preferences, databases, and files buys nothing here, and an empty Mocks screen with a disabled
-     * "Add rule" button was the single most common "is this broken?" first run.
-     */
     @Test
-    fun `editing is read only by default except for mocks`() {
+    fun `editing is enabled by default`() {
         val policy = EditingCapabilities()
 
-        assertFalse(policy.preferences)
-        assertFalse(policy.featureFlags)
-        assertFalse(policy.database)
-        assertFalse(policy.files)
+        assertTrue(policy.preferences)
+        assertTrue(policy.featureFlags)
+        assertTrue(policy.database)
+        assertTrue(policy.files)
         assertTrue(policy.mocks)
-        assertFalse(policy.requestExecution)
-        assertFalse(policy.captureRules)
+        assertTrue(policy.requestExecution)
+        assertTrue(policy.captureRules)
     }
 
     @Test
@@ -30,11 +24,6 @@ class FocusedConfigurationTest {
         assertFalse(EditingCapabilities(mocks = false).mocks)
     }
 
-    /**
-     * [EditingCapabilities.readOnly] has to keep meaning what its name says even though the no-arg
-     * constructor no longer does. A host that asked for read-only and silently got writable mocks
-     * would be the worst possible reading of this change.
-     */
     @Test
     fun `read only factory grants nothing including mocks`() {
         val policy = EditingCapabilities.readOnly()
@@ -49,7 +38,7 @@ class FocusedConfigurationTest {
     }
 
     @Test
-    fun `java builder starts from the mocks enabled default`() {
+    fun `java builder starts from the editable default`() {
         assertTrue(EditingCapabilities.builder().build().mocks)
         assertFalse(
             EditingCapabilities
@@ -60,20 +49,15 @@ class FocusedConfigurationTest {
         )
     }
 
-    /**
-     * The capability object's default is only half the story -- [DevConsoleConfig] has to actually
-     * carry it. It used to seed [EditingCapabilities.readOnly], which still grants nothing, so a
-     * host that configured no capabilities at all would otherwise keep getting read-only mocks.
-     */
     @Test
-    fun `default config makes mocks editable and nothing else`() {
+    fun `default config makes every capability editable`() {
         val editing = DevConsoleConfig.default().editingCapabilities
 
         assertTrue(editing.mocks)
-        assertFalse(editing.preferences)
-        assertFalse(editing.database)
-        assertFalse(editing.files)
-        assertFalse(editing.captureRules)
+        assertTrue(editing.preferences)
+        assertTrue(editing.database)
+        assertTrue(editing.files)
+        assertTrue(editing.captureRules)
     }
 
     @Test
@@ -87,19 +71,19 @@ class FocusedConfigurationTest {
     }
 
     @Test
-    fun `java builder enables only requested editing capabilities`() {
+    fun `java builder disables only requested editing capabilities`() {
         val policy =
             EditingCapabilities
                 .builder()
-                .preferences(true)
+                .preferences(false)
                 .mocks(true)
                 .build()
 
-        assertTrue(policy.preferences)
+        assertFalse(policy.preferences)
         assertTrue(policy.mocks)
-        assertFalse(policy.database)
-        assertFalse(policy.files)
-        assertFalse(policy.requestExecution)
+        assertTrue(policy.database)
+        assertTrue(policy.files)
+        assertTrue(policy.requestExecution)
     }
 
     @Test

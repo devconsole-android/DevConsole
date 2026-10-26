@@ -269,6 +269,24 @@ from the request body), `POST /api/v1/composer/collections` (saves a curl import
 `DELETE /api/v1/composer/collections/{id}`. Variable values flagged `secret` are never included in
 any response, including the metadata for the request that was just executed.
 
+`execute` accepts an optional form field `executor`: `device` (default) or `agent:<id>` for a
+connected host computer (see [Composer agent socket](#composer-agent-socket----apiv1composeragent)).
+It answers `{correlationId, executor, request, response}` where `response` is
+`{statusCode, durationMs, headers, body, bodyTruncated | bodyOmitted, bodyBytes}`. `headers` and
+`body` come from the same redacted capture the Network page shows, so a secret variable's value or
+a redacted field is already masked. Failures: `409 AGENT_UNAVAILABLE` (unknown/disconnected agent),
+`504 AGENT_TIMEOUT`, `502 EXECUTION_FAILED` (with a bounded, secret-scrubbed `detail`), `403
+COMPOSER_HOST_REJECTED`. `GET /api/v1/composer/agents` (auth) lists
+`{id, name, os, version, address, connectedAtEpochMs}`.
+
+`GET /api/v1/composer/hosts` (auth) answers `{editable, anyHost, data: [{host, source}]}` with `source` of
+`app` or `session`. `anyHost` is true when the app configured no hosts: every host is permitted and session
+hosts are not needed. When `editable` is true (`composerHostsEditable`, on by default), `POST /api/v1/composer/hosts`
+(form field `host`, bearer + CSRF, 30 changes per minute with rate limiting on) adds a host for the current server run and
+`DELETE /api/v1/composer/hosts/{host}` removes a session host. Errors: `403 COMPOSER_HOSTS_READ_ONLY`,
+`400 VALIDATION_FAILED` (not a plain hostname), `409 COMPOSER_HOST_LIMIT`, `409 COMPOSER_HOST_SET_BY_APP`.
+`GET /api/v1/meta` lists session hosts in `composer.allowedHosts` too.
+
 ### State
 
 `GET /api/v1/state` (provider ids), `GET /api/v1/state/{id}` (snapshot), `POST
@@ -418,6 +436,29 @@ The stream has **no replay and no delivery guarantee**: a newly-connected client
 published after it starts collecting (no backlog), and the underlying buffer drops the oldest
 event on overflow (2000-event buffer) rather than blocking. Reconcile gaps via `GET
 /api/v1/events` with a cursor, not by trusting the stream alone.
+
+### Composer agent socket -- `/api/v1/composer/agent`
+
+A host computer (`devconsole-agent`) dials in and offers to run Composer requests. Only exists while
+`composerEnabled` is on (otherwise 404 `COMPOSER_DISABLED`). Max frame 8 MiB.
+
+- Connect with `Authorization: Bearer <token>` (as for the stream). **A handshake carrying any
+  `Origin` header is closed with `ORIGIN_REJECTED`**, so a web page can never register as an executor.
+  Close reasons: `AUTH_REQUIRED`, `AUTH_REVOKED`, `HELLO_REQUIRED`, `TOO_MANY_AGENTS` (limit 8).
+- Every frame is one text frame holding an `application/x-www-form-urlencoded` string; `type` names it.
+
+| Direction | `type` | Fields |
+|-----------|--------|--------|
+| agent -> device | `agent.hello` (first frame) | `name`, `os`, `version` |
+| device -> agent | `agent.welcome` | `agentId` |
+| device -> agent | `agent.execute` | `jobId`, `method`, `url`, `timeoutMs`, repeated `header` (`Name:value`), `bodyBase64`, `contentType` |
+| agent -> device | `agent.result` | `jobId`, `status`, `durationMs`, repeated `header`, `body` |
+| agent -> device | `agent.error` | `jobId`, `code` (`HOST_REJECTED` or `FAILED`), `message` |
+
+`agent.execute` carries the fully resolved request (variables substituted, body encoded, real
+`Authorization` value) and exactly one hop: the agent must not follow redirects, because the device
+re-checks its allowlist and drops credentials for each cross-origin hop. Up to 16 jobs may be in
+flight per agent. A closed socket fails its pending jobs immediately.
 
 ## 5. Event schemas
 

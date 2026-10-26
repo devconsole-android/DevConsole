@@ -31,6 +31,7 @@ import io.devconsole.api.BrowserConfig
 import io.devconsole.api.DevConsoleConfig
 import io.devconsole.api.DevConsoleState
 import io.devconsole.api.EditingCapabilities
+import io.devconsole.api.ScreenshotPolicy
 import io.devconsole.api.ScreenshotResult
 import io.devconsole.api.StartRequest
 import io.devconsole.api.StartResult
@@ -89,14 +90,14 @@ private const val ANR_BLOCK_MS = 6_000L
  * Capability-flag posture (see compose-app's `MainActivity` for the full three-sample matrix):
  * [EditingCapabilities.readOnly] refuses every write here, on purpose -- this sample is the
  * locked-down contrast to compose-app's fully-unlocked one. Note that this now takes an explicit
- * call: the SDK's own default leaves `mocks` editable, and `readOnly()` is what opts back out. The
+ * call: the SDK's own default enables every capability, and `readOnly()` opts out. The
  * Data rail (preferences/database/files, seeded below) is still visible and browsable in both the
  * browser dashboard and the SDK's in-app inspector; only the write/edit actions are refused.
  *
- * Screenshot capture follows the same posture: `ScreenshotPolicy.enabled` is left at its SDK-wide
- * `false` default (no `withScreenshotPolicy` override), so the "Capture screenshot" button here
+ * Screenshot capture follows the same posture: `ScreenshotPolicy.enabled` is explicitly set to
+ * `false`, so the "Capture screenshot" button here
  * always renders [ScreenshotResult.Disabled] verbatim, naming the property a host would set to turn
- * it on. compose-app is the sample that opts in -- seeing the refusal here next to compose-app's
+ * it on. compose-app uses the enabled default -- seeing the refusal here next to compose-app's
  * real capture is the fastest way to understand the gate.
  *
  * The HAZARD ZONE below is deliberately set apart from the ordinary demo buttons: one button throws
@@ -122,6 +123,11 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Optional hardening (imports: io.devconsole.api.*, io.devconsole.security.RedactionPolicy):
+        // DevConsoleConfig(redactionPolicy = RedactionPolicy.recommended())
+        //     .withNetworkProtection(NetworkProtection.recommended())
+        //     .withEditingCapabilities(EditingCapabilities.readOnly())
+        //     .withBrowserSecurity(BrowserSecurity.SESSION_CODE)
         DevConsole.initialize(
             application,
             DevConsoleConfig(
@@ -139,10 +145,13 @@ class MainActivity : Activity() {
                             description = "Shows extra diagnostics in the sample UI",
                         ),
                     ),
+                composerEnabled = false,
+                stateMutationsEnabled = false,
                 // Explicit, not just the default: this sample's whole point is the locked-down
                 // contrast to compose-app's fully-unlocked EditingCapabilities.
                 // OpenTriggers likewise stays at its all-off default -- no shake-to-open, no floating button.
             ).withEditingCapabilities(EditingCapabilities.readOnly())
+                .withScreenshotPolicy(ScreenshotPolicy(enabled = false))
                 // Matches the BindingMode.LAN this sample's own Start button passes: the in-app
                 // inspector's More screen issues no StartRequest, so without this it would bind
                 // loopback and the two start paths would hand out different connect URLs. This is
@@ -412,8 +421,8 @@ class MainActivity : Activity() {
 
     /**
      * Exercises every [ScreenshotResult] variant Kotlin's exhaustive `when` demands. Since this
-     * sample's config never calls `withScreenshotPolicy`, [ScreenshotResult.Disabled] is the branch
-     * actually reached here -- the other variants are what compose-app's opted-in capture reaches
+     * sample's config explicitly disables screenshots, [ScreenshotResult.Disabled] is the branch
+     * actually reached here -- the other variants are what compose-app's default capture reaches
      * instead.
      */
     private fun captureScreenshot() {
@@ -423,7 +432,7 @@ class MainActivity : Activity() {
                     "Screenshot captured: ${result.widthPx}x${result.heightPx}, ${result.byteCount} bytes"
                 ScreenshotResult.Disabled ->
                     "Screenshot capture is off -- set screenshotPolicy.enabled = true on DevConsoleConfig " +
-                        "(left at the default here to show the locked-down refusal; compose-app opts in)"
+                        "(explicitly disabled here to show the read-only setup; compose-app uses defaults)"
                 ScreenshotResult.DisabledForBuild -> "Screenshot capture isn't available in this release build"
                 ScreenshotResult.NoForegroundActivity ->
                     "No foreground activity to capture -- bring the app to the front and try again"

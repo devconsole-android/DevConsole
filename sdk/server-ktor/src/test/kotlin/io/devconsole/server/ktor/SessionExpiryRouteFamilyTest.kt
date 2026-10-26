@@ -57,7 +57,7 @@ class SessionExpiryRouteFamilyTest {
             val sessions = SessionAuthority(nowEpochMs = { now }, sessionTtlMs = 1_000L)
             val sessionCodes = SessionCodeAuthority(sessions, nowEpochMs = { now })
             application {
-                devConsoleModule(sessions, sessionCodes) {
+                protectedDevConsoleModule(sessions, sessionCodes) {
                     mocksEditable = true
                     captureRulesEditable = true
                     preferencesEditable = true
@@ -153,7 +153,7 @@ class SessionExpiryRouteFamilyTest {
             var now = 0L
             val sessions = SessionAuthority(nowEpochMs = { now }, sessionTtlMs = 1_000L)
             val sessionCodes = SessionCodeAuthority(sessions, nowEpochMs = { now })
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = approvedSession(sessions, sessionCodes)
             now = 1_001L
             val streamClient = createClient { install(WebSockets) }
@@ -176,7 +176,7 @@ class SessionExpiryRouteFamilyTest {
             var now = 0L
             val sessions = SessionAuthority(nowEpochMs = { now }, sessionTtlMs = 1_000L)
             val sessionCodes = SessionCodeAuthority(sessions, nowEpochMs = { now })
-            application { devConsoleModule(sessions, sessionCodes) }
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
             val session = approvedSession(sessions, sessionCodes)
             val streamClient = createClient { install(WebSockets) }
 

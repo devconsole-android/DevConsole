@@ -59,6 +59,7 @@ private fun pushSections(
             payloadBody,
             copyDescription = "Copy payload",
             onCopy = keyValuesCopyAction(payloadEntries.orEmpty(), copyText),
+            tab = InspectorDetailTab.PAYLOAD,
         ),
         InspectorDetailSectionSpec(
             InspectorExchangeSection.SECONDARY_HEADERS.key,
@@ -111,7 +112,7 @@ internal fun pushDetailContent(
     copyText: (String) -> Unit,
     shareText: (String, String) -> Unit,
 ): ObserveDetailContent {
-    val leadColor = if (push.simulated) colors.warn else colors.signal
+    val leadColor = if (push.simulated) colors.warn else colors.ink
     val leadBg = if (push.simulated) colors.warnSoft else colors.signalSoft
     val title = push.dataPreview["title"] ?: push.messageId ?: "Push notification"
     val pushJson = pushToJsonSnippet(push)
@@ -125,16 +126,11 @@ internal fun pushDetailContent(
                 leadColor = leadColor,
                 leadContainerColor = leadBg,
                 title = title,
-                subtitle = "${push.messageId ?: "no id"} · $whenLabel",
-                status = pushLifecycleShortLabel(push.lifecycle),
+                subtitle = "${push.provider} · $whenLabel",
+                status = "",
                 statusColor = colors.muted,
                 actions =
                     listOf(
-                        InspectorTopAction(
-                            contentDescription = "Copy push payload",
-                            onClick = { copyText(payloadText) },
-                            icon = copyIconAction(colors.muted),
-                        ),
                         InspectorTopAction(
                             contentDescription = "Share push as JSON",
                             onClick = { shareText(pushJson, "Share push JSON") },
@@ -143,7 +139,8 @@ internal fun pushDetailContent(
                     ),
             ),
         sections = pushSections(push, colors, copyText),
-        initiallyOpenSectionKeys = setOf(InspectorExchangeSection.PRIMARY_BODY.key),
+        initiallyOpenSectionKeys =
+            setOf("general", InspectorExchangeSection.PRIMARY_BODY.key, InspectorExchangeSection.SECONDARY_HEADERS.key),
         footerActions = pushFooterActions(colors, payloadText, copyText),
     )
 }

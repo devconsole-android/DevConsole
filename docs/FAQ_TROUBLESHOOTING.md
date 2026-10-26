@@ -15,6 +15,15 @@ speaks plaintext HTTP, pass `BindingMode.LOOPBACK` and use `adb forward` on any 
 trust. See [LAN_PERMISSION_AND_TROUBLESHOOTING.md](LAN_PERMISSION_AND_TROUBLESHOOTING.md) and
 [THREAT_MODEL.md](THREAT_MODEL.md).
 
+**Composer says CORS / my authorized API call fails in the browser.** Composer requests are never
+made by the browser: the dashboard asks the device (or a connected computer) to make them, so CORS
+cannot apply. What looks like a CORS failure is one of the Composer error codes: `COMPOSER_DISABLED`
+(`composerEnabled(true)` missing), `COMPOSER_HOST_REJECTED` (add the host to `composerAllowedHosts`;
+or the host is on a private/VPN/localhost address, which the phone refuses -- run it on a computer),
+or `EXECUTION_FAILED` with a `detail`. To call an API that only your Mac, Linux or Windows computer
+can reach, run `devconsole-agent` and pick it under **Composer -> Run on**. See
+[COMPOSER_AND_MOCKS.md](COMPOSER_AND_MOCKS.md#run-on-a-host-computer-macos-linux-windows).
+
 **Do I need a second interceptor for mock rules?** No. `installDevConsole(...)` wires the mock
 interceptor from the engine DevConsole publishes at `initialize`, so `DevConsoleMockInterceptor` no
 longer needs to be added by hand. Keeping an existing manual line is harmless — the second

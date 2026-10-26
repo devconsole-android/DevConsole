@@ -29,8 +29,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -233,6 +235,10 @@ public final class MainActivity extends Activity {
         EditingCapabilities editingCapabilities = EditingCapabilities.builder()
                 .mocks(true)
                 .captureRules(true)
+                // The in-app Composer screen runs through this flag, not composerEnabled below --
+                // without it the panel reports Disabled("requestExecution") even though the
+                // browser dashboard would happily serve /api/v1/composer/*.
+                .requestExecution(true)
                 .build();
         // Builder rather than positional construction: Kotlin default arguments do not reach Java,
         // so every added field would otherwise break this call site.
@@ -241,6 +247,16 @@ public final class MainActivity extends Activity {
                 .addFeatureFlag(featureFlag)
                 .editingCapabilities(editingCapabilities)
                 .locationPingTracking(SampleLocationPings.tracking())
+                // Composer is off by default: it makes the device issue arbitrary outbound
+                // requests, i.e. turns it into a proxy onto its network. Every /api/v1/composer
+                // route (GETs included) answers 404 {"code":"COMPOSER_DISABLED"} until this is on.
+                // The allowlist is NOT optional in practice -- empty denies every destination, so
+                // execute would just fail next with COMPOSER_HOST_REJECTED. Exact hostnames, no
+                // wildcards; matching what this sample's own buttons talk to.
+                .composerEnabled(true)
+                .composerHostsEditable(true)
+                .composerAllowedHosts(new HashSet<>(Arrays.asList(
+                        "jsonplaceholder.typicode.com", "example.test")))
                 // The floating button is not a Compose feature: OpenTriggerController attaches a
                 // plain ImageView to the Activity's decorView, so an XML/Views host gets the same
                 // draggable, translucent button a Compose host does. Enabled here to show that.

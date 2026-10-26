@@ -1,5 +1,15 @@
 # LAN permission and troubleshooting
 
+Runtime protections are opt-in: redaction, rate limiting, Host/Origin checks, and browser
+authentication are off by default. All editing capabilities, unrestricted Composer, state mutations,
+and screenshots are enabled. For shared networks, configure
+`DevConsoleConfig(redactionPolicy = RedactionPolicy.recommended())`,
+`.withNetworkProtection(NetworkProtection.recommended())`,
+`.withBrowserSecurity(BrowserSecurity.SESSION_CODE)`, and
+`.withEditingCapabilities(EditingCapabilities.readOnly())`; disable Composer/state mutations and
+screenshots as appropriate. See the complete
+[default/one-line configuration table](SECURITY_AND_REDACTION.md#opt-in-security-layers).
+
 ## LAN binding
 
 ```kotlin
@@ -151,6 +161,14 @@ variant). See [BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md](BUILD_VARIANTS_AND_PRODU
 **Session expired / browser suddenly logged out** — this applies to `SESSION_CODE` mode: sessions have
 an absolute 30-minute TTL (refreshable via `/auth/refresh`) and are revoked immediately on server stop.
 Issue a fresh session code from the device and reconnect. Open mode has no browser session to expire.
+
+**429 / `RATE_LIMITED`** — ordinary query/mutation/export budgets apply only when
+`networkProtection.rateLimiting` is true. The session-code exchange attempt budget remains active
+whenever SESSION_CODE is selected. **403 / `ORIGIN_REJECTED`** — Host and Origin validation applies
+only when `networkProtection.hostAndOriginChecks` is true. SESSION_CODE still requires CSRF tokens
+on mutations when those checks are disabled. `/api/v1/meta` reports effective `redaction` and
+`networkProtection` values; CSP continues to allow the dashboard's own WebSocket using the parsed
+request Host, including when allowlist checks are off.
 
 ## Session codes ("SESSION_CODE_EXPIRED" / "SESSION_CODE_INVALID")
 

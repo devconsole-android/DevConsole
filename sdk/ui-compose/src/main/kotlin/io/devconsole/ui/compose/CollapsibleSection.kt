@@ -56,6 +56,7 @@ internal fun CollapsibleSection(
     metaColor: Color = DevConsoleTheme.colors.muted,
     onCopy: (() -> Unit)? = null,
     copyContentDescription: String = "Copy $label",
+    showTopDivider: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // Open: chevron points down (0deg); collapsed: chevron points right (-90deg).
@@ -66,7 +67,9 @@ internal fun CollapsibleSection(
             label = "sectionChevron",
         )
     Column(modifier = modifier.fillMaxWidth()) {
-        HorizontalDivider(color = DevConsoleTheme.colors.line)
+        if (showTopDivider) {
+            HorizontalDivider(color = DevConsoleTheme.colors.line)
+        }
         CollapsibleSectionHeader(label, onToggle, rotation, meta, metaColor, onCopy, copyContentDescription)
         // The chevron was already animating while the content it controls snapped in and out, which
         // reads as two unrelated events rather than one. Expanding the height ties them together:
@@ -100,7 +103,7 @@ private fun CollapsibleSectionHeader(
             modifier =
                 Modifier
                     .weight(1f)
-                    .height(56.dp)
+                    .height(48.dp)
                     .clickable(onClick = onToggle, role = Role.Button)
                     .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -110,7 +113,7 @@ private fun CollapsibleSectionHeader(
                 InspectorGlyph.ChevronDown,
                 contentDescription = null,
                 tint = DevConsoleTheme.colors.muted,
-                size = 16.dp,
+                size = 14.dp,
                 rotationDegrees = rotation,
             )
             Text(
@@ -136,7 +139,7 @@ private fun CollapsibleSectionHeader(
                         InspectorGlyph.Copy,
                         contentDescription = null,
                         tint = DevConsoleTheme.colors.muted,
-                        size = 17.dp,
+                        size = 18.dp,
                     )
                 },
             )

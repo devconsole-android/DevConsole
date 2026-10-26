@@ -10,15 +10,19 @@ package io.devconsole.ui.compose
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.util.Locale
 
 /**
@@ -41,23 +45,33 @@ internal fun RemoteConfigTabContent(
     actions: ObserveActions,
 ) {
     val colors = DevConsoleTheme.colors
-    if (state.remoteConfig.isEmpty()) {
-        ObserveTabEmptyState("No Remote Config provider is registered for this session.")
+    if (state.remoteConfig.isEmpty() && !ui.searchOpen) {
+        ObserveTabEmptyState("No Remote Config provider is registered for this session.", EmptySpot.RemoteConfig)
         return
     }
     val query = ui.remoteConfigSearch.trim().lowercase(Locale.US)
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = EvidenceFabScrollClearance),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
     ) {
-        stickyHeader {
-            InspectorSearchBar(
-                query = ui.remoteConfigSearch,
-                onQueryChange = actions.onRemoteConfigSearchChange,
-                placeholder = "Search key or value",
-            )
+        if (ui.searchOpen) {
+            stickyHeader {
+                InspectorSearchBar(
+                    query = ui.remoteConfigSearch,
+                    onQueryChange = actions.onRemoteConfigSearchChange,
+                    placeholder = "Search key or value",
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
         }
-        item { Spacer(Modifier.height(16.dp)) }
+        if (state.remoteConfig.isEmpty()) {
+            item {
+                ObserveTabEmptyState(
+                    "No Remote Config provider is registered for this session.",
+                    EmptySpot.RemoteConfig,
+                )
+            }
+        }
         state.remoteConfig.forEach { provider ->
             item(key = "rc-head-${provider.id}") { RemoteConfigHeader(provider, colors) }
             val shown = provider.entries.filter { it.matches(query) }
@@ -69,10 +83,14 @@ internal fun RemoteConfigTabContent(
                 provider.entries.isEmpty() ->
                     item(key = "rc-empty-${provider.id}") { RemoteConfigEmptyNote(provider, colors) }
                 shown.isEmpty() ->
-                    item(key = "rc-nomatch-${provider.id}") { RemoteConfigNoMatchNote(colors) }
+                    item(key = "rc-nomatch-${provider.id}") { RemoteConfigNoMatchNote() }
                 else ->
-                    items(shown, key = { "rc-${provider.id}-${it.key}" }) { entry ->
-                        RemoteConfigRow(entry, colors) { actions.onOpenRemoteConfigDetail(provider.id, entry.key) }
+                    itemsIndexed(shown, key = { _, entry -> "rc-${provider.id}-${entry.key}" }) { index, entry ->
+                        RemoteConfigRow(
+                            entry,
+                            colors,
+                            Modifier.groupedPanelItem(GroupPosition.of(index, shown.size)),
+                        ) { actions.onOpenRemoteConfigDetail(provider.id, entry.key) }
                     }
             }
             item(key = "rc-space-${provider.id}") { Spacer(Modifier.height(16.dp)) }
@@ -94,8 +112,8 @@ private fun RemoteConfigHeader(
     Text(
         text = remoteConfigFetchLine(provider),
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-        color = colors.text3,
-        style = MaterialTheme.typography.bodySmall,
+        color = colors.muted,
+        fontSize = 12.5.sp,
     )
 }
 
@@ -115,27 +133,24 @@ private fun RemoteConfigEmptyNote(
             } else {
                 "No values returned by the last fetch."
             },
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
         color = colors.muted,
+        textAlign = TextAlign.Center,
         style = MaterialTheme.typography.bodySmall,
     )
 }
 
 /** Distinct from [RemoteConfigEmptyNote]: the provider has values, the search just excluded them all. */
 @Composable
-private fun RemoteConfigNoMatchNote(colors: DevConsoleColors) {
-    Text(
-        text = "No key matches the current search.",
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-        color = colors.muted,
-        style = MaterialTheme.typography.bodySmall,
-    )
+private fun RemoteConfigNoMatchNote() {
+    InspectorEmptyState(EmptySpot.Search, "No key matches the current search.", spotSize = 64.dp)
 }
 
 @Composable
 private fun RemoteConfigRow(
     entry: InspectorRemoteConfigEntryUi,
     colors: DevConsoleColors,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     // Only ever a preview -- a config value is a string of any length, and the full text is one tap
@@ -147,13 +162,24 @@ private fun RemoteConfigRow(
             if (entry.truncated) append(" · truncated")
         }
     TonalListRow(
-        leadText = remoteConfigLeadText(entry.source),
-        leadColor = remoteConfigLeadColor(entry.source, colors),
-        leadContainerColor = remoteConfigLeadContainerColor(entry.source, colors),
+        leadText = entry.source,
+        leadColor = colors.muted,
+        leadContainerColor = Color.Transparent,
         title = entry.key,
         subtitle = sub,
-        trailValue = entry.source,
-        trailValueColor = if (entry.source == "remote") colors.signal else colors.muted,
+        trailValue =
+            if (entry.redacted) {
+                ""
+            } else {
+                formatByteSize(
+                    entry.value
+                        .toByteArray()
+                        .size
+                        .toLong(),
+                )
+            },
+        trailValueColor = colors.muted,
+        modifier = modifier,
         onClick = onClick,
     )
 }

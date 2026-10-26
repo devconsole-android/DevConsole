@@ -6,7 +6,6 @@
 
 package io.devconsole.ui.compose
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -52,9 +51,8 @@ internal fun FilesSection(
     // its own too, in case something ever reaches it by a route other than that nav item.
     if (!state.captures(CaptureCategory.INSPECTION)) return
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        TerminalSectionLabel("App files")
         when {
-            state.fileRoots.isEmpty() -> SectionEmptyText("No file storage roots available.")
+            state.fileRoots.isEmpty() -> InspectorEmptyState(EmptySpot.Folder, "No file storage roots available.")
             else -> {
                 FileRootChips(
                     roots = state.fileRoots,
@@ -79,11 +77,11 @@ private fun FileRootChips(
     onOpenRoot: (String, String) -> Unit,
 ) {
     val colors = DevConsoleTheme.colors
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        roots.forEach { root ->
+    GroupedPanel {
+        roots.forEachIndexed { index, root ->
+            if (index > 0) GroupedPanelDivider()
             val isSelected = root == selected
-            val background = if (isSelected) colors.signal else colors.surface2
-            val foreground = if (isSelected) colors.signalInk else colors.muted
+            val foreground = if (isSelected) colors.ink else colors.muted
             Text(
                 text = root,
                 color = foreground,
@@ -93,10 +91,9 @@ private fun FileRootChips(
                 modifier =
                     Modifier
                         .minimumInteractiveComponentSize()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(background)
+                        .fillMaxWidth()
                         .clickable { onOpenRoot(root, "") }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
                         .semantics { contentDescription = "Open $root storage root" },
             )
         }
@@ -109,9 +106,14 @@ private fun FileListingCard(
     canEdit: Boolean,
     actions: FileBrowserActions,
 ) {
-    TerminalCard {
+    GroupedPanel {
         val here = if (listing.relativePath.isEmpty()) listing.root else "${listing.root}/${listing.relativePath}"
-        TerminalSectionLabel(here)
+        Text(
+            here,
+            color = DevConsoleTheme.colors.muted,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.padding(16.dp),
+        )
         if (listing.relativePath.isNotEmpty()) {
             FileRow(
                 label = "..",
@@ -125,9 +127,11 @@ private fun FileListingCard(
                 text = "Empty directory.",
                 color = DevConsoleTheme.colors.muted,
                 style = TerminalType.bodySmall,
+                modifier = Modifier.padding(16.dp),
             )
         } else {
             listing.entries.forEach { entry ->
+                GroupedPanelDivider()
                 FileEntryRow(root = listing.root, entry = entry, canEdit = canEdit, actions = actions)
             }
         }
@@ -149,14 +153,13 @@ private fun FileEntryRow(
     val colors = DevConsoleTheme.colors
     Column(modifier = Modifier.fillMaxWidth()) {
         TonalListRow(
-            leadText = if (entry.isDirectory) "DIR" else "FILE",
+            leadText = "",
             leadColor = if (entry.isDirectory) colors.signal else colors.put,
             leadContainerColor = if (entry.isDirectory) colors.signalSoft else colors.putSoft,
             title = entry.name,
-            subtitle = if (entry.isDirectory) "directory" else "${entry.sizeBytes} B",
-            trailValue = if (entry.isDirectory) "›" else "",
+            subtitle = "",
+            trailValue = if (entry.isDirectory) "›" else formatByteSize(entry.sizeBytes),
             trailValueColor = colors.muted,
-            containerColor = androidx.compose.ui.graphics.Color.Transparent,
             onClick = {
                 if (entry.isDirectory) {
                     actions.onOpenPath(root, entry.relativePath)
@@ -166,10 +169,6 @@ private fun FileEntryRow(
             },
         )
         if (canEdit && !entry.isDirectory) FileEntryActions(root, entry, actions)
-        androidx.compose.material3.HorizontalDivider(
-            modifier = Modifier.padding(start = 76.dp),
-            color = colors.line,
-        )
     }
 }
 
@@ -194,7 +193,7 @@ private fun FileEntryActionText(
     val colors = DevConsoleTheme.colors
     Text(
         text = label,
-        color = colors.put,
+        color = colors.muted,
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.Bold,
         style = TerminalType.labelSmall,
@@ -202,7 +201,6 @@ private fun FileEntryActionText(
             Modifier
                 .minimumInteractiveComponentSize()
                 .clip(RoundedCornerShape(6.dp))
-                .background(colors.putSoft)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 10.dp, vertical = 8.dp)
                 .semantics { contentDescription = description },
@@ -220,13 +218,14 @@ private fun FileRow(
     val colors = DevConsoleTheme.colors
     Text(
         text = label,
-        color = if (isDirectory) colors.signal else colors.ink,
+        color = colors.ink,
         fontFamily = FontFamily.Monospace,
         style = TerminalType.bodySmall,
         modifier =
             modifier
                 .clickable(onClick = onClick)
-                .padding(vertical = 6.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .semantics { contentDescription = description },
     )
 }
@@ -237,53 +236,47 @@ private fun FilePreviewCard(
     onClose: () -> Unit,
 ) {
     val colors = DevConsoleTheme.colors
-    TerminalCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TerminalSectionLabel("Preview")
-            Text(
-                text = "CLOSE",
-                color = colors.signal,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                style = TerminalType.labelSmall,
-                modifier =
-                    Modifier
-                        .clickable(onClick = onClose)
-                        .semantics { contentDescription = "Close file preview" },
-            )
-        }
-        when (preview) {
-            is InspectorFilePreviewUi.Text -> {
+    GroupedPanel {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Preview", color = colors.ink)
                 Text(
-                    text = preview.content,
-                    color = colors.ink,
+                    text = "CLOSE",
+                    color = colors.muted,
                     fontFamily = FontFamily.Monospace,
-                    style = TerminalType.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    style = TerminalType.labelSmall,
+                    modifier =
+                        Modifier
+                            .clickable(onClick = onClose)
+                            .semantics { contentDescription = "Close file preview" },
                 )
-                if (preview.truncated) {
-                    Text(
-                        text = "… truncated",
-                        color = colors.muted,
-                        style = TerminalType.labelSmall,
-                    )
-                }
             }
-            is InspectorFilePreviewUi.Binary ->
-                Text(
-                    text = "Binary file, ${preview.sizeBytes} bytes — preview withheld.",
-                    color = colors.muted,
-                    style = TerminalType.bodySmall,
-                )
-            is InspectorFilePreviewUi.Unavailable ->
-                Text(
-                    text = preview.reason,
-                    color = colors.muted,
-                    style = TerminalType.bodySmall,
-                )
+            when (preview) {
+                is InspectorFilePreviewUi.Text -> {
+                    Text(
+                        text = preview.content,
+                        color = colors.ink,
+                        fontFamily = FontFamily.Monospace,
+                        style = TerminalType.bodySmall,
+                    )
+                    if (preview.truncated) {
+                        Text("… truncated", color = colors.muted, style = TerminalType.labelSmall)
+                    }
+                }
+                is InspectorFilePreviewUi.Binary ->
+                    Text(
+                        text = "Binary file, ${preview.sizeBytes} bytes — preview withheld.",
+                        color = colors.muted,
+                        style = TerminalType.bodySmall,
+                    )
+                is InspectorFilePreviewUi.Unavailable ->
+                    Text(preview.reason, color = colors.muted, style = TerminalType.bodySmall)
+            }
         }
     }
 }

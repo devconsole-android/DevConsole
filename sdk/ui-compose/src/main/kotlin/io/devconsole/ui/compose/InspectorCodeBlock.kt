@@ -9,8 +9,8 @@ package io.devconsole.ui.compose
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -23,13 +23,15 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -56,7 +58,7 @@ internal data class InspectorCodeLine(
 internal val InlineCodeBlockMaxHeight = 420.dp
 
 /**
- * Code / JSON viewer for a [CollapsibleSection]'s code variant: 16dp radius, code-bg background,
+ * Code / JSON viewer for a detail panel: 8dp radius, code-bg background,
  * mono 13sp lines at 1.7 line-height, horizontally scrolling, with a signal-soft row highlight for
  * search hits. Backed by a [LazyColumn] (not a `Column`+`forEach`) so a pretty-printed body of
  * thousands of lines only composes/measures the rows actually scrolled into view -- capture-detail
@@ -86,13 +88,13 @@ internal fun InspectorCodeBlock(
         }
         if (activeLineIndex != null) bringIntoViewRequester.bringIntoView()
     }
-    Box(modifier = modifier.fillMaxWidth().bringIntoViewRequester(bringIntoViewRequester)) {
+    Column(modifier = modifier.fillMaxWidth().bringIntoViewRequester(bringIntoViewRequester)) {
         LazyColumn(
             state = listState,
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(colors.codeBg)
                     .heightIn(max = InlineCodeBlockMaxHeight)
                     // A lazy layout can't be measured with `IntrinsicSize.Max` (no intrinsic-measurement
@@ -123,25 +125,18 @@ internal fun InspectorCodeBlock(
     }
 }
 
-/** The small top-right "open full screen" button every code-ish block variant shares. */
+/** Plain trailing full-screen action below the code area. */
 @Composable
-internal fun BoxScope.InspectorCodeBlockExpandButton(onExpandFullScreen: () -> Unit) {
+internal fun InspectorCodeBlockExpandButton(onExpandFullScreen: () -> Unit) {
     val colors = DevConsoleTheme.colors
-    InspectorRoundIconButton(
-        contentDescription = "Full screen",
-        onClick = onExpandFullScreen,
-        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
-        size = 28.dp,
-        containerColor = colors.surface3,
-        icon = {
-            InspectorGlyphIcon(
-                InspectorGlyph.Expand,
-                contentDescription = null,
-                tint = colors.muted,
-                size = 14.dp,
-            )
-        },
-    )
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        TextButton(
+            onClick = onExpandFullScreen,
+            modifier = Modifier.semantics { contentDescription = "Full screen" },
+        ) {
+            Text("Expand", color = colors.signal, fontSize = 14.sp)
+        }
+    }
 }
 
 /** One [InspectorCodeLine] row, shared by [InspectorCodeBlock] and [InspectorCodeFullScreenOverlay]. */

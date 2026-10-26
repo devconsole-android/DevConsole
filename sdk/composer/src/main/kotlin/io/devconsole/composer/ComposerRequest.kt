@@ -79,8 +79,8 @@ data class ComposerRequest(
 
     /**
      * Returns the only representation that may be persisted or sent to a browser. Binary bytes and
-     * secret variable values are dropped; every remaining string crosses the active redaction
-     * boundary before it is copied.
+     * binary payloads are omitted; secret variables are masked only when redaction is enabled.
+     * Every remaining string crosses the active redaction boundary before it is copied.
      */
     fun redacted(redaction: RedactionEngine): ComposerRequest =
         copy(
@@ -120,7 +120,12 @@ data class ComposerRequest(
                 variables.map { variable ->
                     variable.copy(
                         name = redaction.redactText(variable.name),
-                        value = if (variable.secret) redaction.replacement() else redaction.redactText(variable.value),
+                        value =
+                            if (variable.secret && redaction.isEnabled()) {
+                                redaction.replacement()
+                            } else {
+                                redaction.redactText(variable.value)
+                            },
                     )
                 },
         )
@@ -220,6 +225,44 @@ data class ResolvedComposerRequest(
     val timeoutMs: Int,
     val followRedirects: Boolean,
 )
+
+class ComposerWireBody(
+    val bytes: ByteArray,
+    val contentType: String,
+)
+
+fun ResolvedComposerRequest.wireBody(): ComposerWireBody? =
+    when (bodyType) {
+        ComposerBodyType.NONE -> null
+        ComposerBodyType.TEXT -> ComposerWireBody(body.orEmpty().encodeToByteArray(), "text/plain; charset=utf-8")
+        ComposerBodyType.JSON ->
+            ComposerWireBody(body.orEmpty().encodeToByteArray(), "application/json; charset=utf-8")
+        ComposerBodyType.FORM_URL_ENCODED ->
+            ComposerWireBody(body.orEmpty().encodeToByteArray(), "application/x-www-form-urlencoded; charset=utf-8")
+        ComposerBodyType.BINARY_FILE ->
+            ComposerWireBody(
+                binaryBody?.bytes ?: ByteArray(0),
+                binaryBody?.contentType ?: "application/octet-stream",
+            )
+        ComposerBodyType.MULTIPART -> multipartWireBody()
+    }
+
+private fun ResolvedComposerRequest.multipartWireBody(): ComposerWireBody {
+    val boundary = "DevConsole-${System.nanoTime()}"
+    val bytes =
+        buildString {
+            multipartParts.forEach { part ->
+                append("--$boundary\r\n")
+                append("Content-Disposition: form-data; name=\"").append(part.name).append('"')
+                part.fileName?.let { append("; filename=\"").append(it).append('"') }
+                append("\r\n")
+                part.contentType?.let { append("Content-Type: ").append(it).append("\r\n") }
+                append("\r\n").append(part.value).append("\r\n")
+            }
+            append("--$boundary--\r\n")
+        }.encodeToByteArray()
+    return ComposerWireBody(bytes, "multipart/form-data; boundary=$boundary")
+}
 
 data class ComposerResponse(
     val statusCode: Int,

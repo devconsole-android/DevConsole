@@ -3,32 +3,29 @@ package io.devconsole.api
 /**
  * Per-surface write permissions for the dashboard and the in-app inspector.
  *
- * Everything defaults to off except [mocks]. A mock rule writes nothing that belongs to the host --
- * it only short-circuits DevConsole's own OkHttp interceptor -- so the read-only posture that
- * protects preferences, databases, and files has nothing to protect here, while a Mocks screen that
- * cannot add a mock is the most common "is this thing broken?" first run. Pass `mocks = false`, or
- * use [readOnly], to take it back.
+ * Every capability is enabled by default for this debug-only tool. Use [readOnly] to opt in
+ * to a read-only inspector, or disable individual capabilities explicitly.
  *
  * Editing mock rules still requires [CaptureCategory.MOCKS] to be enabled; the two gates are
  * separate and both must hold.
  */
 data class EditingCapabilities(
-    val preferences: Boolean = false,
-    val featureFlags: Boolean = false,
-    val database: Boolean = false,
-    val files: Boolean = false,
+    val preferences: Boolean = true,
+    val featureFlags: Boolean = true,
+    val database: Boolean = true,
+    val files: Boolean = true,
     val mocks: Boolean = true,
-    val requestExecution: Boolean = false,
-    val captureRules: Boolean = false,
+    val requestExecution: Boolean = true,
+    val captureRules: Boolean = true,
 ) {
     class Builder {
-        private var preferences = false
-        private var featureFlags = false
-        private var database = false
-        private var files = false
+        private var preferences = true
+        private var featureFlags = true
+        private var database = true
+        private var files = true
         private var mocks = true
-        private var requestExecution = false
-        private var captureRules = false
+        private var requestExecution = true
+        private var captureRules = true
 
         fun preferences(value: Boolean) = apply { preferences = value }
 
@@ -58,9 +55,7 @@ data class EditingCapabilities(
 
     companion object {
         /**
-         * Grants nothing at all, [mocks] included. Spelled out rather than delegating to the no-arg
-         * constructor, which now enables mocks -- a host that asks for read-only must get exactly
-         * that, whatever the defaults drift to later.
+         * Opt-in read-only policy: grants no editing capability, including mocks.
          */
         @JvmStatic
         fun readOnly(): EditingCapabilities =

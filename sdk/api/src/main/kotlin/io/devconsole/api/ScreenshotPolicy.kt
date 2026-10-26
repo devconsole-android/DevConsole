@@ -8,14 +8,13 @@ package io.devconsole.api
  * Controls whether and how [io.devconsole.DevConsole.captureScreenshot] may capture the foreground
  * window.
  *
- * [enabled] defaults to `false` -- a deliberate product decision, not an oversight. A screenshot
- * cannot be redacted (see `RedactionApplicability.NOT_APPLICABLE` in `sdk:storage-api`), so it is the
- * single most sensitive artifact this SDK can produce; a host must opt in explicitly. [maxLongestEdgePx]
+ * [enabled] defaults to `true`; set it to `false` to disable screenshots. A screenshot
+ * cannot be redacted (see `RedactionApplicability.NOT_APPLICABLE` in `sdk:storage-api`). [maxLongestEdgePx]
  * bounds the downscaled image's longer edge; [maxBytes] bounds the encoded PNG, and a capture that
  * would exceed it is rejected rather than stored.
  */
 data class ScreenshotPolicy(
-    val enabled: Boolean = false,
+    val enabled: Boolean = true,
     val maxLongestEdgePx: Int = DEFAULT_MAX_LONGEST_EDGE_PX,
     val maxBytes: Long = DEFAULT_MAX_BYTES,
 ) {

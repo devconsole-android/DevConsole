@@ -84,52 +84,11 @@ class UrlConnectionComposerTransport(
     }
 
     private fun HttpURLConnection.writeBody(request: ResolvedComposerRequest) {
-        val bytes =
-            when (request.bodyType) {
-                ComposerBodyType.NONE -> return
-                ComposerBodyType.TEXT ->
-                    request.body.orEmpty().encodeToByteArray().also {
-                        setIfAbsent(
-                            "Content-Type",
-                            "text/plain; charset=utf-8",
-                        )
-                    }
-                ComposerBodyType.JSON ->
-                    request.body.orEmpty().encodeToByteArray().also {
-                        setIfAbsent(
-                            "Content-Type",
-                            "application/json; charset=utf-8",
-                        )
-                    }
-                ComposerBodyType.FORM_URL_ENCODED ->
-                    request.body.orEmpty().encodeToByteArray().also {
-                        setIfAbsent("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
-                    }
-                ComposerBodyType.BINARY_FILE -> {
-                    setIfAbsent("Content-Type", request.binaryBody?.contentType ?: "application/octet-stream")
-                    request.binaryBody?.bytes ?: ByteArray(0)
-                }
-                ComposerBodyType.MULTIPART -> multipartBytes(request)
-            }
+        val wire = request.wireBody() ?: return
+        setIfAbsent("Content-Type", wire.contentType)
         doOutput = true
-        setFixedLengthStreamingMode(bytes.size)
-        outputStream.use { it.write(bytes) }
-    }
-
-    private fun HttpURLConnection.multipartBytes(request: ResolvedComposerRequest): ByteArray {
-        val boundary = "DevConsole-${System.nanoTime()}"
-        setIfAbsent("Content-Type", "multipart/form-data; boundary=$boundary")
-        return buildString {
-            request.multipartParts.forEach { part ->
-                append("--$boundary\r\n")
-                append("Content-Disposition: form-data; name=\"").append(part.name).append('"')
-                part.fileName?.let { append("; filename=\"").append(it).append('"') }
-                append("\r\n")
-                part.contentType?.let { append("Content-Type: ").append(it).append("\r\n") }
-                append("\r\n").append(part.value).append("\r\n")
-            }
-            append("--$boundary--\r\n")
-        }.encodeToByteArray()
+        setFixedLengthStreamingMode(wire.bytes.size)
+        outputStream.use { it.write(wire.bytes) }
     }
 
     private fun HttpURLConnection.setIfAbsent(

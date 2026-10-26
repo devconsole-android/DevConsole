@@ -72,6 +72,8 @@ data class InspectorState(
      * caller (tab row, bottom nav, section gating) reads the same gate instead of re-deriving it.
      */
     val captureCategories: Set<CaptureCategory> = CaptureCategory.all(),
+    /** Mirrors [InspectorSnapshot.redactionEnabled]. */
+    val redactionEnabled: Boolean = false,
 )
 
 /** True when [category] is enabled for this session; the one-line building block every gate below composes. */

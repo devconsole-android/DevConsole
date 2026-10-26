@@ -78,7 +78,7 @@ DevConsole.initialize(
 )
 ```
 
-That's the setup. You now have crash and ANR reports, feature flags, and read-only inspectors for
+That's the setup. You now have crash and ANR reports, feature flags, and editable inspectors for
 SharedPreferences, SQLite, and files. Add one line to your HTTP client
 (see [Wire up your network stack](#wire-up-your-network-stack)) and network, WebSocket, and MQTT
 traffic show up too.
@@ -131,13 +131,13 @@ Then open the URL. With the default `BrowserSecurity.NONE`, the bare address is 
 | **Find in a capture** | Every detail screen has a find field that filters and highlights as you type. Network captures go further: step through hits with a counter and arrows, scope the search to the sections you choose, and match field names, values, or both. Any body can be expanded full-screen to read or copy. |
 | **WebSocket & MQTT inspectors** | Connection lifecycles and every frame, inbound and outbound. MQTT rides the Eclipse Paho adapter. |
 | **Mock rules** | Serve canned responses for matching requests (OkHttp), toggled from the dashboard, with deterministic priority matching. Wired by `installDevConsole` and editable out of the box. |
-| **Request composer** | Make the device issue ad-hoc HTTP requests from the dashboard. Off by default, host-allowlist confinable. |
+| **Request composer** | Make the device issue ad-hoc HTTP requests from the dashboard. Enabled by default; empty host lists allow any host, non-empty lists restrict destinations. |
 | **Crash & ANR capture** | Uncaught exceptions and a main-looper watchdog with bounded all-thread dumps and breadcrumbs. Always delegates to any crash reporter you already have. |
 | **Push timeline** | Record FCM (or any) push messages and their lifecycle: received → displayed → opened. The Firebase adapter uses reflection — no compile-time Firebase dependency. |
 | **State & feature flags** | Snapshot host-registered state and override feature flags from the browser. |
 | **Location ping tracker** | Record the location-ping requests you name to files on the device and replay them on a map: every ping coloured by whether it was sent, failed, dropped on the device or never left it, with device- and fix-time gaps, filters, and a route summary. See [Location pings](docs/LOCATION_PINGS.md). |
 | **Remote Config inspector** | Every Remote Config value active on the device, and where each one came from — server, in-app default, static fallback, or a local override — plus last fetch time and status. Read-only. The Firebase adapter uses reflection — no compile-time Firebase dependency. |
-| **Data inspectors** | Browse SharedPreferences, SQLite (incl. a SQL console), and app files. Read-only by default; every edit surface is opt-in. |
+| **Data inspectors** | Browse and edit SharedPreferences, SQLite (incl. a SQL console), and app files. All editing capabilities enabled; read-only operation is opt-in. |
 | **Evidence tray & exports** | Flag anything, attach it to a bug report bundle or Markdown/Jira/GitHub clipboard text. Export HAR, Postman Collection, or a full session ZIP. |
 | **Background keep-alive** | Default foreground service that keeps the server alive while your app is backgrounded. Enabled by the debug-only full runtime; the no-op runtime contributes no service or permissions. |
 
@@ -421,7 +421,8 @@ Not using Firebase? Implement `RemoteConfigProvider` for any other service — t
 vendor-neutral, and [docs/REMOTE_CONFIG.md](docs/REMOTE_CONFIG.md) has a worked example. The
 inspector is read-only: DevConsole never sets overrides and never triggers `fetch()` or `activate()`.
 
-Values are redacted by key name before either surface sees them, matched separator-insensitively so
+With `RedactionPolicy.recommended()`, values are redacted by key name before either surface sees
+them, matched separator-insensitively so
 `api_key` and `apiKey` are caught as well as `api-key`. It is still an allowlist, so a secret under
 a name nobody listed is shown in full — extend `RedactionPolicy.sensitiveFieldNames` if you keep
 anything sensitive in Remote Config.
@@ -566,32 +567,47 @@ devConsole {
 
 ## Security model
 
-DevConsole deliberately exposes your app's internals to a browser, and two of its defaults trade
-safety for a working first run. Know where the edges are:
+DevConsole is a debug-only developer tool. Runtime security layers are **off by default and opt-in**.
+Use these settings for shared networks or production-like data:
+
+| Layer | Default | Enable protection |
+|---|---|---|
+| Redaction | Off | `DevConsoleConfig(redactionPolicy = RedactionPolicy.recommended())` |
+| Rate limits | Off | `.withNetworkProtection(NetworkProtection(rateLimiting = true))` |
+| Host/Origin checks | Off | `.withNetworkProtection(NetworkProtection(hostAndOriginChecks = true))` |
+| Both network protections | Off | `.withNetworkProtection(NetworkProtection.recommended())` |
+| Browser auth | `NONE` | `.withBrowserSecurity(BrowserSecurity.SESSION_CODE)` |
+| Read-only editing | Off; all seven capabilities true | `.withEditingCapabilities(EditingCapabilities.readOnly())` |
+| Composer host restriction | Any host (empty list) | `DevConsoleConfig(composerAllowedHosts = setOf("api.example.test"))` |
+| Disable Composer | Enabled | `DevConsoleConfig(composerEnabled = false)` |
+| Disable state mutations | Enabled | `DevConsoleConfig(stateMutationsEnabled = false)` |
+| Disable screenshots | Enabled | `.withScreenshotPolicy(ScreenshotPolicy(enabled = false))` |
+
+`withNetworkProtection` replaces the policy, so use `recommended()` to enable both switches.
+The release/noop build guard is unchanged; static security headers remain on. `/api/v1/meta` reports
+`redaction: "off" | "on"` and both effective `networkProtection` switches.
 
 - **The dashboard speaks plaintext HTTP, and the default browser mode is open.** There is no TLS.
   `BindingMode.AUTO` binds your device's network address whenever it can, and
   `BrowserSecurity.NONE` means any client that can reach that address can read the dashboard and use
-  whatever editing capabilities the host enabled. Open mode still rejects browser mutations that
-  carry a foreign `Origin`; this protects against a cross-site browser request, not against another
-  client on the same reachable network. For a shared or untrusted network, pass
+  every editing capability by default. Host and Origin checks require
+  `NetworkProtection(hostAndOriginChecks = true)`. For a shared or untrusted network, pass
   `BindingMode.LOOPBACK`, set `BrowserConfig(binding = BrowserBinding.LOOPBACK)`, or opt into
   `BrowserSecurity.SESSION_CODE`.
 - **The connect URL is a credential only in SESSION_CODE mode.** Holding a live `#code=` fragment
   creates a session, with no approval step on the device. Codes are single-use and expire in five
   minutes; sessions last 30. Treat that URL like a password. You can revoke sessions from the More
   screen.
-- **Redaction is an allowlist.** About 25 well-known field names and `Bearer` tokens get masked.
-  Custom header names, signed-URL query params, and PII inside bodies pass through verbatim. See
+- **Redaction is opt-in.** `default()` and `none()` mask nothing. `recommended()` restores the
+  previous built-in sensitive field names; Authorization headers and Bearer text remain visible
+  unless you add rules. Unmatched custom fields and PII remain visible. See
   [docs/SECURITY_AND_REDACTION.md](docs/SECURITY_AND_REDACTION.md).
-- **Screenshots cannot be redacted.** Pixels don't have field names. Capture is **off by default**
+- **Screenshots cannot be redacted.** Pixels don't have field names. Capture is **on by default**
   and everything it produces is marked `UNREDACTED`.
-- **Editing is off by default, except mocks.** Preferences/database/file writes and capture-rule
-  editing are each gated per surface via `EditingCapabilities`; the composer and state mutation have
-  their own `DevConsoleConfig` flags. All of those default to off/read-only. Mock editing is the one
-  exception: a mock rule writes nothing of yours, it only short-circuits DevConsole's own
-  interceptor, so it ships editable. `EditingCapabilities.readOnly()` still refuses everything
-  including mocks.
+- **Editing is enabled by default.** Preferences, feature flags, database, files, mocks, request
+  execution, and capture rules all default to true, in constructors and Java Builders.
+  `EditingCapabilities.readOnly()` refuses everything including mocks. Composer and state mutations
+  have independent flags, both enabled by default.
 
 For the full analysis, including what a malicious network peer or a co-installed app can and cannot
 do, read [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
@@ -603,8 +619,8 @@ Three runnable samples under [`samples/`](samples/), one per integration style:
 | Sample | Stack | Posture |
 |---|---|---|
 | [`compose-app`](samples/compose-app) | Jetpack Compose | Everything unlocked: all editing capabilities, composer, screenshots, OkHttp + Ktor (CIO) network demos, MQTT + WebSocket demos, in-app inspector, shake + floating-button open triggers |
-| [`foundation-app`](samples/foundation-app) | Stock widgets, no UI framework | Everything at its locked-down default — the read-only contrast |
-| [`views-java-app`](samples/views-java-app) | Java + XML, `ui-views` panel | Middle ground: mocks and capture rules editable, data read-only, async Java APIs, shake-to-open (LIGHT) + floating button — the same draggable one Compose hosts get, since it is a plain `View` on the decor view, not a Compose feature |
+| [`foundation-app`](samples/foundation-app) | Stock widgets, no UI framework | Explicit read-only capabilities, Composer/state mutations disabled, screenshots disabled |
+| [`views-java-app`](samples/views-java-app) | Java + XML, `ui-views` panel | Java Builder integration, editable defaults, async Java APIs, shake-to-open (LIGHT) + floating button |
 
 ```bash
 ./gradlew :samples:compose-app:assembleDebug
