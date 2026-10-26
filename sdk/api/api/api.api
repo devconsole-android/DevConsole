@@ -265,6 +265,7 @@ public final class io/devconsole/api/DevConsoleConfig {
 	public final fun getEditingCapabilities ()Lio/devconsole/api/EditingCapabilities;
 	public final fun getEventBufferCapacity ()I
 	public final fun getFeatureFlags ()Ljava/util/List;
+	public final fun getLocationPingTracking ()Lio/devconsole/locationping/LocationPingTracking;
 	public final fun getOpenTriggers ()Lio/devconsole/api/OpenTriggers;
 	public final fun getRedactionPolicy ()Lio/devconsole/security/RedactionPolicy;
 	public final fun getRemoteConfigProviders ()Ljava/util/List;
@@ -286,6 +287,7 @@ public final class io/devconsole/api/DevConsoleConfig {
 	public final fun withCaptureCategories ([Lio/devconsole/api/CaptureCategory;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withCrashPolicy (Lio/devconsole/api/CrashPolicy;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withEditingCapabilities (Lio/devconsole/api/EditingCapabilities;)Lio/devconsole/api/DevConsoleConfig;
+	public final fun withLocationPingTracking (Lio/devconsole/locationping/LocationPingTracking;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withOpenTriggers (Lio/devconsole/api/OpenTriggers;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withRemoteConfigProviders (Ljava/util/List;)Lio/devconsole/api/DevConsoleConfig;
 	public final fun withRetentionPolicy (Lio/devconsole/api/RetentionPolicy;)Lio/devconsole/api/DevConsoleConfig;
@@ -309,6 +311,7 @@ public final class io/devconsole/api/DevConsoleConfig$Builder {
 	public final fun crashPolicy (Lio/devconsole/api/CrashPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun editingCapabilities (Lio/devconsole/api/EditingCapabilities;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun eventBufferCapacity (I)Lio/devconsole/api/DevConsoleConfig$Builder;
+	public final fun locationPingTracking (Lio/devconsole/locationping/LocationPingTracking;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun openTriggers (Lio/devconsole/api/OpenTriggers;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun redactionPolicy (Lio/devconsole/security/RedactionPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
 	public final fun retentionPolicy (Lio/devconsole/api/RetentionPolicy;)Lio/devconsole/api/DevConsoleConfig$Builder;
@@ -331,10 +334,12 @@ public abstract interface class io/devconsole/api/DevConsoleFacadeProvider {
 	public abstract fun featureFlagStringValue (Ljava/lang/String;)Ljava/lang/String;
 	public abstract fun featureFlagValue (Ljava/lang/String;)Z
 	public abstract fun initialize (Landroid/app/Application;Lio/devconsole/api/DevConsoleConfig;)Lio/devconsole/api/InitResult;
+	public abstract fun isLocationPingTrackingEnabled (Ljava/lang/String;)Z
 	public abstract fun logRecorder ()Lio/devconsole/logs/LogRecorder;
 	public abstract fun mockEngine ()Lio/devconsole/mocks/MockEngine;
 	public abstract fun networkRecorder ()Lio/devconsole/network/NetworkTransactionRecorder;
 	public abstract fun openInspector (Landroid/content/Context;)Lio/devconsole/api/InspectorOpenResult;
+	public abstract fun recordLocationPing (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/locationping/LocationPingOutcome;)Z
 	public abstract fun recordPush (Lio/devconsole/push/PushInput;)Lio/devconsole/push/PushEvent;
 	public abstract fun registerRemoteConfigProvider (Lio/devconsole/remoteconfig/RemoteConfigProvider;)Z
 	public abstract fun registerStateProvider (Lio/devconsole/state/StateProvider;)Z

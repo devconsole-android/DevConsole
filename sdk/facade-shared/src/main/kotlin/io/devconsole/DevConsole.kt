@@ -13,6 +13,7 @@ import io.devconsole.api.ScreenshotResult
 import io.devconsole.api.StartRequest
 import io.devconsole.api.StartResult
 import io.devconsole.api.StopReason
+import io.devconsole.locationping.LocationPingOutcome
 import io.devconsole.logs.LogRecorder
 import io.devconsole.mocks.MockEngine
 import io.devconsole.network.NetworkTransactionRecorder
@@ -236,4 +237,16 @@ object DevConsole {
      */
     @JvmStatic
     fun featureFlagStringValue(key: String): String = provider.featureFlagStringValue(key)
+
+    @JvmStatic
+    fun recordLocationPing(
+        url: String,
+        body: String,
+        outcome: LocationPingOutcome,
+    ): Boolean = provider.recordLocationPing(url, body, outcome)
+
+    @JvmStatic
+    @JvmOverloads
+    fun isLocationPingTrackingEnabled(streamName: String? = null): Boolean =
+        provider.isLocationPingTrackingEnabled(streamName)
 }
