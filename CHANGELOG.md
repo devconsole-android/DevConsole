@@ -63,6 +63,21 @@ the DevConsole runtime leaked.
 
 ### Added
 
+- **Location ping tracker.** Name the location-ping endpoints your app sends with
+  `DevConsoleConfig.withLocationPingTracking(...)` and DevConsole records their bodies to app-private
+  JSON-lines files, one track per group id and day. A new **Location pings** dashboard view replays a
+  track on an OpenStreetMap map, colouring each ping as sent, failed, dropped on device or offline,
+  with device- and fix-time gap labels, status and app-state filters, a ping list, per-ping details
+  and a route summary. Streams are switched on from the dashboard or from new switches on the in-app
+  **More** screen. Pings sent through the OkHttp interceptor are recorded automatically;
+  `DevConsole.recordLocationPing(...)` covers the ones that never reach the network, and
+  `DevConsole.isLocationPingTrackingEnabled(...)` reports whether a stream is recording. The new
+  `devconsole-location-ping` module holds the types and is pulled in by `devconsole` and
+  `devconsole-noop`. Leaflet 1.9.4 now ships with the dashboard, and the dashboard's CSP allows
+  images from `https://tile.openstreetmap.org`. See
+  [docs/LOCATION_PINGS.md](docs/LOCATION_PINGS.md).
+- **`NetworkTransactionRecorder.withCompletionObserver(...)`** sees every completed request before
+  capture rules and redaction apply. The location ping tracker is its first user.
 - **`devConsole.verificationEnabled`**, also settable as `-Pdevconsole.verification.enabled=false`.
   Takes verification off `assemble`/`bundle` so a build can always get out the door, warning loudly
   every time and leaving `verifyDevConsoleProtectedArtifacts` runnable by name. A plugin that can

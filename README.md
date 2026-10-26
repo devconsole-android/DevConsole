@@ -135,6 +135,7 @@ Then open the URL. With the default `BrowserSecurity.NONE`, the bare address is 
 | **Crash & ANR capture** | Uncaught exceptions and a main-looper watchdog with bounded all-thread dumps and breadcrumbs. Always delegates to any crash reporter you already have. |
 | **Push timeline** | Record FCM (or any) push messages and their lifecycle: received → displayed → opened. The Firebase adapter uses reflection — no compile-time Firebase dependency. |
 | **State & feature flags** | Snapshot host-registered state and override feature flags from the browser. |
+| **Location ping tracker** | Record the location-ping requests you name to files on the device and replay them on a map: every ping coloured by whether it was sent, failed, dropped on the device or never left it, with device- and fix-time gaps, filters, and a route summary. See [Location pings](docs/LOCATION_PINGS.md). |
 | **Remote Config inspector** | Every Remote Config value active on the device, and where each one came from — server, in-app default, static fallback, or a local override — plus last fetch time and status. Read-only. The Firebase adapter uses reflection — no compile-time Firebase dependency. |
 | **Data inspectors** | Browse SharedPreferences, SQLite (incl. a SQL console), and app files. Read-only by default; every edit surface is opt-in. |
 | **Evidence tray & exports** | Flag anything, attach it to a bug report bundle or Markdown/Jira/GitHub clipboard text. Export HAR, Postman Collection, or a full session ZIP. |
@@ -643,7 +644,7 @@ Full index: [docs/README.md](docs/README.md). Highlights:
   [Push](docs/PUSH.md)
 - [Data inspectors and exports](docs/DATA_INSPECTORS_AND_EXPORTS.md) ·
   [Evidence and bug reports](docs/EVIDENCE_AND_BUG_REPORTS.md)
-- [State and feature flags](docs/STATE_AND_FLAGS.md) · [Remote Config](docs/REMOTE_CONFIG.md)
+- [State and feature flags](docs/STATE_AND_FLAGS.md) · [Remote Config](docs/REMOTE_CONFIG.md) · [Location pings](docs/LOCATION_PINGS.md)
 - [Crash and ANR capture](docs/CRASH_AND_ANR.md) ·
   [Background keep-alive](docs/BACKGROUND_KEEPALIVE.md)
 - [FAQ / troubleshooting](docs/FAQ_TROUBLESHOOTING.md)
