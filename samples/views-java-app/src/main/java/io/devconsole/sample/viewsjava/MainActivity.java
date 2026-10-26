@@ -113,6 +113,7 @@ public final class MainActivity extends Activity {
 
     private CoroutineScope panelScope;
     private OkHttpClient client;
+    private SampleLocationPings sampleLocationPings;
     private OkHttpClient socketClient;
     private TextView lastResponse;
     private DevConsolePanelController panel;
@@ -155,6 +156,7 @@ public final class MainActivity extends Activity {
         // engine DevConsole published at initialize, so no DevConsoleMockInterceptor line is needed.
         client = DevConsoleOkHttp.install(new OkHttpClient.Builder(), DevConsole.networkRecorder())
                 .build();
+        sampleLocationPings = new SampleLocationPings(client);
         socketClient = new OkHttpClient();
         // Mock rules are SESSION-scoped and dropped on every server restart -- restoreRunningSession
         // (re)installs it on each Running transition instead, so a one-shot call here isn't needed.
@@ -183,6 +185,8 @@ public final class MainActivity extends Activity {
         findViewById(R.id.btnSimulateFirebasePush).setOnClickListener(view -> simulateFirebasePush());
         findViewById(R.id.btnReadFeatureFlag).setOnClickListener(view -> readFeatureFlag());
         findViewById(R.id.btnToggleMockRule).setOnClickListener(view -> toggleMockRule());
+        findViewById(R.id.btnSendLocationPing).setOnClickListener(view ->
+                ioExecutor.execute(() -> postResult(sampleLocationPings.sendNextPing())));
         findViewById(R.id.btnCaptureScreenshot).setOnClickListener(view -> captureScreenshot());
         findViewById(R.id.btnTriggerCrash).setOnClickListener(view -> triggerCrash());
         findViewById(R.id.btnTriggerAnr).setOnClickListener(view -> triggerAnr());
@@ -236,6 +240,7 @@ public final class MainActivity extends Activity {
                 .addStateProvider(stateProvider)
                 .addFeatureFlag(featureFlag)
                 .editingCapabilities(editingCapabilities)
+                .locationPingTracking(SampleLocationPings.tracking())
                 // The floating button is not a Compose feature: OpenTriggerController attaches a
                 // plain ImageView to the Activity's decorView, so an XML/Views host gets the same
                 // draggable, translucent button a Compose host does. Enabled here to show that.
