@@ -12,6 +12,7 @@ class InspectorMockRuleEditorTest {
         responsePreview: String?,
         responseHeaders: Map<String, String> = emptyMap(),
         statusCode: Int? = 200,
+        responseBodyTruncated: Boolean = false,
     ) = InspectorTransactionUi(
         id = "tx-1",
         method = "GET",
@@ -21,6 +22,7 @@ class InspectorMockRuleEditorTest {
         durationMs = 42,
         responsePreview = responsePreview,
         responseHeaders = responseHeaders,
+        responseBodyTruncated = responseBodyTruncated,
     )
 
     @Test
@@ -67,6 +69,13 @@ class InspectorMockRuleEditorTest {
     }
 
     @Test
+    fun `truncated capture preview is identified on the editable draft`() {
+        val target = mockRuleDraftFromTransaction(transaction("partial", responseBodyTruncated = true))
+        assertEquals("partial", target.draft.body)
+        assertTrue(target.draft.responseBodyTruncated)
+    }
+
+    @Test
     fun `existing rule ids are threaded through to avoid an id collision`() {
         val base = suggestMockRuleId("GET", "/v1/cart")
 
@@ -101,9 +110,9 @@ class InspectorMockRuleEditorTest {
     // The sheet's open state must survive a configuration change like rotation, not just its
     // individual field values -- verifies MockRuleEditorNewSaver round-trips a draft, and null, intact.
     @Test
-    fun `MockRuleEditorNewSaver round-trips a draft and null`() {
+    fun `MockRuleEditorNewSaver round-trips a truncated draft and null`() {
         val scope = SaverScope { true }
-        val original = mockRuleDraftFromTransaction(transaction("""{"ok":true}"""))
+        val original = mockRuleDraftFromTransaction(transaction("""{"ok":true}""", responseBodyTruncated = true))
 
         val saved = with(MockRuleEditorNewSaver) { scope.save(original) }
         assertEquals(original, saved?.let(MockRuleEditorNewSaver::restore))

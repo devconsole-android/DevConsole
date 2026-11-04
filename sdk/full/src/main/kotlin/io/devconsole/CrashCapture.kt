@@ -14,6 +14,7 @@ import io.devconsole.timeline.TimelineAppender
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -42,8 +43,11 @@ internal enum class CrashKind { UNCAUGHT, ANR }
  * round trips, not three -- before the previously installed handler -- and, downstream of it, the
  * host's own crash reporter -- ever runs. That is a description of the normal-case latency, not a
  * hard ceiling against a genuinely wedged transaction.
+ *
+ * Suppressions: every collaborator is injected so the capture path stays unit-testable, and
+ * install/record/persist/pending-crash recovery all share the same crash-path state.
  */
-@Suppress("LongParameterList") // Every collaborator is injected so the capture path stays unit-testable.
+@Suppress("LongParameterList", "TooManyFunctions")
 internal class CrashCapture(
     private val sessionId: () -> String,
     private val redaction: RedactionEngine,
@@ -63,6 +67,7 @@ internal class CrashCapture(
      * cost the crash record itself -- and never extends the synchronous crash-path budget either.
      */
     private val evidenceStore: () -> EvidenceStore? = { null },
+    private val pendingCrashFile: () -> File? = { null },
 ) {
     constructor(
         sessionId: String,
@@ -74,6 +79,8 @@ internal class CrashCapture(
 
     private val installed = AtomicBoolean(false)
 
+    @Volatile private var enabled = true
+
     @Volatile private var previousHandler: Thread.UncaughtExceptionHandler? = null
 
     /**
@@ -81,23 +88,87 @@ internal class CrashCapture(
      * crash reporter would be a far worse bug than anything this captures.
      */
     fun install() {
+        enabled = true
         if (!installed.compareAndSet(false, true)) return
         previousHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            try {
-                runCatching {
-                    record(
-                        CrashKind.UNCAUGHT,
-                        thread.name,
-                        throwable.stackTraceToString(),
-                        describe(throwable),
-                    )
+        val chainedHandler =
+            Thread.UncaughtExceptionHandler { thread, throwable ->
+                if (!enabled) {
+                    previousHandler?.uncaughtException(thread, throwable)
+                    return@UncaughtExceptionHandler
                 }
-            } finally {
-                runCatching { markCrashed() }
+                try {
+                    val event =
+                        runCatching {
+                            createEvent(
+                                CrashKind.UNCAUGHT,
+                                thread.name,
+                                throwable.stackTraceToString(),
+                                describe(throwable),
+                            )
+                        }.getOrNull()
+                    if (event == null) {
+                        writePendingCrash(throwable)
+                    } else {
+                        runCatching { appender()?.append(event) }
+                        if (!persistNow(event, CrashKind.UNCAUGHT, thread.name)) writePendingCrash(throwable)
+                    }
+                } finally {
+                    runCatching { markCrashed() }
+                    runCatching { previousHandler?.uncaughtException(thread, throwable) }
+                }
             }
-            previousHandler?.uncaughtException(thread, throwable)
+        Thread.setDefaultUncaughtExceptionHandler(chainedHandler)
+        installedHandler = chainedHandler
+    }
+
+    @Volatile private var installedHandler: Thread.UncaughtExceptionHandler? = null
+
+    fun disable() {
+        enabled = false
+        if (Thread.getDefaultUncaughtExceptionHandler() === installedHandler) {
+            Thread.setDefaultUncaughtExceptionHandler(previousHandler)
         }
+    }
+
+    fun importPendingCrash(
+        file: File,
+        sessionId: String,
+    ) {
+        runCatching {
+            PendingCrashFile.read(file)?.let { (summary, trace) ->
+                persistPendingCrash(file, sessionId, summary, trace)
+            }
+        }.onFailure { logcatInfo("DevConsole", "Pending crash import failed: ${it.javaClass.simpleName}") }
+    }
+
+    private fun persistPendingCrash(
+        file: File,
+        sessionId: String,
+        summary: String,
+        trace: String,
+    ) {
+        val event =
+            StoredEvent(
+                id = UUID.randomUUID().toString(),
+                sessionId = sessionId,
+                sequence = nextSequence(),
+                pluginId = PLUGIN_ID,
+                type = "uncaught",
+                wallTimeMs = System.currentTimeMillis(),
+                monoTimeNs = System.nanoTime(),
+                severity = SEVERITY_ERROR,
+                summary =
+                    redaction.redactText(
+                        "Previous launch crashed before storage was ready - $summary",
+                        SUMMARY_CHARS,
+                    ),
+                tagsJson = "{\"kind\":\"UNCAUGHT\",\"thread\":\"previous-launch\"}",
+                payloadJson = payloadJson(trace),
+            )
+        val eventStore = store() ?: return
+        runBlocking { eventStore.insert(listOf(event)) }
+        file.delete()
     }
 
     /**
@@ -119,27 +190,32 @@ internal class CrashCapture(
         stackTrace: String,
         summary: String,
     ) {
-        val event =
-            StoredEvent(
-                id = UUID.randomUUID().toString(),
-                sessionId = sessionId(),
-                sequence = nextSequence(),
-                pluginId = PLUGIN_ID,
-                type = kind.name.lowercase(),
-                wallTimeMs = System.currentTimeMillis(),
-                monoTimeNs = System.nanoTime(),
-                severity = SEVERITY_ERROR,
-                summary = summary.take(SUMMARY_CHARS),
-                tagsJson = """{"kind":"${kind.name}","thread":"${threadName.escapeJson()}"}""",
-                payloadJson = payloadJson(stackTrace),
-            )
+        val event = createEvent(kind, threadName, stackTrace, summary)
         // A throwing appender must never escape record(): on the ANR watchdog thread there is no
-        // caller-side try/catch the way install()'s uncaught-exception handler has one, so an
-        // unguarded throw here would itself become an uncaught exception and -- once install() has
-        // run -- take the whole host process down over a failed *capture* of a stall.
+        // caller-side try/catch the way install()'s uncaught-exception handler has one.
         runCatching { appender()?.append(event) }
         persistNow(event, kind, threadName)
     }
+
+    private fun createEvent(
+        kind: CrashKind,
+        threadName: String,
+        stackTrace: String,
+        summary: String,
+    ): StoredEvent =
+        StoredEvent(
+            id = UUID.randomUUID().toString(),
+            sessionId = sessionId(),
+            sequence = nextSequence(),
+            pluginId = PLUGIN_ID,
+            type = kind.name.lowercase(),
+            wallTimeMs = System.currentTimeMillis(),
+            monoTimeNs = System.nanoTime(),
+            severity = SEVERITY_ERROR,
+            summary = redaction.redactText(summary.take(SUMMARY_CHARS), SUMMARY_CHARS),
+            tagsJson = """{"kind":"${kind.name}","thread":"${threadName.escapeJson()}"}""",
+            payloadJson = payloadJson(stackTrace),
+        )
 
     /**
      * Flags [event] into the evidence tray, kind CRASH, keyed by the crash event's own id so a
@@ -244,16 +320,17 @@ internal class CrashCapture(
         event: StoredEvent,
         kind: CrashKind,
         threadName: String,
-    ) {
+    ): Boolean =
         runCatching {
             runBlocking {
                 withTimeoutOrNull(PERSIST_TIMEOUT_MS) {
-                    store()?.insert(listOf(event))
+                    val eventStore = store() ?: return@withTimeoutOrNull false
+                    eventStore.insert(listOf(event))
                     autoFlagCrash(event, kind, threadName)
+                    true
                 }
             }
-        }
-    }
+        }.getOrDefault(false) == true
 
     private fun markCrashed() {
         val activeSessionId = sessionId()
@@ -270,6 +347,17 @@ internal class CrashCapture(
     private fun describe(throwable: Throwable): String {
         val detail = throwable.message.orEmpty()
         return "${throwable.javaClass.simpleName}: $detail"
+    }
+
+    private fun writePendingCrash(throwable: Throwable) {
+        runCatching {
+            val file = pendingCrashFile() ?: return
+            PendingCrashFile.write(
+                file,
+                describe(throwable).take(SUMMARY_CHARS),
+                throwable.stackTraceToString().take(policy().maxStackChars.coerceAtLeast(1)),
+            )
+        }
     }
 
     private companion object {

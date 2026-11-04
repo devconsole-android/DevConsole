@@ -1,15 +1,36 @@
+public final class io/devconsole/remoteconfig/InMemoryRemoteConfigOverrideStore : io/devconsole/remoteconfig/RemoteConfigOverrideStore {
+	public static final field Companion Lio/devconsole/remoteconfig/InMemoryRemoteConfigOverrideStore$Companion;
+	public static final field MAX_KEY_LENGTH I
+	public fun <init> ()V
+	public fun <init> (Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun addListener (Lio/devconsole/remoteconfig/RemoteConfigOverrideListener;)V
+	public fun clearAll ()V
+	public fun clearOverride (Ljava/lang/String;Ljava/lang/String;)V
+	public fun overrides ()Ljava/util/Map;
+	public fun removeListener (Lio/devconsole/remoteconfig/RemoteConfigOverrideListener;)V
+	public fun setOverride (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+}
+
+public final class io/devconsole/remoteconfig/InMemoryRemoteConfigOverrideStore$Companion {
+}
+
 public final class io/devconsole/remoteconfig/RemoteConfigEntry {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ZZ)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ZZLjava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ZZLjava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Lio/devconsole/remoteconfig/RemoteConfigSource;
 	public final fun component4 ()Z
 	public final fun component5 ()Z
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ZZ)Lio/devconsole/remoteconfig/RemoteConfigEntry;
-	public static synthetic fun copy$default (Lio/devconsole/remoteconfig/RemoteConfigEntry;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ZZILjava/lang/Object;)Lio/devconsole/remoteconfig/RemoteConfigEntry;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Lio/devconsole/remoteconfig/RemoteConfigSource;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ZZLjava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;)Lio/devconsole/remoteconfig/RemoteConfigEntry;
+	public static synthetic fun copy$default (Lio/devconsole/remoteconfig/RemoteConfigEntry;Ljava/lang/String;Ljava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ZZLjava/lang/String;Lio/devconsole/remoteconfig/RemoteConfigSource;ILjava/lang/Object;)Lio/devconsole/remoteconfig/RemoteConfigEntry;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getKey ()Ljava/lang/String;
+	public final fun getProviderSource ()Lio/devconsole/remoteconfig/RemoteConfigSource;
+	public final fun getProviderValue ()Ljava/lang/String;
 	public final fun getRedacted ()Z
 	public final fun getSource ()Lio/devconsole/remoteconfig/RemoteConfigSource;
 	public final fun getTruncated ()Z
@@ -51,6 +72,19 @@ public final class io/devconsole/remoteconfig/RemoteConfigFetchStatus : java/lan
 	public static fun values ()[Lio/devconsole/remoteconfig/RemoteConfigFetchStatus;
 }
 
+public abstract interface class io/devconsole/remoteconfig/RemoteConfigOverrideListener {
+	public abstract fun onOverridesChanged ()V
+}
+
+public abstract interface class io/devconsole/remoteconfig/RemoteConfigOverrideStore {
+	public abstract fun addListener (Lio/devconsole/remoteconfig/RemoteConfigOverrideListener;)V
+	public abstract fun clearAll ()V
+	public abstract fun clearOverride (Ljava/lang/String;Ljava/lang/String;)V
+	public abstract fun overrides ()Ljava/util/Map;
+	public abstract fun removeListener (Lio/devconsole/remoteconfig/RemoteConfigOverrideListener;)V
+	public abstract fun setOverride (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+}
+
 public abstract interface class io/devconsole/remoteconfig/RemoteConfigProvider {
 	public abstract fun getId ()Ljava/lang/String;
 	public abstract fun snapshot ()Lio/devconsole/remoteconfig/RemoteConfigSnapshot;
@@ -60,7 +94,11 @@ public final class io/devconsole/remoteconfig/RemoteConfigRegistry {
 	public static final field Companion Lio/devconsole/remoteconfig/RemoteConfigRegistry$Companion;
 	public static final field MAX_VALUE_LENGTH I
 	public fun <init> ()V
+	public fun <init> (Lio/devconsole/remoteconfig/RemoteConfigOverrideStore;)V
+	public synthetic fun <init> (Lio/devconsole/remoteconfig/RemoteConfigOverrideStore;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun clear ()V
+	public final fun getOverrides ()Lio/devconsole/remoteconfig/RemoteConfigOverrideStore;
+	public final fun overrideValue (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public final fun providerIds ()Ljava/util/List;
 	public final fun register (Lio/devconsole/remoteconfig/RemoteConfigProvider;)V
 	public final fun snapshot (Ljava/lang/String;)Lio/devconsole/remoteconfig/RemoteConfigSnapshot;

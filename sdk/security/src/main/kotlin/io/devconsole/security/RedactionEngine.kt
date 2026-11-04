@@ -159,7 +159,7 @@ class RedactionEngine(
             if (policy.normalizedFieldNames.isEmpty()) return Regex("(?!)")
             val sensitiveNamePattern = policy.normalizedFieldNames.joinToString("|") { Regex.escape(it) }
             return Regex(
-                "(\\\"(?:$sensitiveNamePattern)\\\"\\s*:\\s*)(?:\\\"(?:\\\\.|[^\\\"])*\\\"|[^,}\\s]+)",
+                "(\\\"(?:$sensitiveNamePattern)\\\"\\s*:\\s*)(?:\\\"(?:[^\\\"\\\\]++|\\\\.)*+\\\"|[^,}\\s]++)",
                 RegexOption.IGNORE_CASE,
             )
         }

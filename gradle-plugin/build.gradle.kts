@@ -34,6 +34,12 @@ dependencies {
     testImplementation(gradleTestKit())
 }
 
+tasks.processResources {
+    filesMatching("**/devconsole-plugin-version.properties") {
+        expand("pluginVersion" to project.version.toString())
+    }
+}
+
 gradlePlugin {
     // Required by com.gradle.plugin-publish for Plugin Portal submission; matches the repo URL used
     // in build-logic/convention-publishing's PublishingConventionPlugin (PROJECT_URL) for the SDK
@@ -48,10 +54,8 @@ gradlePlugin {
             implementationClass = "io.devconsole.gradle.DevConsoleVariantPolicyPlugin"
             displayName = "DevConsole Variant Policy"
             description =
-                "Verifies the DevConsole in-app debugging runtime (network inspector, mock " +
-                    "responses, capture dashboard) never reaches a protected release build variant " +
-                    "-- checking declared dependencies, the resolved transitive runtime classpath, " +
-                    "and the final packaged APK/AAB/AAR bytes."
+                "Verifies the DevConsole in-app debugging runtime never reaches protected variants " +
+                    "through declared dependencies, the resolved runtime classpath, and packaged APK/AAB/AAR scans."
             tags.set(listOf("android", "debugging", "devtools", "network-inspector"))
         }
     }

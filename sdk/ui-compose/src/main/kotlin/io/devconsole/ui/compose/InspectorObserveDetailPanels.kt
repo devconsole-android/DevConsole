@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -113,7 +114,9 @@ internal fun ObserveDetailPanel(
                 enter = expandVertically(feedbackSpec(InspectorMotion.EXPAND_MS)) + fadeIn(feedbackSpec()),
                 exit = shrinkVertically(feedbackSpec()) + fadeOut(feedbackSpec()),
             ) {
-                Column(content = content)
+                SelectionContainer {
+                    Column(content = content)
+                }
             }
         }
     }

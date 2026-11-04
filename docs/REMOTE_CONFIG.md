@@ -123,11 +123,36 @@ surface will re-quote one to make it parse, because the quotes would be the view
 rather than something the server sent. A value that was truncated on capture, or withheld by
 redaction, says so instead of failing to parse for an unexplained reason.
 
+## Local overrides
+
+Both surfaces can override a key locally while you debug: in the dashboard, open a key and choose
+**Save override**; in the inspector, tap a row's edit action on the Config tab. The overridden row
+shows the `override` source and keeps the provider's own value beside it, so clearing the override
+visibly restores something. **Clear all overrides** removes every one.
+
+DevConsole cannot change what Firebase (or any provider) returns to your code, so the host reads the
+override first:
+
+```kotlin
+val bannerText = DevConsole.remoteConfigOverride("promo_banner_text")
+    ?: Firebase.remoteConfig.getString("promo_banner_text")
+```
+
+`remoteConfigOverride(key, providerId = null)` returns the override for that key on the given
+provider, or on any provider when `providerId` is null; it is always null in release builds (the
+no-op facade). Overrides persist across app restarts (SharedPreferences
+`devconsole_remote_config_overrides`) and survive a session restart, because they are user intent
+rather than captured state.
+
+Editing shares the `EditingCapabilities.featureFlags` capability with feature-flag overrides, and is
+gated by `CaptureCategory.STATE` like the rest of this page. The provider's value shown next to an
+override goes through the same redaction as every other value.
+
 ## Scope
 
-This inspector is **read-only**. DevConsole does not set overrides and does not trigger `fetch()` or
-`activate()` — it observes the Remote Config lifecycle rather than driving it. The `override` source
-is displayed when a host has applied one of its own.
+DevConsole does not trigger `fetch()` or `activate()` — it observes the Remote Config lifecycle
+rather than driving it. A provider can still report the `override` source for an override of its
+own; that is shown as-is and is not editable from DevConsole.
 
 ## REST
 
@@ -140,10 +165,26 @@ provider's snapshot:
   "fetch":{"lastFetchEpochMs":1755043200000,"status":"success","minimumFetchIntervalSeconds":3600},
   "unavailableReason":null,
   "entries":[
-    {"key":"checkout_v2","value":"true","source":"remote","redacted":false,"truncated":false}
+    {"key":"checkout_v2","value":"true","source":"remote","redacted":false,"truncated":false,
+     "providerValue":null,"providerSource":null}
   ]
-}]}
+}],"overridesEditable":true}
 ```
+
+`providerValue`/`providerSource` are non-null only while a local override replaces the value.
+`overridesEditable` is true when the host wired an override store and allows feature-flag editing.
+
+Override routes (bearer session + `Origin` + `X-DevConsole-CSRF`, audited without raw values):
+
+| Route | Body | Success |
+|---|---|---|
+| `PUT /api/v1/remote-config/{provider}/overrides/{key}` | form `value=<text>` | `{"status":"updated"}` |
+| `DELETE /api/v1/remote-config/{provider}/overrides/{key}` | — | `{"status":"cleared"}` |
+| `DELETE /api/v1/remote-config/overrides` | — | `{"status":"cleared"}` |
+
+Errors: `REMOTE_CONFIG_OVERRIDES_DISABLED` (403, editing capability off),
+`REMOTE_CONFIG_OVERRIDES_UNAVAILABLE` (503, no store), `REMOTE_CONFIG_PROVIDER_NOT_FOUND` (404),
+`VALIDATION_FAILED` (400: missing `value`, blank or over-long key, over-long value).
 
 See [PROTOCOL_REFERENCE.md](PROTOCOL_REFERENCE.md) and
 [STATE_AND_FLAGS.md](STATE_AND_FLAGS.md) for the neighbouring surfaces.

@@ -47,6 +47,27 @@ sealed interface InspectorAction {
         val id: String?,
     ) : InspectorAction
 
+    /** Applies a status-class filter to the traffic snapshot, e.g. from the traffic tab's chips. */
+    data class SelectTrafficStatusClass(
+        val statusClass: TrafficStatusClass,
+    ) : InspectorAction
+
+    /** Applies an exact-host filter to the traffic snapshot; null shows every host. */
+    data class SelectTrafficHost(
+        val host: String?,
+    ) : InspectorAction
+
+    /** Pins or unpins a finished run so retention keeps it. */
+    data class SetSessionPinned(
+        val id: String,
+        val pinned: Boolean,
+    ) : InspectorAction
+
+    /** Deletes a finished run and all its captures; selecting it again falls back to live. */
+    data class DeleteSession(
+        val id: String,
+    ) : InspectorAction
+
     /**
      * Toggles [id]'s evidence-tray flag through the durable `EvidenceStore` -- flags it if
      * unflagged, unflags it if already flagged, per [InspectorState.flaggedTransactionIds].
@@ -178,6 +199,42 @@ sealed interface InspectorAction {
     data class SetServerRunning(
         val running: Boolean,
     ) : InspectorAction
+
+    /** The More surface's "Pause capture" switch; the Observe screen's Resume banner also uses it. */
+    data class SetCapturePaused(
+        val paused: Boolean,
+    ) : InspectorAction
+
+    /**
+     * The More surface's destructive "Purge captured data" action. The surface is expected to
+     * confirm before dispatching this.
+     */
+    data object PurgeCapturedData : InspectorAction
+
+    /** Sends one frame over a live socket connection; the composer clears only on success. */
+    data class SendSocketFrame(
+        val connectionId: String,
+        val text: String,
+        val topic: String? = null,
+        val qos: Int = 0,
+        val retained: Boolean = false,
+    ) : InspectorAction
+
+    /** Applies a local Remote Config override for [key] on [providerId]. */
+    data class SetRemoteConfigOverride(
+        val providerId: String,
+        val key: String,
+        val value: String,
+    ) : InspectorAction
+
+    /** Removes the local override for [key] on [providerId], restoring the provider's value. */
+    data class ClearRemoteConfigOverride(
+        val providerId: String,
+        val key: String,
+    ) : InspectorAction
+
+    /** Removes every local Remote Config override. */
+    data object ClearAllRemoteConfigOverrides : InspectorAction
 
     /** The More surface's screenshot capture button, next to the export actions. */
     data object CaptureScreenshot : InspectorAction

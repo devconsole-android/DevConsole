@@ -80,6 +80,13 @@ internal class SessionMarkerRecorder(
             severity = EventSeverity.WARN,
         )
 
+    fun captureStateChanged(paused: Boolean) =
+        if (paused) {
+            emit("system.capture.paused", "Capture paused")
+        } else {
+            emit("system.capture.resumed", "Capture resumed")
+        }
+
     private fun emit(
         type: String,
         summary: String,

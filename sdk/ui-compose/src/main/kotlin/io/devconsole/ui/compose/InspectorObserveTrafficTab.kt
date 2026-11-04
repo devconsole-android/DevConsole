@@ -27,11 +27,16 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,11 +47,35 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.util.Locale
 
 private const val TRAFFIC_HTTP_CLIENT_ERROR_START = 400
 private const val TRAFFIC_HTTP_CLIENT_ERROR_END = 499
 private const val TRAFFIC_HTTP_SERVER_ERROR_START = 500
+private const val TRAFFIC_HOST_LIMIT = 8
+
+/** Status-class chips in the traffic header, in HTTP bucket order. */
+private val TRAFFIC_STATUS_CLASS_LABELS =
+    listOf(
+        TrafficStatusClass.ALL to "All",
+        TrafficStatusClass.SUCCESS to "2xx",
+        TrafficStatusClass.REDIRECT to "3xx",
+        TrafficStatusClass.CLIENT_ERROR to "4xx",
+        TrafficStatusClass.SERVER_ERROR to "5xx",
+        TrafficStatusClass.FAILED to "Failed",
+    )
+
+/**
+ * Hosts worth offering in the traffic header's dropdown: the [TRAFFIC_HOST_LIMIT] most captured
+ * hosts first, ties alphabetical so the list does not reshuffle between identical counts.
+ */
+internal fun topTrafficHosts(transactions: List<InspectorTransactionUi>): List<String> =
+    transactions
+        .groupingBy { it.host }
+        .eachCount()
+        .entries
+        .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+        .take(TRAFFIC_HOST_LIMIT)
+        .map { it.key }
 
 /** Search+chip-filtered view over [InspectorState.transactions], plus the counts the hero/chips need. */
 private data class TrafficStats(
@@ -61,11 +90,11 @@ private data class TrafficStats(
 private fun List<InspectorTransactionUi>.matchesTrafficSearch(search: String): List<InspectorTransactionUi> {
     if (search.isEmpty()) return this
     return filter { tx ->
-        tx.path.lowercase(Locale.US).contains(search) ||
-            tx.queryString().lowercase(Locale.US).contains(search) ||
-            tx.host.lowercase(Locale.US).contains(search) ||
-            tx.requestPreview?.lowercase(Locale.US)?.contains(search) == true ||
-            tx.responsePreview?.lowercase(Locale.US)?.contains(search) == true
+        tx.path.contains(search, ignoreCase = true) ||
+            tx.queryString().contains(search, ignoreCase = true) ||
+            tx.host.contains(search, ignoreCase = true) ||
+            tx.requestPreview?.contains(search, ignoreCase = true) == true ||
+            tx.responsePreview?.contains(search, ignoreCase = true) == true
     }
 }
 
@@ -81,7 +110,7 @@ private fun rememberTrafficStats(
     chip: String,
 ): TrafficStats =
     remember(transactions, search, chip) {
-        val searched = transactions.matchesTrafficSearch(search.trim().lowercase(Locale.US))
+        val searched = transactions.matchesTrafficSearch(search.trim())
         val chipFiltered =
             when (chip) {
                 "failing" -> searched.filter { it.isFailing() }
@@ -108,7 +137,9 @@ internal fun TrafficTabContent(
     ui: ObserveUiState,
     actions: ObserveActions,
 ) {
-    if (state.transactions.isEmpty() && !ui.searchOpen && !ui.trafficFiltersOpen) {
+    val trafficFilterActive = state.trafficStatusClass != TrafficStatusClass.ALL || state.trafficHost != null
+    val headerControlsOpen = ui.searchOpen || ui.trafficFiltersOpen
+    if (state.transactions.isEmpty() && !headerControlsOpen && !trafficFilterActive) {
         TrafficEmptyState()
         return
     }
@@ -121,7 +152,7 @@ internal fun TrafficTabContent(
     val selectionModeActive = state.selectedTransactionIds.isNotEmpty()
     BackHandler(enabled = selectionModeActive, onBack = actions.onClearTransactionSelection)
 
-    TrafficList(stats, ui, actions, colors, TrafficSelection(state.selectedTransactionIds, selectionModeActive))
+    TrafficList(state, stats, ui, actions, colors, TrafficSelection(state.selectedTransactionIds, selectionModeActive))
 }
 
 /** The traffic tab's selection state, bundled so [TrafficList] doesn't grow a parameter per field. */
@@ -132,13 +163,15 @@ private data class TrafficSelection(
 
 @Composable
 private fun TrafficList(
+    state: InspectorState,
     stats: TrafficStats,
     ui: ObserveUiState,
     actions: ObserveActions,
     colors: DevConsoleColors,
     selection: TrafficSelection,
 ) {
-    val arrivals = rememberArrivals(stats.rowsNewestFirst.map { it.id })
+    val arrivalIds = remember(stats.rowsNewestFirst) { stats.rowsNewestFirst.map { it.id } }
+    val arrivals = rememberArrivals(arrivalIds)
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
@@ -172,6 +205,20 @@ private fun TrafficList(
                     }
                 }
             }
+        }
+        // Keep the filter row reachable even when the filters match nothing, so a narrowing
+        // selection is never a dead end.
+        val filterActive = state.trafficStatusClass != TrafficStatusClass.ALL || state.trafficHost != null
+        if (state.transactions.isNotEmpty() || filterActive) {
+            item {
+                TrafficStatusFilterRow(
+                    selectedClass = state.trafficStatusClass,
+                    selectedHost = state.trafficHost,
+                    transactions = state.transactions,
+                    actions = actions,
+                )
+            }
+            item { Spacer(Modifier.height(12.dp)) }
         }
         if (stats.failCount > 0) {
             item { TrafficHero(stats, ui, colors, actions) }
@@ -291,6 +338,79 @@ private fun ExportPillIcon(colors: DevConsoleColors) {
     ObserveGlyphIcon(ObserveGlyph.Download, contentDescription = null, tint = colors.ground, size = 13.dp)
 }
 
+/**
+ * The traffic header's server-side filters: a status-class chip row plus a host dropdown. Both
+ * dispatch to the ViewModel, which re-reads the capture store with an [InspectorTrafficQuery] --
+ * unlike the search/method chips below, these narrow the page itself rather than the loaded rows.
+ */
+@Composable
+private fun TrafficStatusFilterRow(
+    selectedClass: TrafficStatusClass,
+    selectedHost: String?,
+    transactions: List<InspectorTransactionUi>,
+    actions: ObserveActions,
+) {
+    Column(Modifier.padding(top = 8.dp)) {
+        FilterChipRow(
+            chips =
+                TRAFFIC_STATUS_CLASS_LABELS.map { (statusClass, label) ->
+                    InspectorFilterChip(statusClass.name, label, statusClass == selectedClass)
+                },
+            onChipClick = { chip -> actions.onTrafficStatusClassClick(TrafficStatusClass.valueOf(chip.id)) },
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+        )
+        TrafficHostMenu(selectedHost, transactions, actions)
+    }
+}
+
+@Composable
+private fun TrafficHostMenu(
+    selectedHost: String?,
+    transactions: List<InspectorTransactionUi>,
+    actions: ObserveActions,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    // Once a host is picked the page only holds that host's rows, so the menu keeps offering the
+    // hosts seen while unfiltered -- switching hosts must not require a detour through "All hosts".
+    val unfilteredHosts = remember { mutableListOf<String>() }
+    val hosts =
+        remember(transactions, selectedHost) {
+            if (selectedHost == null) {
+                topTrafficHosts(transactions).also {
+                    unfilteredHosts.clear()
+                    unfilteredHosts.addAll(it)
+                }
+            } else {
+                (unfilteredHosts + selectedHost).distinct()
+            }
+        }
+    Box {
+        FilterChipRow(
+            chips = listOf(InspectorFilterChip("host", "${selectedHost ?: "All hosts"} ▾", selectedHost != null)),
+            onChipClick = { expanded = true },
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("All hosts") },
+                onClick = {
+                    expanded = false
+                    actions.onTrafficHostClick(null)
+                },
+            )
+            hosts.forEach { host ->
+                DropdownMenuItem(
+                    text = { Text(host) },
+                    onClick = {
+                        expanded = false
+                        actions.onTrafficHostClick(host)
+                    },
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun TrafficChips(
     stats: TrafficStats,
@@ -321,7 +441,7 @@ private fun TrafficHero(
     if (ui.trafficHeroCollapsed) {
         HeroBar(
             value = stats.failCount.toString(),
-            label = "requests failing",
+            label = if (stats.failCount == 1) "request failing" else "requests failing",
             onExpand = actions.onToggleTrafficHero,
             valueColor = if (failing) colors.error else colors.ink,
             labelColor = if (failing) colors.error else colors.text3,

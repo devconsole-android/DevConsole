@@ -192,16 +192,13 @@ private class FakePluginFilterEventDao : EventDao {
 
     override fun recentEvents(limit: Int): List<EventEntity> = events.values.sortedBy { it.wallTimeMs }.takeLast(limit)
 
-    override fun oldestLowSeverityFirst(limit: Int): List<String> = emptyList()
+    override fun quotaCandidates(): List<EventPruneCandidate> = emptyList()
+
+    override fun activeSessionTrimCandidates(sessionId: String): List<EventPruneCandidate> = emptyList()
 
     override fun deleteByIds(ids: List<String>) {
         ids.forEach { events.remove(it) }
     }
-
-    override fun oldestUnbookmarkedLowSeverityFirstForSession(
-        sessionId: String,
-        limit: Int,
-    ): List<String> = emptyList()
 
     override fun sessionIdsOlderThan(cutoffEpochMs: Long): List<String> = emptyList()
 

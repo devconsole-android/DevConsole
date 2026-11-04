@@ -16,8 +16,9 @@ import android.view.Window
 import android.view.WindowManager
 import androidx.annotation.RequiresApi
 import io.devconsole.api.ScreenshotPolicy
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import kotlin.coroutines.resume
@@ -85,12 +86,8 @@ internal enum class CaptureAttemptResult { SUCCESS, SECURE, FAILED }
  *   while hardening this path; the `ERROR_SOURCE_NO_DATA` -> [CapturedScreenshot.SecureWindow] mapping
  *   and the re-check-before-copy ordering are implemented per the documented `PixelCopy` contract and
  *   covered by Robolectric unit tests only, not verified against real hardware.
- * - **A timed-out `PixelCopy` request cannot be cancelled.** [capture] bounds the wait and recycles its
- *   bitmap on timeout, but `PixelCopy.request` has no cancel API; if the system-side copy is still
- *   in flight when the timeout fires, it is racing a bitmap this class has already recycled. This is
- *   believed low-risk in practice (a `PixelCopy` copy is a single-frame operation, not the kind of
- *   thing a stalled main thread should be able to delay), but it is not something this class can rule
- *   out from application code.
+ * - **A timed-out `PixelCopy` request cannot be cancelled.** On timeout its bitmap is abandoned without
+ *   recycling; the system can finish writing safely and GC will reclaim the bitmap afterward.
  */
 internal class ScreenshotCapture(
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
@@ -131,26 +128,19 @@ internal class ScreenshotCapture(
             runCatching { bitmapFactory(width, height) }
                 .getOrElse { return CapturedScreenshot.Failed("Unable to allocate capture bitmap: ${it.message}") }
 
-        // Every branch below owns the bitmap and must either hand it to encode() or recycle it --
-        // including external cancellation of this coroutine, which is why the timed section is wrapped
-        // in try/catch rather than relying solely on the `null` (timeout) result of withTimeoutOrNull.
+        // PixelCopy has no cancellation API, so neither a timeout nor caller cancellation may recycle
+        // the destination bitmap: the native copy could still be writing into it. GC reclaims it.
         val outcome =
-            try {
-                withTimeoutOrNull(captureTimeoutMs) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        captureWithPixelCopy(window, bitmap)
-                    } else {
-                        captureWithCanvas(window, decorView, bitmap)
-                    }
+            withTimeoutOrNull(captureTimeoutMs) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    captureWithPixelCopy(window, bitmap)
+                } else {
+                    captureWithCanvas(window, decorView, bitmap)
                 }
-            } catch (cancelled: CancellationException) {
-                bitmap.recycle()
-                throw cancelled
             }
 
         return when (outcome) {
             null -> {
-                bitmap.recycle()
                 CapturedScreenshot.Failed("Screenshot capture timed out after ${captureTimeoutMs}ms", timedOut = true)
             }
             CaptureAttemptResult.SUCCESS -> encode(bitmap, policy)
@@ -165,12 +155,12 @@ internal class ScreenshotCapture(
         }
     }
 
-    private fun encode(
+    private suspend fun encode(
         bitmap: Bitmap,
         policy: ScreenshotPolicy,
     ): CapturedScreenshot {
         val scaled = bitmap.downscaledTo(policy.maxLongestEdgePx)
-        val png = pngEncoder(scaled)
+        val png = withContext(Dispatchers.IO) { pngEncoder(scaled) }
         val widthPx = scaled.width
         val heightPx = scaled.height
         if (scaled !== bitmap) bitmap.recycle()

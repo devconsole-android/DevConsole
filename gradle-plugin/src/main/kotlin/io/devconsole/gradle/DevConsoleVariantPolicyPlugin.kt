@@ -167,11 +167,15 @@ abstract class VerifyDevConsoleProtectedArtifactsTask : DefaultTask() {
             resolvedRuntimeComponents.get().flatMap { (variant, components) ->
                 components
                     .filter { it in badProjectDisplayNames || it.matches(FULL_RUNTIME_COORDINATE) }
-                    .map { "$variant -> $it (resolved)" }
+                    .map { component ->
+                        val guidance = if (component.contains("devconsole-ui-")) "; use debugImplementation" else ""
+                        "$variant -> $component (resolved)$guidance"
+                    }
             }
         val found = (declared + transitive).distinct()
         if (found.isEmpty()) return
-        val message = "Protected variants contain the full DevConsole runtime: ${found.joinToString()}"
+        val message = "Protected variants contain DevConsole runtime components: ${found.joinToString()}. " +
+            "Use debugImplementation for DevConsole UI add-ons."
         if (failOnUnsafeVariant.get()) error(message) else logger.warn("DevConsole: $message")
     }
 
@@ -180,9 +184,9 @@ abstract class VerifyDevConsoleProtectedArtifactsTask : DefaultTask() {
         val FULL_RUNTIME_COORDINATE =
             Regex(
                 "^(?:com\\.github\\.devconsole-android\\.DevConsole|io\\.github\\.devconsole-android):" +
-                    "(?:devconsole|devconsole-network-okhttp|devconsole-mocks-okhttp|" +
+                    "(?:devconsole|devconsole-network-okhttp|devconsole-network-ktor|devconsole-mocks-okhttp|" +
                     "devconsole-socket-okhttp|devconsole-socket-paho|devconsole-push-firebase|" +
-                    "devconsole-remote-config-firebase):.+",
+                    "devconsole-remote-config-firebase|devconsole-ui-compose|devconsole-ui-views):.+",
             )
     }
 }
@@ -493,10 +497,14 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
             listOf(
                 "DEVCONSOLE_ENABLED_FULL_V1",
                 "DEVCONSOLE_ENABLED_NETWORK_OKHTTP_V1",
+                "DEVCONSOLE_ENABLED_NETWORK_KTOR_V1",
                 "DEVCONSOLE_ENABLED_MOCKS_OKHTTP_V1",
                 "DEVCONSOLE_ENABLED_SOCKET_OKHTTP_V1",
+                "DEVCONSOLE_ENABLED_SOCKET_PAHO_V1",
                 "DEVCONSOLE_ENABLED_PUSH_FIREBASE_V1",
                 "DEVCONSOLE_ENABLED_REMOTE_CONFIG_FIREBASE_V1",
+                "DEVCONSOLE_ENABLED_UI_COMPOSE_V1",
+                "DEVCONSOLE_ENABLED_UI_VIEWS_V1",
                 "Lio/devconsole/server/ktor/KtorLocalServerEngine;",
                 "io.devconsole.DevConsoleInitializer",
                 ".devconsoleinitializer",
@@ -505,11 +513,8 @@ abstract class VerifyDevConsolePackagedArtifactTask : DefaultTask() {
 }
 
 // JitPack serves a build under its git ref name. This repo tags `v*`, and JitPack resolves a
-// requested version against the `v`-prefixed tag when no bare tag exists, so "1.3.1" reaches the
-// v1.3.1 build -- and reads the same as the version this plugin carries on the Plugin Portal.
-// Bump in step with SDK_VERSION in convention-publishing; the tag must exist before this resolves.
-private const val DEFAULT_SDK_VERSION = "1.3.1"
-
+// requested version against the `v`-prefixed tag when no bare tag exists, so the plugin's own
+// implementation version reaches the corresponding v-prefixed SDK build.
 /** Gradle property backing [DevConsoleExtension.verificationEnabled]. */
 private const val VERIFICATION_ENABLED_PROPERTY = "devconsole.verification.enabled"
 
@@ -525,6 +530,18 @@ private val DEVCONSOLE_GROUPS = setOf(DEVCONSOLE_GROUP, "io.github.devconsole-an
  * `devconsole-ui-views`, `devconsole-network-ktor`) is *not* the core runtime and must not suppress it.
  */
 private val CORE_RUNTIME_COORDINATE_NAMES = setOf("devconsole", "devconsole-noop")
+private val PROTECTED_RUNTIME_COORDINATE_NAMES = setOf("devconsole") +
+    setOf("devconsole-network-ktor", "devconsole-socket-paho", "devconsole-ui-compose", "devconsole-ui-views")
+
+private fun Project.pluginVersion(): String =
+    DevConsoleVariantPolicyPlugin::class.java.`package`.implementationVersion
+        ?.takeIf(String::isNotBlank)
+        ?: DevConsoleVariantPolicyPlugin::class.java.getResourceAsStream("/devconsole-plugin-version.properties")
+            ?.use { properties ->
+                java.util.Properties().apply { load(properties) }.getProperty("pluginVersion")
+            }
+            ?.takeIf(String::isNotBlank)
+        ?: error("DevConsole: could not determine plugin implementation version for sdkVersion; set devConsole.sdkVersion explicitly.")
 
 class DevConsoleVariantPolicyPlugin : Plugin<Project> {
     override fun apply(target: Project) = with(target) {
@@ -547,12 +564,15 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
             protectedDependencyPaths.convention(
                 setOf(
                     ":sdk:full",
+                    ":sdk:network-ktor",
                     ":sdk:network-okhttp",
                     ":sdk:mocks-okhttp",
                     ":sdk:socket-okhttp",
                     ":sdk:socket-paho",
                     ":sdk:push-firebase",
                     ":sdk:remote-config-firebase",
+                    ":sdk:ui-compose",
+                    ":sdk:ui-views",
                 ),
             )
             // PROTECTED by default: a release-signed staging/beta/preprod build type (anything not in
@@ -565,7 +585,7 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
                 providers.gradleProperty(VERIFICATION_ENABLED_PROPERTY).map(String::toBoolean).orElse(true),
             )
             autoWireDependencies.convention(true)
-            sdkVersion.convention(DEFAULT_SDK_VERSION)
+            sdkVersion.convention(provider { pluginVersion() })
         }
         registerPackagedArtifactScans(extension, packagedVerificationTasks, actualVariantBuildTypes)
 
@@ -614,6 +634,17 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
             }
             val policies = actualVariantBuildTypes.mapValues { (variantName, buildType) ->
                 variantPolicy(variantName, buildType, extension)
+            }
+            extension.enabledVariants.get().filter { configured ->
+                actualVariantBuildTypes.none { (name, buildType) -> configured == name || configured == buildType }
+            }.forEach { configured ->
+                logger.warn("DevConsole: enabledVariants entry '$configured' matched no Android variant or build type in project '$path'.")
+            }
+            extension.protectedVariantPatterns.get().forEach { pattern ->
+                val regex = runCatching { Regex(pattern) }.getOrNull()
+                if (regex == null || actualVariantBuildTypes.keys.none(regex::matches)) {
+                    logger.warn("DevConsole: protectedVariantPatterns entry '$pattern' matched no Android variant in project '$path'.")
+                }
             }
             val report = tasks.register<DevConsoleVariantReportTask>("devConsoleVariantReport") {
                 group = "verification"
@@ -911,7 +942,8 @@ class DevConsoleVariantPolicyPlugin : Plugin<Project> {
                     val path = dep.projectPathCompat()
                     if (path in protectedPaths) "$variant -> $path" else null
                 }
-                dep is org.gradle.api.artifacts.ExternalModuleDependency && dep.group in DEVCONSOLE_GROUPS && dep.name == "devconsole" -> "$variant -> ${dep.group}:${dep.name}"
+                dep is org.gradle.api.artifacts.ExternalModuleDependency && dep.group in DEVCONSOLE_GROUPS &&
+                    dep.name in PROTECTED_RUNTIME_COORDINATE_NAMES -> "$variant -> ${dep.group}:${dep.name}"
                 else -> null
             }
         }

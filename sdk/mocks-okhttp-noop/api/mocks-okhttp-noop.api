@@ -3,3 +3,8 @@ public final class io/devconsole/mocks/okhttp/DevConsoleMockInterceptor : okhttp
 	public fun intercept (Lokhttp3/Interceptor$Chain;)Lokhttp3/Response;
 }
 
+public final class io/devconsole/mocks/okhttp/MockFailureMarker : java/lang/RuntimeException {
+	public fun <init> (Ljava/util/Map;)V
+	public final fun getTags ()Ljava/util/Map;
+}
+

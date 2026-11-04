@@ -34,6 +34,7 @@ dependencies {
     // network-ktor is the one adapter with no release no-op twin, so it is debug-only and the
     // client that installs it lives in src/debug (src/release builds the same client without it).
     debugImplementation(project(":sdk:network-ktor"))
+    implementation(project(":sdk:logs-timber"))
     implementation("io.ktor:ktor-client-core:3.0.3")
     // CIO, not the OkHttp engine: a body captured through a pure-Kotlin engine is the proof that
     // the Ktor plugin captures on its own rather than riding on this sample's OkHttp adapter.

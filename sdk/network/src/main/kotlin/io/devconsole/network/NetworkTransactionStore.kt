@@ -28,11 +28,14 @@ data class NetworkTransactionQuery(
     val hosts: Set<String> = emptySet(),
     val statuses: Set<Int> = emptySet(),
     val correlationId: String? = null,
+    val bodyQuery: String? = null,
 ) {
     var filters: NetworkTransactionFilters = NetworkTransactionFilters()
         private set
 
     fun withFilters(filters: NetworkTransactionFilters): NetworkTransactionQuery = copy().also { it.filters = filters }
+
+    internal fun normalizedBodyQuery(): String? = bodyQuery?.takeIf(String::isNotBlank)?.take(MAX_BODY_QUERY_LENGTH)
 
     internal fun scope(): String =
         listOf(
@@ -40,12 +43,14 @@ data class NetworkTransactionQuery(
             hosts.map(String::lowercase).sorted().joinToString(","),
             statuses.sorted().joinToString(","),
             correlationId.orEmpty(),
+            normalizedBodyQuery()?.lowercase().orEmpty(),
             filters.scope(),
         ).joinToString("|")
 
     companion object {
         const val DEFAULT_PAGE_LIMIT = 100
         const val MAX_PAGE_LIMIT = 500
+        const val MAX_BODY_QUERY_LENGTH = 256
     }
 }
 
@@ -163,7 +168,8 @@ class InMemoryNetworkTransactionStore(
     override fun page(query: NetworkTransactionQuery): NetworkTransactionPage =
         synchronized(lock) {
             if (query.limit !in
-                1..NetworkTransactionQuery.MAX_PAGE_LIMIT
+                1..NetworkTransactionQuery.MAX_PAGE_LIMIT ||
+                (query.bodyQuery != null && query.bodyQuery.length > NetworkTransactionQuery.MAX_BODY_QUERY_LENGTH)
             ) {
                 return@synchronized NetworkTransactionPage(emptyList(), null, false, true)
             }
@@ -174,6 +180,7 @@ class InMemoryNetworkTransactionStore(
                     cursorCodec.decode(query.cursor, query.scope())
                         ?: return@synchronized NetworkTransactionPage(emptyList(), null, false, true)
                 }
+            val bodyNeedle = query.normalizedBodyQuery()
             val matching =
                 transactions
                     .asSequence()
@@ -190,6 +197,8 @@ class InMemoryNetworkTransactionStore(
                             transaction.capture.response?.statusCode in query.statuses
                     }.filter { transaction ->
                         query.correlationId == null || transaction.capture.request.correlationId == query.correlationId
+                    }.filter { transaction ->
+                        bodyNeedle == null || transaction.matchesBody(bodyNeedle)
                     }.filter { transaction -> transaction.matches(query.filters) }
                     .sortedWith(
                         compareByDescending<NetworkTransaction> { it.startedAtEpochMs }.thenByDescending { it.id },
@@ -252,6 +261,13 @@ private fun NetworkTransaction.matches(filters: NetworkTransactionFilters): Bool
     if (filters.query != null && !searchableText().contains(filters.query, ignoreCase = true)) return false
     return true
 }
+
+private fun NetworkTransaction.matchesBody(needle: String): Boolean =
+    capture.request.body.containsText(needle) || capture.response?.body.containsText(needle)
+
+/** Only text previews are searched; binary and omitted bodies never match. */
+private fun BodyPreview?.containsText(needle: String): Boolean =
+    (this as? BodyPreview.Text)?.value?.contains(needle, ignoreCase = true) == true
 
 private fun NetworkTransaction.searchableText(): String =
     buildString {

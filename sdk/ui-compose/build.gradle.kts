@@ -7,6 +7,7 @@ plugins {
 
 android {
     namespace = "io.devconsole.ui.compose"
+    defaultConfig { consumerProguardFiles("consumer-rules.pro") }
     buildFeatures { compose = true }
 }
 

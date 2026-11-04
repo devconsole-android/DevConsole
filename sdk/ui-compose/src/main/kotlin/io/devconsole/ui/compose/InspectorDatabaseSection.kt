@@ -20,16 +20,19 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,15 +53,25 @@ internal fun DatabaseSection(
 ) {
     // Defensive: databases belong to the INSPECTION category -- see FilesSection's identical guard.
     if (!state.captures(CaptureCategory.INSPECTION)) return
+    // With a single database there is nothing to choose: open it so its tables and the SQL console
+    // are ready instead of asking for a tap on the only chip. Keyed on the list, so it runs once per
+    // listing and never loops when the open fails.
+    val onlyDatabase = state.databases.singleOrNull()
+    LaunchedEffect(onlyDatabase) {
+        if (onlyDatabase != null && state.databaseListing == null) actions.onOpenDatabase(onlyDatabase)
+    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when {
             state.databases.isEmpty() -> InspectorEmptyState(EmptySpot.Database, "No app databases found.")
             else -> {
-                DatabaseChips(
-                    databases = state.databases,
-                    selected = state.databaseListing?.name,
-                    onOpenDatabase = actions.onOpenDatabase,
-                )
+                // The tables card already names the only database, so a one-chip picker is noise.
+                if (onlyDatabase == null) {
+                    DatabaseChips(
+                        databases = state.databases,
+                        selected = state.databaseListing?.name,
+                        onOpenDatabase = actions.onOpenDatabase,
+                    )
+                }
                 state.databaseListing?.let { listing ->
                     DatabaseTablesCard(listing = listing, onOpenTable = actions.onOpenTable)
                 }
@@ -178,6 +191,11 @@ private fun QueryResultTable(result: InspectorQueryResultUi) {
         modifier = Modifier.horizontalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        Text(
+            text = "${result.rows.size} ${if (result.rows.size == 1) "row" else "rows"}",
+            color = colors.muted,
+            style = TerminalType.labelSmall,
+        )
         Row {
             result.columns.forEach { column ->
                 Text(
@@ -187,7 +205,7 @@ private fun QueryResultTable(result: InspectorQueryResultUi) {
                     fontWeight = FontWeight.Bold,
                     style = TerminalType.bodySmall,
                     modifier = Modifier.width(160.dp).padding(8.dp),
-                    textAlign = TextAlign.End,
+                    textAlign = TextAlign.Start,
                 )
             }
         }
@@ -195,13 +213,17 @@ private fun QueryResultTable(result: InspectorQueryResultUi) {
             GroupedPanelDivider()
             Row {
                 row.forEach { value ->
+                    // Long values (a CREATE TABLE statement, a JSON blob) would otherwise wrap into a
+                    // column dozens of lines tall and push every other row off screen.
                     Text(
                         value,
                         color = colors.muted,
                         fontFamily = FontFamily.Monospace,
                         style = TerminalType.bodySmall,
+                        maxLines = QUERY_CELL_MAX_LINES,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.width(160.dp).padding(8.dp),
-                        textAlign = TextAlign.End,
+                        textAlign = TextAlign.Start,
                     )
                 }
             }
@@ -226,11 +248,29 @@ private fun SqlConsoleCard(
     val colors = DevConsoleTheme.colors
     GroupedPanel {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("SQL console", color = colors.ink)
-            var draft by remember { mutableStateOf("") }
+            Text(
+                text = selectedDatabase?.let { "SQL console · $it" } ?: "SQL console",
+                color = colors.ink,
+            )
+            var draft by rememberSaveable { mutableStateOf("") }
+            val focusManager = LocalFocusManager.current
             OutlinedTextField(
                 value = draft,
                 onValueChange = { draft = it },
+                placeholder = {
+                    Text(
+                        text =
+                            if (selectedDatabase ==
+                                null
+                            ) {
+                                "Pick a database above first"
+                            } else {
+                                "SELECT * FROM table LIMIT 50"
+                            },
+                        color = colors.muted,
+                        style = TerminalType.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    )
+                },
                 textStyle = TerminalType.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 shape = RoundedCornerShape(12.dp),
                 colors =
@@ -247,16 +287,20 @@ private fun SqlConsoleCard(
                     text = "Read-only — enable the database capability to run write statements.",
                 )
             }
-            val canRun = selectedDatabase != null && draft.isNotBlank()
-            if (canRun) {
-                InspectorPillButton(
-                    label = "RUN",
-                    onClick = { onExecuteSql(requireNotNull(selectedDatabase), draft) },
-                    containerColor = colors.signal,
-                    contentColor = colors.signalInk,
-                    modifier = Modifier.semantics { contentDescription = "Run SQL statement" },
-                )
-            }
+            // Always shown (disabled until there is something to run) so the action is discoverable
+            // before typing; it used to appear only once the field had text, under the keyboard.
+            InspectorPillButton(
+                label = "RUN",
+                onClick = {
+                    // Drop the keyboard so the result, rendered just below, is actually visible.
+                    focusManager.clearFocus()
+                    selectedDatabase?.let { database -> onExecuteSql(database, draft) }
+                },
+                containerColor = colors.signal,
+                contentColor = colors.signalInk,
+                enabled = selectedDatabase != null && draft.isNotBlank(),
+                modifier = Modifier.semantics { contentDescription = "Run SQL statement" },
+            )
             sqlResult?.let { SqlResultView(it) }
         }
     }
@@ -269,7 +313,7 @@ private fun SqlResultView(result: InspectorSqlResultUi) {
         is InspectorSqlResultUi.Rows -> QueryResultTable(result.result)
         is InspectorSqlResultUi.Wrote ->
             Text(
-                text = "${result.affectedRows} row(s) affected",
+                text = "${result.affectedRows} ${if (result.affectedRows == 1) "row" else "rows"} affected",
                 color = colors.ink,
                 style = TerminalType.bodySmall,
             )
@@ -339,3 +383,5 @@ private fun DatabaseSectionReadOnlyPreview() {
         )
     }
 }
+
+private const val QUERY_CELL_MAX_LINES = 3

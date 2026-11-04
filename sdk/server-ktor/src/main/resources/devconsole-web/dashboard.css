@@ -84,6 +84,9 @@
 }
 
 * { box-sizing: border-box; }
+.composer-collection-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
+.composer-collection-load { flex: 1; min-width: 0; }
+.composer-collection-delete { align-self: center; margin: 0 8px; }
 /* The `hidden` attribute only sets `display: none` in the UA stylesheet, so any author rule that
    sets `display` beats it and the element stays on screen. Several components here declare
    `display: flex` or `grid` and are toggled by setting `.hidden` from JS -- the empty selection bar
@@ -644,7 +647,7 @@ button.ghost { background: transparent; }
 }
 
 /* Card section shell — scaffolding for card-grid views. */
-.card-shell { display: flex; flex-direction: column; border: 0; border-radius: 0; background: transparent; overflow: visible; }
+.card-shell { display: flex; flex-direction: column; min-width: 0; border: 0; border-radius: 0; background: transparent; overflow: visible; }
 .card-shell-head { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 0 8px; border-bottom: 1px solid var(--line); }
 .card-shell-head .ic { width: 14px; height: 14px; }
 .card-shell-title { margin: 0; font-size: 14px; text-transform: none; letter-spacing: 0; font-weight: 700; flex: 1; }
@@ -671,7 +674,7 @@ button.is-refreshing .ic { animation: composerSpin 0.8s linear infinite; }
 .field.field-highlight select { border-color: var(--signal); animation: composerFieldPulse 0.9s ease-in-out 3; }
 #mocksRulesBadge:empty { display: none; }
 .card-shell-badge { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--text-3); }
-.card-shell-body { flex: 1; display: flex; flex-direction: column; padding: 14px 0 0; }
+.card-shell-body { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 14px 0 0; }
 /* --d-card-pad, not a literal 16px: this is the consumer that token was declared for, and until
    now it had none -- so Simple mode grew every row and the body font while leaving cards exactly
    as tight as Advanced. */
@@ -753,7 +756,7 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
      desktop width doesn't carry that grid-template-columns override into stacked mode. */
   .split-shell,
   .split-shell.collapse-list,
-  .split-shell.collapse-detail { grid-template-columns: 1fr; grid-template-rows: none; flex: 0 0 auto; min-height: 0; }
+  .split-shell.collapse-detail { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; flex: 0 0 auto; min-height: 0; }
   .split-shell > .splitter { display: none; }
   /* height (not just min-height) so the stacked panes are a bounded box, not an unbounded one that
      only ever grows to fit its content -- .list-body's flex:1;min-height:0;overflow-y:auto (below)
@@ -796,7 +799,13 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .col-duration { flex: 0 0 74px; text-align: right; }
 .col-status { flex: 0 0 62px; text-align: right; }
 .col-flag { flex: 0 0 24px; text-align: right; }
-@media (max-width: 620px) { .col-duration { display: none; } }
+@media (max-width: 620px) {
+  /* The row cell goes with its header: hiding only the header left Crashes/Push/Timeline rows a
+     74px column the head no longer labels, which squeezed the summary to ~10px at 390px. Network's
+     duration sits inside .row-metrics, so the direct-child selector leaves it alone. */
+  .col-duration, .row > .row-duration { display: none; }
+  #crashesView .col-badge, #crashesView .row-badge { flex-basis: 56px; }
+}
 /* The stacked pair keeps both values at every width — it costs one column, not two, and Network's
    list head is sr-only anyway, so there is no header to drift out of step with it. */
 
@@ -1201,7 +1210,9 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 .card-metric-label { font-size: 10.5px; font-weight: 600; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-metric-val { font-family: var(--font-mono); font-size: 17px; margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.card-toggles { display: grid; gap: 1px; margin-bottom: 12px; }
+/* minmax(0, 1fr), not the implicit auto column: a long rule id would otherwise set the grid's
+   min-content width and push the row's toggle off a phone-width screen. */
+.card-toggles { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; margin-bottom: 12px; min-width: 0; }
 .card-toggle-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .card-toggle-row:last-child { border-bottom: none; }
 .card-toggle-text { flex: 1; min-width: 0; }
@@ -1356,6 +1367,14 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
    without the path/headers/body rows wrapping too tightly. */
 .modal.modal-wide { max-width: 640px; }
 .mock-body-toolbar { display: flex; align-items: center; gap: 12px; margin-top: -4px; }
+/* The action editor only renders the fields the selected action type needs. The attribute-driven
+   hide must beat `.field`'s own display rule. */
+#mockRuleModal [data-mock-fields][hidden] { display: none !important; }
+.mock-step-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; padding: 8px 0; }
+.mock-step-row .field { flex: 1 1 140px; min-width: 120px; margin: 0; }
+.mock-step-row .field-full { flex-basis: 100%; }
+.mock-step-remove { align-self: center; }
+.mock-step-loop { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
 /* The JSON status is the one thing on its row that can run long (a parse error carries the
    engine's own message), so it takes the slack and ellipses rather than widening the dialog.
    The full-window toggle lives on the find bar below and parks on that row's right edge. */
@@ -1823,7 +1842,7 @@ label.field.export-metadata { display: flex; flex-direction: row; align-items: c
   .row-check { flex-basis: 24px; }
 }
 @media (max-width: 960px) {
-  .split-shell { grid-template-columns: 1fr; gap: 16px; }
+  .split-shell { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .host-line { display: none; }
 }
 @media (max-width: 780px) {
@@ -1882,10 +1901,11 @@ label.field.export-metadata { display: flex; flex-direction: row; align-items: c
   margin: 4px 0;
 }
 .toolbar .topbar-overflow > button {
-  height: 32px;
+  /* Matches the redesigned `.toolbar > button` (40px / 13px) so Export sits level with its neighbours. */
+  height: 40px;
   border-radius: 8px;
   padding: 0 12px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .topbar-menu-item.danger {
   color: var(--error);
@@ -1940,6 +1960,11 @@ label.field.export-metadata { display: flex; flex-direction: row; align-items: c
 /* Timeline and WebSockets rows carry four columns, so their list starts at half the width
    (the splitter still overrides it per view). */
 #timelineView .split-shell, #socketView .split-shell { grid-template-columns: minmax(360px, var(--list-w, 50%)) 5px minmax(360px, 1fr); }
+/* The id selector above outranks the generic stacked-mode rule, so restate the single column here;
+   without it Timeline and Sockets kept two 360px columns on a phone and ran off the screen. */
+@media (max-width: 960px) {
+  #timelineView .split-shell, #socketView .split-shell { grid-template-columns: minmax(0, 1fr); }
+}
 #networkView .split-shell { position: relative; grid-template-columns: minmax(300px, var(--list-w, 44%)) 5px minmax(0, 1fr); }
 #networkView .list-pane, #networkDetailPane { border-radius: 0; min-width: 0; }
 #networkView .list-head { position: relative; padding: 0 12px; height: 36px; flex-basis: 36px; gap: 8px; }
@@ -1960,6 +1985,15 @@ label.field.export-metadata { display: flex; flex-direction: row; align-items: c
 /* Full endpoint: the host takes a small first line so the path keeps its full width (rows stay 44px). */
 #transactions .row-main-host { display: block; font-size: 11px; line-height: 14px; overflow: hidden; text-overflow: ellipsis; }
 #transactions .row-metrics-inline { font-family: var(--font-mono); font-size: 12px; }
+/* Phone width: the path is the one column worth reading, so the method column narrows, the duration
+   and the Full-endpoint toggle drop out, and the status keeps only its own width -- before this the
+   path was squeezed to "/…" and the toggle overlapped the "Status · time" heading. */
+@media (max-width: 480px) {
+  #networkView .col-badge, #transactions .row-badge { flex-basis: 44px; }
+  #networkView .col-network-metrics, #transactions .row-metrics-inline { min-width: 0; }
+  #transactions .row-time, #networkFullEndpoint, #networkView .col-network-time { display: none; }
+  #transactions .row { gap: 8px; }
+}
 #transactions .row.selected { background: var(--surface-2); box-shadow: inset 2px 0 var(--signal); }
 #transactions .row-check, #transactions .row-flag, #networkSelectAllVisible { opacity: 0; }
 #transactions .row:hover .row-check, #transactions .row:hover .row-flag,
@@ -1967,6 +2001,10 @@ label.field.export-metadata { display: flex; flex-direction: row; align-items: c
 #transactions .row.row-picked .row-check, #transactions .row.row-picked .row-flag,
 #networkView .list-head:hover #networkSelectAllVisible, #networkSelectAllVisible:focus-visible,
 #networkSelectAllVisible[aria-checked="true"], #networkSelectAllVisible[aria-checked="mixed"] { opacity: 1; }
+/* Touch screens have no hover: never hide row controls behind it. */
+@media (hover: none) {
+  #transactions .row-check, #transactions .row-flag, #networkSelectAllVisible { opacity: 1; }
+}
 #networkDetailPane .network-detail-head { padding: 12px 16px 0; }
 #networkDetailPane .detail-head-row { flex-wrap: nowrap; gap: 8px; }
 #networkDetailPane .network-method { font: 12px var(--font-mono); color: var(--muted); }
@@ -2013,4 +2051,175 @@ body.mode-simple #networkDetailPane [data-detail-tab] { display: inline-flex; }
   #networkDetailPane .detail-body { padding: 8px; }
   #networkDetailPane .network-head-actions { gap: 0; }
   #networkDetailPane .network-icon-action, #networkDetailPane .detail-menu-btn { width: 24px; }
+}
+
+/* Pin/delete controls in the Session view run-history table. */
+.card-table td.run-actions { white-space: nowrap; text-align: right; }
+.run-actions-row { display: inline-flex; gap: 4px; vertical-align: middle; }
+
+/* Network endpoint latency panel & clickable rows. */
+.network-endpoints-panel { margin-bottom: 12px; }
+.network-endpoints-panel .card-lede { margin-bottom: 10px; }
+.endpoint-row { cursor: pointer; }
+.endpoint-row:hover { background: var(--surface-2); }
+.endpoint-row:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; background: var(--surface-2); }
+@media (max-width: 620px) {
+  .network-endpoints-panel .card-shell-head { flex-wrap: wrap; }
+  .network-endpoints-panel .card-table th,
+  .network-endpoints-panel .card-table td { padding: 10px 12px; font-size: 12px; }
+}
+
+/* Endpoint latency: path over host in one cell keeps the numeric columns on screen. */
+.network-endpoints-panel .endpoint-cell { max-width: 260px; }
+.network-endpoints-panel .endpoint-cell > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.network-endpoints-panel .endpoint-host { font-size: 11px; margin-top: 2px; }
+
+/* ---- HAR offline viewer banner ---------------------------------------- */
+/* Wraps rather than scrolls: the file name is the one unbounded string here, and at 390px it
+   must break inside the banner instead of widening the page. */
+.har-banner {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
+  margin-bottom: 12px; padding: 8px 12px; min-width: 0;
+  border: 1px solid var(--put); border-radius: 8px;
+  background: var(--put-soft); color: var(--ink); font-size: 12.5px;
+}
+.har-banner-text { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; }
+.har-banner-text .ic { color: var(--put); flex: 0 0 auto; }
+.har-banner-file { font-family: var(--font-mono); font-weight: 700; overflow-wrap: anywhere; }
+.har-banner-close { flex: 0 0 auto; height: 28px; padding: 0 10px; border-radius: 6px; font-size: 12px; }
+
+/* ---- Structured decoders (JWT / GraphQL) in the network detail -------- */
+.decoded-sections { display: grid; gap: 4px; margin-top: 12px; min-width: 0; }
+.decoded-group { border-top: 1px solid var(--line); padding-top: 12px; }
+.decoded-source { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; overflow-wrap: anywhere; }
+.decoded-source .ic { flex: 0 0 auto; }
+.decoded-note { display: flex; align-items: flex-start; gap: 6px; margin-top: 8px; color: var(--muted); font-size: 11.5px; }
+.decoded-note .ic { flex: 0 0 auto; margin-top: 2px; }
+.decoded-sections .code-block { min-width: 0; overflow-x: auto; }
+
+/* ---- Crash grouping ---------------------------------------------------- */
+/* A pressed toolbar toggle reads as an active filter, matching the segmented controls it sits
+   beside without turning into a second selected-state language. */
+/* A group's "×N" is its identity; let the exception name ellipsise first. */
+#crashesView .row-tag { flex-shrink: 0; }
+#crashesGroupToggle[aria-pressed="true"] { border-color: var(--signal); color: var(--signal); background: var(--signal-soft); }
+.crash-occurrences { display: grid; gap: 2px; margin-bottom: 16px; min-width: 0; }
+.crash-occurrence {
+  display: flex; align-items: baseline; gap: 12px; width: 100%; min-width: 0;
+  padding: 6px 8px; text-align: left; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; font-size: 12px;
+}
+.crash-occurrence:hover, .crash-occurrence:focus-visible { border-color: var(--line); background: var(--surface-2); }
+.crash-occurrence-time { flex: 0 0 auto; font-family: var(--font-mono); color: var(--ink); }
+.crash-occurrence-run { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+@media (max-width: 480px) {
+  .har-banner { align-items: flex-start; flex-direction: column; }
+  /* In a column the 220px basis becomes a height, which ballooned the banner on phones. */
+  .har-banner-text { flex: 0 0 auto; }
+  .har-banner-close { align-self: flex-end; }
+}
+
+/* ---- Socket send composer ---- */
+.socket-composer {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.socket-composer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.socket-composer-head .ic {
+  color: var(--signal);
+}
+.socket-composer textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.socket-composer-mqtt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.socket-composer-mqtt .field {
+  flex: 1 1 140px;
+}
+.socket-composer-mqtt .field-qos {
+  flex: 0 0 80px;
+}
+.socket-composer-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--ink);
+  padding-bottom: 8px;
+  user-select: none;
+}
+.socket-composer-checkbox input {
+  cursor: pointer;
+}
+.socket-composer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---- Remote Config override editor ---- */
+.rc-override-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rc-provider-fallback {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  word-break: break-all;
+  font-family: var(--font-mono);
+}
+.rc-override-section textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  resize: vertical;
+}
+.rc-override-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+@media (max-width: 480px) {
+  .socket-composer-mqtt {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .socket-composer-mqtt .field-qos {
+    flex: 1 1 auto;
+  }
 }

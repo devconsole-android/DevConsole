@@ -33,8 +33,11 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,6 +75,12 @@ internal fun DataRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var heroCollapsed by rememberSaveable { mutableStateOf(true) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(state.lastCommandResult) {
+        val result = state.lastCommandResult ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(result.toFlashMessage())
+        viewModel.dispatch(InspectorAction.DismissCommandResult)
+    }
     LifecycleStartEffect(Unit) {
         viewModel.dispatch(InspectorAction.Refresh)
         onStopOrDispose { }
@@ -96,6 +105,7 @@ internal fun DataRoute(
                 onExecuteSql = { database, sql -> viewModel.dispatch(InspectorAction.ExecuteSql(database, sql)) },
             ),
         modifier = modifier,
+        snackbarHostState = snackbarHostState,
     )
 }
 
@@ -141,6 +151,7 @@ internal fun DataScreen(
     databaseActions: DatabaseBrowserActions,
     modifier: Modifier = Modifier,
     initialSource: String? = null,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val colors = DevConsoleTheme.colors
     val hero = rememberDataHero(state)
@@ -154,77 +165,72 @@ internal fun DataScreen(
 
     val fadeSpec = feedbackSpec<Float>()
     // imePadding() keeps the SQL console above the soft keyboard; a no-op while the IME is hidden.
-    Column(modifier = modifier.fillMaxSize().background(colors.ground).imePadding()) {
-        AnimatedContent(
-            targetState = active,
-            transitionSpec = { fadeIn(animationSpec = fadeSpec) togetherWith fadeOut(animationSpec = fadeSpec) },
-            label = "dataSourceScreen",
-            modifier = Modifier.fillMaxSize(),
-        ) { sourceKey ->
-            when (sourceKey) {
-                null ->
-                    DataSourceList(state, hero, heroCollapsed, onToggleHero, onToggleTheme, colors) {
-                        activeSource = it
-                    }
-                "preferences" -> {
-                    DataSourceSubScreen(title = "Preferences", onBack = { activeSource = null }) {
-                        LazyColumn(
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
-                        ) {
-                            dataPreferenceRows(state, colors)
+    Box(modifier = modifier.fillMaxSize().background(colors.ground).imePadding()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            AnimatedContent(
+                targetState = active,
+                transitionSpec = { fadeIn(animationSpec = fadeSpec) togetherWith fadeOut(animationSpec = fadeSpec) },
+                label = "dataSourceScreen",
+                modifier = Modifier.fillMaxSize(),
+            ) { sourceKey ->
+                when (sourceKey) {
+                    null ->
+                        DataSourceList(state, hero, heroCollapsed, onToggleHero, onToggleTheme, colors) {
+                            activeSource = it
+                        }
+                    "preferences" -> {
+                        DataSourceSubScreen(title = "Preferences", onBack = { activeSource = null }) {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
+                            ) { dataPreferenceRows(state, colors) }
                         }
                     }
-                }
-                "database" -> {
-                    DataSourceSubScreen(title = "Database", onBack = { activeSource = null }) {
-                        Column(
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(top = 4.dp, bottom = 16.dp),
-                        ) {
-                            DatabaseSection(
-                                state = state,
-                                canWrite = state.capabilities.database,
-                                actions = databaseActions,
-                            )
+                    "database" ->
+                        DataSourceSubScreen(title = "Database", onBack = { activeSource = null }) {
+                            Column(
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(top = 4.dp, bottom = 16.dp),
+                            ) {
+                                DatabaseSection(
+                                    state = state,
+                                    canWrite = state.capabilities.database,
+                                    actions = databaseActions,
+                                )
+                            }
                         }
-                    }
-                }
-                "files" -> {
-                    DataSourceSubScreen(title = "Files", onBack = { activeSource = null }) {
-                        Column(
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(top = 4.dp, bottom = 16.dp),
-                        ) {
-                            FilesSection(
-                                state = state,
-                                canEdit = state.capabilities.files,
-                                actions = fileActions,
-                            )
+                    "files" ->
+                        DataSourceSubScreen(title = "Files", onBack = { activeSource = null }) {
+                            Column(
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(top = 4.dp, bottom = 16.dp),
+                            ) {
+                                FilesSection(state = state, canEdit = state.capabilities.files, actions = fileActions)
+                            }
                         }
-                    }
-                }
-                "state" -> {
-                    DataSourceSubScreen(title = "App state", onBack = { activeSource = null }) {
-                        Column(
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(top = 4.dp, bottom = 16.dp),
-                        ) {
-                            DataStateProviders(state, colors)
+                    "state" ->
+                        DataSourceSubScreen(title = "App state", onBack = { activeSource = null }) {
+                            Column(
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(top = 4.dp, bottom = 16.dp),
+                            ) { DataStateProviders(state, colors) }
                         }
-                    }
                 }
             }
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+        )
     }
 }
 
@@ -271,7 +277,7 @@ private fun DataSourceList(
                     if (state.captures(CaptureCategory.INSPECTION)) {
                         DataSourceRow(
                             "Preferences",
-                            "${state.preferenceFiles.size} files",
+                            countLabel(state.preferenceFiles.size, "file"),
                             R.drawable.devconsole_ic_preferences,
                         ) {
                             onOpenSource("preferences")
@@ -279,8 +285,8 @@ private fun DataSourceList(
                         GroupedPanelDivider()
                         DataSourceRow(
                             "Database",
-                            state.databaseListing?.let { "${it.name} · ${it.tables.size} tables" }
-                                ?: "${state.databases.size} databases",
+                            state.databaseListing?.let { "${it.name} · ${countLabel(it.tables.size, "table")}" }
+                                ?: countLabel(state.databases.size, "database"),
                             R.drawable.devconsole_ic_database,
                         ) {
                             onOpenSource("database")
@@ -288,8 +294,8 @@ private fun DataSourceList(
                         GroupedPanelDivider()
                         DataSourceRow(
                             "Files",
-                            state.fileListing?.let { "${it.entries.size} items" }
-                                ?: "${state.fileRoots.size} roots",
+                            state.fileListing?.let { countLabel(it.entries.size, "item") }
+                                ?: countLabel(state.fileRoots.size, "root"),
                             R.drawable.devconsole_ic_files,
                         ) {
                             onOpenSource("files")
@@ -299,7 +305,7 @@ private fun DataSourceList(
                         if (state.captures(CaptureCategory.INSPECTION)) GroupedPanelDivider()
                         DataSourceRow(
                             "App state",
-                            state.stateProviders.size.let { "$it ${if (it == 1) "provider" else "providers"}" },
+                            countLabel(state.stateProviders.size, "provider"),
                             R.drawable.devconsole_ic_mocks,
                         ) {
                             onOpenSource("state")

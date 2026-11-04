@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class PersistentTimelineTest {
@@ -50,7 +51,8 @@ class PersistentTimelineTest {
 
         val page = timeline.page(TimelineQuery()) as TimelinePage.Success
         assertEquals(setOf("persisted", "live"), page.events.map(StoredEvent::id).toSet())
-        assertEquals(0, store.inserted.size)
+        // The live append is mirrored asynchronously by the started writer; only hydrated rows must never be.
+        assertFalse(synchronized(store) { store.inserted.toList() }.any { it.id == "persisted" })
     }
 
     @Test
@@ -128,7 +130,7 @@ class PersistentTimelineTest {
         val inserted = mutableListOf<StoredEvent>()
 
         override suspend fun insert(events: List<StoredEvent>): EventStoreWriteResult {
-            inserted += events
+            synchronized(this) { inserted += events }
             return EventStoreWriteResult.Success(events.size)
         }
 

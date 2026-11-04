@@ -157,6 +157,8 @@ internal fun CodeLineRow(
     }
 }
 
+private const val MAX_RENDERED_LINE_CHARS = 4_000
+
 @Composable
 private fun CodeSpan(
     text: String,
@@ -165,8 +167,22 @@ private fun CodeSpan(
     lineHeight: TextUnit,
     highlights: List<InspectorSearchHighlight> = emptyList(),
 ) {
+    val (displayText, displayHighlights) =
+        if (text.length <= MAX_RENDERED_LINE_CHARS) {
+            text to highlights
+        } else {
+            val truncatedLength = MAX_RENDERED_LINE_CHARS
+            val remaining = text.length - truncatedLength
+            val clippedHighlights =
+                highlights.mapNotNull { h ->
+                    val start = h.start.coerceIn(0, truncatedLength)
+                    val end = h.endExclusive.coerceIn(start, truncatedLength)
+                    if (start < end) h.copy(start = start, endExclusive = end) else null
+                }
+            "${text.take(truncatedLength)}… (+$remaining chars)" to clippedHighlights
+        }
     Text(
-        inspectorHighlightedText(text, highlights, DevConsoleTheme.colors),
+        inspectorHighlightedText(displayText, displayHighlights, DevConsoleTheme.colors),
         color = color,
         fontFamily = FontFamily.Monospace,
         fontSize = fontSize,

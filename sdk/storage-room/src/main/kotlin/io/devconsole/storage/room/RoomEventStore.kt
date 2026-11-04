@@ -85,7 +85,21 @@ class RoomEventStore(
     ): RoomEventStore =
         apply {
             this.databaseProvider = databaseProvider
-            this.recover = recover
+            this.recover = { failure ->
+                recover(failure)
+                coordinator.activeSession?.let { session ->
+                    try {
+                        val recoveredDatabase = databaseProvider()
+                        recoveredDatabase.runInTransaction {
+                            recoveredDatabase.sessionDao().insertIfAbsent(session.toSessionEntity())
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // Suppress failure re-creating active session so recovery does not fail.
+                    }
+                }
+            }
         }
 
     override suspend fun insert(events: List<StoredEvent>): EventStoreWriteResult =

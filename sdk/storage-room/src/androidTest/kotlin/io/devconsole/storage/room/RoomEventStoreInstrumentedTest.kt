@@ -76,6 +76,9 @@ class RoomEventStoreInstrumentedTest {
     fun retainedEventsPluginFilterSurvivesACrowdedSessionAndACrashedPreviousRun() =
         runBlocking {
             val store = RoomEventStore(database, RoomRetentionCoordinator())
+            // Real wall times: the first insert runs the age prune, and 1970 timestamps (0..50 ms)
+            // were deleted as expired before the query ever ran, failing the test for the wrong reason.
+            val base = System.currentTimeMillis() - 60_000
             val crash =
                 StoredEvent(
                     id = "crash-1",
@@ -83,7 +86,7 @@ class RoomEventStoreInstrumentedTest {
                     sequence = 0,
                     pluginId = "crash",
                     type = "crash.uncaught",
-                    wallTimeMs = 0,
+                    wallTimeMs = base,
                     monoTimeNs = 0,
                     severity = 5,
                     summary = "fatal",
@@ -96,7 +99,7 @@ class RoomEventStoreInstrumentedTest {
                         sequence = index.toLong(),
                         pluginId = "logs",
                         type = "logs.line",
-                        wallTimeMs = (index + 1).toLong(),
+                        wallTimeMs = base + index + 1,
                         monoTimeNs = (index + 1).toLong(),
                         severity = 1,
                         summary = "line $index",

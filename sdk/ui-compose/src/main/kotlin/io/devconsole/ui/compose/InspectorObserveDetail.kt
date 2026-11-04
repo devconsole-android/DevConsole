@@ -27,6 +27,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
@@ -565,6 +567,8 @@ internal fun InspectorObserveDetailScreen(
     modifier: Modifier = Modifier,
     searchPlaceholder: String = DEFAULT_DETAIL_SEARCH_PLACEHOLDER,
     searchOptions: InspectorDetailSearchOptions? = null,
+    /** Kind-specific content rendered after the sections, e.g. the socket frame's send composer. */
+    trailingContent: (@Composable () -> Unit)? = null,
 ) {
     val tabs = remember(sections) { sections.map { it.tab }.distinct().sortedBy { it.ordinal } }
     val showTabs = tabs.size > 1
@@ -663,7 +667,10 @@ internal fun InspectorObserveDetailScreen(
         return
     }
 
-    Surface(modifier = modifier.fillMaxSize(), color = colors.ground) {
+    Surface(
+        modifier = modifier.fillMaxSize().semantics { paneTitle = "${header.kindLabel} detail: ${header.title}" },
+        color = colors.ground,
+    ) {
         Column(modifier = Modifier.fillMaxSize().imePadding()) {
             InspectorDetailHeader(
                 kindLabel = header.kindLabel,
@@ -720,6 +727,7 @@ internal fun InspectorObserveDetailScreen(
                     onToggleSection = { key, expanded -> openState[key] = !expanded },
                     onExpandCodeFullScreen = { key -> fullScreenSectionKey = key },
                     footerActions = footerActions,
+                    trailingContent = trailingContent,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -809,6 +817,7 @@ private fun ObserveDetailTabBody(
     onExpandCodeFullScreen: (String) -> Unit,
     footerActions: List<InspectorFooterAction>,
     modifier: Modifier = Modifier,
+    trailingContent: (@Composable () -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -840,6 +849,8 @@ private fun ObserveDetailTabBody(
                 }
             }
         }
+        // After the sections, so the frame the operator opened stays the first thing they read.
+        trailingContent?.invoke()
         if (overviewVisible) ObserveDetailActionRows(footerActions)
     }
 }

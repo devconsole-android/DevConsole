@@ -56,8 +56,8 @@ internal fun remoteConfigFetchLine(provider: InspectorRemoteConfigUi): String =
 /** Value as well as key: finding which key holds a given variant is as common as recalling its name. */
 internal fun InspectorRemoteConfigEntryUi.matches(query: String): Boolean =
     query.isEmpty() ||
-        key.lowercase(Locale.US).contains(query) ||
-        (!redacted && value.lowercase(Locale.US).contains(query))
+        key.contains(query, ignoreCase = true) ||
+        (!redacted && value.contains(query, ignoreCase = true))
 
 /** Hand-built fixture shared by the Observe preview and the detail preview. */
 internal fun remoteConfigPreviewProviders(): List<InspectorRemoteConfigUi> =

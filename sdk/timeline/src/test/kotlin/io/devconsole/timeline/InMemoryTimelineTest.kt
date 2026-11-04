@@ -2,6 +2,7 @@ package io.devconsole.timeline
 
 import io.devconsole.storage.api.StoredEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -12,6 +13,55 @@ class InMemoryTimelineTest {
             event(id = "b", sequence = 2, plugin = "network", summary = "request"),
             event(id = "c", sequence = 3, plugin = "network", summary = "response"),
         )
+
+    @Test
+    fun `append evicts oldest events and removes their ids`() {
+        val timeline = InMemoryTimeline(emptyList(), CursorCodec("cursor-secret-128".encodeToByteArray()), capacity = 3)
+        val appended = (1L..5L).map { event("event-$it", it, "system", "event $it") }
+
+        appended.forEach(timeline::append)
+
+        val page = timeline.page(TimelineQuery(limit = 10)) as TimelinePage.Success
+        assertEquals(listOf("event-3", "event-4", "event-5"), page.events.map(StoredEvent::id))
+        assertTrue(!timeline.contains("event-1"))
+        assertTrue(!timeline.contains("event-2"))
+        assertTrue(timeline.contains("event-3"))
+    }
+
+    @Test
+    fun `append deduplicates event ids`() {
+        val timeline = InMemoryTimeline(emptyList(), CursorCodec("cursor-secret-128".encodeToByteArray()), capacity = 2)
+        val event = event("same", 1, "system", "original")
+
+        timeline.append(event)
+        timeline.append(event.copy(summary = "duplicate"))
+
+        val page = timeline.page(TimelineQuery()) as TimelinePage.Success
+        assertEquals(listOf("original"), page.events.map(StoredEvent::summary))
+    }
+
+    @Test
+    fun `append remains practical across a large bounded stream`() {
+        val timeline =
+            InMemoryTimeline(
+                emptyList(),
+                CursorCodec("cursor-secret-128".encodeToByteArray()),
+                capacity = 5_000,
+            )
+        val startedAt = System.nanoTime()
+
+        (1L..100_000L).forEach { sequence ->
+            timeline.append(event("event-$sequence", sequence, "system", "event $sequence"))
+        }
+
+        val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+        assertTrue("100k bounded appends took ${elapsedMs}ms", elapsedMs < 10_000)
+        assertFalse(timeline.contains("event-1"))
+        assertTrue(timeline.contains("event-100000"))
+        val newest = timeline.page(TimelineQuery(limit = 500, sort = TimelineSort.DESC)) as TimelinePage.Success
+        assertEquals(500, newest.events.size)
+        assertEquals("event-100000", newest.events.first().id)
+    }
 
     @Test
     fun `paginates by opaque cursor without duplicating events`() {

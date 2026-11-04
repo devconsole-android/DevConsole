@@ -7,6 +7,7 @@ package io.devconsole.ui.compose
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.devconsole.api.ScreenshotResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 
 private const val MAX_VISIBLE_TRANSACTIONS = 200
 private const val OBSERVE_TAB_SWITCH_DEBOUNCE_MS = 300L
@@ -58,6 +60,10 @@ class InspectorViewModel
         private val mutableServerStartPermission = MutableStateFlow<String?>(null)
         internal val serverStartPermission: StateFlow<String?> = mutableServerStartPermission.asStateFlow()
 
+        /** False until the first snapshot attempt settles, so screens show loading, not "unavailable". */
+        private val mutableSnapshotLoaded = MutableStateFlow(false)
+        internal val snapshotLoaded: StateFlow<Boolean> = mutableSnapshotLoaded.asStateFlow()
+
         /**
          * Tracks the in-flight snapshot fetch so a newer refresh (filter change, mutation,
          * explicit [InspectorAction.Refresh]) always requests cancellation of an older one still
@@ -69,6 +75,16 @@ class InspectorViewModel
          * snapshot for a stale filter.
          */
         private var snapshotJob: Job? = null
+        private val snapshotJobLock = Any()
+        private val snapshotGeneration = AtomicLong()
+
+        /**
+         * The traffic filter the next read is made with. Owned here rather than in the Compose
+         * route because [InspectorDataSource.snapshot] takes it: a selection change has to re-read
+         * the store with the new filter, not just re-filter an already-loaded page.
+         */
+        @Volatile
+        private var trafficQuery = InspectorTrafficQuery()
 
         init {
             viewModelScope.launch(dispatcher) {
@@ -79,7 +95,7 @@ class InspectorViewModel
 
         // One branch per MVI action; a when-based dispatcher is the clearest shape for this even as
         // action count grows, so complexity is accepted here rather than split across dispatchers.
-        @Suppress("CyclomaticComplexMethod")
+        @Suppress("CyclomaticComplexMethod", "LongMethod")
         fun dispatch(action: InspectorAction) {
             when (action) {
                 InspectorAction.Refresh -> refreshSnapshot()
@@ -94,6 +110,10 @@ class InspectorViewModel
                 is InspectorAction.SelectTransactions -> selectTransactions(action.ids)
                 InspectorAction.ClearTransactionSelection -> clearTransactionSelection()
                 is InspectorAction.SelectSession -> selectSession(action.id)
+                is InspectorAction.SelectTrafficStatusClass -> selectTrafficStatusClass(action.statusClass)
+                is InspectorAction.SelectTrafficHost -> selectTrafficHost(action.host)
+                is InspectorAction.SetSessionPinned -> setSessionPinned(action.id, action.pinned)
+                is InspectorAction.DeleteSession -> deleteSession(action.id)
                 is InspectorAction.ToggleTransactionFlag -> toggleTransactionFlag(action.id)
                 is InspectorAction.ToggleCrashFlag -> toggleCrashFlag(action.id)
                 is InspectorAction.ExecuteComposer -> executeComposer(action.request)
@@ -123,14 +143,26 @@ class InspectorViewModel
                 InspectorAction.ExportSessionZip -> exportSessionZip()
                 is InspectorAction.RevokePrincipal -> revokePrincipal(action.id)
                 is InspectorAction.SetServerRunning -> setServerRunning(action.running)
+                is InspectorAction.SetCapturePaused -> setCapturePaused(action.paused)
+                InspectorAction.PurgeCapturedData -> purgeCapturedData()
+                is InspectorAction.SendSocketFrame ->
+                    sendSocketFrame(action.connectionId, action.text, action.topic, action.qos, action.retained)
+                is InspectorAction.SetRemoteConfigOverride ->
+                    setRemoteConfigOverride(action.providerId, action.key, action.value)
+                is InspectorAction.ClearRemoteConfigOverride ->
+                    clearRemoteConfigOverride(action.providerId, action.key)
+                InspectorAction.ClearAllRemoteConfigOverrides -> clearAllRemoteConfigOverrides()
                 InspectorAction.CaptureScreenshot -> captureScreenshot()
                 InspectorAction.DismissScreenshotResult -> dismissScreenshotResult()
             }
         }
 
         private fun refreshSnapshot() {
-            snapshotJob?.cancel()
-            snapshotJob = viewModelScope.launch(dispatcher) { loadSnapshot() }
+            val generation = snapshotGeneration.incrementAndGet()
+            synchronized(snapshotJobLock) {
+                snapshotJob?.cancel()
+                snapshotJob = viewModelScope.launch(dispatcher) { loadSnapshot(generation) }
+            }
         }
 
         /**
@@ -140,12 +172,15 @@ class InspectorViewModel
          * alone is not sufficient to stop it.
          */
         private fun refreshSnapshotDebounced() {
-            snapshotJob?.cancel()
-            snapshotJob =
-                viewModelScope.launch(dispatcher) {
-                    delay(OBSERVE_TAB_SWITCH_DEBOUNCE_MS)
-                    loadSnapshot()
-                }
+            val generation = snapshotGeneration.incrementAndGet()
+            synchronized(snapshotJobLock) {
+                snapshotJob?.cancel()
+                snapshotJob =
+                    viewModelScope.launch(dispatcher) {
+                        delay(OBSERVE_TAB_SWITCH_DEBOUNCE_MS)
+                        loadSnapshot(generation)
+                    }
+            }
         }
 
         /**
@@ -155,17 +190,30 @@ class InspectorViewModel
          * cancelled, so this throws instead of reaching [applySnapshot] once a newer job has taken
          * over.
          */
-        private suspend fun loadSnapshot() {
-            val snapshot = dataSource.snapshot()
+        private suspend fun loadSnapshot(generation: Long = snapshotGeneration.incrementAndGet()) {
+            val result = runCatching { dataSource.snapshot(trafficQuery) }
+            val snapshot =
+                result.getOrElse { error ->
+                    if (error is CancellationException) throw error
+                    currentCoroutineContext().ensureActive()
+                    if (generation == snapshotGeneration.get()) mutableState.update { it.copy(available = false) }
+                    mutableSnapshotLoaded.value = true
+                    return
+                }
             currentCoroutineContext().ensureActive()
+            if (generation != snapshotGeneration.get()) return
             applySnapshot(snapshot)
+            mutableSnapshotLoaded.value = true
             // Evidence flags are a separate durable read (Room, not the in-memory snapshot above) --
             // refreshed alongside every snapshot load so a flag made from the dashboard shows up here
             // on the next poll, not just after a flag/unflag made on this device. Crash flags follow
             // the same selectedSessionId guard as `crashes`/`logs` in applySnapshot: a live refresh
             // must not clobber a past session's flag set while it stays selected.
             refreshFlaggedTransactionIds()
-            if (mutableState.value.selectedSessionId == null) refreshFlaggedCrashIds(null)
+            currentCoroutineContext().ensureActive()
+            val shouldRefreshCurrentSession =
+                generation == snapshotGeneration.get() && mutableState.value.selectedSessionId == null
+            if (shouldRefreshCurrentSession) refreshFlaggedCrashIds(null)
         }
 
         private suspend fun refreshFlaggedTransactionIds() {
@@ -216,60 +264,9 @@ class InspectorViewModel
 
         private fun applySnapshot(snapshot: InspectorSnapshot) {
             val boundedTransactions = snapshot.transactions.takeLast(MAX_VISIBLE_TRANSACTIONS)
+            val sendProtocols = socketSendProtocols(snapshot.sockets)
             mutableState.update { current ->
-                val next =
-                    current.copy(
-                        available = snapshot.available,
-                        serverControlSupported = dataSource.supportsServerControl(),
-                        transactions = boundedTransactions,
-                        // selectedTransactionIds backs the Observe traffic tab's selection-mode UI and
-                        // InspectorAction.ExportHar/ExportPostman's scope; prune whatever aged out of the
-                        // bounded page (capacity eviction), same as every other list below.
-                        selectedTransactionIds =
-                            current.selectedTransactionIds.filterTo(mutableSetOf()) { id ->
-                                boundedTransactions.any { it.id == id }
-                            },
-                        capabilities = snapshot.capabilities,
-                        keepAlivePromptNeeded = snapshot.keepAlivePromptNeeded,
-                        mocksEnabled = snapshot.mocksEnabled,
-                        mockRules = snapshot.mockRules,
-                        captureRules = snapshot.captureRules,
-                        sockets = snapshot.sockets.take(MAX_VISIBLE_TRANSACTIONS),
-                        pushEvents = snapshot.pushEvents.take(MAX_VISIBLE_TRANSACTIONS),
-                        // While a past session is selected, `logs`/`crashes` hold that session's retained
-                        // capture (loaded by selectSession below), not the live one -- a periodic/tab-switch
-                        // refresh landing in between must not silently snap them back to the live session's
-                        // data. See selectSession's own doc for why this matters for the Crashes tab's
-                        // previous-run banner in particular.
-                        logs =
-                            if (current.selectedSessionId != null) {
-                                current.logs
-                            } else {
-                                snapshot.logs.take(MAX_VISIBLE_TRANSACTIONS)
-                            },
-                        crashes =
-                            if (current.selectedSessionId != null) {
-                                current.crashes
-                            } else {
-                                snapshot.crashes.take(MAX_VISIBLE_TRANSACTIONS)
-                            },
-                        featureFlags = snapshot.featureFlags,
-                        stateProviders = snapshot.stateProviders,
-                        remoteConfig = snapshot.remoteConfig,
-                        preferenceFiles = snapshot.preferenceFiles,
-                        fileRoots = snapshot.fileRoots,
-                        databases = snapshot.databases,
-                        sessions = snapshot.sessions,
-                        selectedSessionId =
-                            current.selectedSessionId?.takeIf { id ->
-                                snapshot.sessions.any { it.id == id }
-                            },
-                        health = snapshot.health,
-                        browser = snapshot.browser,
-                        retention = snapshot.retention,
-                        captureCategories = snapshot.captureCategories,
-                        redactionEnabled = snapshot.redactionEnabled,
-                    )
+                val next = current.withSnapshot(snapshot, boundedTransactions, dataSource, sendProtocols)
                 // A category disabled mid-session (or a filter change while a now-hidden tab stayed
                 // selected) must not strand the Observe tab row on a tab [visibleObserveTabs] no
                 // longer lists -- snap to the first still-visible one. [visibleObserveTabs] always
@@ -285,6 +282,76 @@ class InspectorViewModel
                     visibleTabs.firstOrNull()?.let { next.copy(observeTab = it) } ?: next
                 }
             }
+        }
+
+        /**
+         * Asks the data source which live connections accept a frame. Only non-null answers make it
+         * into the map; a connection the adapter cannot write to therefore has no composer.
+         */
+        private fun socketSendProtocols(sockets: List<InspectorSocketUi>): Map<String, String> =
+            sockets
+                .mapNotNull { socket ->
+                    dataSource.socketSendProtocol(socket.id)?.let { protocol -> socket.id to protocol }
+                }.toMap()
+
+        private fun InspectorState.withSnapshot(
+            snapshot: InspectorSnapshot,
+            boundedTransactions: List<InspectorTransactionUi>,
+            dataSource: InspectorDataSource,
+            sendProtocols: Map<String, String>,
+        ): InspectorState {
+            val current = this
+            // While a past run is selected, its retained captures (loaded by selectSession) stay on
+            // screen: a periodic or tab-switch refresh must not snap them back to the live run.
+            val pastRunSelected =
+                current.selectedSessionId != null && snapshot.sessions.any { it.id == current.selectedSessionId }
+            val shownTransactions = if (pastRunSelected) current.transactions else boundedTransactions
+            return copy(
+                available = snapshot.available,
+                serverControlSupported = dataSource.supportsServerControl(),
+                captureControlSupported = dataSource.supportsCaptureControl(),
+                // Re-read on every snapshot refresh, so a pause toggled on the More screen (or from
+                // the dashboard) reaches the Observe banner on its next poll without new plumbing.
+                capturePaused = dataSource.isCapturePaused(),
+                transactions = shownTransactions,
+                // selectedTransactionIds backs the Observe traffic tab's selection-mode UI and
+                // InspectorAction.ExportHar/ExportPostman's scope; prune whatever aged out of the
+                // bounded page (capacity eviction), same as every other list below.
+                selectedTransactionIds =
+                    current.selectedTransactionIds.filterTo(mutableSetOf()) { id ->
+                        shownTransactions.any { it.id == id }
+                    },
+                capabilities = snapshot.capabilities,
+                keepAlivePromptNeeded = snapshot.keepAlivePromptNeeded,
+                mocksEnabled = snapshot.mocksEnabled,
+                mockRules = snapshot.mockRules,
+                captureRules = snapshot.captureRules,
+                sockets = if (pastRunSelected) current.sockets else snapshot.sockets.take(MAX_VISIBLE_TRANSACTIONS),
+                // A retained run's connections are long closed; only the live run can be written to.
+                socketSendProtocols = if (pastRunSelected) emptyMap() else sendProtocols,
+                pushEvents =
+                    if (pastRunSelected) current.pushEvents else snapshot.pushEvents.take(MAX_VISIBLE_TRANSACTIONS),
+                featureFlags = snapshot.featureFlags,
+                stateProviders = snapshot.stateProviders,
+                remoteConfig = snapshot.remoteConfig,
+                remoteConfigOverridesEditable = dataSource.supportsRemoteConfigOverrides(),
+                preferenceFiles = snapshot.preferenceFiles,
+                fileRoots = snapshot.fileRoots,
+                databases = snapshot.databases,
+                sessions = snapshot.sessions,
+                selectedSessionId =
+                    current.selectedSessionId?.takeIf { id ->
+                        snapshot.sessions.any { it.id == id }
+                    },
+                // Same past-run guard; see selectSession for why the Crashes banner depends on it.
+                logs = if (pastRunSelected) current.logs else snapshot.logs.take(MAX_VISIBLE_TRANSACTIONS),
+                crashes = if (pastRunSelected) current.crashes else snapshot.crashes.take(MAX_VISIBLE_TRANSACTIONS),
+                health = snapshot.health,
+                browser = snapshot.browser,
+                retention = snapshot.retention,
+                captureCategories = snapshot.captureCategories,
+                redactionEnabled = snapshot.redactionEnabled,
+            )
         }
 
         private fun selectObserveTab(tab: ObserveTab) {
@@ -315,26 +382,43 @@ class InspectorViewModel
         }
 
         /**
-         * Loads both the retained logs and crashes for [id] (or the live session's, when `null`) --
+         * Loads the retained logs, crashes and traffic (network/socket/push) for [id] (or the live
+         * session's, when `null`) --
          * the Crashes tab is a session-scoped read exactly like Logs, so the More screen's Retained
          * runs row and the Crashes tab's previous-run-crashed banner both go through this one path.
          * [applySnapshot]'s own guard keeps a later live-snapshot refresh from clobbering either list
          * while [id] stays selected.
          */
-        private fun selectSession(id: String?) {
+        private fun selectSession(requestedId: String?) {
+            // The current run is always browsed live; selecting it from a list means "back to live".
+            val id =
+                requestedId?.takeUnless { candidate ->
+                    mutableState.value.sessions.any {
+                        it.id == candidate &&
+                            it.isCurrent
+                    }
+                }
             mutableState.update { it.copy(selectedSessionId = id, sessionLogsLoading = id != null) }
             viewModelScope.launch(dispatcher) {
                 val logs = runCatching { dataSource.logsForSession(id) }.getOrDefault(emptyList())
                 val crashes = runCatching { dataSource.crashesForSession(id) }.getOrDefault(emptyList())
                 val flaggedCrashIds = runCatching { dataSource.flaggedCrashIds(id) }.getOrDefault(emptySet())
+                val captures =
+                    runCatching {
+                        dataSource.capturesForSession(
+                            id,
+                        )
+                    }.getOrDefault(InspectorSessionCaptures())
                 mutableState.update { state ->
-                    if (state.selectedSessionId ==
-                        id
-                    ) {
+                    if (state.selectedSessionId == id) {
                         state.copy(
                             logs = logs.take(MAX_VISIBLE_TRANSACTIONS),
                             crashes = crashes.take(MAX_VISIBLE_TRANSACTIONS),
                             flaggedCrashIds = flaggedCrashIds,
+                            transactions = captures.transactions.takeLast(MAX_VISIBLE_TRANSACTIONS),
+                            sockets = captures.sockets.take(MAX_VISIBLE_TRANSACTIONS),
+                            pushEvents = captures.pushEvents.take(MAX_VISIBLE_TRANSACTIONS),
+                            selectedTransactionIds = emptySet(),
                             sessionLogsLoading = false,
                         )
                     } else {
@@ -344,15 +428,48 @@ class InspectorViewModel
             }
         }
 
+        /**
+         * Re-reads the capture store with a new status-class filter. The state field is written
+         * before the reload so the chip selection paints immediately, in step with the refresh.
+         */
+        private fun selectTrafficStatusClass(statusClass: TrafficStatusClass) {
+            trafficQuery = trafficQuery.copy(statusClass = statusClass)
+            mutableState.update { it.copy(trafficStatusClass = statusClass) }
+            refreshSnapshot()
+        }
+
+        /** Host counterpart of [selectTrafficStatusClass]; null shows every host. */
+        private fun selectTrafficHost(host: String?) {
+            val normalized = host?.trim()?.takeIf(String::isNotEmpty)
+            trafficQuery = trafficQuery.copy(host = normalized)
+            mutableState.update { it.copy(trafficHost = normalized) }
+            refreshSnapshot()
+        }
+
+        private fun setSessionPinned(
+            id: String,
+            pinned: Boolean,
+        ) {
+            runCommandThenReload { dataSource.setSessionPinned(id, pinned) }
+        }
+
+        private fun deleteSession(id: String) {
+            viewModelScope.launch(dispatcher) {
+                val result = dataSource.deleteSession(id)
+                showComposerResult(result)
+                if (result is InspectorCommandResult.Success && mutableState.value.selectedSessionId == id) {
+                    selectSession(null)
+                }
+                loadSnapshot()
+            }
+        }
+
         private fun executeComposer(request: InspectorComposerRequest) {
             if (!mutableState.value.capabilities.requestExecution) {
                 showComposerResult(InspectorCommandResult.Disabled(CAPABILITY_REQUEST_EXECUTION))
                 return
             }
-            viewModelScope.launch(dispatcher) {
-                showComposerResult(dataSource.execute(request))
-                loadSnapshot()
-            }
+            runCommandThenReload { dataSource.execute(request) }
         }
 
         private fun setMocksEnabled(enabled: Boolean) {
@@ -360,10 +477,7 @@ class InspectorViewModel
                 showComposerResult(InspectorCommandResult.Disabled(CAPABILITY_MOCKS))
                 return
             }
-            viewModelScope.launch(dispatcher) {
-                showComposerResult(dataSource.setMocksEnabled(enabled))
-                loadSnapshot()
-            }
+            runCommandThenReload { dataSource.setMocksEnabled(enabled) }
         }
 
         /**
@@ -436,10 +550,7 @@ class InspectorViewModel
                 showComposerResult(InspectorCommandResult.Disabled(CAPABILITY_FEATURE_FLAGS))
                 return
             }
-            viewModelScope.launch(dispatcher) {
-                showComposerResult(dataSource.setFeatureFlag(key, value))
-                loadSnapshot()
-            }
+            runCommandThenReload { dataSource.setFeatureFlag(key, value) }
         }
 
         private fun setPreference(
@@ -452,10 +563,7 @@ class InspectorViewModel
                 showComposerResult(InspectorCommandResult.Disabled(CAPABILITY_PREFERENCES))
                 return
             }
-            viewModelScope.launch(dispatcher) {
-                showComposerResult(dataSource.setPreference(file, key, value, type))
-                loadSnapshot()
-            }
+            runCommandThenReload { dataSource.setPreference(file, key, value, type) }
         }
 
         private fun removePreference(
@@ -466,10 +574,7 @@ class InspectorViewModel
                 showComposerResult(InspectorCommandResult.Disabled(CAPABILITY_PREFERENCES))
                 return
             }
-            viewModelScope.launch(dispatcher) {
-                showComposerResult(dataSource.removePreference(file, key))
-                loadSnapshot()
-            }
+            runCommandThenReload { dataSource.removePreference(file, key) }
         }
 
         private fun openFilePath(
@@ -488,7 +593,9 @@ class InspectorViewModel
         ) {
             viewModelScope.launch(dispatcher) {
                 val preview = dataSource.previewFile(root, relativePath)
-                mutableState.update { it.copy(filePreview = preview) }
+                mutableState.update {
+                    it.copy(filePreview = preview, filePreviewName = relativePath.substringAfterLast('/'))
+                }
             }
         }
 
@@ -604,10 +711,7 @@ class InspectorViewModel
          * disappears from [InspectorState.browser] immediately.
          */
         private fun revokePrincipal(id: String) {
-            viewModelScope.launch(dispatcher) {
-                showComposerResult(dataSource.revokePrincipal(id))
-                loadSnapshot()
-            }
+            runCommandThenReload { dataSource.revokePrincipal(id) }
         }
 
         /** Ungated, like the exports above: starting/stopping is a device-owner action, not a data capability. */
@@ -628,6 +732,58 @@ class InspectorViewModel
                 }
                 runServerCommand(running)
             }
+        }
+
+        /** Ungated like the capture commands: pausing only touches the SDK's own live capture gate. */
+        private fun setCapturePaused(paused: Boolean) {
+            viewModelScope.launch(dispatcher) {
+                showComposerResult(dataSource.setCapturePaused(paused))
+                // The snapshot carries the authoritative flag, so the switch and the Observe banner
+                // both reflect what the runtime actually applied rather than the requested value.
+                loadSnapshot()
+            }
+        }
+
+        /** Ungated: purging empties the SDK's own capture buffers and old unpinned runs only. */
+        private fun purgeCapturedData() {
+            viewModelScope.launch(dispatcher) {
+                showComposerResult(dataSource.purgeCapturedData())
+                mutableState.update { it.copy(selectedTransactionIds = emptySet()) }
+                loadSnapshot()
+            }
+        }
+
+        /** Ungated, like the capture commands: sending only writes to a connection the adapter offered. */
+        private fun sendSocketFrame(
+            connectionId: String,
+            text: String,
+            topic: String?,
+            qos: Int,
+            retained: Boolean,
+        ) {
+            runCommandThenReload { dataSource.sendSocketFrame(connectionId, text, topic, qos, retained) }
+        }
+
+        /** Ungated: an override only touches the SDK's own local Remote Config layer. */
+        private fun setRemoteConfigOverride(
+            providerId: String,
+            key: String,
+            value: String,
+        ) {
+            runCommandThenReload { dataSource.setRemoteConfigOverride(providerId, key, value) }
+        }
+
+        /** Ungated counterpart of [setRemoteConfigOverride]; the provider's own value returns. */
+        private fun clearRemoteConfigOverride(
+            providerId: String,
+            key: String,
+        ) {
+            runCommandThenReload { dataSource.clearRemoteConfigOverride(providerId, key) }
+        }
+
+        /** Ungated counterpart of [setRemoteConfigOverride], clearing every provider's overrides. */
+        private fun clearAllRemoteConfigOverrides() {
+            runCommandThenReload { dataSource.clearAllRemoteConfigOverrides() }
         }
 
         /**
@@ -675,12 +831,21 @@ class InspectorViewModel
             mutableState.update { it.copy(lastScreenshotResult = null) }
         }
 
+        /** Runs one data-source command off the main thread, flashes its result, then reloads the snapshot. */
+        private fun runCommandThenReload(command: suspend () -> InspectorCommandResult) {
+            viewModelScope.launch(dispatcher) {
+                showComposerResult(command())
+                loadSnapshot()
+            }
+        }
+
         /**
          * A successful export's [InspectorCommandResult.Success.sharePath] also opens the system
          * Share sheet, exactly like a Files-screen [InspectorAction.ShareFile] would -- see the
          * `LaunchedEffect` in `DevConsoleWorkspace`'s `WorkspaceContent`, which is what actually
          * consumes [InspectorState.pendingShareFilePath].
          */
+
         private fun showComposerResult(result: InspectorCommandResult) {
             val sharePath = (result as? InspectorCommandResult.Success)?.sharePath
             mutableState.update {

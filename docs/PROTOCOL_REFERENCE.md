@@ -64,10 +64,9 @@ host>}` at start-up). Otherwise: `{"code":"ORIGIN_REJECTED"}` 403.
 `POST /api/v1/auth/session-code/exchange` has its own limiter (5/min), checked inline and keyed by
 **source IP** rather than session, since it runs before a session exists.
 
-One rate limiter is wired into the dispatcher's `when` for
-`.../websockets/connections/{id}/send` without a matching route — dead capacity in the current
-build. (`POST /api/v1/exports` and `GET /api/v1/report` do have routes — checked inline rather
-than through the table above — sharing one 5-per-10-minute export limiter; see §3.)
+`POST /api/v1/websockets/connections/{id}/send` (socket send, below) has its own limiter in the
+dispatcher. (`POST /api/v1/exports` and `GET /api/v1/report` are checked inline rather than through
+the table above, sharing one 5-per-10-minute export limiter; see §3.)
 
 ## Browser access modes
 
@@ -239,12 +238,33 @@ for the named-options use case (environment/account-tier switching).
 
 ### Remote Config
 
-`GET /api/v1/remote-config` (auth). Read-only; there is no write route. Returns one object per
+`GET /api/v1/remote-config` (auth). Returns one object per
 registered provider: `id`, `fetch` (`lastFetchEpochMs` — **null**, never a sentinel, when no fetch
 has completed — plus `status` and `minimumFetchIntervalSeconds`), `unavailableReason`, and `entries`
 (`key`, `value`, `source`, `redacted`, `truncated`). `source` is one of `remote`, `default`,
 `static`, `override`, `unknown`. Gated by the `state` capture category, the same one that covers
-state providers and feature flags. See [REMOTE_CONFIG.md](REMOTE_CONFIG.md).
+state providers and feature flags. Entries also carry `providerValue`/`providerSource` while a local
+override is active, and the response carries `overridesEditable`. Local overrides are set with `PUT`
+and cleared with `DELETE` on `/api/v1/remote-config/{provider}/overrides/{key}`, and all cleared
+with `DELETE /api/v1/remote-config/overrides` (control headers; `featureFlags` editing
+capability). See [REMOTE_CONFIG.md](REMOTE_CONFIG.md#local-overrides).
+
+### Socket send
+
+`POST /api/v1/websockets/connections/{id}/send` (control headers; `requestExecution` capability;
+`socket` or `mqtt` category). Form body `text`, plus `topic`/`qos`/`retained` for MQTT. See
+[WEBSOCKET_INSPECTOR.md](WEBSOCKET_INSPECTOR.md#sending-a-frame) for responses.
+
+### Capture pause and purge
+
+`GET /api/v1/capture` (auth) → `{"paused":<bool>,"available":<bool>}`. `POST /api/v1/capture/paused`
+(control headers; raw `true`/`false` body) pauses or resumes writing new captures and answers
+`{"paused":<bool>}`; audited as `capture.pause`/`capture.resume`. `POST /api/v1/capture/purge`
+(control headers) removes this run's captured network, socket and push data plus old unpinned runs
+and answers the counts: `{"networkTransactions":n,"socketConnections":n,"pushEvents":n,
+"retainedRunsDeleted":n}`. Both answer `CAPTURE_CONTROL_UNAVAILABLE` (503) when the host did not
+wire capture control. The dashboard puts both in the topbar's overflow menu and shows a "Capture
+paused" pill while paused; the inspector has them under More → Capture.
 
 ### Composer
 
@@ -474,9 +494,6 @@ An invalid/expired cursor on either paginated family returns the generic `{"code
 
 ## 7. Known dead paths / quirks worth remembering
 
-- `.../websockets/connections/{id}/send` has a rate limiter wired but no matching route — reserved
-  capacity, not a bug to chase. (`POST /api/v1/exports` looks like the same situation at a glance
-  but is not: it has a real route, documented in §3, on its own 5-per-10-minute limiter.)
 - `GET /api/v1/plugins/audit` is the command audit log, not a leftover plugin-framework route — the
   name is historical (see §3, Command audit).
 - Bookmark/note routes report `CSRF_INVALID` instead of `AUTH_REQUIRED` for a fully unauthenticated

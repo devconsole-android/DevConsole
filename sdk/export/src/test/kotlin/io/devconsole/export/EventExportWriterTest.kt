@@ -110,6 +110,109 @@ class EventExportWriterTest {
     }
 
     @Test
+    fun `oversized lazy attachment is rejected before its source is read and estimate does not read it`() {
+        val directory = Files.createTempDirectory("devconsole-export-lazy-test").toFile()
+        try {
+            var reads = 0
+            val request =
+                ExportRequest(
+                    sessionId = "session-1",
+                    destination = File(directory, "export.zip"),
+                    events = listOf(event(summary = "large", attachmentId = "lazy")),
+                    maxBytes = 1,
+                ).withAttachmentSources(
+                    mapOf(
+                        "lazy" to
+                            ExportAttachmentSource(1024, "application/octet-stream") {
+                                reads++
+                                error("attachment source must not be opened")
+                            },
+                    ),
+                )
+            val writer = EventExportWriter(RedactionEngine(RedactionPolicy.recommended()))
+            assertTrue(writer.estimateBytes(request) > 1)
+            assertEquals(ExportResult.ExceedsSizeLimit, writer.write(request))
+            assertEquals(0, reads)
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `binary attachment bytes are preserved exactly`() {
+        val directory = Files.createTempDirectory("devconsole-export-binary-test").toFile()
+        try {
+            val source = byteArrayOf(0, 0xFF.toByte(), 0xC3.toByte(), 0x28, 0x1B)
+            val destination = File(directory, "export.zip")
+            val request =
+                ExportRequest("session-1", listOf(event(summary = "binary", attachmentId = "binary")), destination)
+                    .withAttachmentSources(
+                        mapOf(
+                            "binary" to
+                                ExportAttachmentSource(source.size.toLong(), "image/png") { source.inputStream() },
+                        ),
+                    )
+            assertTrue(EventExportWriter().write(request) is ExportResult.Success)
+            ZipFile(destination).use { zip ->
+                val path =
+                    zip.entries().asSequence().first {
+                        it.name.startsWith("attachments/") &&
+                            it.name.endsWith(".bin")
+                    }
+                assertTrue(source.contentEquals(zip.getInputStream(path).readBytes()))
+            }
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `control characters are JSON escaped in timeline`() {
+        val directory = Files.createTempDirectory("devconsole-export-control-test").toFile()
+        try {
+            val destination = File(directory, "export.zip")
+            val summary = "a\u0000\u0001\u001b\b\u000c\n\r\t"
+            val request = ExportRequest("session-1", listOf(event(summary = summary)), destination)
+            assertTrue(EventExportWriter().write(request) is ExportResult.Success)
+            ZipFile(destination).use { zip ->
+                val jsonLine = zip.getInputStream(zip.getEntry("timeline.jsonl")).bufferedReader().readText()
+                assertTrue(jsonLine.contains("\\u0000"))
+                assertTrue(jsonLine.contains("\\u0001"))
+                assertTrue(jsonLine.contains("\\u001b"))
+                assertTrue(jsonLine.contains("\\b"))
+                assertTrue(jsonLine.none { it.code < 0x20 })
+            }
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `structured evidence redaction growth replaces the whole file with valid JSON`() {
+        val directory = Files.createTempDirectory("devconsole-evidence-structured-test").toFile()
+        try {
+            val destination = File(directory, "evidence.zip")
+            val request =
+                evidenceRequest(destination).withEvidenceBundle(
+                    baseEvidenceBundle().copy(reportJson = "{\"password\":\"x\"}"),
+                )
+            assertTrue(
+                EventExportWriter(
+                    RedactionEngine(RedactionPolicy.recommended()),
+                ).write(request) is ExportResult.Success,
+            )
+            ZipFile(destination).use { zip ->
+                assertEquals(
+                    "{\"_comment\":\"redacted structured body omitted to preserve valid JSON\"}",
+                    zip.readText("report.json"),
+                )
+            }
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `includes bookmarks and re-redacted notes in timeline export`() {
         val directory = Files.createTempDirectory("devconsole-export-annotation-test").toFile()
         try {

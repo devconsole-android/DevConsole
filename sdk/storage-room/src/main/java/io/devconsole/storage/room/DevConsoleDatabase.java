@@ -16,7 +16,7 @@ import androidx.annotation.NonNull;
                 EvidenceItemEntity.class,
                 EvidenceReportEntity.class
         },
-        version = 5,
+        version = 6,
         exportSchema = true)
 public abstract class DevConsoleDatabase extends RoomDatabase {
     public static final Migration MIGRATION_1_2 = new Migration(1, 2) {
@@ -103,6 +103,14 @@ public abstract class DevConsoleDatabase extends RoomDatabase {
             database.execSQL(
                     "ALTER TABLE `attachments` " +
                             "ADD COLUMN `redaction_applicability` TEXT NOT NULL DEFAULT 'APPLIED'");
+        }
+    };
+
+    /** Pinned runs are kept by retention until unpinned. */
+    public static final Migration MIGRATION_5_6 = new Migration(5, 6) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase database) {
+            database.execSQL("ALTER TABLE `sessions` ADD COLUMN `pinned` INTEGER NOT NULL DEFAULT 0");
         }
     };
 

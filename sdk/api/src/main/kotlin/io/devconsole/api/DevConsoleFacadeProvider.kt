@@ -58,6 +58,15 @@ interface DevConsoleFacadeProvider {
     fun registerRemoteConfigProvider(provider: RemoteConfigProvider): Boolean
 
     /**
+     * The local override a developer applied in DevConsole for [key], or null. Hosts read it before
+     * their provider: `DevConsole.remoteConfigOverride("k") ?: remoteConfig.getString("k")`.
+     */
+    fun remoteConfigOverride(
+        key: String,
+        providerId: String?,
+    ): String?
+
+    /**
      * The endpoint of the running server, or null when it is not running. [DevConsoleState.Running]
      * carries no payload, so without this a host that loses its [StartResult.Started] -- to an
      * activity recreation, say -- had no way to recover the address.
@@ -94,4 +103,20 @@ interface DevConsoleFacadeProvider {
      * (a boolean flag returns `"true"`/`"false"`). Falls back to `""` for an unknown key.
      */
     fun featureFlagStringValue(key: String): String
+
+    /**
+     * Pauses or resumes live capture of network transactions, socket connections, push events, and
+     * log lines. Returns `false` when the runtime is disabled or not initialized, and `true` when
+     * the state was applied.
+     */
+    fun setCapturePaused(paused: Boolean): Boolean
+
+    /** Whether live capture is currently paused. */
+    fun isCapturePaused(): Boolean
+
+    /** Clears captured in-memory data and deletes finished retained runs; the live run and pinned runs are kept. */
+    suspend fun purgeCapturedData(): PurgeResult
+
+    /** Exports the current session bundle as a ZIP file. */
+    suspend fun exportSession(): SessionExportResult
 }

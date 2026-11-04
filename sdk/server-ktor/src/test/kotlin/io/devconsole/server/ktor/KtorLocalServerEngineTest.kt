@@ -46,10 +46,40 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.NetworkInterface
 import java.net.ServerSocket
+import java.net.Socket
 import java.util.Collections
 import java.util.UUID
 
 class KtorLocalServerEngineTest {
+    @Test
+    fun `a restarted server rebinds its port while the previous listener's connections are in TIME_WAIT`() =
+        runBlocking {
+            val port = ServerSocket(0).use { it.localPort }
+            val first = KtorLocalServerEngine()
+            val firstResult = first.start(StartRequest(BindingMode.LOOPBACK, port..port))
+            assertTrue(firstResult is ServerStartResult.Started)
+            // `Connection: close` makes the server close first, so its side of the connection --
+            // bound to `port` -- is left in TIME_WAIT, exactly what a killed app leaves behind.
+            Socket("127.0.0.1", port).use { socket ->
+                socket.getOutputStream().write(
+                    "GET /api/v1/meta HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n".toByteArray(),
+                )
+                socket.getInputStream().readBytes()
+            }
+            first.stop()
+
+            val second = KtorLocalServerEngine()
+            try {
+                val secondResult = second.start(StartRequest(BindingMode.LOOPBACK, port..port))
+                assertTrue(
+                    "expected a rebind of $port, got $secondResult",
+                    secondResult is ServerStartResult.Started && secondResult.endpoint.port == port,
+                )
+            } finally {
+                second.stop()
+            }
+        }
+
     @Test
     fun `falls forward through a requested loopback port range`() =
         runBlocking {

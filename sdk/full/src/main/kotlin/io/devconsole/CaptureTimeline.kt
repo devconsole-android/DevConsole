@@ -121,10 +121,12 @@ internal class TeeingNetworkTransactionStore(
     private val bridge: CaptureTimelineBridge,
     private val activeSessionId: () -> String? = { null },
     private val liveCaptureLock: Any = Any(),
+    private val captureGate: CaptureGate = CaptureGate(),
 ) : NetworkTransactionStore by delegate {
     override fun record(transaction: NetworkTransaction) {
         synchronized(liveCaptureLock) {
             if (transaction.sessionId != null && transaction.sessionId != activeSessionId()) return
+            if (!captureGate.allowsNetworkTransaction(transaction.id) { delegate.find(it) != null }) return
             delegate.record(transaction)
             val request = transaction.capture.request
             val status = transaction.capture.response?.statusCode
@@ -179,6 +181,7 @@ internal class TeeingSocketStore(
     private val delegate: SocketStore,
     private val bridge: CaptureTimelineBridge,
     private val liveCaptureLock: Any = Any(),
+    private val captureGate: CaptureGate = CaptureGate(),
 ) : SocketStore by delegate {
     private val lifecycleKeys = linkedSetOf<String>()
 
@@ -188,6 +191,7 @@ internal class TeeingSocketStore(
 
     override fun open(connection: SocketConnection) {
         synchronized(liveCaptureLock) {
+            if (!captureGate.allowsNewCapture() && delegate.connection(connection.id) == null) return
             delegate.open(connection)
             emitLifecycleOnce(
                 SocketLifecycleEvent(
@@ -331,9 +335,11 @@ internal class TeeingPushStore(
     private val delegate: PushStore,
     private val bridge: CaptureTimelineBridge,
     private val liveCaptureLock: Any = Any(),
+    private val captureGate: CaptureGate = CaptureGate(),
 ) : PushStore by delegate {
     override fun append(event: PushEvent) {
         synchronized(liveCaptureLock) {
+            if (!captureGate.allowsNewCapture()) return
             delegate.append(event)
             // Fail-open: a push can be recorded before the runtime session exists (no
             // sessionIdOverride here, so bridge.emit falls back to resolving one), which throws

@@ -124,6 +124,21 @@ data class CapturedRequest(
     /** ID of the bounded, redacted body attachment, when one was persisted. */
     var attachmentId: String? = null
         internal set
+
+    /** Copy carrying persisted [metadata], e.g. when decoding retained history. */
+    fun withMetadata(metadata: CapturedRequestMetadata): CapturedRequest = restoredCopy(metadata, attachmentId)
+
+    /** Copy carrying a persisted [attachmentId], e.g. when decoding retained history. */
+    fun withAttachmentId(attachmentId: String?): CapturedRequest = restoredCopy(metadata, attachmentId)
+
+    private fun restoredCopy(
+        metadata: CapturedRequestMetadata,
+        attachmentId: String?,
+    ): CapturedRequest =
+        copy().also {
+            it.metadata = metadata
+            it.attachmentId = attachmentId
+        }
 }
 
 data class CapturedRequestMetadata(
@@ -147,6 +162,21 @@ data class CapturedResponse(
     /** ID of the bounded, redacted body attachment, when one was persisted. */
     var attachmentId: String? = null
         internal set
+
+    /** Copy carrying persisted [metadata], e.g. when decoding retained history. */
+    fun withMetadata(metadata: CapturedResponseMetadata): CapturedResponse = restoredCopy(metadata, attachmentId)
+
+    /** Copy carrying a persisted [attachmentId], e.g. when decoding retained history. */
+    fun withAttachmentId(attachmentId: String?): CapturedResponse = restoredCopy(metadata, attachmentId)
+
+    private fun restoredCopy(
+        metadata: CapturedResponseMetadata,
+        attachmentId: String?,
+    ): CapturedResponse =
+        copy().also {
+            it.metadata = metadata
+            it.attachmentId = attachmentId
+        }
 }
 
 data class CapturedResponseMetadata(

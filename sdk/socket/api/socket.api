@@ -263,11 +263,13 @@ public final class io/devconsole/socket/SocketRecorder {
 	public static final field Companion Lio/devconsole/socket/SocketRecorder$Companion;
 	public static final field MAX_BINARY_FRAME_PREVIEW_BYTES I
 	public static final field MAX_TEXT_PREVIEW_CHARS I
-	public fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/socket/SocketStore;ZLkotlin/jvm/functions/Function0;)V
-	public synthetic fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/socket/SocketStore;ZLkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/socket/SocketStore;ZLkotlin/jvm/functions/Function0;Lio/devconsole/socket/BinaryPreviewPolicy;)V
+	public fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/socket/SocketStore;ZLkotlin/jvm/functions/Function0;Lio/devconsole/socket/BinaryPreviewPolicy;Lio/devconsole/socket/SocketSenderRegistry;)V
+	public synthetic fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/socket/SocketStore;ZLkotlin/jvm/functions/Function0;Lio/devconsole/socket/BinaryPreviewPolicy;Lio/devconsole/socket/SocketSenderRegistry;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/socket/SocketStore;ZLkotlin/jvm/functions/Function0;Lio/devconsole/socket/SocketSenderRegistry;)V
+	public synthetic fun <init> (Lio/devconsole/security/RedactionEngine;Lio/devconsole/socket/SocketStore;ZLkotlin/jvm/functions/Function0;Lio/devconsole/socket/SocketSenderRegistry;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun bindToCurrentSession ()Lio/devconsole/socket/SocketRecorder;
 	public final fun getProtocol ()Lio/devconsole/socket/SocketProtocol;
+	public final fun getSenders ()Lio/devconsole/socket/SocketSenderRegistry;
 	public final fun onBinaryMessage (Ljava/lang/String;Lio/devconsole/socket/SocketDirection;JLjava/lang/String;)V
 	public final fun onBinaryMessage (Ljava/lang/String;Lio/devconsole/socket/SocketDirection;[BLjava/lang/String;)V
 	public static synthetic fun onBinaryMessage$default (Lio/devconsole/socket/SocketRecorder;Ljava/lang/String;Lio/devconsole/socket/SocketDirection;JLjava/lang/String;ILjava/lang/Object;)V
@@ -296,6 +298,78 @@ public final class io/devconsole/socket/SocketRecorder {
 }
 
 public final class io/devconsole/socket/SocketRecorder$Companion {
+}
+
+public final class io/devconsole/socket/SocketSendRequest {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;IZ)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;IZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;IZ)Lio/devconsole/socket/SocketSendRequest;
+	public static synthetic fun copy$default (Lio/devconsole/socket/SocketSendRequest;Ljava/lang/String;Ljava/lang/String;IZILjava/lang/Object;)Lio/devconsole/socket/SocketSendRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getQos ()I
+	public final fun getRetained ()Z
+	public final fun getText ()Ljava/lang/String;
+	public final fun getTopic ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/socket/SocketSendResult {
+}
+
+public final class io/devconsole/socket/SocketSendResult$NotConnected : io/devconsole/socket/SocketSendResult {
+	public static final field INSTANCE Lio/devconsole/socket/SocketSendResult$NotConnected;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/socket/SocketSendResult$Rejected : io/devconsole/socket/SocketSendResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/socket/SocketSendResult$Rejected;
+	public static synthetic fun copy$default (Lio/devconsole/socket/SocketSendResult$Rejected;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/socket/SocketSendResult$Rejected;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/socket/SocketSendResult$Sent : io/devconsole/socket/SocketSendResult {
+	public static final field INSTANCE Lio/devconsole/socket/SocketSendResult$Sent;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/socket/SocketSendResult$Unsupported : io/devconsole/socket/SocketSendResult {
+	public static final field INSTANCE Lio/devconsole/socket/SocketSendResult$Unsupported;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/socket/SocketSender {
+	public abstract fun send (Lio/devconsole/socket/SocketSendRequest;)Lio/devconsole/socket/SocketSendResult;
+}
+
+public final class io/devconsole/socket/SocketSenderRegistry {
+	public static final field Companion Lio/devconsole/socket/SocketSenderRegistry$Companion;
+	public static final field MAX_TEXT_BYTES I
+	public fun <init> ()V
+	public final fun canSend (Ljava/lang/String;)Z
+	public final fun clear ()V
+	public final fun protocol (Ljava/lang/String;)Lio/devconsole/socket/SocketProtocol;
+	public final fun register (Ljava/lang/String;Lio/devconsole/socket/SocketProtocol;Lio/devconsole/socket/SocketSender;)V
+	public final fun send (Ljava/lang/String;Lio/devconsole/socket/SocketSendRequest;)Lio/devconsole/socket/SocketSendResult;
+	public final fun unregister (Ljava/lang/String;)V
+}
+
+public final class io/devconsole/socket/SocketSenderRegistry$Companion {
 }
 
 public abstract interface class io/devconsole/socket/SocketStore {

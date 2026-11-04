@@ -210,10 +210,17 @@ public final class io/devconsole/storage/api/SessionRetentionPolicy {
 
 public abstract interface class io/devconsole/storage/api/SessionStore {
 	public abstract fun crash (Ljava/lang/String;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun delete (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun end (Ljava/lang/String;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun session (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun sessions (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun setPinned (Ljava/lang/String;ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun start (Lio/devconsole/storage/api/StoredSession;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/devconsole/storage/api/SessionStore$DefaultImpls {
+	public static fun delete (Lio/devconsole/storage/api/SessionStore;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun setPinned (Lio/devconsole/storage/api/SessionStore;Ljava/lang/String;ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class io/devconsole/storage/api/StoredAttachment {
@@ -334,14 +341,15 @@ public final class io/devconsole/storage/api/StoredEvidenceReport {
 }
 
 public final class io/devconsole/storage/api/StoredSession {
-	public fun <init> (Ljava/lang/String;Lio/devconsole/storage/api/StoredSessionStatus;JJLjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;JJ)V
-	public synthetic fun <init> (Ljava/lang/String;Lio/devconsole/storage/api/StoredSessionStatus;JJLjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;JJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Lio/devconsole/storage/api/StoredSessionStatus;JJLjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;JJZ)V
+	public synthetic fun <init> (Ljava/lang/String;Lio/devconsole/storage/api/StoredSessionStatus;JJLjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;JJZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component10 ()Ljava/lang/String;
 	public final fun component11 ()Ljava/lang/Integer;
 	public final fun component12 ()Ljava/lang/String;
 	public final fun component13 ()J
 	public final fun component14 ()J
+	public final fun component15 ()Z
 	public final fun component2 ()Lio/devconsole/storage/api/StoredSessionStatus;
 	public final fun component3 ()J
 	public final fun component4 ()J
@@ -350,8 +358,8 @@ public final class io/devconsole/storage/api/StoredSession {
 	public final fun component7 ()Ljava/lang/String;
 	public final fun component8 ()Ljava/lang/Long;
 	public final fun component9 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Lio/devconsole/storage/api/StoredSessionStatus;JJLjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;JJ)Lio/devconsole/storage/api/StoredSession;
-	public static synthetic fun copy$default (Lio/devconsole/storage/api/StoredSession;Ljava/lang/String;Lio/devconsole/storage/api/StoredSessionStatus;JJLjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;JJILjava/lang/Object;)Lio/devconsole/storage/api/StoredSession;
+	public final fun copy (Ljava/lang/String;Lio/devconsole/storage/api/StoredSessionStatus;JJLjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;JJZ)Lio/devconsole/storage/api/StoredSession;
+	public static synthetic fun copy$default (Lio/devconsole/storage/api/StoredSession;Ljava/lang/String;Lio/devconsole/storage/api/StoredSessionStatus;JJLjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;JJZILjava/lang/Object;)Lio/devconsole/storage/api/StoredSession;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAppVersionCode ()Ljava/lang/Long;
 	public final fun getAppVersionName ()Ljava/lang/String;
@@ -363,6 +371,7 @@ public final class io/devconsole/storage/api/StoredSession {
 	public final fun getEndedAtMs ()Ljava/lang/Long;
 	public final fun getEstimatedBytes ()J
 	public final fun getId ()Ljava/lang/String;
+	public final fun getPinned ()Z
 	public final fun getRecordCount ()J
 	public final fun getStartedAtMonotonicNs ()J
 	public final fun getStartedAtMs ()J

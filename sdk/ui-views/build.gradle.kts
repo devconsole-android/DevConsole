@@ -4,7 +4,10 @@ plugins {
     id("devconsole.publishing")
 }
 
-android { namespace = "io.devconsole.ui.views" }
+android {
+    namespace = "io.devconsole.ui.views"
+    defaultConfig { consumerProguardFiles("consumer-rules.pro") }
+}
 
 dependencies {
     api(project(":sdk:api"))

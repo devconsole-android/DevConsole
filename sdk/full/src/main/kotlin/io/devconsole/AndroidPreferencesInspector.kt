@@ -6,6 +6,7 @@ package io.devconsole
 
 import android.content.Context
 import io.devconsole.security.RedactionEngine
+import io.devconsole.security.RedactionPolicy
 import io.devconsole.server.api.PreferencesEntryData
 import io.devconsole.server.api.PreferencesFileData
 import io.devconsole.server.api.PreferencesInspector
@@ -62,16 +63,22 @@ internal class AndroidPreferencesInspector(
                 .commit()
         }.getOrDefault(false)
 
-    /** Only files inside the app's own `shared_prefs` dir are ever listed or written. */
+    /**
+     * Only files inside the app's own `shared_prefs` dir are ever listed or written, and never
+     * DevConsole's own (`io.devconsole.mock_rules`, the inspector's `devconsole.ui`): they are SDK
+     * state, not the host's, and a hand edit there could corrupt the stored mock rules.
+     */
     private fun preferenceFileNames(): List<String> {
         val dir = File(context.applicationInfo.dataDir, SHARED_PREFS_DIR)
         return dir
             .listFiles { candidate -> candidate.isFile && candidate.name.endsWith(XML_SUFFIX) }
             ?.map { it.name.removeSuffix(XML_SUFFIX) }
+            ?.filterNot { name -> INTERNAL_PREFERENCE_PREFIXES.any(name::startsWith) }
             ?.sorted()
             .orEmpty()
     }
 
+    @Suppress("CyclomaticComplexMethod") // One exhaustive mapping keeps preference display and redaction in sync.
     private fun toEntry(
         key: String,
         value: Any?,
@@ -88,13 +95,28 @@ internal class AndroidPreferencesInspector(
             }
         val raw = if (value is Set<*>) value.joinToString(", ") else value.toString()
         val redactable = value is String || value is Set<*>
-        val display = if (redactable) redaction.redactFields(mapOf(key to raw)).getValue(key) else raw
-        return PreferencesEntryData(key, display, type, redacted = redactable && display != raw)
+        val sensitiveKey = key.isSensitivePreferenceKey()
+        val display =
+            when {
+                sensitiveKey && redaction.isEnabled() -> redaction.replacement()
+                redactable -> redaction.redactFields(mapOf(key to raw)).getValue(key)
+                else -> raw
+            }
+        return PreferencesEntryData(key, display, type, redacted = (redactable || sensitiveKey) && display != raw)
+    }
+
+    private fun String.isSensitivePreferenceKey(): Boolean {
+        val lowered = lowercase()
+        val collapsed = lowered.replace(KEY_SEPARATORS, "")
+        return lowered in SENSITIVE_KEY_NAMES ||
+            collapsed in COLLAPSED_SENSITIVE_KEY_NAMES ||
+            SENSITIVE_KEY_FRAGMENTS.any { collapsed.contains(it) }
     }
 
     private companion object {
         const val SHARED_PREFS_DIR = "shared_prefs"
         const val XML_SUFFIX = ".xml"
+        val INTERNAL_PREFERENCE_PREFIXES = listOf("io.devconsole.", "devconsole.")
         const val TYPE_BOOLEAN = "BOOLEAN"
         const val TYPE_INT = "INT"
         const val TYPE_LONG = "LONG"
@@ -102,5 +124,26 @@ internal class AndroidPreferencesInspector(
         const val TYPE_STRING = "STRING"
         const val TYPE_STRING_SET = "STRING_SET"
         const val TYPE_UNKNOWN = "UNKNOWN"
+        val KEY_SEPARATORS = Regex("[-_.]")
+
+        // Same idea as the database inspector's column fragments: app keys like `auth_token` or
+        // `apiKey` never match the HTTP field list exactly.
+        val SENSITIVE_KEY_FRAGMENTS =
+            setOf(
+                "password",
+                "passwd",
+                "secret",
+                "token",
+                "auth",
+                "credential",
+                "session",
+                "cookie",
+                "apikey",
+                "privatekey",
+                "accesskey",
+            )
+        val SENSITIVE_KEY_NAMES =
+            RedactionPolicy.recommended().sensitiveFieldNames.mapTo(mutableSetOf()) { it.lowercase() }
+        val COLLAPSED_SENSITIVE_KEY_NAMES = SENSITIVE_KEY_NAMES.mapTo(mutableSetOf()) { it.replace(KEY_SEPARATORS, "") }
     }
 }

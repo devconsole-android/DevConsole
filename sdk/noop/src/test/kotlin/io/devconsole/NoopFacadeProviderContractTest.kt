@@ -5,6 +5,12 @@
 package io.devconsole
 
 import io.devconsole.api.DevConsoleFacadeProvider
+import io.devconsole.api.PurgeResult
+import io.devconsole.api.SessionExportResult
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.lang.reflect.Method
@@ -54,4 +60,17 @@ class NoopFacadeProviderContractTest {
         interfaceClass.methods.filter { it.declaringClass == interfaceClass }
 
     private fun Method.signatureLabel(): String = "$name(${parameterTypes.joinToString(", ") { it.simpleName }})"
+
+    @Test
+    fun `noop PlatformFacadeProvider returns documented disabled defaults for runtime control and export APIs`() {
+        val provider = PlatformFacadeProvider()
+
+        assertFalse(provider.isCapturePaused())
+        assertFalse(provider.setCapturePaused(true))
+        assertFalse(provider.isCapturePaused())
+        assertEquals(PurgeResult.NOTHING, runBlocking { provider.purgeCapturedData() })
+        assertEquals(SessionExportResult.Disabled, runBlocking { provider.exportSession() })
+        assertNull(provider.remoteConfigOverride("flag", null))
+        assertNull(provider.remoteConfigOverride("flag", "firebase"))
+    }
 }

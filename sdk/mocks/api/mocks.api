@@ -49,9 +49,42 @@ public final class io/devconsole/mocks/MockAction$Delay : io/devconsole/mocks/Mo
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/devconsole/mocks/MockAction$MapRemote : io/devconsole/mocks/MockAction {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/Integer;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;)Lio/devconsole/mocks/MockAction$MapRemote;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockAction$MapRemote;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/mocks/MockAction$MapRemote;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHost ()Ljava/lang/String;
+	public final fun getPath ()Ljava/lang/String;
+	public final fun getPort ()Ljava/lang/Integer;
+	public final fun getScheme ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class io/devconsole/mocks/MockAction$Passthrough : io/devconsole/mocks/MockAction {
 	public static final field INSTANCE Lio/devconsole/mocks/MockAction$Passthrough;
 	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockAction$Sequence : io/devconsole/mocks/MockAction {
+	public fun <init> (Ljava/util/List;Z)V
+	public synthetic fun <init> (Ljava/util/List;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/util/List;Z)Lio/devconsole/mocks/MockAction$Sequence;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockAction$Sequence;Ljava/util/List;ZILjava/lang/Object;)Lio/devconsole/mocks/MockAction$Sequence;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLoop ()Z
+	public final fun getSteps ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -95,6 +128,22 @@ public final class io/devconsole/mocks/MockAction$TemplateResponse : io/devconso
 	public final fun getHeaders ()Ljava/util/Map;
 	public final fun getStatusCode ()I
 	public final fun getTemplate ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/mocks/MockAction$Throttle : io/devconsole/mocks/MockAction {
+	public fun <init> (JJLio/devconsole/mocks/MockAction;)V
+	public synthetic fun <init> (JJLio/devconsole/mocks/MockAction;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()J
+	public final fun component2 ()J
+	public final fun component3 ()Lio/devconsole/mocks/MockAction;
+	public final fun copy (JJLio/devconsole/mocks/MockAction;)Lio/devconsole/mocks/MockAction$Throttle;
+	public static synthetic fun copy$default (Lio/devconsole/mocks/MockAction$Throttle;JJLio/devconsole/mocks/MockAction;ILjava/lang/Object;)Lio/devconsole/mocks/MockAction$Throttle;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBytesPerSecond ()J
+	public final fun getLatencyMs ()J
+	public final fun getNext ()Lio/devconsole/mocks/MockAction;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -147,6 +196,7 @@ public final class io/devconsole/mocks/MockEngine {
 	public final fun isEnabled ()Z
 	public final fun persist (Lio/devconsole/mocks/MockRuleStore;Ljava/lang/String;Ljava/lang/String;)V
 	public final fun remove (Ljava/lang/String;)Z
+	public final fun requestBodyLimitBytes ()Ljava/lang/Integer;
 	public final fun restore (Lio/devconsole/mocks/MockRuleStore;Ljava/lang/String;Ljava/lang/String;)V
 	public final fun rules ()Ljava/util/List;
 	public final fun setEnabled (Ljava/lang/String;Z)Z

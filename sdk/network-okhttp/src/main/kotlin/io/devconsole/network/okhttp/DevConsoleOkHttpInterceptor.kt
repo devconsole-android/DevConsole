@@ -1,5 +1,6 @@
 package io.devconsole.network.okhttp
 
+import io.devconsole.mocks.okhttp.MockFailureMarker
 import io.devconsole.network.NetworkCaptureContext
 import io.devconsole.network.NetworkRequestInput
 import io.devconsole.network.NetworkRequestMetadata
@@ -64,8 +65,15 @@ class DevConsoleOkHttpInterceptor
                         // failure is best-effort and must never replace or suppress it.
                         runCatching {
                             val failureMessage = error.message ?: error.javaClass.simpleName
+                            val failureRequest =
+                                error.suppressed.filterIsInstance<MockFailureMarker>().firstOrNull()?.let { mockError ->
+                                    request
+                                        .newBuilder()
+                                        .tag(NetworkCaptureContext::class.java, NetworkCaptureContext(mockError.tags))
+                                        .build()
+                                } ?: request
                             recorder.record(
-                                request.toInput(),
+                                failureRequest.toInput(),
                                 NetworkResponseInput(statusCode = 0, error = failureMessage)
                                     .withMetadata(
                                         NetworkResponseMetadata(

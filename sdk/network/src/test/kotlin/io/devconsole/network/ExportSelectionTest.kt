@@ -42,6 +42,16 @@ class ExportSelectionTest {
     }
 
     @Test
+    fun `All pages beyond the first 500 transactions`() {
+        val store = store()
+        repeat(650) { index -> store.record(transaction("row-$index", index.toLong())) }
+
+        val resolved = store.resolveExportSelection(ExportSelection.All)
+
+        assertEquals(650, resolved!!.size)
+    }
+
+    @Test
     fun `Ids resolves exactly the named transactions and silently drops unknown ids`() {
         val store = store()
         store.record(transaction("a", 100))

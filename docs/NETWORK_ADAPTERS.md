@@ -9,7 +9,7 @@ about twenty lines against the same public recorder.
 |---|---|
 | **OkHttp** | Add `DevConsoleOkHttpInterceptor` (below). |
 | **Retrofit** | **Nothing.** Retrofit does no networking of its own — it delegates to an `OkHttpClient`. Add the interceptor to the client Retrofit is built with and every call is captured. |
-| **Ktor client** | Install `DevConsoleKtorClientPlugin` (below). Engine-independent: CIO, OkHttp, Android, and Java all work, including full response-body capture. The OkHttp engine still has an edge for timing phases and mocks — see [Ktor on the OkHttp engine](#ktor-on-the-okhttp-engine). |
+| **Ktor client** | Install `DevConsoleKtorClientPlugin` (below). Engine-independent: CIO, OkHttp, Android, and Java all work, including full response-body capture. Mock rules are available too via `DevConsoleKtorMocks`. The OkHttp engine still has an edge for timing phases — see [Ktor on the OkHttp engine](#ktor-on-the-okhttp-engine). |
 | **Apollo / GraphQL** | Runs on OkHttp, so the interceptor captures it. Bodies are shown as-is; there is no GraphQL-aware formatting yet. |
 | **Cronet, HttpURLConnection, Volley, anything else** | Write a small adapter against `NetworkTransactionRecorder` — see [Custom stacks](#custom-stacks). |
 | **gRPC** | Not supported. `grpc-okhttp` uses OkHttp's transport primitives directly and never passes through the `Interceptor` chain, so it needs a gRPC `ClientInterceptor`. Not yet written. |
@@ -18,10 +18,10 @@ Three things worth knowing:
 
 - **`sdk:server-ktor` is not Ktor client support.** It is the embedded dashboard server. Ktor client
   capture lives in `sdk:network-ktor`.
-- **Mocking, WebSocket capture, and OkHttp's DNS/TCP/TLS/send/wait/receive timing breakdown are
-  OkHttp-only.** `DevConsoleMockInterceptor`, `DevConsoleOkHttpWebSocketListener`, and per-phase
-  timing have no equivalent for other stacks yet, so a Ktor-CIO app gets full request/response
-  capture but not mocks, WebSocket capture, or a timing breakdown finer than total call duration.
+- **WebSocket capture and OkHttp's DNS/TCP/TLS/send/wait/receive timing breakdown are
+  OkHttp-only.** `DevConsoleOkHttpWebSocketListener` and per-phase timing have no equivalent for
+  other stacks yet, so a Ktor-CIO app gets full request/response capture and mock rules but not
+  WebSocket capture or a timing breakdown finer than total call duration.
 - **Both adapters capture response bodies now, each with its own bound.** OkHttp captures a
   declared-length body eagerly and an unknown-length (chunked, transparently-gzipped) one through a
   non-blocking tee, capped at 512 KiB — see
@@ -152,23 +152,46 @@ response with no declared content type is still captured, so the body-preview UT
 decide from the actual bytes.
 
 What the Ktor adapter still can't provide — on any engine — is OkHttp's DNS/TCP/TLS/send/wait/receive
-timing breakdown and mock rules. See [Ktor on the OkHttp engine](#ktor-on-the-okhttp-engine) below.
+timing breakdown. See [Ktor on the OkHttp engine](#ktor-on-the-okhttp-engine) below.
+
+### Mocking Ktor requests
+
+`DevConsoleKtorMocks` applies the same `MockEngine` rules as the OkHttp interceptor. Install it
+alongside the capture plugin and pass it the host's engine:
+
+```kotlin
+val client = HttpClient {
+    install(DevConsoleKtorClientPlugin) { recorder = DevConsole.networkRecorder() }
+    install(DevConsoleKtorMocks) { mockEngine = DevConsole.mockEngine() }
+}
+```
+
+It intercepts `HttpSend`, so a mocked response never reaches the network but still flows through
+the receive pipeline: transactions are recorded like any other call and tagged `mocked=true` plus
+`mockRuleId=<rule id>`. Matching uses the same rule fields as OkHttp (method, scheme, host, path
+regex, query and header predicates, and a bounded body preview), and the same actions are
+supported: static and template responses, delay, connection failure, timeout, status override, body
+replacement, map-remote, throttle, and sequence. A disabled engine, or no matching rule, lets the
+call proceed untouched.
+
+One gap: a `Throttle` rule paces a static payload, but latency-only pacing is applied when it wraps
+a passthrough — the response channel belongs to the engine at that point, so bytes-per-second
+throttling of a real response body is not simulated.
 
 ### Ktor on the OkHttp engine
 
-`DevConsoleKtorClientPlugin` already captures full request and response bodies on every engine, so
-you no longer need the engine-level interceptor just to get bodies. What it still can't provide is
-the **DNS/TCP/TLS/send/wait/receive timing breakdown** and **mock rules** — both come from OkHttp's
-`EventListener`/interceptor chain, which the Ktor client pipeline has no equivalent for. If your
-`HttpClient` uses the **OkHttp engine** and you need either of those, instrument the engine's
-`OkHttpClient` directly instead of installing the plugin:
+`DevConsoleKtorClientPlugin` already captures full request and response bodies on every engine, and
+`DevConsoleKtorMocks` covers mock rules, so you no longer need the engine-level interceptor for
+either. What the plugin still can't provide is the **DNS/TCP/TLS/send/wait/receive timing
+breakdown** — it comes from OkHttp's `EventListener`, which the Ktor client pipeline has no
+equivalent for. If your `HttpClient` uses the **OkHttp engine** and you need those timing phases,
+instrument the engine's `OkHttpClient` directly instead of installing the plugin:
 
 ```kotlin
 val client = HttpClient(OkHttp) {
     engine {
         config {
             installDevConsole(DevConsole.networkRecorder())
-            addInterceptor(DevConsoleMockInterceptor(DevConsole.mockEngine())) // optional
         }
     }
 }
@@ -185,8 +208,8 @@ Two caveats:
   [tee described above](#chunked-and-streaming-responses) and its 512 KiB cap, not the Ktor
   plugin's 256 KiB one.
 
-Reach for this only when you need timing phases or mocks. For capture alone, the plugin now covers
-CIO, OkHttp, Android, and Java equally well.
+Reach for this only when you need timing phases. For capture and mocks, the plugin covers CIO,
+OkHttp, Android, and Java equally well.
 
 ## Custom stacks
 

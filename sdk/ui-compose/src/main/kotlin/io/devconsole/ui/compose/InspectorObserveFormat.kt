@@ -152,3 +152,10 @@ internal fun shareTextSnippet(
         context.startActivity(Intent.createChooser(sendIntent, chooserTitle))
     }
 }
+
+/** "1 file" / "3 files": a count with its noun in the right number. */
+internal fun countLabel(
+    count: Int,
+    singular: String,
+    plural: String = "${singular}s",
+): String = "$count ${if (count == 1) singular else plural}"

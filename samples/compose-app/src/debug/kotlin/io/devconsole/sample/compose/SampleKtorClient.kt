@@ -6,6 +6,7 @@ package io.devconsole.sample.compose
 
 import io.devconsole.DevConsole
 import io.devconsole.network.ktor.DevConsoleKtorClientPlugin
+import io.devconsole.network.ktor.DevConsoleKtorMocks
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 
@@ -22,10 +23,16 @@ import io.ktor.client.engine.cio.CIO
  * [CIO] is deliberate, not incidental. It is a pure-Kotlin engine with no OkHttp underneath, so a
  * captured response body here proves the capture came from the Ktor plugin itself rather than from
  * the OkHttp adapter the rest of this sample uses.
+ *
+ * [DevConsoleKtorMocks] applies the same session mock rules the OkHttp adapter does, so the sample's
+ * `/orders` rule answers Ktor calls too.
  */
 internal fun buildSampleKtorClient(): HttpClient =
     HttpClient(CIO) {
         install(DevConsoleKtorClientPlugin) {
             recorder = DevConsole.networkRecorder()
+        }
+        install(DevConsoleKtorMocks) {
+            mockEngine = DevConsole.mockEngine()
         }
     }

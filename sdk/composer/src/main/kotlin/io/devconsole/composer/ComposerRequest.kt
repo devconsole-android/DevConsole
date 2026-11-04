@@ -5,6 +5,14 @@ import io.devconsole.security.RedactionPolicy
 import java.net.URI
 import java.net.URLEncoder
 
+private const val URI_REFERENCE_CHARS = "-._~:/?#[]@!$&'()*+,;="
+private const val HEX = "0123456789ABCDEF"
+private const val HEX_RADIX = 16
+private const val HEX_NIBBLE_MASK = 0xF
+private const val URI_ESCAPE_LENGTH = 3
+private const val HEX_SHIFT = 4
+private const val ASCII_LIMIT = 128
+
 enum class ComposerBodyType { NONE, TEXT, JSON, FORM_URL_ENCODED, MULTIPART, BINARY_FILE }
 
 data class ComposerQueryParameter(
@@ -206,7 +214,6 @@ data class ComposerRequest(
     private companion object {
         const val DEFAULT_TIMEOUT_MS = 15_000
         const val CONTROL_CHARACTER_LIMIT = 0x20
-        const val HEX_RADIX = 16
         const val UNICODE_ESCAPE_WIDTH = 4
         const val UNICODE_ESCAPE_PADDING = '0'
         val DEFAULT_REDACTION: RedactionEngine by lazy { RedactionEngine(RedactionPolicy.default()) }
@@ -312,10 +319,7 @@ class ComposerExecutor(
             response.headers.entries
                 .firstOrNull { it.key.equals(LOCATION_HEADER, ignoreCase = true) }
                 ?.value
-        if (!followRedirects || response.statusCode !in REDIRECT_STATUSES || location.isNullOrBlank()) {
-            return null
-        }
-        val nextUrl = URI(url).resolve(location).toString()
+        val nextUrl = redirectedUrl(location, response.statusCode) ?: return null
         val nextMethod = redirectedMethod(response.statusCode)
         val dropsBody = nextMethod != method
         val crossOrigin = URI(url).origin() != URI(nextUrl).origin()
@@ -330,6 +334,14 @@ class ComposerExecutor(
         )
     }
 
+    private fun ResolvedComposerRequest.redirectedUrl(
+        location: String?,
+        statusCode: Int,
+    ): String? {
+        if (!followRedirects || statusCode !in REDIRECT_STATUSES || location.isNullOrBlank()) return null
+        return runCatching { URI(url).resolve(location.encodeUriReference()).toString() }.getOrNull()
+    }
+
     private fun ResolvedComposerRequest.redirectedMethod(statusCode: Int): String =
         when {
             statusCode == STATUS_SEE_OTHER && method != HEAD_METHOD -> GET_METHOD
@@ -341,6 +353,39 @@ class ComposerExecutor(
         val effectivePort = port.takeIf { it >= 0 } ?: if (scheme == HTTPS_SCHEME) HTTPS_PORT else HTTP_PORT
         return "${scheme.lowercase()}://${host.lowercase()}:$effectivePort"
     }
+
+    /** Preserve valid escapes while percent-encoding characters URI rejects. */
+    private fun String.encodeUriReference(): String {
+        val source = this
+        return buildString(source.length) {
+            var index = 0
+            while (index < source.length) {
+                val character = source[index]
+                val hasValidEscape = source.hasValidEscapeAt(index)
+                if (hasValidEscape) {
+                    append(source, index, index + URI_ESCAPE_LENGTH)
+                    index += URI_ESCAPE_LENGTH
+                } else if (character.isAscii() && (character.isLetterOrDigit() || character in URI_REFERENCE_CHARS)) {
+                    append(character)
+                    index++
+                } else {
+                    character.toString().toByteArray(Charsets.UTF_8).forEach { byte ->
+                        append('%')
+                        append(HEX[(byte.toInt() ushr HEX_SHIFT) and HEX_NIBBLE_MASK])
+                        append(HEX[byte.toInt() and HEX_NIBBLE_MASK])
+                    }
+                    index++
+                }
+            }
+        }
+    }
+
+    private fun String.hasValidEscapeAt(index: Int): Boolean =
+        getOrNull(index) == '%' &&
+            getOrNull(index + 1)?.digitToIntOrNull(HEX_RADIX) != null &&
+            getOrNull(index + URI_ESCAPE_LENGTH - 1)?.digitToIntOrNull(HEX_RADIX) != null
+
+    private fun Char.isAscii(): Boolean = code < ASCII_LIMIT
 
     private fun Map<String, String>.withoutCredentials(): Map<String, String> =
         filterKeys { name -> name.lowercase() !in CREDENTIAL_HEADERS }

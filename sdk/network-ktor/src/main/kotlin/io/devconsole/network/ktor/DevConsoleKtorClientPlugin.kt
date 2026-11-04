@@ -1,5 +1,6 @@
 package io.devconsole.network.ktor
 
+import io.devconsole.network.NetworkCaptureContext
 import io.devconsole.network.NetworkRequestInput
 import io.devconsole.network.NetworkRequestMetadata
 import io.devconsole.network.NetworkResponseInput
@@ -131,6 +132,13 @@ class DevConsoleKtorClientConfig {
 private val startedAtKey = AttributeKey<Long>("DevConsoleStartedAt")
 
 /**
+ * Adapter-neutral tags a Ktor plugin attached to the outgoing request, read back here into
+ * [NetworkRequestMetadata.tags]. `DevConsoleKtorMocks` is the only writer today; the key lives here
+ * so capture does not have to depend on the mocks plugin being installed.
+ */
+internal val devConsoleKtorCaptureContextKey = AttributeKey<NetworkCaptureContext>("DevConsoleKtorCaptureContext")
+
+/**
  * Reads up to [MAX_KTOR_RESPONSE_BODY_CAPTURE_BYTES] (+1 to detect overflow without guessing at
  * `isClosedForRead` edge states) from the capture half of the split and records the transaction
  * exactly once.
@@ -241,6 +249,11 @@ private fun prepareTransaction(response: HttpResponse): PendingKtorTransaction {
                 threadName = Thread.currentThread().name,
                 bodyLength = request.headers[HttpHeaders.ContentLength]?.toLongOrNull(),
                 bodyOmittedReason = if (capturedRequestBody != null) null else "ktor-pipeline-metadata-only",
+                tags =
+                    request.attributes
+                        .getOrNull(devConsoleKtorCaptureContextKey)
+                        ?.tags
+                        .orEmpty(),
             ),
         )
 

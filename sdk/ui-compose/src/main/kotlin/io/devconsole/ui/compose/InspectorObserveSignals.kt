@@ -52,18 +52,19 @@ internal fun SocketsTabContent(
         }
     val searchedIndices =
         remember(recentFrames, ui.socketsSearch) {
-            val query = ui.socketsSearch.trim().lowercase(Locale.US)
+            val query = ui.socketsSearch.trim()
             recentFrames.indices.filter { index ->
                 if (query.isEmpty()) {
                     true
                 } else {
                     val (socket, frame) = recentFrames[index]
-                    socket.url.lowercase(Locale.US).contains(query) ||
-                        frame.preview?.lowercase(Locale.US)?.contains(query) == true
+                    socket.url.contains(query, ignoreCase = true) ||
+                        frame.preview?.contains(query, ignoreCase = true) == true
                 }
             }
         }
-    val arrivals = rememberArrivals(searchedIndices.map { frameKeys[it] })
+    val arrivalKeys = remember(searchedIndices, frameKeys) { searchedIndices.map { frameKeys[it] } }
+    val arrivals = rememberArrivals(arrivalKeys)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -121,7 +122,7 @@ private fun SocketsHero(
         buildString {
             if (loudest != null && loudest.receivedCount > 0) {
                 val path = loudest.url.removePrefix("wss://").removePrefix("ws://")
-                append("$path is the loudest at ${loudest.receivedCount} frames received.")
+                append("$path is the loudest at ${countLabel(loudest.receivedCount, "frame")} received.")
             } else {
                 append("No frames received yet.")
             }
@@ -208,19 +209,20 @@ internal fun PushTabContent(
         }
     val searchedIndices =
         remember(state.pushEvents, ui.pushSearch) {
-            val query = ui.pushSearch.trim().lowercase(Locale.US)
+            val query = ui.pushSearch.trim()
             state.pushEvents.indices.filter { index ->
                 if (query.isEmpty()) {
                     true
                 } else {
                     val push = state.pushEvents[index]
-                    push.provider.lowercase(Locale.US).contains(query) ||
-                        push.messageId?.lowercase(Locale.US)?.contains(query) == true ||
-                        push.dataPreview.values.any { it.lowercase(Locale.US).contains(query) }
+                    push.provider.contains(query, ignoreCase = true) ||
+                        push.messageId?.contains(query, ignoreCase = true) == true ||
+                        push.dataPreview.values.any { it.contains(query, ignoreCase = true) }
                 }
             }
         }
-    val arrivals = rememberArrivals(searchedIndices.map { pushKeys[it] })
+    val arrivalKeys = remember(searchedIndices, pushKeys) { searchedIndices.map { pushKeys[it] } }
+    val arrivals = rememberArrivals(arrivalKeys)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -325,21 +327,26 @@ internal fun LogsTabContent(
         ObserveTabEmptyState("No logs captured yet.", EmptySpot.Logs)
         return
     }
-    val searched =
+    val rowsNewestFirst =
         remember(state.logs, ui.logsSearch) {
-            val query = ui.logsSearch.trim().lowercase(Locale.US)
-            if (query.isEmpty()) {
-                state.logs
-            } else {
-                state.logs.filter { log ->
-                    log.summary.lowercase(Locale.US).contains(query) ||
-                        log.source.lowercase(Locale.US).contains(query) ||
-                        log.detail?.lowercase(Locale.US)?.contains(query) == true
+            val query = ui.logsSearch.trim()
+            val filtered =
+                if (query.isEmpty()) {
+                    state.logs
+                } else {
+                    state.logs.filter { log ->
+                        log.summary.contains(query, ignoreCase = true) ||
+                            log.source.contains(query, ignoreCase = true) ||
+                            log.detail?.contains(query, ignoreCase = true) == true
+                    }
                 }
-            }
+            filtered.sortedWith(
+                compareByDescending<InspectorLogUi> { it.timestampEpochMs }
+                    .thenByDescending { it.id },
+            )
         }
-    val rowsNewestFirst = searched.asReversed()
-    val arrivals = rememberArrivals(rowsNewestFirst.map { it.id })
+    val arrivalIds = remember(rowsNewestFirst) { rowsNewestFirst.map { it.id } }
+    val arrivals = rememberArrivals(arrivalIds)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -383,7 +390,7 @@ private fun LogsHero(
     if (ui.logsHeroCollapsed) {
         HeroBar(
             value = flagged.size.toString(),
-            label = "of ${logs.size} events need attention",
+            label = "of ${countLabel(logs.size, "event")} ${if (flagged.size == 1) "needs" else "need"} attention",
             onExpand = actions.onToggleLogsHero,
             valueColor = colors.warn,
             labelColor = colors.warn,

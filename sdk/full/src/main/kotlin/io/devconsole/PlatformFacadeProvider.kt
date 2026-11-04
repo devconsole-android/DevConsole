@@ -21,8 +21,10 @@ import io.devconsole.api.DevConsoleFacadeProvider
 import io.devconsole.api.DevConsoleState
 import io.devconsole.api.InitResult
 import io.devconsole.api.InspectorOpenResult
+import io.devconsole.api.PurgeResult
 import io.devconsole.api.ScreenshotPolicy
 import io.devconsole.api.ScreenshotResult
+import io.devconsole.api.SessionExportResult
 import io.devconsole.api.StartRequest
 import io.devconsole.api.StartResult
 import io.devconsole.api.StopReason
@@ -39,6 +41,8 @@ import io.devconsole.network.NetworkAttachmentPayload
 import io.devconsole.network.NetworkCaptureFactory
 import io.devconsole.network.NetworkCursorCodec
 import io.devconsole.network.NetworkTransactionRecorder
+import io.devconsole.network.NetworkTransactionStore
+import io.devconsole.network.isTextualContentType
 import io.devconsole.push.InMemoryPushStore
 import io.devconsole.push.PushEvent
 import io.devconsole.push.PushInput
@@ -60,6 +64,8 @@ import io.devconsole.server.api.ServerStartResult
 import io.devconsole.server.api.SessionAuthority
 import io.devconsole.server.api.SessionCodeAuthority
 import io.devconsole.server.api.SessionCodeInfo
+import io.devconsole.server.ktor.CaptureControl
+import io.devconsole.server.ktor.CapturePurgeSummary
 import io.devconsole.server.ktor.KtorLocalServerEngine
 import io.devconsole.socket.InMemorySocketStore
 import io.devconsole.socket.SocketProtocol
@@ -159,6 +165,16 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             onPublished = runtime::recordPublishedEvent,
         )
     private val sessionMarkerRecorder = SessionMarkerRecorder(captureBridge)
+    private val captureGate = CaptureGate()
+
+    // Completed runs only: the live run is always served from the in-memory stores below.
+    private val retainedSessions =
+        RetainedSessionCaptures(
+            events = { sessionId ->
+                RetainedCaptureQuery({ eventStore }, runtime::currentSessionId).eventsForExport(sessionId)
+            },
+            cursorCodec = NetworkCursorCodec(randomCursorSecret()),
+        )
     private var sessionMarkerMonitor: AndroidSessionMarkerMonitor? = null
     private val reportingPersistenceDrop = AtomicBoolean(false)
     private val liveCaptureLock = Any()
@@ -172,14 +188,20 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             captureBridge,
             { runtime.currentSessionId() },
             liveCaptureLock,
+            captureGate,
         )
     private val inMemorySocketStore = InMemorySocketStore()
-    private val socketStore = TeeingSocketStore(inMemorySocketStore, captureBridge, liveCaptureLock)
+    private val socketStore = TeeingSocketStore(inMemorySocketStore, captureBridge, liveCaptureLock, captureGate)
     private val inMemoryPushStore = InMemoryPushStore()
-    private val pushStore = TeeingPushStore(inMemoryPushStore, captureBridge, liveCaptureLock)
+    private val pushStore = TeeingPushStore(inMemoryPushStore, captureBridge, liveCaptureLock, captureGate)
     private val stateRegistry = StateRegistry()
-    private val remoteConfigRegistry = RemoteConfigRegistry()
-    private val mockEngineInstance = MockEngine(emptyList()).withOutcomeSink(::recordMockOutcome)
+    private val remoteConfigOverrideStore = AndroidRemoteConfigOverrideStore()
+    private val remoteConfigRegistry = RemoteConfigRegistry(remoteConfigOverrideStore)
+
+    // Body predicates are offered in both rule editors, so the debug runtime has to honour them;
+    // the OkHttp interceptor only copies a body when a live rule has one (see requestBodyLimitBytes).
+    private val mockEngineInstance =
+        MockEngine(emptyList(), bodyMatchingEnabled = true).withOutcomeSink(::recordMockOutcome)
 
     /** Handed back by [mockEngine] instead of [mockEngineInstance] while MOCKS is off. Never mutated. */
     private val disabledMockEngine = MockEngine(emptyList(), enabled = false)
@@ -227,7 +249,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     private val gatedPushStore =
         object : PushStore by pushStore {
             override fun append(event: PushEvent) {
-                if (categoryEnabled(CaptureCategory.PUSH)) pushStore.append(event)
+                if (categoryEnabled(CaptureCategory.PUSH) && captureGate.allowsNewCapture()) pushStore.append(event)
             }
         }
     private val pushRecorderInstance = PushRecorder(redaction, gatedPushStore)
@@ -250,6 +272,8 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
 
     @Volatile private var activeConfig: DevConsoleConfig? = null
 
+    @Volatile private var inspectorExporter: InspectorExporter? = null
+
     private val crashCapture =
         CrashCapture(
             ::activeSessionId,
@@ -261,6 +285,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             breadcrumbs = { breadcrumbs },
             policy = { activeConfig?.crashPolicy ?: CrashPolicy() },
             evidenceStore = { roomEvidenceStore.takeIf { durableSessionReady.get() } },
+            pendingCrashFile = { application.filesDir.resolve("devconsole/pending-crash.json") },
         )
     private val anrWatchdog = AnrWatchdog(onAnr = crashCapture::recordAnr)
 
@@ -273,7 +298,11 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     private val logRecorderInstance =
         LogRecorder(
             redaction,
-            LogSink { entry -> if (categoryEnabled(CaptureCategory.LOGS)) timelineLogSink.emit(entry) },
+            LogSink { entry ->
+                if (categoryEnabled(CaptureCategory.LOGS) && captureGate.allowsNewCapture()) {
+                    timelineLogSink.emit(entry)
+                }
+            },
         )
 
     private fun recordMockOutcome(outcome: MockOutcome) {
@@ -317,7 +346,13 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                             eventId = payload.transactionId,
                             mimeType = payload.contentType,
                             bytes = payload.bytes,
-                            isRedacted = true,
+                            isRedacted = isTextualContentType(payload.contentType),
+                            redactionApplicability =
+                                if (isTextualContentType(payload.contentType)) {
+                                    RedactionApplicability.APPLIED
+                                } else {
+                                    RedactionApplicability.NOT_APPLICABLE
+                                },
                         ).withSourceMetadata(
                             originalLength = payload.originalLength,
                             truncated = payload.truncated,
@@ -575,6 +610,10 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 roomEventStore?.withSessionFirstRetention()
                 roomAttachmentStore?.withSessionFirstRetention()
                 durableSessionReady.set(true)
+                crashCapture.importPendingCrash(
+                    application.filesDir.resolve("devconsole/pending-crash.json"),
+                    expectedSessionId,
+                )
                 if (runtime.state.value is DevConsoleState.Running) {
                     (cachedTimeline as? PersistentTimeline)?.setPersistenceReady(true)
                 }
@@ -710,6 +749,8 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 .serverMetadata()
                 .copy(captureCategories = CaptureCategory.wireNames(config.captureCategories))
         if (!mockPersistenceBound) {
+            // Deliberately synchronous: persisted mock rules must be active before the host's first
+            // request, so this small SharedPreferences read stays on the initializing thread.
             runCatching {
                 val mockRuleStore = AndroidMockRuleStore(application)
                 mockEngineInstance.bindPersistence(
@@ -739,6 +780,9 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             // by the config, so the new config's set is the whole truth.
             stateRegistry.clear()
             remoteConfigRegistry.clear()
+            // Idempotent: loads the file on the first initialize only, so a later re-initialize
+            // cannot overwrite overrides the developer has edited since.
+            remoteConfigOverrideStore.attach(application)
             // A duplicate id *within one config*, or from a host that both configured and
             // late-registered a provider, must not take down initialize(); it is simply ignored.
             config.stateProviders.forEach { provider -> safely { stateRegistry.register(provider) } }
@@ -761,6 +805,8 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
         // host's handler, so a disabled category skips installation entirely too.
         if (config.crashPolicy.crashCaptureEnabled && config.capturesCategory(CaptureCategory.CRASHES)) {
             crashCapture.install()
+        } else {
+            crashCapture.disable()
         }
         return result
     }
@@ -791,6 +837,9 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 featureFlagsSupplier = { if (::featureFlags.isInitialized) featureFlags else null },
                 stateRegistry = stateRegistry,
                 remoteConfigRegistry = remoteConfigRegistry,
+                remoteConfigOverridesEditable = {
+                    activeConfig?.editingCapabilities?.featureFlags == true && categoryEnabled(CaptureCategory.STATE)
+                },
                 // The one engine PlatformFacadeProvider keeps current via updatePolicy, rather than
                 // a fresh one per snapshot(): constructing a RedactionEngine recompiles the whole
                 // textPatterns set, which is why redactionValidationError() guards it at all. This
@@ -810,10 +859,13 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                             SessionExportSources(
                                 annotationsSupplier = { timelineAnnotations },
                                 attachmentReader = { attachmentId -> roomAttachmentStore?.read(attachmentId) },
+                                attachmentMetadataReader = { attachmentId ->
+                                    roomAttachmentStore?.metadata(attachmentId)
+                                },
                             ),
-                    ).apply { exportRedaction = redaction },
+                    ).apply { exportRedaction = redaction }.also { inspectorExporter = it },
                 healthSupplier = { runtime.health.value.toInspectorHealthUi() },
-                sessionsSupplier = { storedSessions.toInspectorSessions() },
+                sessionsSupplier = { storedSessions.toInspectorSessions(runtime.currentSessionId()) },
                 browserSupplier = {
                     activeConfig?.toInspectorBrowserUi(
                         lastStarted?.endpoint,
@@ -829,6 +881,9 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                 retentionSupplier = { activeConfig?.retentionPolicy?.toInspectorRetentionUi() },
                 revokePrincipalHandler = sessionAuthority::revokeIfPresent,
                 retainedCaptures = RetainedCaptureQuery({ eventStore }, runtime::currentSessionId),
+                retainedSessions = retainedSessions,
+                deleteRunHandler = ::deleteRetainedRun,
+                pinRunHandler = ::pinRetainedRun,
                 shareableFileResolver = fileInspectorInstance::resolveShareableFile,
                 evidenceStore = roomEvidenceStore,
                 evidenceSessionId = ::currentOrFallbackSessionId,
@@ -943,6 +998,34 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
         }
     }
 
+    private fun sdkHealthSnapshot(): SdkHealthSnapshot =
+        runtime.health.value.let { health ->
+            SdkHealthSnapshot(
+                initializationCount = health.initializationCount,
+                publishedEventCount = health.publishedEventCount,
+                droppedEventCount = health.droppedEventCount,
+                state = health.state.javaClass.simpleName,
+            )
+        }
+
+    /** The facade's own pause/purge, seen through the server module's [CaptureControl] contract. */
+    private fun captureControlBridge(): CaptureControl =
+        object : CaptureControl {
+            override fun isPaused(): Boolean = this@PlatformFacadeProvider.isCapturePaused()
+
+            override fun setPaused(paused: Boolean): Boolean = this@PlatformFacadeProvider.setCapturePaused(paused)
+
+            override suspend fun purge(): CapturePurgeSummary =
+                this@PlatformFacadeProvider.purgeCapturedData().let { purged ->
+                    CapturePurgeSummary(
+                        networkTransactions = purged.networkTransactions,
+                        socketConnections = purged.socketConnections,
+                        pushEvents = purged.pushEvents,
+                        retainedRunsDeleted = purged.retainedRunsDeleted,
+                    )
+                }
+        }
+
     /** The one-time construction half of [buildOrReconfigureServerEngine], split out for length alone. */
     @Suppress("LongParameterList")
     private fun createServerEngine(
@@ -959,16 +1042,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             sessionAuthority = sessionAuthority,
             sessionCodeAuthority = sessionCodeAuthority,
             metadata = { metadata },
-            sdkHealth = {
-                runtime.health.value.let { health ->
-                    SdkHealthSnapshot(
-                        initializationCount = health.initializationCount,
-                        publishedEventCount = health.publishedEventCount,
-                        droppedEventCount = health.droppedEventCount,
-                        state = health.state.javaClass.simpleName,
-                    )
-                }
-            },
+            sdkHealth = ::sdkHealthSnapshot,
             networkTransactions = networkStore,
             socketStore = socketStore,
             pushStore = pushStore,
@@ -982,6 +1056,11 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             // redaction policy and STATE gate for the process's life, while FullInspectorDataSource
             // (which reads the same live field) moved on. Same field, two surfaces, one answer.
             remoteConfigSnapshots = { redactedRemoteConfigSnapshots(activeConfig) },
+            captureControl = captureControlBridge(),
+            // The adapter-facing registry, so the dashboard can write on exactly the connections the
+            // OkHttp and Paho adapters opened here -- never a second registry the adapters never see.
+            socketSenders = socketRecorderInstance.senders,
+            remoteConfigOverrides = remoteConfigOverrideStore,
             featureFlags = featureFlags,
             featureFlagsEditable = featureFlagsEditable,
             mockEngine = mockEngineInstance,
@@ -994,14 +1073,9 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             databaseEditable = config.editingCapabilities.database,
             fileInspector = gatedFileInspector,
             filesEditable = config.editingCapabilities.files,
-            timeline =
-                persistentTimeline(
-                    application,
-                    config.storagePolicy,
-                    config.retentionPolicy,
-                    config.eventBufferCapacity,
-                ),
+            timeline = serverTimeline(application, config),
             composerEnabled = config.composerEnabled,
+            composerCollections = composerCollectionStore(application),
             composerAllowedHosts = config.composerAllowedHosts,
             composerHostsEditable = config.composerHostsEditable,
             stateMutationsEnabled = config.stateMutationsEnabled,
@@ -1014,10 +1088,56 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             sessionsProvider = { sessionStore?.sessions().orEmpty() },
             screenshotCapture = ::captureScreenshot,
         ).withRetainedCaptures(RetainedCaptureQuery({ eventStore }, runtime::currentSessionId))
+            .withRetainedNetworkTransactions(::retainedNetworkStore)
+            .withRunControls(delete = ::deleteRetainedRun, pin = ::pinRetainedRun)
             .withNetworkProtection(config.networkProtection)
             .withBrowserSecurity(config.browserSecurity)
             .withAttachmentReader { attachmentId -> roomAttachmentStore?.read(attachmentId) }
             .withAttachmentMetadataReader { attachmentId -> roomAttachmentStore?.metadata(attachmentId) }
+
+    /** Split out of [createServerEngine] to keep that constructor within detekt's method-length limit. */
+    private fun serverTimeline(
+        application: Application,
+        config: DevConsoleConfig,
+    ): Timeline =
+        persistentTimeline(
+            application,
+            config.storagePolicy,
+            config.retentionPolicy,
+            config.eventBufferCapacity,
+        )
+
+    /** Split out of [createServerEngine] to keep that constructor within detekt's method-length limit. */
+    private fun composerCollectionStore(application: Application): FileComposerCollectionStore =
+        FileComposerCollectionStore(File(application.filesDir, "devconsole/composer-collections.json"))
+
+    /** Deletes a finished run with its captures; the live run is refused by the store itself. */
+    private suspend fun deleteRetainedRun(sessionId: String): Boolean {
+        val store = sessionStore ?: return false
+        val deleted = sessionId != runtime.currentSessionId() && store.delete(sessionId)
+        if (deleted) {
+            retainedSessions.forget(sessionId)
+            storedSessions = store.sessions()
+        }
+        return deleted
+    }
+
+    private suspend fun pinRetainedRun(
+        sessionId: String,
+        pinned: Boolean,
+    ): Boolean {
+        val store = sessionStore ?: return false
+        val changed = store.setPinned(sessionId, pinned)
+        if (changed) storedSessions = store.sessions()
+        return changed
+    }
+
+    /** A known, completed run's network store; null for the live run or one retention already pruned. */
+    private suspend fun retainedNetworkStore(sessionId: String): NetworkTransactionStore? {
+        val known = sessionId != runtime.currentSessionId() && sessionStore?.session(sessionId) != null
+        if (!known) retainedSessions.forget(sessionId)
+        return if (known) retainedSessions.networkStore(sessionId) else null
+    }
 
     override fun state(): StateFlow<DevConsoleState> = runtime.state
 
@@ -1070,7 +1190,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
                     if (!durableSessionReady.get() && bootstrapJob?.isActive != true) {
                         scheduleSessionBootstrap(application)
                     }
-                    durableSessionReady.get()
+                    sessionReadyForStart(true, durableSessionReady.get(), bootstrapJob?.isActive == true)
                 }
             if (!sessionReady) {
                 // A Room/bootstrap failure must not take down the developer server. Captures stay
@@ -1311,6 +1431,25 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
         categoryEnabled(CaptureCategory.STATE) && safely { remoteConfigRegistry.register(provider) }
 
     /**
+     * Reads the developer's local override without ever throwing into the host: a config read runs
+     * on the host's own request path, where a debugging tool must never be the reason a call fails.
+     */
+    override fun remoteConfigOverride(
+        key: String,
+        providerId: String?,
+    ): String? =
+        runCatching {
+            if (providerId != null) {
+                remoteConfigRegistry.overrideValue(providerId, key)
+            } else {
+                remoteConfigOverrideStore
+                    .overrides()
+                    .values
+                    .firstNotNullOfOrNull { overrides -> overrides[key] }
+            }
+        }.getOrNull()
+
+    /**
      * Empty when the STATE category is off, so the dashboard route cannot outflank the host's gate.
      * A null config means initialize() has not landed yet, which reads the same way: nothing to serve.
      */
@@ -1406,6 +1545,75 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     override fun featureFlagStringValue(key: String): String {
         val flags = if (::featureFlags.isInitialized) featureFlags else return ""
         return runCatching { flags.value(key) }.getOrDefault("")
+    }
+
+    @Synchronized
+    override fun setCapturePaused(paused: Boolean): Boolean {
+        val state = runtime.state.value
+        if (state is DevConsoleState.Uninitialized || state is DevConsoleState.DisabledForBuild) return false
+        if (captureGate.setPaused(paused)) {
+            runCatching { sessionMarkerRecorder.captureStateChanged(paused) }
+        }
+        return true
+    }
+
+    override fun isCapturePaused(): Boolean = captureGate.isPaused()
+
+    override suspend fun purgeCapturedData(): PurgeResult {
+        var networkRemoved = 0
+        var socketRemoved = 0
+        var pushRemoved = 0
+        var retainedDeleted = 0
+        runCatching {
+            synchronized(liveCaptureLock) {
+                networkRemoved = networkTransactionStore.statusDistribution().values.sum()
+                socketRemoved = inMemorySocketStore.connections().size
+                pushRemoved = inMemoryPushStore.events().size
+                networkTransactionStore.clear()
+                inMemorySocketStore.clear()
+                socketStore.resetSession()
+                inMemoryPushStore.clear()
+            }
+        }
+        runCatching {
+            withContext(Dispatchers.IO) {
+                val store = sessionStore
+                if (store != null) {
+                    val activeId = runtime.currentSessionId()
+                    store
+                        .sessions()
+                        .filter { it.id != activeId && !it.pinned && it.status in PURGEABLE_RUN_STATUSES }
+                        .forEach { session ->
+                            val deleted = runCatching { store.delete(session.id) }.getOrDefault(false)
+                            if (deleted) {
+                                retainedDeleted++
+                                runCatching { retainedSessions.forget(session.id) }
+                            }
+                        }
+                    storedSessions = runCatching { store.sessions() }.getOrDefault(emptyList())
+                }
+            }
+        }
+        return PurgeResult(
+            networkTransactions = networkRemoved,
+            socketConnections = socketRemoved,
+            pushEvents = pushRemoved,
+            retainedRunsDeleted = retainedDeleted,
+        )
+    }
+
+    override suspend fun exportSession(): SessionExportResult {
+        val state = runtime.state.value
+        val runtimeActive = state !is DevConsoleState.Uninitialized && state !is DevConsoleState.DisabledForBuild
+        val exporter = inspectorExporter?.takeIf { runtimeActive } ?: return SessionExportResult.Disabled
+        return runCatching {
+            when (val outcome = withContext(Dispatchers.IO) { exporter.exportSessionZip() }) {
+                is ExportOutcome.Written -> SessionExportResult.Exported(File(outcome.path))
+                is ExportOutcome.Failed -> SessionExportResult.Failed(outcome.message)
+            }
+        }.getOrElse { failure ->
+            SessionExportResult.Failed(failure.message ?: failure.javaClass.simpleName)
+        }
     }
 
     /** Registration must happen exactly once per Application, regardless of how many times [initialize] runs. */
@@ -1524,7 +1732,17 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     /** Device/app metadata for the evidence bundle's session.json; honestly null before a durable session exists. */
     private suspend fun currentSessionSnapshot(): StoredSession? = sessionStore?.session(activeSessionId())
 
-    private companion object {
+    internal companion object {
+        /**
+         * A start is only "durable session unavailable" when there is a store but no bootstrap is
+         * ready or in flight; an in-flight bootstrap enables durable writes when it completes.
+         */
+        fun sessionReadyForStart(
+            sessionStoreAvailable: Boolean,
+            durableReady: Boolean,
+            bootstrapInFlight: Boolean,
+        ): Boolean = !sessionStoreAvailable || durableReady || bootstrapInFlight
+
         const val DATABASE_NAME = "devconsole-events.db"
         const val DEVCONSOLE_DIRECTORY = "devconsole"
         const val BOOTSTRAP_TIMEOUT_MS = 5_000L
@@ -1551,7 +1769,7 @@ private fun io.devconsole.core.SdkHealth.toInspectorHealthUi(): InspectorHealthU
     )
 
 /** Durable app-run rows replace the old synthetic marker-derived session list. */
-private fun List<StoredSession>.toInspectorSessions(): List<InspectorSessionUi> =
+private fun List<StoredSession>.toInspectorSessions(currentSessionId: String?): List<InspectorSessionUi> =
     sortedByDescending(StoredSession::startedAtMs).map { session ->
         InspectorSessionUi(
             id = session.id,
@@ -1560,6 +1778,8 @@ private fun List<StoredSession>.toInspectorSessions(): List<InspectorSessionUi> 
             status = session.status.name,
             recordCount = session.recordCount,
             estimatedBytes = session.estimatedBytes,
+            isCurrent = session.id == currentSessionId,
+            pinned = session.pinned,
         )
     }
 
@@ -1634,6 +1854,9 @@ private fun io.devconsole.api.RetentionPolicy.toInspectorRetentionUi(): Inspecto
     InspectorRetentionUi(maxSessions = maxSessions, maxAgeMs = maxAgeMs, maxBytes = maxBytes)
 
 private const val CURSOR_SECRET_BYTES = 16
+
+/** Runs [PlatformFacadeProvider.purgeCapturedData] may delete: finished ones, never the live run or a pinned one. */
+private val PURGEABLE_RUN_STATUSES = setOf(StoredSessionStatus.COMPLETED, StoredSessionStatus.CRASHED)
 
 private fun randomCursorSecret(): ByteArray = ByteArray(CURSOR_SECRET_BYTES).also(SecureRandom()::nextBytes)
 

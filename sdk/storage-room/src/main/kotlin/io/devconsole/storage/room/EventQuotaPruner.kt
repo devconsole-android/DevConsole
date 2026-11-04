@@ -12,7 +12,7 @@ data class EventPruneResult(
 )
 
 /**
- * Deletes expired events, then bounded batches of the oldest lowest-severity quota candidates.
+ * Deletes expired events, then selects the oldest lowest-severity quota candidates in one ordered scan.
  *
  * This prune is global (row-first), not session-scoped, so it can remove rows belonging to any
  * session -- not just the one whose write triggered it. [onSessionsPruned] is the correction hook
@@ -50,30 +50,34 @@ class EventQuotaPruner(
                 affectedSessions += eventDao.sessionIdsOlderThan(cutoffEpochMs)
                 eventDao.deleteOlderThan(cutoffEpochMs)
             }
-        var count = eventDao.eventCount()
-        var bytes = eventDao.estimatedStoredBytes()
-        var quotaDeleted = 0
-        while (count > maxEvents || bytes > maxBytes) {
-            val countExcess = (count - maxEvents).coerceAtLeast(0)
-            val limit =
-                countExcess
-                    .coerceAtLeast(1)
-                    .coerceAtMost(PRUNE_BATCH_SIZE.toLong())
-                    .toInt()
-            val ids = eventDao.oldestLowSeverityFirst(limit)
-            if (ids.isEmpty()) break
-            affectedSessions += eventDao.sessionIdsForIds(ids)
-            eventDao.deleteByIds(ids)
-            quotaDeleted += ids.size
-            count = eventDao.eventCount()
-            bytes = eventDao.estimatedStoredBytes()
+        val count = eventDao.eventCount()
+        val bytes = eventDao.estimatedStoredBytes()
+        val mustDrop = (count - maxEvents).coerceAtLeast(0)
+        // The candidate scan reads every row's id + byte weight; skip it when already within both caps.
+        val candidates = if (mustDrop > 0 || bytes > maxBytes) eventDao.quotaCandidates() else emptyList()
+        var dropCount = 0
+        var bytesAfterDelete = bytes
+        for (candidate in candidates) {
+            if (dropCount.toLong() >= mustDrop && bytesAfterDelete <= maxBytes) break
+            bytesAfterDelete -= candidate.bytes
+            dropCount++
         }
+        val ids = candidates.take(dropCount).map { it.id }
+        if (ids.isNotEmpty()) {
+            ids.chunked(PRUNE_BATCH_SIZE).forEach { batch ->
+                affectedSessions += eventDao.sessionIdsForIds(batch)
+                eventDao.deleteByIds(batch)
+            }
+        }
+        val quotaDeleted = ids.size
+        val remainingCount = count - quotaDeleted
+        val remainingBytes = bytes - candidates.take(quotaDeleted).sumOf { it.bytes }
         if (affectedSessions.isNotEmpty()) onSessionsPruned(affectedSessions)
         return EventPruneResult(
             expiredCount = expired,
             quotaCount = quotaDeleted,
-            remainingCount = count,
-            remainingBytes = bytes,
+            remainingCount = remainingCount,
+            remainingBytes = remainingBytes,
         )
     }
 

@@ -6,9 +6,13 @@ package io.devconsole.storage.room
 
 import androidx.room.DatabaseConfiguration
 import androidx.sqlite.db.SupportSQLiteOpenHelper
+import io.devconsole.storage.api.EventStoreWriteResult
 import io.devconsole.storage.api.SessionRetentionPolicy
+import io.devconsole.storage.api.StoredSession
+import io.devconsole.storage.api.StoredSessionStatus
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Files
@@ -25,6 +29,40 @@ import java.nio.file.Files
  * real, Room-built database this module's plain JVM unit tests cannot construct.
  */
 class SessionRetentionPrunerTest {
+    @Test
+    fun `retention keeps pinned runs even when they are over count and age limits`() =
+        runBlocking {
+            val eventDao = FakeTrimEventDao()
+            val attachmentDao = FakeTrimAttachmentDao()
+            val sessionDao = FakeTrimSessionDao(eventDao, attachmentDao)
+            sessionDao.put(fakeSession("run-a", estimatedBytes = 10, recordCount = 1).withStatus("COMPLETED", 1))
+            sessionDao.put(fakeSession("run-b", estimatedBytes = 10, recordCount = 1).withStatus("CRASHED", 2))
+            assertEquals(1, sessionDao.setPinned("run-a", true))
+            assertEquals(1, sessionDao.setPinned("run-b", true))
+            val database = fakeTrimDatabase(sessionDao, eventDao, attachmentDao)
+            val files = FileAttachmentStore(Files.createTempDirectory("prune-pin-test").toFile())
+            val policy = SessionRetentionPolicy(maxSessions = 1, maxAgeMs = 1, maxBytes = 1_000)
+
+            SessionRetentionPruner(database, files).prune(policy, activeSessionId = null, nowMs = 1_000)
+
+            assertEquals(setOf("run-a", "run-b"), sessionDao.sessions().map { it.id }.toSet())
+        }
+
+    @Test
+    fun `an explicit delete refuses the active run`() =
+        runBlocking {
+            val eventDao = FakeTrimEventDao()
+            val attachmentDao = FakeTrimAttachmentDao()
+            val sessionDao = FakeTrimSessionDao(eventDao, attachmentDao)
+            sessionDao.put(fakeSession("active-run", estimatedBytes = 10, recordCount = 1))
+            val database = fakeTrimDatabase(sessionDao, eventDao, attachmentDao)
+            val files = FileAttachmentStore(Files.createTempDirectory("prune-active-test").toFile())
+
+            assertFalse(SessionRetentionPruner(database, files).deleteFinished("active-run"))
+            assertEquals(0, sessionDao.setPinned("active-run", true))
+            assertEquals(listOf("active-run"), sessionDao.sessions().map { it.id })
+        }
+
     @Test
     fun `a no-op pass on an already-under-budget active session never re-aggregates usage`() =
         runBlocking {
@@ -47,8 +85,7 @@ class SessionRetentionPrunerTest {
             val eventDao = FakeTrimEventDao()
             val attachmentDao = FakeTrimAttachmentDao()
             val sessionDao = FakeTrimSessionDao(eventDao, attachmentDao)
-            // 5 events at the fake's fixed 100-byte weight each = 500 total; a 250-byte budget
-            // must evict the 3 oldest-lowest-severity events (0, 1, 2), leaving 3 and 4.
+            // Five equal-sized events under a two-event budget must evict the three oldest rows.
             repeat(5) { index ->
                 eventDao.events[
                     "event-$index",
@@ -60,28 +97,195 @@ class SessionRetentionPrunerTest {
                         wallTimeMs = index.toLong(),
                     )
             }
-            sessionDao.put(fakeSession("session-1", estimatedBytes = 500, recordCount = 5))
+            val eventWeight = trimEventBytes(eventDao.events.getValue("event-0"))
+            sessionDao.put(fakeSession("session-1", estimatedBytes = eventWeight * 5, recordCount = 5))
             val database = fakeTrimDatabase(sessionDao, eventDao, attachmentDao)
             val files = FileAttachmentStore(Files.createTempDirectory("prune-trim-test").toFile())
-            val policy = SessionRetentionPolicy(maxSessions = 10, maxAgeMs = Long.MAX_VALUE / 2, maxBytes = 250)
+            val policy =
+                SessionRetentionPolicy(maxSessions = 10, maxAgeMs = Long.MAX_VALUE / 2, maxBytes = eventWeight * 2)
 
             SessionRetentionPruner(database, files).prune(policy, activeSessionId = "session-1", nowMs = 1_000)
 
             assertEquals(setOf("event-3", "event-4"), eventDao.events.keys)
-            assertEquals(200L, sessionDao.session("session-1")?.estimatedBytes)
+            assertEquals(eventWeight * 2, sessionDao.session("session-1")?.estimatedBytes)
             assertEquals(2L, sessionDao.session("session-1")?.recordCount)
             // The trim path is expected to pay for full recomputes -- pruning is rare, unlike the
             // per-write path the no-op test above guards.
             assertTrue(sessionDao.refreshUsageCalls > 0)
         }
+
+    @Test
+    fun `active trim batches all selected rows and preserves bookmarked event`() =
+        runBlocking {
+            val eventDao = FakeTrimEventDao()
+            val attachmentDao = FakeTrimAttachmentDao()
+            val sessionDao = FakeTrimSessionDao(eventDao, attachmentDao)
+            repeat(5) { index ->
+                eventDao.events["event-$index"] = trimEvent("event-$index", "session-1", index, index.toLong())
+            }
+            eventDao.protected += "event-0"
+            val eventWeight = trimEventBytes(eventDao.events.getValue("event-0"))
+            sessionDao.put(fakeSession("session-1", estimatedBytes = eventWeight * 5, recordCount = 5))
+            val database = fakeTrimDatabase(sessionDao, eventDao, attachmentDao)
+
+            SessionRetentionPruner(
+                database,
+                FileAttachmentStore(Files.createTempDirectory("prune-batch-test").toFile()),
+            ).prune(
+                SessionRetentionPolicy(maxSessions = 10, maxAgeMs = Long.MAX_VALUE / 2, maxBytes = eventWeight * 2),
+                "session-1",
+                1_000,
+            )
+
+            assertEquals(setOf("event-0", "event-4"), eventDao.events.keys)
+            assertEquals(1, eventDao.candidateScans)
+            assertEquals(1, eventDao.deleteCalls)
+        }
+
+    @Test
+    fun `failed attachment delete does not stop quota pruning`() =
+        runBlocking {
+            val eventDao = FakeTrimEventDao()
+            val attachmentDao = FakeTrimAttachmentDao()
+            val sessionDao = FakeTrimSessionDao(eventDao, attachmentDao)
+            eventDao.events["event-0"] = trimEvent("event-0", "session-1", 0, 0)
+            eventDao.events["event-1"] = trimEvent("event-1", "session-1", 1, 1)
+            val attachment =
+                AttachmentEntity(
+                    "attachment",
+                    "event-0",
+                    "session-1",
+                    "image/png",
+                    1,
+                    700,
+                    false,
+                    "hash",
+                    true,
+                    "session-1/attachments/file.bin",
+                    0,
+                    false,
+                    true,
+                    "NOT_APPLICABLE",
+                )
+            attachmentDao.insert(attachment)
+            attachmentDao.pending += attachment.id
+            eventDao.attached += "event-0"
+            sessionDao.put(fakeSession("session-1", estimatedBytes = 900, recordCount = 3))
+            val database = fakeTrimDatabase(sessionDao, eventDao, attachmentDao)
+            SessionRetentionPruner(database) { FileDeletion.Failed }.prune(
+                SessionRetentionPolicy(maxSessions = 10, maxAgeMs = Long.MAX_VALUE / 2, maxBytes = 100),
+                "session-1",
+                1_000,
+            )
+            assertEquals(setOf("event-0"), eventDao.events.keys)
+            assertTrue(attachmentDao.pending.contains(attachment.id))
+        }
+
+    @Test
+    fun `corruption recovery restores active session before retrying event insert`() =
+        runBlocking {
+            val staleEventDao = FakeTrimEventDao()
+            val staleAttachmentDao = FakeTrimAttachmentDao()
+            val staleSessionDao = FakeTrimSessionDao(staleEventDao, staleAttachmentDao)
+            val staleDatabase =
+                fakeTrimDatabase(staleSessionDao, staleEventDao, staleAttachmentDao, failSessionLookup = true)
+            val freshEventDao = FakeTrimEventDao()
+            val freshAttachmentDao = FakeTrimAttachmentDao()
+            val freshSessionDao = FakeTrimSessionDao(freshEventDao, freshAttachmentDao)
+            var currentDatabase = staleDatabase
+            val coordinator =
+                RoomRetentionCoordinator().apply {
+                    activeSession = StoredSession("active-session", StoredSessionStatus.ACTIVE, 10L)
+                }
+            val store =
+                RoomEventStore(staleDatabase, coordinator)
+                    .withRecovery({ currentDatabase }, {
+                        currentDatabase = fakeTrimDatabase(freshSessionDao, freshEventDao, freshAttachmentDao)
+                    })
+                    .withSessionFirstRetention()
+            val session = StoredSession("active-session", StoredSessionStatus.ACTIVE, 10L)
+
+            val result =
+                store.insert(
+                    listOf(
+                        io.devconsole.storage.api.StoredEvent(
+                            id = "event-1",
+                            sessionId = session.id,
+                            sequence = 1,
+                            pluginId = "system",
+                            type = "system.event",
+                            wallTimeMs = 11,
+                            monoTimeNs = 12,
+                            severity = 1,
+                            summary = "ready",
+                            tagsJson = "{}",
+                        ),
+                    ),
+                )
+
+            assertEquals(EventStoreWriteResult.Success(1), result)
+            assertEquals("ACTIVE", freshSessionDao.session(session.id)?.status)
+        }
+
+    @Test
+    fun `recovery hook failure returns unavailable instead of escaping event insert`() =
+        runBlocking {
+            val eventDao = FakeTrimEventDao()
+            val attachmentDao = FakeTrimAttachmentDao()
+            val sessionDao = FakeTrimSessionDao(eventDao, attachmentDao)
+            val staleDatabase = fakeTrimDatabase(sessionDao, eventDao, attachmentDao, failSessionLookup = true)
+            val store =
+                RoomEventStore(staleDatabase, RoomRetentionCoordinator())
+                    .withRecovery({ staleDatabase }, { throw IllegalStateException("recovery failed") })
+                    .withSessionFirstRetention()
+
+            val result =
+                store.insert(
+                    listOf(
+                        io.devconsole.storage.api.StoredEvent(
+                            id = "event-1",
+                            sessionId = "active-session",
+                            sequence = 1,
+                            pluginId = "system",
+                            type = "system.event",
+                            wallTimeMs = 11,
+                            monoTimeNs = 12,
+                            severity = 1,
+                            summary = "ready",
+                            tagsJson = "{}",
+                        ),
+                    ),
+                )
+
+            assertEquals(EventStoreWriteResult.Unavailable, result)
+        }
+
+    @Test
+    fun `start remembers active session metadata on shared coordinator`() =
+        runBlocking {
+            val eventDao = FakeTrimEventDao()
+            val attachmentDao = FakeTrimAttachmentDao()
+            val sessionDao = FakeTrimSessionDao(eventDao, attachmentDao)
+            val coordinator = RoomRetentionCoordinator()
+            val store =
+                RoomSessionStore(
+                    fakeTrimDatabase(sessionDao, eventDao, attachmentDao),
+                    FileAttachmentStore(Files.createTempDirectory("active-session-test").toFile()),
+                    SessionRetentionPolicy(10, Long.MAX_VALUE / 2, 10_000),
+                    coordinator,
+                )
+            val session = StoredSession("active-session", StoredSessionStatus.ACTIVE, 10L)
+
+            store.start(session)
+
+            assertEquals(session, coordinator.activeSession)
+        }
 }
 
 /**
- * A fixed per-event weight keeps the arithmetic easy to reason about; the real byte formula is
- * covered by EventUsageEstimateTest.
+ * Fake usage totals use the production per-event estimate so trim selection and usage correction
+ * agree exactly.
  */
-private const val FAKE_EVENT_BYTE_WEIGHT = 100L
-
 private fun fakeSession(
     id: String,
     estimatedBytes: Long,
@@ -101,6 +305,7 @@ private fun fakeSession(
     null,
     recordCount,
     estimatedBytes,
+    false,
 )
 
 private fun trimEvent(
@@ -125,10 +330,19 @@ private fun trimEvent(
     1,
 )
 
+private fun trimEventBytes(event: EventEntity): Long = event.toStoredEvent().estimatedStorageBytes()
+
+private fun EventEntity.pruneCandidate(): EventPruneCandidate =
+    EventPruneCandidate().also {
+        it.id = id
+        it.bytes = trimEventBytes(this)
+    }
+
 private fun fakeTrimDatabase(
     sessionDao: SessionDao,
     eventDao: EventDao,
     attachmentDao: AttachmentDao,
+    failSessionLookup: Boolean = false,
 ): DevConsoleDatabase =
     object : DevConsoleDatabase() {
         // Room 2.7.x still declares createOpenHelper as abstract (it became non-abstract in 2.8+);
@@ -136,13 +350,26 @@ private fun fakeTrimDatabase(
         override fun createOpenHelper(config: DatabaseConfiguration): SupportSQLiteOpenHelper =
             error("not touched by these tests")
 
+        override fun runInTransaction(body: Runnable) {
+            body.run()
+        }
+
+        override fun <V> runInTransaction(body: java.util.concurrent.Callable<V>): V = body.call()
+
         override fun eventDao(): EventDao = eventDao
 
         override fun attachmentDao(): AttachmentDao = attachmentDao
 
         override fun timelineAnnotationDao(): TimelineAnnotationDao = FakeTrimTimelineAnnotationDao()
 
-        override fun sessionDao(): SessionDao = sessionDao
+        override fun sessionDao(): SessionDao =
+            if (failSessionLookup) {
+                object : SessionDao by sessionDao {
+                    override fun session(sessionId: String): SessionEntity? = error("database disk image is malformed")
+                }
+            } else {
+                sessionDao
+            }
 
         override fun captureRuleDao(): CaptureRuleDao = error("SessionRetentionPruner never touches capture rules")
 
@@ -160,9 +387,7 @@ private fun fakeTrimDatabase(
     }
 
 /**
- * Recomputes usage from the linked fake event/attachment DAOs, mirroring refreshUsage's real
- * aggregation closely enough for these tests: a fixed per-event weight instead of the exact byte
- * formula (see FAKE_EVENT_BYTE_WEIGHT).
+ * Recomputes usage from the linked fake event/attachment DAOs using the production event estimate.
  */
 private class FakeTrimSessionDao(
     private val eventDao: FakeTrimEventDao,
@@ -188,14 +413,21 @@ private class FakeTrimSessionDao(
 
     override fun expiredCompleted(cutoffEpochMs: Long): List<SessionEntity> =
         sessions.values.filter {
-            it.status in setOf("COMPLETED", "CRASHED") && (it.endedAtMs ?: it.startedAtMs) < cutoffEpochMs
+            it.status in setOf("COMPLETED", "CRASHED") && !it.pinned && (it.endedAtMs ?: it.startedAtMs) < cutoffEpochMs
         }
 
     override fun completedOldestFirst(): List<SessionEntity> =
-        sessions.values.filter {
-            it.status in
-                setOf("COMPLETED", "CRASHED")
-        }
+        sessions.values.filter { it.status in setOf("COMPLETED", "CRASHED") && !it.pinned }
+
+    override fun setPinned(
+        sessionId: String,
+        pinned: Boolean,
+    ): Int {
+        val current = sessions[sessionId]
+        if (current == null || current.status !in setOf("COMPLETED", "CRASHED")) return 0
+        sessions[sessionId] = current.withPinned(pinned)
+        return 1
+    }
 
     override fun deletingSessions(): List<SessionEntity> = sessions.values.filter { it.status == "DELETING" }
 
@@ -228,7 +460,7 @@ private class FakeTrimSessionDao(
         val estimatedBytes =
             eventDao.events.values
                 .filter { it.sessionId == sessionId }
-                .size * FAKE_EVENT_BYTE_WEIGHT +
+                .sumOf(::trimEventBytes) +
                 attachmentDao.attachments.values
                     .filter { it.sessionId == sessionId }
                     .sumOf { it.storedLength }
@@ -267,6 +499,7 @@ private fun SessionEntity.withStatus(
     deviceOsVersion,
     recordCount,
     estimatedBytes,
+    pinned,
 )
 
 private fun SessionEntity.withUsage(
@@ -287,10 +520,15 @@ private fun SessionEntity.withUsage(
     deviceOsVersion,
     newRecordCount,
     newEstimatedBytes,
+    pinned,
 )
 
 private class FakeTrimEventDao : EventDao {
     val events = linkedMapOf<String, EventEntity>()
+    val protected = mutableSetOf<String>()
+    val attached = mutableSetOf<String>()
+    var candidateScans = 0
+    var deleteCalls = 0
 
     override fun insertAll(events: List<EventEntity>) {
         events.forEach { this.events[it.id] = it }
@@ -314,15 +552,15 @@ private class FakeTrimEventDao : EventDao {
         return expired.size
     }
 
-    override fun estimatedStoredBytes(): Long = events.size * FAKE_EVENT_BYTE_WEIGHT
+    override fun estimatedStoredBytes(): Long = events.values.sumOf(::trimEventBytes)
 
     override fun recentEvents(limit: Int): List<EventEntity> = events.values.toList().takeLast(limit)
 
-    override fun oldestLowSeverityFirst(limit: Int): List<String> =
+    override fun quotaCandidates(): List<EventPruneCandidate> =
         events.values
-            .sortedWith(compareBy({ it.severity }, { it.wallTimeMs }))
-            .take(limit)
-            .map { it.id }
+            .filter { it.id !in protected }
+            .sortedWith(compareBy({ it.severity }, { it.wallTimeMs }, { it.sequence }, { it.id }))
+            .map { it.pruneCandidate() }
 
     override fun recentEventsForSession(
         sessionId: String,
@@ -341,17 +579,18 @@ private class FakeTrimEventDao : EventDao {
         limit: Int,
     ): List<EventEntity> = events.values.filter { it.pluginId in pluginIds }.takeLast(limit)
 
-    override fun oldestUnbookmarkedLowSeverityFirstForSession(
-        sessionId: String,
-        limit: Int,
-    ): List<String> =
+    override fun activeSessionTrimCandidates(sessionId: String): List<EventPruneCandidate> =
         events.values
-            .filter { it.sessionId == sessionId }
-            .sortedWith(compareBy({ it.severity }, { it.wallTimeMs }))
-            .take(limit)
-            .map { it.id }
+            .filter {
+                it.sessionId == sessionId &&
+                    it.id !in protected &&
+                    it.id !in attached
+            }.sortedWith(compareBy({ it.severity }, { it.wallTimeMs }, { it.sequence }, { it.id }))
+            .map { it.pruneCandidate() }
+            .also { candidateScans++ }
 
     override fun deleteByIds(ids: List<String>) {
+        deleteCalls++
         ids.forEach { events.remove(it) }
     }
 
@@ -366,7 +605,7 @@ private class FakeTrimEventDao : EventDao {
 
 private class FakeTrimAttachmentDao : AttachmentDao {
     val attachments = linkedMapOf<String, AttachmentEntity>()
-    private val pending = mutableSetOf<String>()
+    val pending = mutableSetOf<String>()
 
     override fun insert(attachment: AttachmentEntity) {
         attachments[attachment.id] = attachment
@@ -424,3 +663,22 @@ private class FakeTrimTimelineAnnotationDao : TimelineAnnotationDao {
 
     override fun deleteEvents(eventIds: List<String>) = Unit
 }
+
+private fun SessionEntity.withPinned(newPinned: Boolean) =
+    SessionEntity(
+        id,
+        status,
+        startedAtMs,
+        startedAtMonotonicNs,
+        endedAtMs,
+        applicationId,
+        appVersionName,
+        appVersionCode,
+        buildType,
+        deviceModel,
+        deviceApiLevel,
+        deviceOsVersion,
+        recordCount,
+        estimatedBytes,
+        newPinned,
+    )

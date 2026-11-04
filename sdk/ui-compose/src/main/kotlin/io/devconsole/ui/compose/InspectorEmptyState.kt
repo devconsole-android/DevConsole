@@ -41,6 +41,7 @@ internal enum class EmptySpot(
     Search(R.drawable.devconsole_spot_search, R.drawable.devconsole_spot_search_accent),
     Folder(R.drawable.devconsole_spot_folder, R.drawable.devconsole_spot_folder_accent),
     Database(R.drawable.devconsole_spot_database, R.drawable.devconsole_spot_database_accent),
+    Control(R.drawable.devconsole_spot_mocks, R.drawable.devconsole_spot_mocks_accent),
 }
 
 @Composable

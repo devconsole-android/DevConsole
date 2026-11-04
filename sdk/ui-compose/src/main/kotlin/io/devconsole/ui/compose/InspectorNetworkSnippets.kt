@@ -29,13 +29,14 @@ private fun InspectorTransactionUi.sendableRequestBody(): String? {
 /**
  * Reproduces a captured transaction as a composer request so Replay reuses the existing
  * [InspectorDataSource.execute] path (capability gate + exact-host allow-list) unchanged. A
- * binary request body is never fabricated from its `[binary, N bytes]` placeholder text.
+ * binary request body is never fabricated from its `[binary, N bytes]` placeholder text, and a
+ * header whose captured value was redacted is dropped rather than sent as its `<redacted>` marker.
  */
 internal fun InspectorTransactionUi.toComposerRequest(): InspectorComposerRequest =
     InspectorComposerRequest(
         method = method,
         url = displayUrl(),
-        headers = requestHeaders,
+        headers = requestHeaders.filterValues { !it.isRedactedValue() },
         body = sendableRequestBody(),
     )
 

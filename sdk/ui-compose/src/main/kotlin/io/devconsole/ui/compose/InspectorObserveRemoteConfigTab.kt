@@ -7,7 +7,9 @@
 
 package io.devconsole.ui.compose
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,13 +19,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.util.Locale
 
 /**
  * Remote Config tab: every provider's currently resolved keys, read-only.
@@ -49,7 +53,7 @@ internal fun RemoteConfigTabContent(
         ObserveTabEmptyState("No Remote Config provider is registered for this session.", EmptySpot.RemoteConfig)
         return
     }
-    val query = ui.remoteConfigSearch.trim().lowercase(Locale.US)
+    val query = ui.remoteConfigSearch.trim()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
@@ -73,7 +77,14 @@ internal fun RemoteConfigTabContent(
             }
         }
         state.remoteConfig.forEach { provider ->
-            item(key = "rc-head-${provider.id}") { RemoteConfigHeader(provider, colors) }
+            item(key = "rc-head-${provider.id}") {
+                RemoteConfigHeader(
+                    provider = provider,
+                    colors = colors,
+                    editable = state.remoteConfigOverridesEditable,
+                    onClearAll = actions.onRequestClearAllRemoteConfigOverrides,
+                )
+            }
             val shown = provider.entries.filter { it.matches(query) }
             when {
                 provider.unavailableReason != null ->
@@ -87,10 +98,13 @@ internal fun RemoteConfigTabContent(
                 else ->
                     itemsIndexed(shown, key = { _, entry -> "rc-${provider.id}-${entry.key}" }) { index, entry ->
                         RemoteConfigRow(
-                            entry,
-                            colors,
-                            Modifier.groupedPanelItem(GroupPosition.of(index, shown.size)),
-                        ) { actions.onOpenRemoteConfigDetail(provider.id, entry.key) }
+                            entry = entry,
+                            colors = colors,
+                            editable = state.remoteConfigOverridesEditable,
+                            modifier = Modifier.groupedPanelItem(GroupPosition.of(index, shown.size)),
+                            onClick = { actions.onOpenRemoteConfigDetail(provider.id, entry.key) },
+                            onEdit = { actions.onOpenRemoteConfigOverride(provider.id, entry.key) },
+                        )
                     }
             }
             item(key = "rc-space-${provider.id}") { Spacer(Modifier.height(16.dp)) }
@@ -107,14 +121,30 @@ internal fun RemoteConfigTabContent(
 private fun RemoteConfigHeader(
     provider: InspectorRemoteConfigUi,
     colors: DevConsoleColors,
+    editable: Boolean,
+    onClearAll: () -> Unit,
 ) {
     GroupLabel("Remote Config · ${provider.id}")
-    Text(
-        text = remoteConfigFetchLine(provider),
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-        color = colors.muted,
-        fontSize = 12.5.sp,
-    )
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = remoteConfigFetchLine(provider),
+            modifier = Modifier.weight(1f),
+            color = colors.muted,
+            fontSize = 12.5.sp,
+        )
+        if (editable && provider.entries.any { it.overridden }) {
+            TextButton(
+                onClick = onClearAll,
+                modifier = Modifier.testTag("remoteConfigClearAll"),
+            ) {
+                Text("Clear all overrides", color = colors.signal, fontSize = 13.sp)
+            }
+        }
+    }
 }
 
 /**
@@ -146,21 +176,24 @@ private fun RemoteConfigNoMatchNote() {
     InspectorEmptyState(EmptySpot.Search, "No key matches the current search.", spotSize = 64.dp)
 }
 
+/**
+ * The override affordance and badge exist only when the adapter supports overrides; otherwise the
+ * row stays exactly the read-only row it has always been. The row's own click still opens the
+ * detail, so the edit control is a separate actionable node ([TonalListRow] must not merge them).
+ */
 @Composable
 private fun RemoteConfigRow(
     entry: InspectorRemoteConfigEntryUi,
     colors: DevConsoleColors,
+    editable: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
+    onEdit: () -> Unit,
 ) {
     // Only ever a preview -- a config value is a string of any length, and the full text is one tap
     // away in the detail. `truncated` is the SDK's own capture cut, not this line's shortening, so
     // it stays called out rather than being conflated with the row simply running out of room.
-    val sub =
-        buildString {
-            append(if (entry.redacted) "<redacted>" else entry.value)
-            if (entry.truncated) append(" · truncated")
-        }
+    val sub = remoteConfigRowSubtitle(entry)
     TonalListRow(
         leadText = entry.source,
         leadColor = colors.muted,
@@ -181,5 +214,30 @@ private fun RemoteConfigRow(
         trailValueColor = colors.muted,
         modifier = modifier,
         onClick = onClick,
+        mergeDescendants = !editable,
+        trailContent =
+            if (editable) {
+                {
+                    TextButton(
+                        onClick = onEdit,
+                        modifier = Modifier.testTag("remoteConfigEdit-${entry.key}"),
+                    ) {
+                        Text("Edit", color = colors.signal, fontSize = 13.sp)
+                    }
+                }
+            } else {
+                null
+            },
     )
 }
+
+/**
+ * The row's value line. A DevConsole override also names the provider's own value, so the masked
+ * value stays visible without opening the editor; a redacted entry never shows either value.
+ */
+internal fun remoteConfigRowSubtitle(entry: InspectorRemoteConfigEntryUi): String =
+    buildString {
+        append(if (entry.redacted) "<redacted>" else entry.value)
+        if (entry.truncated) append(" · truncated")
+        if (entry.overridden && !entry.redacted) append(" · provider: ${entry.providerValue ?: "<unknown>"}")
+    }

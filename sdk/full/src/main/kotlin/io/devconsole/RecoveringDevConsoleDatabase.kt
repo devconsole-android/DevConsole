@@ -67,6 +67,7 @@ internal class RecoveringDevConsoleDatabase(
             .addMigrations(DevConsoleDatabase.MIGRATION_2_3)
             .addMigrations(DevConsoleDatabase.MIGRATION_3_4)
             .addMigrations(DevConsoleDatabase.MIGRATION_4_5)
+            .addMigrations(DevConsoleDatabase.MIGRATION_5_6)
             .addCallback(IncrementalVacuumCallback)
             .build()
 

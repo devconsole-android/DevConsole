@@ -88,6 +88,30 @@ class EvidenceAndScreenshotRoutesTest {
         }
 
     @Test
+    fun `a previous run's tray is readable by sessionId after a restart`() =
+        testApplication {
+            val sessions = SessionAuthority()
+            val sessionCodes = SessionCodeAuthority(sessions)
+            val store = FakeEvidenceStore()
+            store.flag(
+                StoredEvidenceItem("item-1", "run-old", EvidenceKind.CRASH, "crash-1", "Crash", 1L, "{}"),
+            )
+            application {
+                protectedDevConsoleModule(sessions, sessionCodes) {
+                    evidenceStore = store
+                    currentSessionId = { "run-new" }
+                }
+            }
+            val session = approvedSession(sessions, sessionCodes)
+
+            val current = client.get("/api/v1/evidence") { authHeaders(session) }.bodyAsText()
+            val previous = client.get("/api/v1/evidence?sessionId=run-old") { authHeaders(session) }.bodyAsText()
+
+            assertFalse(current.contains("crash-1"))
+            assertTrue(previous.contains("crash-1"))
+        }
+
+    @Test
     fun `every evidence mutation requires csrf and is audited`() =
         testApplication {
             val sessions = SessionAuthority()
@@ -799,7 +823,7 @@ class EvidenceAndScreenshotRoutesTest {
         }
 
     @Test
-    fun `push snapshot is materialized from the store's own index-based subject id`() =
+    fun `push snapshot is materialized from the push event's stable subject id`() =
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
@@ -817,7 +841,11 @@ class EvidenceAndScreenshotRoutesTest {
             val response =
                 client.post("/api/v1/evidence") {
                     controlHeaders(session)
-                    setBody("kind=push&id=0")
+                    val push = pushStore.events().single()
+                    val stableId =
+                        "${push.provider}:${push.receivedAtEpochMs}:" +
+                            "${push.messageId.orEmpty()}:${push.source.orEmpty()}"
+                    setBody("kind=push&id=" + java.net.URLEncoder.encode(stableId, "UTF-8"))
                 }
             val body = response.bodyAsText()
 

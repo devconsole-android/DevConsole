@@ -2,6 +2,8 @@
  * @author Shakib
  * @since 05/08/26
  */
+@file:Suppress("TooManyFunctions") // One small validator/parser per editable mock-rule field, grouped with the form.
+
 package io.devconsole.ui.compose
 
 import java.util.Locale
@@ -18,7 +20,11 @@ internal val MOCK_RULE_SCOPES = listOf("SESSION", "PERSISTENT_INTERNAL", "TEST_F
 
 /** Inline-error text for the id field, or null when valid; mirrors FullInspectorDataSource.upsertMockRule. */
 internal fun mockRuleIdError(id: String): String? =
-    if (id.matches(MOCK_RULE_ID_REGEX)) null else "Letters, digits, . _ - only -- can't start with . _ or -"
+    when {
+        id.isBlank() -> "Give the rule an id, e.g. rule-checkout"
+        id.matches(MOCK_RULE_ID_REGEX) -> null
+        else -> "Letters, digits, . _ - only -- can't start with . _ or -"
+    }
 
 /** Inline-error text for the status field, or null when valid; mirrors FullInspectorDataSource.upsertMockRule. */
 internal fun mockRuleStatusError(statusCode: Int?): String? {
@@ -65,18 +71,146 @@ internal fun parseMockRuleHeaderLines(text: String): ParsedMockRuleHeaders {
 
 internal fun Map<String, String>.toMockRuleHeaderLines(): String = entries.joinToString("\n") { (k, v) -> "$k: $v" }
 
+/** Every editable action type offered by the sheet's Action dropdown, in display order. */
+internal val MOCK_RULE_ACTION_TYPES =
+    listOf(
+        InspectorMockActionType.STATIC,
+        InspectorMockActionType.STATUS_OVERRIDE,
+        InspectorMockActionType.BODY_REPLACEMENT,
+        InspectorMockActionType.CONNECTION_FAILURE,
+        InspectorMockActionType.TIMEOUT,
+        InspectorMockActionType.THROTTLE,
+        InspectorMockActionType.MAP_REMOTE,
+    )
+
+internal fun InspectorMockActionType.label(): String =
+    when (this) {
+        InspectorMockActionType.STATIC -> "Static response"
+        InspectorMockActionType.STATUS_OVERRIDE -> "Status override"
+        InspectorMockActionType.BODY_REPLACEMENT -> "Body replacement"
+        InspectorMockActionType.CONNECTION_FAILURE -> "Connection failure"
+        InspectorMockActionType.TIMEOUT -> "Timeout"
+        InspectorMockActionType.THROTTLE -> "Throttle"
+        InspectorMockActionType.MAP_REMOTE -> "Map remote"
+        InspectorMockActionType.OTHER -> "Other (read-only)"
+    }
+
 /**
- * Whether a rule's action round-trips through the create/edit sheet without data loss. Only
- * `StaticResponse` and `Delay(StaticResponse)` do -- `upsertMockRule` always builds a plain
- * `StaticResponse` (`FullInspectorDataSource.kt:299-303`), so opening the editor on anything else
- * (`TemplateResponse`/`ConnectionFailure`/`Timeout`/`StatusOverride`/`BodyReplacement`/`Passthrough`)
- * and pressing Save would silently replace a fault-injection or template rule with an empty 200.
- * Discriminated via [InspectorMockRuleUi.actionLabel] since the UI model carries no richer
- * action-kind field; the prefixes are `MockAction.toLabel()`'s exact literals
- * (`FullInspectorDataSource.kt:701-708`) -- "Static response (…)" / "Delay (…ms)".
+ * Whether a rule's action round-trips through the create/edit sheet without data loss. Decided by
+ * [InspectorMockRuleUi.actionType]: every shape the sheet can rebuild is editable, and
+ * [InspectorMockActionType.OTHER] (sequence/template/passthrough, or a delayed non-static action)
+ * is not -- opening the editor on one of those and pressing Save would silently replace it.
  */
-internal fun InspectorMockRuleUi.isEditableOnDevice(): Boolean =
-    actionLabel.startsWith("Static response") || actionLabel.startsWith("Delay")
+internal fun InspectorMockRuleUi.isEditableOnDevice(): Boolean = actionType != InspectorMockActionType.OTHER
+
+/**
+ * Label-based fallback kept for callers that only have [InspectorMockRuleUi.actionLabel]. Every
+ * editable action type except `OTHER` is accepted; a Delay is editable only when its wrapped action
+ * is explicitly the static response action (mirrors FullInspectorDataSource.toUi's mapping).
+ */
+internal fun isEditableMockActionLabel(actionLabel: String): Boolean =
+    MOCK_RULE_ACTION_TYPES.any { actionLabel.startsWith(it.label()) } ||
+        (
+            actionLabel.startsWith("Delay (") &&
+                actionLabel.substringAfter(" → ", missingDelimiterValue = "").startsWith("Static response")
+        )
+
+private const val MOCK_RULE_MAX_THROTTLE_BYTES_PER_SECOND = 104_857_600L
+internal const val MOCK_RULE_BYTES_PER_KB = 1_024L
+internal const val MOCK_RULE_MIN_REMOTE_PORT = 1
+internal const val MOCK_RULE_MAX_REMOTE_PORT = 65_535
+
+/** Timeout is a required 0-30000 ms value; mirrors `MockAction.Timeout`'s constructor range. */
+internal fun mockRuleTimeoutError(
+    timeoutText: String,
+    timeoutMs: Long?,
+): String? =
+    when {
+        timeoutText.isBlank() || timeoutMs == null -> "Must be a number"
+        timeoutMs !in 0..MOCK_RULE_MAX_DELAY_MS -> "Must be 0-$MOCK_RULE_MAX_DELAY_MS ms"
+        else -> null
+    }
+
+/** Throttle rate is entered in KB/s and validated against `MockAction.Throttle`'s byte range. */
+internal fun mockRuleThrottleRateError(
+    kbpsText: String,
+    bytesPerSecond: Long?,
+): String? {
+    val maxKbps = MOCK_RULE_MAX_THROTTLE_BYTES_PER_SECOND / MOCK_RULE_BYTES_PER_KB
+    return when {
+        kbpsText.isBlank() || bytesPerSecond == null -> "Must be a number"
+        bytesPerSecond !in 1..MOCK_RULE_MAX_THROTTLE_BYTES_PER_SECOND -> "Must be 1-$maxKbps KB/s"
+        else -> null
+    }
+}
+
+/** Throttle latency is optional; a blank field means no added latency. */
+internal fun mockRuleThrottleLatencyError(
+    latencyText: String,
+    latencyMs: Long?,
+): String? =
+    when {
+        latencyText.isBlank() -> null
+        latencyMs == null -> "Must be a number"
+        latencyMs !in 0..MOCK_RULE_MAX_DELAY_MS -> "Must be 0-$MOCK_RULE_MAX_DELAY_MS ms"
+        else -> null
+    }
+
+/** `MockAction.MapRemote` requires at least one replacement field. */
+internal fun mockRuleMapRemoteError(hasAnyField: Boolean): String? =
+    if (hasAnyField) null else "Set at least one of scheme, host, port or path"
+
+/** Mirrors `MockAction.MapRemote`'s scheme constraint. */
+internal fun mockRuleRemoteSchemeError(scheme: String): String? =
+    when {
+        scheme.isBlank() -> null
+        scheme.lowercase(Locale.US) !in setOf("http", "https") -> "Must be http or https"
+        else -> null
+    }
+
+/** Mirrors `MockAction.MapRemote`'s host constraint. */
+internal fun mockRuleRemoteHostError(host: String): String? =
+    if (host.isBlank() || '/' !in host) null else "Must not contain '/'"
+
+/** Mirrors `MockAction.MapRemote`'s path constraint. */
+internal fun mockRuleRemotePathError(path: String): String? =
+    if (path.isBlank() || path.startsWith('/')) null else "Must start with '/'"
+
+/** Port is optional; a blank field leaves the port unchanged. */
+internal fun mockRuleRemotePortError(
+    portText: String,
+    port: Int?,
+): String? =
+    when {
+        portText.isBlank() -> null
+        port == null -> "Must be a number"
+        port !in MOCK_RULE_MIN_REMOTE_PORT..MOCK_RULE_MAX_REMOTE_PORT ->
+            "Must be $MOCK_RULE_MIN_REMOTE_PORT-$MOCK_RULE_MAX_REMOTE_PORT"
+        else -> null
+    }
+
+/** [skippedLines] counts lines with no `key=value` shape -- shown as a non-blocking hint. */
+internal data class ParsedMockRulePredicates(
+    val predicates: Map<String, String>,
+    val skippedLines: Int,
+)
+
+/** Parses the multiline `key=value` convention used for query and header predicates. */
+internal fun parseMockRulePredicateLines(text: String): ParsedMockRulePredicates {
+    var skipped = 0
+    val predicates = LinkedHashMap<String, String>()
+    text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.forEach { line ->
+        val equalsIndex = line.indexOf('=')
+        if (equalsIndex <= 0) {
+            skipped++
+        } else {
+            predicates[line.substring(0, equalsIndex).trim()] = line.substring(equalsIndex + 1).trim()
+        }
+    }
+    return ParsedMockRulePredicates(predicates, skipped)
+}
+
+internal fun Map<String, String>.toMockRulePredicateLines(): String = entries.joinToString("\n") { (k, v) -> "$k=$v" }
 
 private const val MOCK_RULE_ID_MAX_LENGTH = 128
 

@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -85,6 +86,11 @@ internal fun InspectorTopArea(
     modifier: Modifier = Modifier,
     actions: List<InspectorTopAction> = emptyList(),
     live: Boolean = true,
+    liveLabel: String = "Live",
+    liveActive: Boolean = true,
+    /** When non-null the live indicator becomes a toggle pill announced by [liveDescription]. */
+    onLiveClick: (() -> Unit)? = null,
+    liveDescription: String? = null,
 ) {
     val colors = DevConsoleTheme.colors
     Column(modifier = modifier) {
@@ -94,13 +100,26 @@ internal fun InspectorTopArea(
         ) {
             Text(title, color = colors.ink, style = MaterialTheme.typography.headlineSmall)
             if (live) {
+                val liveColor = if (liveActive) colors.signal else colors.muted
+                val pillModifier =
+                    if (onLiveClick == null) {
+                        Modifier.padding(start = 12.dp)
+                    } else {
+                        Modifier
+                            .padding(start = 4.dp)
+                            .clip(RoundedCornerShape(50))
+                            .clickable(role = Role.Button, onClick = onLiveClick)
+                            .semantics(mergeDescendants = true) {
+                                liveDescription?.let { contentDescription = it }
+                            }.padding(horizontal = 8.dp, vertical = 6.dp)
+                    }
                 Row(
-                    modifier = Modifier.padding(start = 12.dp),
+                    modifier = pillModifier,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(colors.signal))
-                    Text("Live", color = colors.signal, fontSize = 13.sp)
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(liveColor))
+                    Text(liveLabel, color = liveColor, fontSize = 13.sp)
                 }
             }
             Spacer(Modifier.weight(1f))

@@ -87,6 +87,9 @@ import io.devconsole.api.ShakeIntensity
 import io.devconsole.api.StartRequest
 import io.devconsole.api.StartResult
 import io.devconsole.api.StopReason
+import io.devconsole.logs.LogLevel
+import io.devconsole.logs.timber.DevConsoleLog
+import io.devconsole.logs.timber.DevConsoleTimberTree
 import io.devconsole.mocks.MockAction
 import io.devconsole.mocks.MockRule
 import io.devconsole.network.okhttp.installDevConsole
@@ -117,6 +120,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.eclipse.paho.client.mqttv3.MqttAsyncClient
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import timber.log.Timber
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -139,6 +143,7 @@ private const val SAMPLE_POST_BODY =
 
 private const val SHOW_ORDER_HISTORY_FLAG = "compose_sample.show_order_history"
 private const val MOCK_RULE_ID = "compose-sample-orders"
+private const val PROMO_BANNER_KEY = "promo_banner_text"
 
 /**
  * Stands in for a real Remote Config client so the sample can demonstrate the inspector without
@@ -166,7 +171,7 @@ private class SampleRemoteConfigProvider : RemoteConfigProvider {
                 listOf(
                     RemoteConfigEntry("checkout_v2_enabled", "true", RemoteConfigSource.REMOTE),
                     RemoteConfigEntry("checkout_experiment", CHECKOUT_EXPERIMENT_JSON, RemoteConfigSource.REMOTE),
-                    RemoteConfigEntry("promo_banner_text", "Free delivery this week", RemoteConfigSource.REMOTE),
+                    RemoteConfigEntry(PROMO_BANNER_KEY, PROMO_BANNER_TEXT, RemoteConfigSource.REMOTE),
                     RemoteConfigEntry("max_cart_items", "20", RemoteConfigSource.DEFAULT),
                     RemoteConfigEntry("courier_eta_strategy", "", RemoteConfigSource.STATIC),
                     RemoteConfigEntry("api_base_url", "https://staging.example.test", RemoteConfigSource.OVERRIDE),
@@ -180,11 +185,12 @@ private class SampleRemoteConfigProvider : RemoteConfigProvider {
                 ),
         )
 
-    private companion object {
-        const val FETCH_AGE_MS = 90_000L
+    companion object {
+        const val PROMO_BANNER_TEXT = "Free delivery this week"
+        private const val FETCH_AGE_MS = 90_000L
 
         /** One line, exactly as a Remote Config server sends it — the viewer does the indenting. */
-        const val CHECKOUT_EXPERIMENT_JSON =
+        private const val CHECKOUT_EXPERIMENT_JSON =
             """{"id":"checkout-flow-2026-08","variant":"b","rollout":0.25,""" +
                 """"steps":["cart","address","payment"],"fallback":null}"""
     }
@@ -296,6 +302,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         DevConsole.initialize(application, buildConfig())
+        if (Timber.forest().isEmpty()) {
+            Timber.plant(DevConsoleTimberTree(DevConsole.logRecorder()))
+        }
+        DevConsoleLog.install(DevConsole.logRecorder())
         // Installed here AND re-installed from the Running-state observer below. Both are needed:
         // mock rules are SESSION-scoped and DevConsole's stop sequence calls clearSessionRules(),
         // so a one-shot install would silently stop mocking after any restart -- but installing
@@ -355,6 +365,13 @@ class MainActivity : ComponentActivity() {
                         key = SHOW_ORDER_HISTORY_FLAG,
                         defaultValue = false,
                         description = "Shows the order-history placeholder in the sample UI",
+                    ),
+                    // A multi-value flag: the inspector offers its allowed values as a single choice.
+                    FeatureFlag(
+                        key = "backend_environment",
+                        defaultValue = "production",
+                        allowedValues = setOf("production", "staging", "local"),
+                        description = "Which backend the sample would talk to",
                     ),
                 ),
         ).withRemoteConfigProviders(
@@ -533,6 +550,18 @@ class MainActivity : ComponentActivity() {
                     },
                 )
                 CapabilityCard(
+                    title = "Send mocked Ktor request",
+                    subtitle = "The same /orders mock rule, applied by DevConsoleKtorMocks on the Ktor client",
+                    onClick = {
+                        scope.launch { lastResponse = sendKtorRequest("https://example.test/orders") }
+                    },
+                )
+                CapabilityCard(
+                    title = "Read remote config",
+                    subtitle = "A local override set in DevConsole wins over the provider's promo_banner_text",
+                    onClick = { lastResponse = readPromoBannerText() },
+                )
+                CapabilityCard(
                     title = "Send mocked request",
                     subtitle = "Served by a session mock rule, not the network",
                     onClick = {
@@ -570,6 +599,12 @@ class MainActivity : ComponentActivity() {
                     title = "Simulate push",
                     subtitle = "Recorded on the push timeline",
                     onClick = { lastResponse = simulatePush() },
+                )
+                CapabilityCard(
+                    title = "Write log lines",
+                    subtitle =
+                        "An INFO, a WARN and an ERROR, plus one Timber and one DevConsoleLog line, on the Logs tab",
+                    onClick = { lastResponse = writeSampleLogs() },
                 )
                 CapabilityCard(
                     title = "Capture screenshot",
@@ -670,6 +705,16 @@ class MainActivity : ComponentActivity() {
         }
 
     /**
+     * How a host reads config with DevConsole overrides: the override first, then its provider. The
+     * sample provider's value stands in for `Firebase.remoteConfig.getString(...)`.
+     */
+    private fun readPromoBannerText(): String {
+        val override = DevConsole.remoteConfigOverride(PROMO_BANNER_KEY)
+        val value = override ?: SampleRemoteConfigProvider.PROMO_BANNER_TEXT
+        return "promo_banner_text = \"$value\" (${if (override != null) "DevConsole override" else "provider"})"
+    }
+
+    /**
      * Issues one request through the sample's Ktor client, whose debug build installs
      * `DevConsoleKtorClientPlugin` (see `SampleKtorClient` in `src/debug`).
      *
@@ -760,6 +805,22 @@ class MainActivity : ComponentActivity() {
                 ),
             )
         return "Push recorded: ${event.messageId}"
+    }
+
+    private fun writeSampleLogs(): String {
+        DevConsole.logRecorder().apply {
+            record(LogLevel.INFO, "Checkout", "Cart opened with 3 items")
+            record(LogLevel.WARN, "Checkout", "Coupon SAVE10 expired, falling back to full price")
+            record(
+                LogLevel.ERROR,
+                "Checkout",
+                "Payment declined",
+                IllegalStateException("Card issuer returned code 05"),
+            )
+        }
+        Timber.i("Checkout reached the timeline through the Timber bridge")
+        DevConsoleLog.w("Checkout", "Coupon check reached the timeline through the DevConsoleLog bridge")
+        return "5 log lines recorded"
     }
 }
 

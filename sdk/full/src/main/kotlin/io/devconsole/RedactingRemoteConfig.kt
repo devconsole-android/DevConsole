@@ -33,15 +33,17 @@ internal class RedactingRemoteConfig(
      * The key is deliberately never redacted: knowing *which* value was withheld is the point of the
      * view, and the key name is what the host typed into the Remote Config console, not a secret.
      */
-    private fun redact(entry: RemoteConfigEntry): RemoteConfigEntry =
-        if (isSensitive(entry.key)) {
-            entry.copy(value = replacement, redacted = true)
-        } else {
-            // Still run the value through the engine: a non-sensitive key can hold a bearer token,
-            // and the engine's text patterns are what catch that.
-            val scrubbed = redaction.redactText(entry.value)
-            if (scrubbed == entry.value) entry else entry.copy(value = scrubbed, redacted = true)
-        }
+    private fun redact(entry: RemoteConfigEntry): RemoteConfigEntry {
+        val sensitive = isSensitive(entry.key)
+        // Still run a non-sensitive key's value through the engine: it can hold a bearer token,
+        // and the engine's text patterns are what catch that. providerValue is the value a surface
+        // shows *behind* an active override, so it needs exactly the same treatment -- otherwise a
+        // secret the provider resolved would be displayed raw the moment a developer overrides it.
+        val value = if (sensitive) replacement else redaction.redactText(entry.value)
+        val providerValue = entry.providerValue?.let { if (sensitive) replacement else redaction.redactText(it) }
+        if (!sensitive && value == entry.value && providerValue == entry.providerValue) return entry
+        return entry.copy(value = value, redacted = true, providerValue = providerValue)
+    }
 
     /**
      * Matches separator-insensitively, which the raw policy does not.

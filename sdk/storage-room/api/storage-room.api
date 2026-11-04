@@ -88,6 +88,7 @@ public abstract class io/devconsole/storage/room/DevConsoleDatabase : androidx/r
 	public static final field MIGRATION_2_3 Landroidx/room/migration/Migration;
 	public static final field MIGRATION_3_4 Landroidx/room/migration/Migration;
 	public static final field MIGRATION_4_5 Landroidx/room/migration/Migration;
+	public static final field MIGRATION_5_6 Landroidx/room/migration/Migration;
 	public fun <init> ()V
 	public abstract fun attachmentDao ()Lio/devconsole/storage/room/AttachmentDao;
 	public abstract fun captureRuleDao ()Lio/devconsole/storage/room/CaptureRuleDao;
@@ -113,6 +114,7 @@ public final class io/devconsole/storage/room/DevConsoleDatabase_Impl : io/devco
 }
 
 public abstract interface class io/devconsole/storage/room/EventDao {
+	public abstract fun activeSessionTrimCandidates (Ljava/lang/String;)Ljava/util/List;
 	public abstract fun deleteByIds (Ljava/util/List;)V
 	public abstract fun deleteOlderThan (J)I
 	public abstract fun deleteSession (Ljava/lang/String;)V
@@ -120,8 +122,7 @@ public abstract interface class io/devconsole/storage/room/EventDao {
 	public abstract fun eventCount ()J
 	public abstract fun eventsForSession (Ljava/lang/String;)Ljava/util/List;
 	public abstract fun insertAll (Ljava/util/List;)V
-	public abstract fun oldestLowSeverityFirst (I)Ljava/util/List;
-	public abstract fun oldestUnbookmarkedLowSeverityFirstForSession (Ljava/lang/String;I)Ljava/util/List;
+	public abstract fun quotaCandidates ()Ljava/util/List;
 	public abstract fun recentEvents (I)Ljava/util/List;
 	public abstract fun recentEventsByPlugin (Ljava/util/List;I)Ljava/util/List;
 	public abstract fun recentEventsForSession (Ljava/lang/String;I)Ljava/util/List;
@@ -132,6 +133,7 @@ public abstract interface class io/devconsole/storage/room/EventDao {
 
 public final class io/devconsole/storage/room/EventDao_Impl : io/devconsole/storage/room/EventDao {
 	public fun <init> (Landroidx/room/RoomDatabase;)V
+	public fun activeSessionTrimCandidates (Ljava/lang/String;)Ljava/util/List;
 	public fun deleteByIds (Ljava/util/List;)V
 	public fun deleteOlderThan (J)I
 	public fun deleteSession (Ljava/lang/String;)V
@@ -140,8 +142,7 @@ public final class io/devconsole/storage/room/EventDao_Impl : io/devconsole/stor
 	public fun eventsForSession (Ljava/lang/String;)Ljava/util/List;
 	public static fun getRequiredConverters ()Ljava/util/List;
 	public fun insertAll (Ljava/util/List;)V
-	public fun oldestLowSeverityFirst (I)Ljava/util/List;
-	public fun oldestUnbookmarkedLowSeverityFirstForSession (Ljava/lang/String;I)Ljava/util/List;
+	public fun quotaCandidates ()Ljava/util/List;
 	public fun recentEvents (I)Ljava/util/List;
 	public fun recentEventsByPlugin (Ljava/util/List;I)Ljava/util/List;
 	public fun recentEventsForSession (Ljava/lang/String;I)Ljava/util/List;
@@ -166,6 +167,12 @@ public final class io/devconsole/storage/room/EventEntity {
 	public final field type Ljava/lang/String;
 	public final field wallTimeMs J
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;JJILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V
+}
+
+public final class io/devconsole/storage/room/EventPruneCandidate {
+	public field bytes J
+	public field id Ljava/lang/String;
+	public fun <init> ()V
 }
 
 public final class io/devconsole/storage/room/EventPruneResult {
@@ -347,10 +354,12 @@ public final class io/devconsole/storage/room/RoomSessionStore : io/devconsole/s
 	public fun <init> (Lio/devconsole/storage/room/DevConsoleDatabase;Lio/devconsole/storage/room/FileAttachmentStore;Lio/devconsole/storage/api/SessionRetentionPolicy;Lio/devconsole/storage/room/RoomRetentionCoordinator;Lkotlin/jvm/functions/Function0;)V
 	public synthetic fun <init> (Lio/devconsole/storage/room/DevConsoleDatabase;Lio/devconsole/storage/room/FileAttachmentStore;Lio/devconsole/storage/api/SessionRetentionPolicy;Lio/devconsole/storage/room/RoomRetentionCoordinator;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun crash (Ljava/lang/String;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun delete (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun end (Ljava/lang/String;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun enforceRetention (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun session (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun sessions (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun setPinned (Ljava/lang/String;ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun start (Lio/devconsole/storage/api/StoredSession;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun withPolicy (Lio/devconsole/storage/api/SessionRetentionPolicy;)Lio/devconsole/storage/room/RoomSessionStore;
 	public final fun withRecovery (Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)Lio/devconsole/storage/room/RoomSessionStore;
@@ -378,6 +387,7 @@ public abstract interface class io/devconsole/storage/room/SessionDao {
 	public abstract fun session (Ljava/lang/String;)Lio/devconsole/storage/room/SessionEntity;
 	public abstract fun sessionCount ()J
 	public abstract fun sessions ()Ljava/util/List;
+	public abstract fun setPinned (Ljava/lang/String;Z)I
 	public abstract fun totalEstimatedBytes ()J
 }
 
@@ -396,6 +406,7 @@ public final class io/devconsole/storage/room/SessionDao_Impl : io/devconsole/st
 	public fun session (Ljava/lang/String;)Lio/devconsole/storage/room/SessionEntity;
 	public fun sessionCount ()J
 	public fun sessions ()Ljava/util/List;
+	public fun setPinned (Ljava/lang/String;Z)I
 	public fun totalEstimatedBytes ()J
 }
 
@@ -410,15 +421,17 @@ public final class io/devconsole/storage/room/SessionEntity {
 	public final field endedAtMs Ljava/lang/Long;
 	public final field estimatedBytes J
 	public final field id Ljava/lang/String;
+	public final field pinned Z
 	public final field recordCount J
 	public final field startedAtMonotonicNs J
 	public final field startedAtMs J
 	public final field status Ljava/lang/String;
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;JJLjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;JJ)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;JJLjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;JJZ)V
 }
 
 public final class io/devconsole/storage/room/SessionRetentionPruner {
 	public fun <init> (Lio/devconsole/storage/room/DevConsoleDatabase;Lio/devconsole/storage/room/FileAttachmentStore;)V
+	public final fun deleteFinished (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun prune (Lio/devconsole/storage/api/SessionRetentionPolicy;Ljava/lang/String;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

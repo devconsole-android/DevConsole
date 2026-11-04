@@ -30,12 +30,13 @@ public final class SessionEntity {
     @Nullable @ColumnInfo(name = "device_os_version") public final String deviceOsVersion;
     @ColumnInfo(name = "record_count") public final long recordCount;
     @ColumnInfo(name = "estimated_bytes") public final long estimatedBytes;
+    @ColumnInfo(name = "pinned", defaultValue = "0") public final boolean pinned;
 
     public SessionEntity(@NonNull String id, @NonNull String status, long startedAtMs,
             long startedAtMonotonicNs, @Nullable Long endedAtMs, @Nullable String applicationId,
             @Nullable String appVersionName, @Nullable Long appVersionCode, @Nullable String buildType,
             @Nullable String deviceModel, @Nullable Integer deviceApiLevel,
-            @Nullable String deviceOsVersion, long recordCount, long estimatedBytes) {
+            @Nullable String deviceOsVersion, long recordCount, long estimatedBytes, boolean pinned) {
         this.id = id;
         this.status = status;
         this.startedAtMs = startedAtMs;
@@ -50,5 +51,6 @@ public final class SessionEntity {
         this.deviceOsVersion = deviceOsVersion;
         this.recordCount = recordCount;
         this.estimatedBytes = estimatedBytes;
+        this.pinned = pinned;
     }
 }

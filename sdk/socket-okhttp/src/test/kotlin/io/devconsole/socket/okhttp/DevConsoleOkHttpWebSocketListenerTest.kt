@@ -8,7 +8,10 @@ import io.devconsole.socket.SocketDirection
 import io.devconsole.socket.SocketLifecycleType
 import io.devconsole.socket.SocketMessage
 import io.devconsole.socket.SocketPayload
+import io.devconsole.socket.SocketProtocol
 import io.devconsole.socket.SocketRecorder
+import io.devconsole.socket.SocketSendRequest
+import io.devconsole.socket.SocketSendResult
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
@@ -127,6 +130,104 @@ class DevConsoleOkHttpWebSocketListenerTest {
         assertEquals(SocketLifecycleType.CANCELLED, store.lifecycleEvents("socket-1").last().type)
     }
 
+    @Test
+    fun `listener registers a sender that sends through okhttp and records one sent frame`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store)
+        val listener = DevConsoleOkHttpWebSocketListener(recorder, connectionIdProvider = { "socket-1" })
+        val socket = FakeWebSocket()
+
+        listener.recordOpen(socket)
+
+        assertTrue(recorder.senders.canSend("socket-1"))
+        assertEquals(SocketProtocol.WEBSOCKET, recorder.senders.protocol("socket-1"))
+        assertEquals(SocketSendResult.Sent, recorder.senders.send("socket-1", SocketSendRequest("hello")))
+        assertEquals(listOf("hello"), socket.sentTexts)
+        assertEquals(listOf(SocketDirection.SENT), store.messages("socket-1").map(SocketMessage::direction))
+    }
+
+    @Test
+    fun `a send is recorded once when the listener opened the socket before it was wrapped`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store)
+        val listener = DevConsoleOkHttpWebSocketListener(recorder, connectionIdProvider = { "socket-1" })
+        val delegate = FakeWebSocket()
+
+        listener.recordOpen(delegate)
+        DevConsoleRecordingWebSocket.wrap(delegate, recorder) { "socket-1" }
+
+        assertEquals(SocketSendResult.Sent, recorder.senders.send("socket-1", SocketSendRequest("hello")))
+
+        assertEquals(1, delegate.sendCount)
+        assertEquals(1, store.messages("socket-1").size)
+    }
+
+    @Test
+    fun `a send is recorded once when the socket was wrapped before the listener opened it`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store)
+        val listener = DevConsoleOkHttpWebSocketListener(recorder, connectionIdProvider = { "socket-1" })
+        val delegate = FakeWebSocket()
+
+        DevConsoleRecordingWebSocket.wrap(delegate, recorder) { "socket-1" }
+        listener.recordOpen(delegate)
+
+        assertEquals(SocketSendResult.Sent, recorder.senders.send("socket-1", SocketSendRequest("hello")))
+
+        assertEquals(1, delegate.sendCount)
+        assertEquals(1, store.messages("socket-1").size)
+    }
+
+    @Test
+    fun `a frame okhttp refuses is reported as a rejection and is not recorded`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store)
+        val listener = DevConsoleOkHttpWebSocketListener(recorder, connectionIdProvider = { "socket-1" })
+        val socket = FakeWebSocket().apply { sendAccepted = false }
+
+        listener.recordOpen(socket)
+
+        assertEquals(
+            SocketSendResult.Rejected("Send queue full or socket closing"),
+            recorder.senders.send("socket-1", SocketSendRequest("hello")),
+        )
+        assertTrue(store.messages("socket-1").isEmpty())
+    }
+
+    @Test
+    fun `the listener unregisters the sender when the socket closes or fails`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store)
+        val listener = DevConsoleOkHttpWebSocketListener(recorder, connectionIdProvider = { "socket-1" })
+        val socket = FakeWebSocket()
+
+        listener.recordOpen(socket)
+        assertTrue(recorder.senders.canSend("socket-1"))
+        listener.onClosed(socket, 1000, "bye")
+        assertFalse(recorder.senders.canSend("socket-1"))
+
+        listener.recordOpen(socket)
+        assertTrue(recorder.senders.canSend("socket-1"))
+        listener.onFailure(socket, IllegalStateException("dropped"), null)
+        assertFalse(recorder.senders.canSend("socket-1"))
+    }
+
+    @Test
+    fun `the wrapper unregisters its sender on close and on cancel`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store)
+
+        val closed = DevConsoleRecordingWebSocket.wrap(FakeWebSocket(), recorder) { "socket-1" }
+        assertTrue(recorder.senders.canSend("socket-1"))
+        closed.close(1000, "bye")
+        assertFalse(recorder.senders.canSend("socket-1"))
+
+        val cancelled = DevConsoleRecordingWebSocket.wrap(FakeWebSocket(), recorder) { "socket-2" }
+        assertTrue(recorder.senders.canSend("socket-2"))
+        cancelled.cancel()
+        assertFalse(recorder.senders.canSend("socket-2"))
+    }
+
     private fun fakeResponse(): Response =
         Response
             .Builder()
@@ -172,6 +273,8 @@ class DevConsoleOkHttpWebSocketListenerTest {
 
     private class FakeWebSocket : WebSocket {
         var sendCount = 0
+        var sendAccepted = true
+        val sentTexts = mutableListOf<String>()
 
         override fun request(): Request = Request.Builder().url("wss://api.test/socket").build()
 
@@ -179,12 +282,13 @@ class DevConsoleOkHttpWebSocketListenerTest {
 
         override fun send(text: String): Boolean {
             sendCount += 1
-            return true
+            sentTexts += text
+            return sendAccepted
         }
 
         override fun send(bytes: ByteString): Boolean {
             sendCount += 1
-            return true
+            return sendAccepted
         }
 
         override fun close(

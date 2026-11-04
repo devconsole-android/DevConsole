@@ -10,7 +10,9 @@ import io.devconsole.api.DevConsoleFacadeProvider
 import io.devconsole.api.DevConsoleState
 import io.devconsole.api.InitResult
 import io.devconsole.api.InspectorOpenResult
+import io.devconsole.api.PurgeResult
 import io.devconsole.api.ScreenshotResult
+import io.devconsole.api.SessionExportResult
 import io.devconsole.api.StartRequest
 import io.devconsole.api.StartResult
 import io.devconsole.api.StopReason
@@ -92,6 +94,11 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
 
     override fun registerRemoteConfigProvider(provider: RemoteConfigProvider): Boolean = false
 
+    override fun remoteConfigOverride(
+        key: String,
+        providerId: String?,
+    ): String? = null
+
     override fun endpoint(): BrowserEndpoint? = null
 
     override fun accessInfo(): AccessInfo? = null
@@ -109,6 +116,14 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
     override fun featureFlagValue(key: String): Boolean = declaredDefault(key).toBoolean()
 
     override fun featureFlagStringValue(key: String): String = declaredDefault(key)
+
+    override fun setCapturePaused(paused: Boolean): Boolean = false
+
+    override fun isCapturePaused(): Boolean = false
+
+    override suspend fun purgeCapturedData(): PurgeResult = PurgeResult.NOTHING
+
+    override suspend fun exportSession(): SessionExportResult = SessionExportResult.Disabled
 
     private fun declaredDefault(key: String): String = flags.firstOrNull { it.key == key }?.defaultValue.orEmpty()
 }

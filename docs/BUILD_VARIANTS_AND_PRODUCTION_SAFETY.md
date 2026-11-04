@@ -34,7 +34,7 @@ runtime in an extra internal variant:
 devConsole {
     enabledVariants.set(setOf("debug", "internal"))              // gets the full runtime
     protectedVariantPatterns.set(listOf("(?i).*release", "prod.*")) // verified free of it
-    protectedDependencyPaths.set(setOf(":sdk:full"))        // default; override for a differently-pathed module
+    protectedDependencyPaths.set(setOf(":sdk:full")) // project paths only; override for a differently-pathed checkout
     failBuildOnUnsafeVariant.set(true)                      // default; false downgrades to a warning
     autoWireDependencies.set(true)                          // default; false to declare coordinates yourself
     sdkVersion.set("1.3.1")                                 // default; the JitPack version to resolve
@@ -42,10 +42,16 @@ devConsole {
 ```
 
 `protectedVariantPatterns` entries are matched with `Regex.matches` — a **full** match against the
-whole variant name, not a substring search. The bare pattern `"release"` only matches a variant
-literally named `"release"`; it silently misses a flavored variant like `"prodRelease"`. Anchor
-patterns with `.*` (as `(?i).*release` above does) so they match regardless of what a flavor
-prefixes onto the build type.
+whole variant name, not a substring search. Use `"(?i).*release"` to match release variants
+including flavored names such as `"prodRelease"`. Configuration entries that match no variant are
+reported as warnings.
+
+`protectedDependencyPaths` defaults to the ten project modules that publish the core runtime,
+capture adapters and UI launchers (`:sdk:full`, `:sdk:network-okhttp`, `:sdk:network-ktor`,
+`:sdk:mocks-okhttp`, `:sdk:socket-okhttp`, `:sdk:socket-paho`, `:sdk:push-firebase`,
+`:sdk:remote-config-firebase`, `:sdk:ui-compose` and `:sdk:ui-views`). Setting this property replaces
+that project-path set. Published coordinates are checked separately by coordinate matching, and
+packaged APK/AAB/AAR bytes are scanned for retained marker signatures.
 
 **A variant that already names a DevConsole dependency is left alone.** Auto-wiring only fills a
 gap, so an explicit `debugImplementation("com.github.devconsole-android.DevConsole:devconsole:...")` — or a
@@ -69,17 +75,21 @@ The plugin registers:
 
 - `devConsoleVariantReport` writes `build/reports/devconsole/variants.json` listing the effective
   policy (`ENABLED`/`DISABLED`/`PROTECTED`) for every variant.
-- `verify<Variant>DevConsoleProtectedArtifacts` — one task per protected variant — inspects that
-  variant's dependency graph for a direct `ProjectDependency` on any path in
-  `protectedDependencyPaths`, and fails the build if one is found. Each variant's
+- `verify<Variant>DevConsoleProtectedArtifacts` — one task per protected variant — inspects declared
+  dependencies and the resolved runtime dependency graph for protected DevConsole modules, and fails
+  the build if one is found. It does not inspect packaged bytes. Each variant's
   `assemble<Variant>` and `bundle<Variant>` depends on its own verifier, so building a protected
-  artifact always runs its checks.
+  artifact always runs its dependency checks.
+- `verify<Variant>DevConsolePackagedArtifact` scans the APK (or library AAR) bytes. Applications also
+  register `verify<Variant>DevConsolePackagedBundle` for AAB bytes. These tasks run on their matching
+  `assemble<Variant>` / `bundle<Variant>` lifecycle paths.
 - `verifyDevConsoleProtectedArtifacts` is the aggregate: it depends on every per-variant verifier,
   and `check` hangs off it. Run it as part of your release checklist — the three sample apps run it
   in CI on every push (see [`.github/workflows/verify.yml`](../.github/workflows/verify.yml)).
 
 ```bash
-./gradlew :app:assembleRelease :app:verifyDevConsoleProtectedArtifacts
+./gradlew :app:assembleRelease # runs dependency verification and the packaged APK scan
+./gradlew :app:verifyDevConsoleProtectedArtifacts # dependency graph sweep across protected variants
 ```
 
 On a flavored project, ask for the variant you are actually shipping. The aggregate verifies *every*
@@ -87,8 +97,10 @@ protected variant, so on a project with `production`/`staging`/`partner` flavors
 builds — all three release variants:
 
 ```bash
-./gradlew :app:assembleProductionRelease                              # verifies productionRelease only
-./gradlew :app:verifyProductionReleaseDevConsoleProtectedArtifacts    # the same check, on its own
+./gradlew :app:assembleProductionRelease                              # verifies dependencies and scans the production APK
+./gradlew :app:verifyProductionReleaseDevConsoleProtectedArtifacts    # dependency graph only
+./gradlew :app:verifyProductionReleaseDevConsolePackagedArtifact       # packaged APK/AAR scan
+./gradlew :app:verifyProductionReleaseDevConsolePackagedBundle         # packaged AAB scan
 ```
 
 ## Full/no-op parity

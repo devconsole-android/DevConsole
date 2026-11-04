@@ -208,7 +208,7 @@ class ScreenshotCaptureTest {
     // --- Finding 2: bounded capture + no leaked bitmap ----------------------------------------------
 
     @Test
-    fun `a capture that never resolves times out, reports timedOut, and recycles its bitmap`() =
+    fun `a capture that never resolves times out without recycling the pending destination bitmap`() =
         runTest {
             var capturedBitmap: Bitmap? = null
             val handler = SwallowingHandler(Looper.getMainLooper())
@@ -230,11 +230,14 @@ class ScreenshotCaptureTest {
             assertTrue("expected a Failed result, got $result", result is CapturedScreenshot.Failed)
             result as CapturedScreenshot.Failed
             assertTrue(result.timedOut)
-            assertTrue("bitmap must not be leaked past a timeout", requireNotNull(capturedBitmap).isRecycled)
+            assertTrue(
+                "timed-out PixelCopy destination must remain valid for a pending write",
+                !requireNotNull(capturedBitmap).isRecycled,
+            )
         }
 
     @Test
-    fun `cancelling an in-flight capture recycles the bitmap instead of leaking it`() =
+    fun `cancelling an in-flight capture leaves its pending destination valid`() =
         runTest {
             val allocated = CountDownLatch(1)
             var capturedBitmap: Bitmap? = null
@@ -258,7 +261,7 @@ class ScreenshotCaptureTest {
             assertTrue("expected the capture bitmap to be allocated", allocated.await(5, TimeUnit.SECONDS))
             job.cancelAndJoin()
 
-            assertTrue("bitmap must not be leaked past cancellation", requireNotNull(capturedBitmap).isRecycled)
+            assertTrue("cancelled PixelCopy destination must remain valid", !requireNotNull(capturedBitmap).isRecycled)
         }
 
     /** Robolectric's window is 0x0 until laid out; force a real decor-view size for tests that need one. */

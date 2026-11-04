@@ -2,12 +2,9 @@
  * @author Shakib
  * @since 06/08/26
  *
- * NOTE: written to compile against a real device/emulator window, but not executed in this change --
- * no emulator was available in this environment. Do not treat this file as evidence the real
- * `PixelCopy` path or the `FLAG_SECURE` rejection have been run; [ScreenshotCaptureTest] (Robolectric,
- * `sdk:full` unit tests) exercises the same capture code path including a real `PixelCopy.request`
- * dispatch under Robolectric's shadow, but that is not a substitute for verifying against an actual
- * device compositor.
+ * Runs against a real device compositor (verified on a Pixel 6, API 37, 03/11/26): the real
+ * `PixelCopy` path and the `FLAG_SECURE` rejection. [ScreenshotCaptureTest] covers the same code under
+ * Robolectric's shadow.
  */
 package io.devconsole
 
@@ -29,14 +26,7 @@ class ScreenshotCaptureInstrumentedTest {
             val policy = ScreenshotPolicy(enabled = true, maxLongestEdgePx = 512, maxBytes = 4L * 1024 * 1024)
             val capture = ScreenshotCapture()
 
-            val result =
-                runBlocking {
-                    var outcome: CapturedScreenshot? = null
-                    scenario.onActivity { activity ->
-                        outcome = runBlocking { capture.capture(activity, policy) }
-                    }
-                    outcome
-                }
+            val result = runBlocking { capture.capture(scenario.currentActivity(), policy) }
 
             assertTrue("expected a real capture, got $result", result is CapturedScreenshot.Bytes)
             result as CapturedScreenshot.Bytes
@@ -56,16 +46,20 @@ class ScreenshotCaptureInstrumentedTest {
             }
             val capture = ScreenshotCapture()
 
-            val result =
-                runBlocking {
-                    var outcome: CapturedScreenshot? = null
-                    scenario.onActivity { activity ->
-                        outcome = runBlocking { capture.capture(activity, ScreenshotPolicy(enabled = true)) }
-                    }
-                    outcome
-                }
+            val result = runBlocking { capture.capture(scenario.currentActivity(), ScreenshotPolicy(enabled = true)) }
 
             assertEquals(CapturedScreenshot.SecureWindow, result)
         }
     }
+}
+
+/**
+ * The activity, handed back to the instrumentation thread. capture() must be awaited from here, not
+ * inside onActivity: PixelCopy delivers its result on the main looper, so blocking main to wait for
+ * it can only ever time out -- which is how this test first failed on a real device.
+ */
+private fun ActivityScenario<ScreenshotProbeActivity>.currentActivity(): ScreenshotProbeActivity {
+    var current: ScreenshotProbeActivity? = null
+    onActivity { current = it }
+    return checkNotNull(current)
 }

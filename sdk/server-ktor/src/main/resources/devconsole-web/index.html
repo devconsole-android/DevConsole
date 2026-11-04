@@ -96,6 +96,10 @@
     <span class="dot" id="lamp"></span>
     <span class="label" id="status" title="Open DevConsole on the device, tap More, then scan the QR or copy the link — it shows on screen, never in logcat">Open DevConsole on device → More → scan the QR</span>
   </div>
+  <div class="capture-paused-pill" id="capturePausedPill" role="status" hidden>
+    <span class="capture-paused-label">Capture paused</span>
+    <button type="button" id="captureResumePill" title="Resume capturing traffic from the device">Resume</button>
+  </div>
   <button type="button" class="live-toggle" id="liveToggle" aria-pressed="false" aria-label="Resume live events" hidden><span class="live-dot" aria-hidden="true"></span><span id="liveToggleLabel">Paused</span></button>
   <div class="stream-seg" role="group" aria-label="Live tail control">
     <button type="button" id="streamLive" title="Record live events (p)" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#dc-record"/></svg><span class="stream-seg-label">Live</span></button>
@@ -107,6 +111,9 @@
       <button type="button" class="icon-btn" id="topbarOverflowToggle" title="More actions" aria-label="More actions" aria-haspopup="true" aria-expanded="false" aria-controls="topbarOverflowPanel"><svg class="ic" aria-hidden="true"><use href="#dc-dots"/></svg></button>
       <div class="topbar-menu" id="topbarOverflowPanel" role="group" aria-label="More actions" hidden>
         <button type="button" class="topbar-menu-item" id="captureScreenshot" title="Capture a screenshot of the device's foreground screen — off by default; the host enables it via screenshotPolicy.enabled" aria-label="Capture screenshot" disabled><svg class="ic" aria-hidden="true"><use href="#dc-camera"/></svg><span>Capture screenshot</span></button>
+        <button type="button" class="topbar-menu-item" id="capturePausedToggle" title="Stop or resume writing new captures to the device" aria-label="Pause capture" hidden><svg class="ic" aria-hidden="true"><use href="#dc-pause"/></svg><span>Pause capture</span></button>
+        <button type="button" class="topbar-menu-item danger" id="capturePurge" title="Remove this run's captured traffic and old unpinned runs from the device" aria-label="Purge captured data" hidden><svg class="ic" aria-hidden="true"><use href="#dc-trash"/></svg><span>Purge captured data…</span></button>
+        <div class="menu-separator" role="separator"></div>
         <button type="button" class="topbar-menu-item" id="modeToggle" title="Advanced mode on/off (a)" aria-pressed="false" aria-label="Advanced mode on/off"><svg class="ic" aria-hidden="true"><use href="#dc-expand"/></svg><span>Advanced mode</span></button>
         <button type="button" class="topbar-menu-item" id="shortcutsBtn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><svg class="ic" aria-hidden="true"><use href="#dc-keyboard"/></svg><span>Keyboard shortcuts</span></button>
       </div>
@@ -258,10 +265,17 @@
           </div>
         </div>
         <div class="drop" id="networkHostDrop"></div>
+        <label class="toolbar-group-stack" id="networkRunGroup" hidden>
+          <span class="toolbar-group-label">Run</span>
+          <select id="networkRun" aria-label="App run to show"><option value="">Live run</option></select>
+        </label>
         <div class="toolbar-spacer"></div>
+        <button type="button" id="networkEndpointsBtn" title="Per-endpoint latency statistics" aria-expanded="false" aria-controls="networkEndpointsPanel"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-activity"/></svg>Endpoints</button>
         <div class="topbar-overflow" id="networkExportMenu">
           <button type="button" id="networkExportToggle" title="Export captures" aria-label="Export captures" aria-haspopup="true" aria-expanded="false" aria-controls="networkExportPanel"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-download"/></svg>Export</button>
           <div class="topbar-menu" id="networkExportPanel" role="group" aria-label="Export captures" hidden>
+            <button type="button" class="topbar-menu-item" id="networkHarOpen"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-folder"/></svg><span>Open HAR file…</span></button>
+            <div class="menu-separator" role="separator"></div>
             <button type="button" class="topbar-menu-item" id="networkHarDownload"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-download"/></svg><span>HAR</span></button>
             <button type="button" class="topbar-menu-item" id="networkPostmanDownload"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-download"/></svg><span>Postman</span></button>
             <div class="menu-separator" role="separator"></div>
@@ -271,6 +285,22 @@
       </div>
       <div class="applied-filters" id="networkChips" hidden></div>
       <div class="selection-bar" id="networkSelectionBar" hidden aria-label="Export selection"></div>
+      <section class="card-shell network-endpoints-panel" id="networkEndpointsPanel" aria-labelledby="networkEndpointsTitle" hidden>
+        <div class="card-shell-head">
+          <svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-activity"/></svg>
+          <h2 class="card-shell-title" id="networkEndpointsTitle">Endpoint latency</h2>
+          <span class="card-shell-badge" id="networkEndpointsBadge"></span>
+          <div class="card-shell-actions">
+            <button type="button" class="xs" id="networkEndpointsRefresh" title="Refresh endpoint statistics"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Refresh</button>
+            <button type="button" class="xs" id="networkEndpointsClose" aria-label="Close endpoint latency panel"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-close"/></svg>Close</button>
+          </div>
+        </div>
+        <div class="card-shell-body">
+          <p class="card-lede">Click an endpoint row to filter Network captures by its path prefix.</p>
+          <div id="networkEndpointsBody"></div>
+        </div>
+      </section>
+      <input type="file" id="networkHarFile" accept=".har,application/json" hidden>
       <details class="adv-filters" id="networkAdvFilters">
         <summary><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-funnel"/></svg>More filters</summary>
         <div class="filter-grid">
@@ -287,14 +317,16 @@
           <label class="field"><span>Error</span><select id="networkError"><option value="">Any</option><option value="true">Errors only</option><option value="false">No error</option></select></label>
           <label class="field"><span>Correlation ID</span><input id="networkCorrelation"></label>
           <label class="field"><span>Tag (name=value)</span><input id="networkTag"></label>
+          <label class="field"><span>Body contains</span><input id="networkBody" maxlength="256" placeholder="error, orderId…"></label>
           <div class="filter-actions"><button type="button" id="networkRefresh"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Apply</button></div>
         </div>
       </details>
+      <div class="har-banner" id="networkHarBanner" role="status" aria-live="polite" hidden></div>
       <div class="split-shell">
         <div class="list-pane" id="networkListPane">
           <div class="list-head network-list-head">
             <button type="button" class="col-check" id="networkSelectAllVisible" role="checkbox" aria-checked="false" title="Select all visible"></button>
-            <span class="col-badge">Method</span><span class="col-main network-col-path"><span id="networkMainColLabel">Path</span><button type="button" id="networkFullEndpoint" aria-pressed="false">Full endpoint</button></span><span class="col-network-metrics">Status · time</span><span class="col-flag"></span>
+            <span class="col-badge">Method</span><span class="col-main network-col-path"><span id="networkMainColLabel">Path</span><button type="button" id="networkFullEndpoint" aria-pressed="false">Full endpoint</button></span><span class="col-network-metrics">Status<span class="col-network-time"> · time</span></span><span class="col-flag"></span>
           </div>
           <div class="list-body" id="transactions" aria-label="Transactions"><div class="empty-state empty-connect">
             <svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg>
@@ -388,6 +420,7 @@
           <div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-select"/><use class="spot-accent" href="#dc-spot-select-accent"/></svg><div class="empty-title">No socket message selected</div><div class="empty-sub">Select a connection or apply filters to inspect frames. JSON text frames are formatted; binary previews appear only when the host opted in.</div></div>
         </aside>
       </div>
+      <div class="socket-composer" id="socketComposer" hidden></div>
     </section>
 
     <!-- PUSH -->
@@ -451,6 +484,7 @@
           </div>
         </div>
         <div class="toolbar-spacer"></div>
+        <button type="button" id="crashesGroupToggle" aria-pressed="false" title="Group crashes with the same exception and top frame"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-funnel"/></svg>Group similar</button>
         <button type="button" id="crashesRefresh"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Refresh</button>
       </div>
       <div class="split-shell">
@@ -490,6 +524,7 @@
       <div class="toolbar">
         <label class="field search-field"><span class="visually-hidden">Find key</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="remoteConfigSearch" placeholder="checkout_v2, banner…"></span></label>
         <div class="toolbar-group"><span class="toolbar-group-label">Source</span><div class="seg" id="remoteConfigSourceSeg" role="group" aria-label="Filter by value source"><button type="button" class="active" data-value="all">All</button><button type="button" data-value="remote">Remote</button><button type="button" data-value="default">Default</button><button type="button" data-value="static">Static</button><button type="button" data-value="override">Override</button><button type="button" data-value="unknown">Unknown</button></div></div>
+        <button type="button" class="btn danger" id="remoteConfigClearOverrides" title="Remove every override so each key falls back to its provider value" hidden><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-close"/></svg>Clear all overrides</button>
         <button type="button" class="btn" id="remoteConfigRefresh"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Refresh</button>
       </div>
       <div id="remoteConfigCards"><div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect Remote Config.</p></div></details></div></div>
@@ -628,6 +663,9 @@
           <div id="mockRuleList"></div>
           <div class="card-buttons">
             <button type="button" id="mockNewRule"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-plus"/></svg>New rule</button>
+            <button type="button" id="mockExportRules"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-download"/></svg>Export rules</button>
+            <button type="button" id="mockImportRules"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-folder"/></svg>Import rules</button>
+            <input type="file" id="mockImportRulesFile" accept="application/json,.json" hidden>
             <button type="button" id="mockDisable" class="danger" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-close"/></svg>Disable all mocks</button>
           </div>
           </div>
@@ -713,28 +751,59 @@
         <label class="field"><span>Scheme (optional)</span><input id="mockRuleScheme" placeholder="https"></label>
         <label class="field"><span>Host (optional)</span><input id="mockRuleHost" placeholder="api.example.test"></label>
         <label class="field field-full"><span>Path regular expression</span><input id="mockRulePath" placeholder="/orders.*"></label>
-        <label class="field"><span>Response status</span><input id="mockRuleStatus" type="number" min="100" max="599" value="200"></label>
-        <label class="field"><span>Delay ms (optional)</span><input id="mockRuleDelay" type="number" min="0" max="30000" placeholder="0"></label>
-        <label class="field field-full"><span>Response headers (Name: value, one per line)</span><textarea id="mockRuleHeaders" rows="3"></textarea></label>
-        <label class="field field-full">
+        <label class="field"><span>Action</span><select id="mockRuleActionType">
+          <option value="static">Static response</option>
+          <option value="template">Template</option>
+          <option value="status_override">Status override</option>
+          <option value="body_replacement">Body replacement</option>
+          <option value="connection_failure">Connection failure</option>
+          <option value="timeout">Timeout</option>
+          <option value="map_remote">Map remote</option>
+          <option value="throttle">Throttle</option>
+          <option value="sequence">Sequence</option>
+          <option value="passthrough">Passthrough</option>
+        </select></label>
+        <label class="field" data-mock-fields="static template status_override"><span>Response status</span><input id="mockRuleStatus" type="number" min="100" max="599" value="200"></label>
+        <label class="field" data-mock-fields="static template"><span>Delay ms (optional)</span><input id="mockRuleDelay" type="number" min="0" max="30000" placeholder="0"></label>
+        <label class="field" data-mock-fields="connection_failure" hidden><span>Failure message (optional)</span><input id="mockRuleFailureMessage" placeholder="DevConsole simulated connection failure"></label>
+        <label class="field" data-mock-fields="timeout" hidden><span>Timeout ms</span><input id="mockRuleTimeoutMs" type="number" min="0" max="30000" value="1000"></label>
+        <label class="field" data-mock-fields="map_remote" hidden><span>Remote scheme (optional)</span><input id="mockRuleRemoteScheme" placeholder="https"></label>
+        <label class="field" data-mock-fields="map_remote" hidden><span>Remote host (optional)</span><input id="mockRuleRemoteHost" placeholder="staging.api"></label>
+        <label class="field" data-mock-fields="map_remote" hidden><span>Remote port (optional)</span><input id="mockRuleRemotePort" type="number" min="1" max="65535"></label>
+        <label class="field" data-mock-fields="map_remote" hidden><span>Remote path (optional)</span><input id="mockRuleRemotePath" placeholder="/v2"></label>
+        <label class="field" data-mock-fields="throttle" hidden><span>Bytes per second</span><input id="mockRuleBytesPerSecond" type="number" min="1" max="104857600" value="50000"></label>
+        <label class="field" data-mock-fields="throttle" hidden><span>Latency ms</span><input id="mockRuleThrottleLatency" type="number" min="0" max="30000" value="0"></label>
+        <label class="field field-full" data-mock-fields="static template"><span>Response headers (Name: value, one per line)</span><textarea id="mockRuleHeaders" rows="3"></textarea></label>
+        <label class="field field-full" data-mock-fields="static template body_replacement">
           <span>Response body</span>
           <span class="mock-body-editor">
             <span id="mockRuleBodyHighlight" class="mock-body-highlight" aria-hidden="true"></span>
             <textarea id="mockRuleBody" rows="14" placeholder="{}"></textarea>
           </span>
         </label>
-        <div class="field-full mock-body-toolbar">
+        <div class="field-full mock-body-toolbar" data-mock-fields="static template body_replacement">
           <button type="button" id="mockRuleBodyFormat" class="xs">Format</button>
           <span id="mockRuleBodyStatus" class="card-field-help"></span>
         </div>
-        <div class="field-full mock-body-findbar">
+        <div class="field-full mock-body-findbar" data-mock-fields="static template body_replacement">
           <span class="search-wrap mock-body-find-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="mockRuleBodyFind" placeholder="Find in response body…" aria-describedby="mockRuleBodyFindCount"></span>
           <button type="button" id="mockRuleBodyFindPrev" class="xs" aria-label="Previous match" title="Previous match (Shift+Enter)" disabled><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-arrow-up"/></svg></button>
           <button type="button" id="mockRuleBodyFindNext" class="xs" aria-label="Next match" title="Next match (Enter)" disabled><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-arrow-down"/></svg></button>
           <span id="mockRuleBodyFindCount" class="card-field-help" role="status" aria-live="polite" aria-atomic="true"></span>
           <button type="button" id="mockRuleBodyExpand" class="xs" aria-pressed="false" aria-controls="mockRuleBody" title="Expand the dialog to fill the window (the body editor takes the extra room)"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-expand"/></svg><span id="mockRuleBodyExpandLabel">Full window</span></button>
         </div>
-        <div id="mockRuleBodyPreview" class="field-full"></div>
+        <div id="mockRuleBodyPreview" class="field-full" data-mock-fields="static template body_replacement"></div>
+        <p class="field-full card-field-help" data-mock-fields="template" hidden>Placeholders: <code>{{method}}</code> <code>{{host}}</code> <code>{{path}}</code> <code>{{body}}</code> <code>{{query.name}}</code> <code>{{header.Name}}</code>. A value the request doesn't carry renders empty; an unknown placeholder skips the rule.</p>
+        <div class="field-full" id="mockRuleSequence" data-mock-fields="sequence" hidden>
+          <div id="mockRuleSteps"></div>
+          <div class="mock-body-toolbar">
+            <button type="button" id="mockRuleStepAdd" class="xs">Add step</button>
+            <label class="field-inline mock-step-loop"><input type="checkbox" id="mockRuleSequenceLoop"> Loop steps</label>
+          </div>
+        </div>
+        <label class="field field-full"><span>Query predicates (key=value, one per line)</span><textarea id="mockRuleQueryPredicates" rows="2"></textarea></label>
+        <label class="field field-full"><span>Header predicates (key=value, one per line)</span><textarea id="mockRuleHeaderPredicates" rows="2"></textarea></label>
+        <label class="field field-full"><span>Body regex (optional, whole request body, up to 8 KB)</span><input id="mockRuleBodyPredicate" placeholder=".*&quot;paid&quot;.*"></label>
         <label class="field"><span>Priority</span><input id="mockRulePriority" type="number" value="0"></label>
         <label class="field"><span>Scope</span><select id="mockRuleScope"><option value="SESSION">Session</option><option value="PERSISTENT_INTERNAL">Persistent (internal)</option></select></label>
       </div>
@@ -801,6 +870,17 @@
       </div>
       <p class="rc-value-notice" id="remoteConfigValueNotice" hidden></p>
       <div id="remoteConfigValueBody"></div>
+      <div class="rc-override-section" id="remoteConfigOverrideSection" hidden>
+        <div class="rc-provider-fallback" id="remoteConfigProviderFallback" hidden></div>
+        <label class="field field-full">
+          <span>Override value</span>
+          <textarea id="remoteConfigOverrideInput" rows="4" placeholder="Enter override value..."></textarea>
+        </label>
+        <div class="rc-override-actions">
+          <button type="button" class="btn primary" id="remoteConfigSaveOverride"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg>Save override</button>
+          <button type="button" class="btn danger" id="remoteConfigClearOverride" hidden><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-close"/></svg>Clear override</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>

@@ -334,16 +334,21 @@ public abstract interface class io/devconsole/api/DevConsoleFacadeProvider {
 	public abstract fun captureScreenshot (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun createInspectorIntent (Landroid/content/Context;)Landroid/content/Intent;
 	public abstract fun endpoint ()Lio/devconsole/api/BrowserEndpoint;
+	public abstract fun exportSession (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun featureFlagStringValue (Ljava/lang/String;)Ljava/lang/String;
 	public abstract fun featureFlagValue (Ljava/lang/String;)Z
 	public abstract fun initialize (Landroid/app/Application;Lio/devconsole/api/DevConsoleConfig;)Lio/devconsole/api/InitResult;
+	public abstract fun isCapturePaused ()Z
 	public abstract fun logRecorder ()Lio/devconsole/logs/LogRecorder;
 	public abstract fun mockEngine ()Lio/devconsole/mocks/MockEngine;
 	public abstract fun networkRecorder ()Lio/devconsole/network/NetworkTransactionRecorder;
 	public abstract fun openInspector (Landroid/content/Context;)Lio/devconsole/api/InspectorOpenResult;
+	public abstract fun purgeCapturedData (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun recordPush (Lio/devconsole/push/PushInput;)Lio/devconsole/push/PushEvent;
 	public abstract fun registerRemoteConfigProvider (Lio/devconsole/remoteconfig/RemoteConfigProvider;)Z
 	public abstract fun registerStateProvider (Lio/devconsole/state/StateProvider;)Z
+	public abstract fun remoteConfigOverride (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public abstract fun setCapturePaused (Z)Z
 	public abstract fun socketRecorder ()Lio/devconsole/socket/SocketRecorder;
 	public abstract fun startBrowser (Lio/devconsole/api/StartRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun state ()Lkotlinx/coroutines/flow/StateFlow;
@@ -675,6 +680,28 @@ public final class io/devconsole/api/OpenTriggers$Companion {
 	public final fun disabled ()Lio/devconsole/api/OpenTriggers;
 }
 
+public final class io/devconsole/api/PurgeResult {
+	public static final field Companion Lio/devconsole/api/PurgeResult$Companion;
+	public fun <init> (IIII)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun copy (IIII)Lio/devconsole/api/PurgeResult;
+	public static synthetic fun copy$default (Lio/devconsole/api/PurgeResult;IIIIILjava/lang/Object;)Lio/devconsole/api/PurgeResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getNetworkTransactions ()I
+	public final fun getPushEvents ()I
+	public final fun getRetainedRunsDeleted ()I
+	public final fun getSocketConnections ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/PurgeResult$Companion {
+	public final fun getNOTHING ()Lio/devconsole/api/PurgeResult;
+}
+
 public final class io/devconsole/api/RetentionPolicy {
 	public static final field Companion Lio/devconsole/api/RetentionPolicy$Companion;
 	public static final field DEFAULT_MAX_AGE_MS J
@@ -783,6 +810,38 @@ public final class io/devconsole/api/ScreenshotResult$NoForegroundActivity : io/
 public final class io/devconsole/api/ScreenshotResult$SecureWindow : io/devconsole/api/ScreenshotResult {
 	public static final field INSTANCE Lio/devconsole/api/ScreenshotResult$SecureWindow;
 	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/devconsole/api/SessionExportResult {
+}
+
+public final class io/devconsole/api/SessionExportResult$Disabled : io/devconsole/api/SessionExportResult {
+	public static final field INSTANCE Lio/devconsole/api/SessionExportResult$Disabled;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/SessionExportResult$Exported : io/devconsole/api/SessionExportResult {
+	public fun <init> (Ljava/io/File;)V
+	public final fun component1 ()Ljava/io/File;
+	public final fun copy (Ljava/io/File;)Lio/devconsole/api/SessionExportResult$Exported;
+	public static synthetic fun copy$default (Lio/devconsole/api/SessionExportResult$Exported;Ljava/io/File;ILjava/lang/Object;)Lio/devconsole/api/SessionExportResult$Exported;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFile ()Ljava/io/File;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/api/SessionExportResult$Failed : io/devconsole/api/SessionExportResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/devconsole/api/SessionExportResult$Failed;
+	public static synthetic fun copy$default (Lio/devconsole/api/SessionExportResult$Failed;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/api/SessionExportResult$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getReason ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
