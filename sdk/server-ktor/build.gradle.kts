@@ -22,6 +22,7 @@ dependencies {
     implementation(project(":sdk:push"))
     implementation(project(":sdk:state"))
     implementation(project(":sdk:remote-config"))
+    implementation(project(":sdk:location-ping"))
     implementation(project(":sdk:export"))
     implementation(project(":sdk:storage-api"))
     implementation("io.ktor:ktor-server-core:3.0.3")
@@ -34,7 +35,7 @@ dependencies {
 }
 
 val dashboardAssetFiles: List<File> =
-    listOf("index.html", "dashboard.css", "dashboard.js")
+    listOf("index.html", "dashboard.css", "dashboard.js", "location-pings.js", "leaflet.js", "leaflet.css")
         .map { name -> layout.projectDirectory.file("src/main/resources/devconsole-web/$name").asFile }
 val dashboardManifest = layout.buildDirectory.file("generated/devconsole-web/asset-manifest.json")
 

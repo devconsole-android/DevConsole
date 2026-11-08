@@ -64,6 +64,11 @@
                 android:text="Send mocked request" />
 
             <Button
+                android:id="@+id/btnSendLocationPing"
+                style="@style/DevConsoleButton"
+                android:text="Send location ping" />
+
+            <Button
                 android:id="@+id/btnOpenSocket"
                 style="@style/DevConsoleButton"
                 android:text="Open sample WebSocket" />

@@ -118,6 +118,8 @@ class InspectorViewModel
                 is InspectorAction.ToggleCrashFlag -> toggleCrashFlag(action.id)
                 is InspectorAction.ExecuteComposer -> executeComposer(action.request)
                 is InspectorAction.SetMocksEnabled -> setMocksEnabled(action.enabled)
+                is InspectorAction.SetLocationPingStreamEnabled ->
+                    setLocationPingStreamEnabled(action.name, action.enabled)
                 is InspectorAction.UpsertMockRule -> upsertMockRule(action.rule)
                 is InspectorAction.DeleteMockRule -> deleteMockRule(action.id)
                 is InspectorAction.SetMockRuleEnabled -> setMockRuleEnabled(action.id, action.enabled)
@@ -294,66 +296,6 @@ class InspectorViewModel
                     dataSource.socketSendProtocol(socket.id)?.let { protocol -> socket.id to protocol }
                 }.toMap()
 
-        private fun InspectorState.withSnapshot(
-            snapshot: InspectorSnapshot,
-            boundedTransactions: List<InspectorTransactionUi>,
-            dataSource: InspectorDataSource,
-            sendProtocols: Map<String, String>,
-        ): InspectorState {
-            val current = this
-            // While a past run is selected, its retained captures (loaded by selectSession) stay on
-            // screen: a periodic or tab-switch refresh must not snap them back to the live run.
-            val pastRunSelected =
-                current.selectedSessionId != null && snapshot.sessions.any { it.id == current.selectedSessionId }
-            val shownTransactions = if (pastRunSelected) current.transactions else boundedTransactions
-            return copy(
-                available = snapshot.available,
-                serverControlSupported = dataSource.supportsServerControl(),
-                captureControlSupported = dataSource.supportsCaptureControl(),
-                // Re-read on every snapshot refresh, so a pause toggled on the More screen (or from
-                // the dashboard) reaches the Observe banner on its next poll without new plumbing.
-                capturePaused = dataSource.isCapturePaused(),
-                transactions = shownTransactions,
-                // selectedTransactionIds backs the Observe traffic tab's selection-mode UI and
-                // InspectorAction.ExportHar/ExportPostman's scope; prune whatever aged out of the
-                // bounded page (capacity eviction), same as every other list below.
-                selectedTransactionIds =
-                    current.selectedTransactionIds.filterTo(mutableSetOf()) { id ->
-                        shownTransactions.any { it.id == id }
-                    },
-                capabilities = snapshot.capabilities,
-                keepAlivePromptNeeded = snapshot.keepAlivePromptNeeded,
-                mocksEnabled = snapshot.mocksEnabled,
-                mockRules = snapshot.mockRules,
-                captureRules = snapshot.captureRules,
-                sockets = if (pastRunSelected) current.sockets else snapshot.sockets.take(MAX_VISIBLE_TRANSACTIONS),
-                // A retained run's connections are long closed; only the live run can be written to.
-                socketSendProtocols = if (pastRunSelected) emptyMap() else sendProtocols,
-                pushEvents =
-                    if (pastRunSelected) current.pushEvents else snapshot.pushEvents.take(MAX_VISIBLE_TRANSACTIONS),
-                featureFlags = snapshot.featureFlags,
-                stateProviders = snapshot.stateProviders,
-                remoteConfig = snapshot.remoteConfig,
-                remoteConfigOverridesEditable = dataSource.supportsRemoteConfigOverrides(),
-                preferenceFiles = snapshot.preferenceFiles,
-                fileRoots = snapshot.fileRoots,
-                databases = snapshot.databases,
-                sessions = snapshot.sessions,
-                selectedSessionId =
-                    current.selectedSessionId?.takeIf { id ->
-                        snapshot.sessions.any { it.id == id }
-                    },
-                // Same past-run guard; see selectSession for why the Crashes banner depends on it.
-                logs = if (pastRunSelected) current.logs else snapshot.logs.take(MAX_VISIBLE_TRANSACTIONS),
-                crashes = if (pastRunSelected) current.crashes else snapshot.crashes.take(MAX_VISIBLE_TRANSACTIONS),
-                health = snapshot.health,
-                browser = snapshot.browser,
-                retention = snapshot.retention,
-                captureCategories = snapshot.captureCategories,
-                redactionEnabled = snapshot.redactionEnabled,
-            )
-        }
-
         private fun selectObserveTab(tab: ObserveTab) {
             mutableState.update { it.copy(observeTab = tab) }
             // Observe is a live tail: every tab switch re-reads the capture store so the screen
@@ -470,6 +412,16 @@ class InspectorViewModel
                 return
             }
             runCommandThenReload { dataSource.execute(request) }
+        }
+
+        private fun setLocationPingStreamEnabled(
+            name: String,
+            enabled: Boolean,
+        ) {
+            viewModelScope.launch(dispatcher) {
+                showComposerResult(dataSource.setLocationPingStreamEnabled(name, enabled))
+                loadSnapshot()
+            }
         }
 
         private fun setMocksEnabled(enabled: Boolean) {
@@ -857,3 +809,64 @@ class InspectorViewModel
             mutableState.update { it.copy(lastCommandResult = null) }
         }
     }
+
+private fun InspectorState.withSnapshot(
+    snapshot: InspectorSnapshot,
+    boundedTransactions: List<InspectorTransactionUi>,
+    dataSource: InspectorDataSource,
+    sendProtocols: Map<String, String>,
+): InspectorState {
+    val current = this
+    // While a past run is selected, its retained captures (loaded by selectSession) stay on
+    // screen: a periodic or tab-switch refresh must not snap them back to the live run.
+    val pastRunSelected =
+        current.selectedSessionId != null && snapshot.sessions.any { it.id == current.selectedSessionId }
+    val shownTransactions = if (pastRunSelected) current.transactions else boundedTransactions
+    return copy(
+        available = snapshot.available,
+        serverControlSupported = dataSource.supportsServerControl(),
+        captureControlSupported = dataSource.supportsCaptureControl(),
+        // Re-read on every snapshot refresh, so a pause toggled on the More screen (or from
+        // the dashboard) reaches the Observe banner on its next poll without new plumbing.
+        capturePaused = dataSource.isCapturePaused(),
+        transactions = shownTransactions,
+        // selectedTransactionIds backs the Observe traffic tab's selection-mode UI and
+        // InspectorAction.ExportHar/ExportPostman's scope; prune whatever aged out of the
+        // bounded page (capacity eviction), same as every other list below.
+        selectedTransactionIds =
+            current.selectedTransactionIds.filterTo(mutableSetOf()) { id ->
+                shownTransactions.any { it.id == id }
+            },
+        capabilities = snapshot.capabilities,
+        keepAlivePromptNeeded = snapshot.keepAlivePromptNeeded,
+        mocksEnabled = snapshot.mocksEnabled,
+        mockRules = snapshot.mockRules,
+        captureRules = snapshot.captureRules,
+        sockets = if (pastRunSelected) current.sockets else snapshot.sockets.take(MAX_VISIBLE_TRANSACTIONS),
+        // A retained run's connections are long closed; only the live run can be written to.
+        socketSendProtocols = if (pastRunSelected) emptyMap() else sendProtocols,
+        pushEvents =
+            if (pastRunSelected) current.pushEvents else snapshot.pushEvents.take(MAX_VISIBLE_TRANSACTIONS),
+        featureFlags = snapshot.featureFlags,
+        stateProviders = snapshot.stateProviders,
+        remoteConfig = snapshot.remoteConfig,
+        remoteConfigOverridesEditable = dataSource.supportsRemoteConfigOverrides(),
+        locationPingStreams = snapshot.locationPingStreams,
+        preferenceFiles = snapshot.preferenceFiles,
+        fileRoots = snapshot.fileRoots,
+        databases = snapshot.databases,
+        sessions = snapshot.sessions,
+        selectedSessionId =
+            current.selectedSessionId?.takeIf { id ->
+                snapshot.sessions.any { it.id == id }
+            },
+        // Same past-run guard; see selectSession for why the Crashes banner depends on it.
+        logs = if (pastRunSelected) current.logs else snapshot.logs.take(MAX_VISIBLE_TRANSACTIONS),
+        crashes = if (pastRunSelected) current.crashes else snapshot.crashes.take(MAX_VISIBLE_TRANSACTIONS),
+        health = snapshot.health,
+        browser = snapshot.browser,
+        retention = snapshot.retention,
+        captureCategories = snapshot.captureCategories,
+        redactionEnabled = snapshot.redactionEnabled,
+    )
+}

@@ -7,6 +7,12 @@ internal object DashboardAssets {
 
     fun js(): String = resource("/devconsole-web/dashboard.js")
 
+    fun locationPingsJs(): String = resource("/devconsole-web/location-pings.js")
+
+    fun leafletJs(): String = resource("/devconsole-web/leaflet.js")
+
+    fun leafletCss(): String = resource("/devconsole-web/leaflet.css")
+
     /** The DevConsole mark, served as the dashboard's favicon. Read as bytes -- it is not text. */
     fun favicon(): ByteArray = binaryResource("/devconsole-web/favicon.webp")
 

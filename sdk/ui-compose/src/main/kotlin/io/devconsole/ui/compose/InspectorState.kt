@@ -53,6 +53,7 @@ data class InspectorState(
      * composer is hidden for it.
      */
     val socketSendProtocols: Map<String, String> = emptyMap(),
+    val locationPingStreams: List<InspectorLocationPingStreamUi> = emptyList(),
     val preferenceFiles: List<InspectorPreferenceFileUi> = emptyList(),
     val fileRoots: List<String> = emptyList(),
     val fileListing: InspectorFileListingUi? = null,

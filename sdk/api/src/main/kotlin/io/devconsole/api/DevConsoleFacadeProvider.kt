@@ -3,6 +3,7 @@ package io.devconsole.api
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import io.devconsole.locationping.LocationPingOutcome
 import io.devconsole.logs.LogRecorder
 import io.devconsole.mocks.MockEngine
 import io.devconsole.network.NetworkTransactionRecorder
@@ -119,4 +120,12 @@ interface DevConsoleFacadeProvider {
 
     /** Exports the current session bundle as a ZIP file. */
     suspend fun exportSession(): SessionExportResult
+
+    fun recordLocationPing(
+        url: String,
+        body: String,
+        outcome: LocationPingOutcome,
+    ): Boolean
+
+    fun isLocationPingTrackingEnabled(streamName: String?): Boolean
 }

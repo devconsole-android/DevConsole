@@ -15,6 +15,7 @@ import io.devconsole.api.SessionExportResult
 import io.devconsole.api.StartRequest
 import io.devconsole.api.StartResult
 import io.devconsole.api.StopReason
+import io.devconsole.locationping.LocationPingOutcome
 import io.devconsole.logs.LogRecorder
 import io.devconsole.mocks.MockEngine
 import io.devconsole.network.NetworkTransactionRecorder
@@ -269,4 +270,16 @@ object DevConsole {
     /** Exports the current session bundle as a ZIP file. */
     @JvmStatic
     suspend fun exportSession(): SessionExportResult = provider.exportSession()
+
+    @JvmStatic
+    fun recordLocationPing(
+        url: String,
+        body: String,
+        outcome: LocationPingOutcome,
+    ): Boolean = provider.recordLocationPing(url, body, outcome)
+
+    @JvmStatic
+    @JvmOverloads
+    fun isLocationPingTrackingEnabled(streamName: String? = null): Boolean =
+        provider.isLocationPingTrackingEnabled(streamName)
 }

@@ -266,6 +266,20 @@ and answers the counts: `{"networkTransactions":n,"socketConnections":n,"pushEve
 wire capture control. The dashboard puts both in the topbar's overflow menu and shows a "Capture
 paused" pill while paused; the inspector has them under More → Capture.
 
+### Location pings
+
+`GET /api/v1/location-pings` (auth) returns `configured`, `streams` (`name`, `path`, `enabled`),
+`schema` (`groupLabel`, `hasFixTime`, `hasAppState`), `storage` (`usedBytes`, `maxBytes`,
+`lastError`) and `tracks` (`stream`, `file`, `groupId`, `capturedDate`, `sizeBytes`,
+`lastModifiedEpochMs`), newest first. `GET /api/v1/location-pings/track?stream=&file=` (auth)
+returns `track`, `truncated` and `points` (`index`, `lat`, `lng`, `deviceTime`, `deviceGapSeconds`,
+`fixTime`, `fixGapSeconds`, `status` — one of `sent`, `failed`, `dropped`, `offline` —
+`statusCode`, `appState`, `fields`), ordered by device time; `fields` are redacted. Mutations need
+auth plus Origin/CSRF and are audited: `PUT /api/v1/location-pings/streams/{name}` with a body of
+`true` or `false`, `DELETE /api/v1/location-pings/track?stream=&file=`, and
+`DELETE /api/v1/location-pings` (optionally `?stream=a&stream=b`) answering `filesDeleted` and
+`filesLeft`. Gated by the `network` capture category. See [LOCATION_PINGS.md](LOCATION_PINGS.md).
+
 ### Composer
 
 `POST /api/v1/composer/execute` (auth — one-off request; `method` restricted to
