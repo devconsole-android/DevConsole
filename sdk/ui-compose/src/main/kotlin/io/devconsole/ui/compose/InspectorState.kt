@@ -41,6 +41,7 @@ data class InspectorState(
     val stateProviders: List<InspectorStateProviderUi> = emptyList(),
     /** Remote Config providers, already redacted and STATE-gated by the data source. */
     val remoteConfig: List<InspectorRemoteConfigUi> = emptyList(),
+    val locationPingStreams: List<InspectorLocationPingStreamUi> = emptyList(),
     val preferenceFiles: List<InspectorPreferenceFileUi> = emptyList(),
     val fileRoots: List<String> = emptyList(),
     val fileListing: InspectorFileListingUi? = null,

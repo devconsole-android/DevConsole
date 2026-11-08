@@ -3,6 +3,7 @@ package io.devconsole.api
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import io.devconsole.locationping.LocationPingOutcome
 import io.devconsole.logs.LogRecorder
 import io.devconsole.mocks.MockEngine
 import io.devconsole.network.NetworkTransactionRecorder
@@ -94,4 +95,12 @@ interface DevConsoleFacadeProvider {
      * (a boolean flag returns `"true"`/`"false"`). Falls back to `""` for an unknown key.
      */
     fun featureFlagStringValue(key: String): String
+
+    fun recordLocationPing(
+        url: String,
+        body: String,
+        outcome: LocationPingOutcome,
+    ): Boolean
+
+    fun isLocationPingTrackingEnabled(streamName: String?): Boolean
 }

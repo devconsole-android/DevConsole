@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="dark light">
   <title>DevConsole</title>
   <link rel="icon" type="image/webp" href="/assets/favicon.webp">
+  <link rel="stylesheet" href="/assets/leaflet.css">
   <link rel="stylesheet" href="/assets/dashboard.css">
 </head>
 <body>
@@ -14,6 +15,7 @@
   <symbol id="dc-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7"/></symbol>
   <symbol id="dc-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.75 12 C4.75 8.1 8.05 5.75 12 5.75 C15.95 5.75 19.25 8.1 21.25 12 C19.25 15.9 15.95 18.25 12 18.25 C8.05 18.25 4.75 15.9 2.75 12 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
   <symbol id="dc-network" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.888 8.109 H19.781 M16.28 4.608 L19.781 8.109 L16.28 11.611 M15.112 15.891 H4.219 M7.72 12.389 L4.219 15.891 L7.72 19.392" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+  <symbol id="dc-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></symbol>
   <symbol id="dc-sockets" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.621 3.136 V8.205 M15.379 3.136 V8.205 M6.086 8.205 H17.914 V11.584 C17.914 14.879 15.295 17.498 12 17.498 C8.705 17.498 6.086 14.879 6.086 11.584 V8.205 Z M12 17.498 V20.877" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
   <symbol id="dc-push" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.96 17.091 C6.133 15.917 6.524 15.135 6.524 13.571 V9.268 C6.524 6.241 8.973 3.793 12 3.793 C15.027 3.793 17.476 6.241 17.476 9.268 V13.571 C17.476 15.135 17.867 15.917 19.04 17.091 H4.96 Z M10.044 19.437 C11.061 20.478 12.939 20.478 13.956 19.437" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
   <symbol id="dc-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.525" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M12 7.129 V12 L15.653 14.436" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
@@ -124,6 +126,7 @@
       <button type="button" id="viewOverview" class="active" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#dc-grid"/></svg><span class="rail-name">Overview</span></button>
       <button type="button" id="viewNetwork"><svg class="ic" aria-hidden="true"><use href="#dc-network"/></svg><span class="rail-name">Network</span><span class="rail-count" id="navCountNetwork">0</span></button>
       <button type="button" id="viewSockets"><svg class="ic" aria-hidden="true"><use href="#dc-sockets"/></svg><span class="rail-name">WebSockets</span><span class="rail-count" id="navCountSockets">0</span></button>
+      <button type="button" id="viewLocationPings"><svg class="ic" aria-hidden="true"><use href="#dc-pin"/></svg><span class="rail-name">Location pings</span><span class="rail-count" id="navCountLocationPings">0</span></button>
     </div>
     <div class="rail-group">
       <div class="rail-group-label"><span class="text">Signals</span><span class="rule"></span></div>
@@ -495,6 +498,62 @@
       <div id="remoteConfigCards"><div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to inspect Remote Config.</p></div></details></div></div>
     </section>
 
+    <!-- LOCATION PINGS -->
+    <section class="view" id="locationPingsView">
+      <div class="view-head">
+        <div class="view-title-row"><h1 class="view-title">Location pings</h1><span class="view-badge" id="lpBadge"></span></div>
+        <p class="view-hint">Location-ping requests recorded to the device and replayed on a map. Each dot is one ping, coloured by what happened to it; the gaps show how long the device waited between pings.</p>
+      </div>
+      <div class="lp-streams" id="lpStreams" role="group" aria-label="Recorded streams"></div>
+      <div class="metric-strip" id="lpMetrics" hidden></div>
+      <div class="toolbar">
+        <label class="field"><span>Stream</span><select id="lpStream" aria-label="Stream"></select></label>
+        <label class="field lp-track-field"><span id="lpTrackLabel">Group</span><select id="lpTrack"></select></label>
+        <div class="toolbar-group-stack">
+          <span class="toolbar-group-label">Status</span>
+          <div class="seg" id="lpStatusSeg" role="group" aria-label="Filter by ping status">
+            <button type="button" class="active" data-value="all">All</button>
+            <button type="button" data-value="sent">Sent</button>
+            <button type="button" data-value="failed">Failed</button>
+            <button type="button" data-value="dropped">Dropped</button>
+            <button type="button" data-value="offline">Offline</button>
+          </div>
+        </div>
+        <div class="toolbar-group-stack" id="lpAppStateGroup" hidden>
+          <span class="toolbar-group-label">App state</span>
+          <div class="seg" id="lpAppStateSeg" role="group" aria-label="Filter by app state">
+            <button type="button" class="active" data-value="all">All</button>
+            <button type="button" data-value="foreground">Foreground</button>
+            <button type="button" data-value="background">Background</button>
+          </div>
+        </div>
+        <label class="lp-check"><input type="checkbox" id="lpDeviceGaps">Device time gaps</label>
+        <label class="lp-check" id="lpFixGapsToggle" hidden><input type="checkbox" id="lpFixGaps">Fix time gaps</label>
+        <label class="lp-check"><input type="checkbox" id="lpAutoRefresh">Auto-refresh</label>
+        <button type="button" id="lpRefresh"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg>Refresh</button>
+        <button type="button" class="danger" id="lpDeleteTrack" disabled><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-trash"/></svg>Delete track</button>
+        <button type="button" class="danger" id="lpDeleteAll" disabled>Delete all</button>
+      </div>
+      <div class="lp-note" id="lpNote" role="status" hidden></div>
+      <div class="lp-body">
+        <div class="lp-map-wrap">
+          <div class="lp-map" id="lpMap"></div>
+          <div class="lp-legend">
+            <span aria-hidden="true"><i class="lp-dot lp-sent"></i>Sent</span>
+            <span aria-hidden="true"><i class="lp-dot lp-failed"></i>Failed</span>
+            <span aria-hidden="true"><i class="lp-dot lp-dropped"></i>Dropped on device</span>
+            <span aria-hidden="true"><i class="lp-dot lp-offline"></i>Offline</span>
+            <a class="lp-map-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">&copy; OpenStreetMap</a>
+          </div>
+          <div class="lp-empty" id="lpEmpty"><div class="empty-state"><svg class="ic empty-icon" aria-hidden="true"><use href="#dc-pin"/></svg><div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More → scan the QR or paste the code in Overview to see recorded location pings.</div></div></div>
+        </div>
+        <aside class="lp-list" aria-label="Pings">
+          <div class="lp-list-head"><span>#</span><span>Device gap</span><span id="lpFixGapHead">Fix gap</span><span>Status</span></div>
+          <div class="lp-list-body" id="lpList"></div>
+        </aside>
+      </div>
+    </section>
+
     <!-- PREFERENCES -->
     <section class="view" id="preferencesView">
       <div class="view-head">
@@ -805,7 +864,22 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="lpPingModal" hidden>
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="lpPingTitle">
+    <div class="modal-header">
+      <span class="modal-title" id="lpPingTitle"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-pin"/></svg><span id="lpPingTitleText">Ping</span></span>
+      <button type="button" class="modal-close" id="lpPingClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="lp-ping-rows" id="lpPingRows"></div>
+      <div class="card-buttons"><button type="button" id="lpPingCopy"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-copy"/></svg>Copy as JSON</button><button type="button" class="primary" id="lpPingShow">Show on map</button></div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<script src="/assets/leaflet.js"></script>
+<script src="/assets/location-pings.js"></script>
 <script src="/assets/dashboard.js"></script>
 </body></html>

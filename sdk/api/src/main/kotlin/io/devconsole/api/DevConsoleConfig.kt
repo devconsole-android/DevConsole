@@ -1,5 +1,6 @@
 package io.devconsole.api
 
+import io.devconsole.locationping.LocationPingTracking
 import io.devconsole.remoteconfig.RemoteConfigProvider
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
@@ -94,6 +95,9 @@ data class DevConsoleConfig(
     var remoteConfigProviders: List<RemoteConfigProvider> = emptyList()
         private set
 
+    var locationPingTracking: LocationPingTracking = LocationPingTracking()
+        private set
+
     fun withStoragePolicy(value: StoragePolicy): DevConsoleConfig =
         duplicate().also {
             it.storagePolicy = value
@@ -147,6 +151,9 @@ data class DevConsoleConfig(
     fun withRemoteConfigProviders(value: List<RemoteConfigProvider>): DevConsoleConfig =
         duplicate().also { it.remoteConfigProviders = value.toList() }
 
+    fun withLocationPingTracking(value: LocationPingTracking): DevConsoleConfig =
+        duplicate().also { it.locationPingTracking = value }
+
     fun capturesCategory(category: CaptureCategory): Boolean = category in captureCategories
 
     /**
@@ -186,20 +193,25 @@ data class DevConsoleConfig(
             }
 
     fun runtimeEquivalentTo(other: DevConsoleConfig): Boolean =
-        this == other &&
-            composerHostsEditable == other.composerHostsEditable &&
-            storagePolicy == other.storagePolicy &&
-            sessionPolicy == other.sessionPolicy &&
-            editingCapabilities == other.editingCapabilities &&
-            retentionPolicy == other.retentionPolicy &&
-            browserConfig == other.browserConfig &&
-            browserSecurity == other.browserSecurity &&
-            networkProtection == other.networkProtection &&
-            crashPolicy == other.crashPolicy &&
-            screenshotPolicy == other.screenshotPolicy &&
-            captureCategories == other.captureCategories &&
-            openTriggers == other.openTriggers &&
-            remoteConfigProviders == other.remoteConfigProviders
+        this == other && runtimeSettings() == other.runtimeSettings()
+
+    private fun runtimeSettings(): List<Any> =
+        listOf(
+            composerHostsEditable,
+            storagePolicy,
+            sessionPolicy,
+            editingCapabilities,
+            retentionPolicy,
+            browserConfig,
+            browserSecurity,
+            networkProtection,
+            crashPolicy,
+            screenshotPolicy,
+            captureCategories,
+            openTriggers,
+            remoteConfigProviders,
+            locationPingTracking,
+        )
 
     private fun duplicate(): DevConsoleConfig =
         copy().also {
@@ -216,6 +228,7 @@ data class DevConsoleConfig(
             it.captureCategories = captureCategories
             it.openTriggers = openTriggers
             it.remoteConfigProviders = remoteConfigProviders
+            it.locationPingTracking = locationPingTracking
         }
 
     /** Mutable builder for Java callers and for incremental construction. */
@@ -241,6 +254,7 @@ data class DevConsoleConfig(
         private var captureCategories: Set<CaptureCategory> = CaptureCategory.all()
         private var openTriggers = OpenTriggers()
         private val remoteConfigProviders = mutableListOf<RemoteConfigProvider>()
+        private var locationPingTracking = LocationPingTracking()
 
         fun eventBufferCapacity(value: Int) = apply { eventBufferCapacity = value }
 
@@ -284,6 +298,8 @@ data class DevConsoleConfig(
 
         fun addRemoteConfigProvider(value: RemoteConfigProvider) = apply { remoteConfigProviders += value }
 
+        fun locationPingTracking(value: LocationPingTracking) = apply { locationPingTracking = value }
+
         fun build(): DevConsoleConfig {
             val configured =
                 DevConsoleConfig(
@@ -306,6 +322,7 @@ data class DevConsoleConfig(
                     .withCaptureCategories(captureCategories)
                     .withOpenTriggers(openTriggers)
                     .withRemoteConfigProviders(remoteConfigProviders)
+                    .withLocationPingTracking(locationPingTracking)
             return retentionPolicy?.let(configured::withRetentionPolicy) ?: configured
         }
     }

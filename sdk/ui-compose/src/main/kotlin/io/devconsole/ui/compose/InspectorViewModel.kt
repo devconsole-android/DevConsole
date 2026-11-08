@@ -98,6 +98,8 @@ class InspectorViewModel
                 is InspectorAction.ToggleCrashFlag -> toggleCrashFlag(action.id)
                 is InspectorAction.ExecuteComposer -> executeComposer(action.request)
                 is InspectorAction.SetMocksEnabled -> setMocksEnabled(action.enabled)
+                is InspectorAction.SetLocationPingStreamEnabled ->
+                    setLocationPingStreamEnabled(action.name, action.enabled)
                 is InspectorAction.UpsertMockRule -> upsertMockRule(action.rule)
                 is InspectorAction.DeleteMockRule -> deleteMockRule(action.id)
                 is InspectorAction.SetMockRuleEnabled -> setMockRuleEnabled(action.id, action.enabled)
@@ -256,6 +258,7 @@ class InspectorViewModel
                         featureFlags = snapshot.featureFlags,
                         stateProviders = snapshot.stateProviders,
                         remoteConfig = snapshot.remoteConfig,
+                        locationPingStreams = snapshot.locationPingStreams,
                         preferenceFiles = snapshot.preferenceFiles,
                         fileRoots = snapshot.fileRoots,
                         databases = snapshot.databases,
@@ -351,6 +354,16 @@ class InspectorViewModel
             }
             viewModelScope.launch(dispatcher) {
                 showComposerResult(dataSource.execute(request))
+                loadSnapshot()
+            }
+        }
+
+        private fun setLocationPingStreamEnabled(
+            name: String,
+            enabled: Boolean,
+        ) {
+            viewModelScope.launch(dispatcher) {
+                showComposerResult(dataSource.setLocationPingStreamEnabled(name, enabled))
                 loadSnapshot()
             }
         }
