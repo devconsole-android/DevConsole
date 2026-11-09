@@ -1,11 +1,17 @@
 package io.devconsole.socket.okhttp
 
 import io.devconsole.socket.SocketDirection
+import io.devconsole.socket.SocketProtocol
 import io.devconsole.socket.SocketRecorder
+import io.devconsole.socket.SocketSendResult
+import io.devconsole.socket.SocketSender
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
+
+/** OkHttp refuses a frame for exactly one reason, and the dashboard should show OkHttp's wording. */
+private const val SEND_QUEUE_FULL_REASON = "Send queue full or socket closing"
 
 /**
  * OkHttp adapter that records callbacks without altering socket control flow.
@@ -35,7 +41,36 @@ class DevConsoleOkHttpWebSocketListener
 
         /** Internal: only [onOpen] and this module's own tests need to invoke this directly. */
         internal fun recordOpen(webSocket: WebSocket) {
-            recorder.onOpen(connectionIdProvider(webSocket), webSocket.request().url.toString())
+            val connectionId = connectionIdProvider(webSocket)
+            recorder.onOpen(connectionId, webSocket.request().url.toString())
+            registerSenderIfAbsent(connectionId, webSocket)
+        }
+
+        /**
+         * Skipped when a sender is already registered, because [DevConsoleRecordingWebSocket.wrap]
+         * registers its own. The wrapper's sender records through the wrapper's `send`, so letting
+         * the listener replace it would record every host frame twice.
+         */
+        private fun registerSenderIfAbsent(
+            connectionId: String,
+            webSocket: WebSocket,
+        ) {
+            if (recorder.senders.canSend(connectionId)) return
+            recorder.senders.register(
+                connectionId,
+                SocketProtocol.WEBSOCKET,
+                SocketSender { request -> sendDirect(webSocket, connectionId, request.text) },
+            )
+        }
+
+        private fun sendDirect(
+            webSocket: WebSocket,
+            connectionId: String,
+            text: String,
+        ): SocketSendResult {
+            if (!webSocket.send(text)) return SocketSendResult.Rejected(SEND_QUEUE_FULL_REASON)
+            recorder.onMessage(connectionId, SocketDirection.SENT, text, "text/plain")
+            return SocketSendResult.Sent
         }
 
         override fun onMessage(
@@ -73,7 +108,9 @@ class DevConsoleOkHttpWebSocketListener
             code: Int,
             reason: String,
         ) {
-            recorder.onClosed(connectionIdProvider(webSocket))
+            val connectionId = connectionIdProvider(webSocket)
+            recorder.onClosed(connectionId)
+            recorder.senders.unregister(connectionId)
             delegate?.onClosed(webSocket, code, reason)
         }
 
@@ -82,7 +119,9 @@ class DevConsoleOkHttpWebSocketListener
             t: Throwable,
             response: Response?,
         ) {
-            recorder.onFailure(connectionIdProvider(webSocket), t)
+            val connectionId = connectionIdProvider(webSocket)
+            recorder.onFailure(connectionId, t)
+            recorder.senders.unregister(connectionId)
             delegate?.onFailure(webSocket, t, response)
         }
     }
@@ -93,6 +132,19 @@ class DevConsoleRecordingWebSocket private constructor(
     private val recorder: SocketRecorder,
     private val connectionId: String,
 ) : WebSocket {
+    /**
+     * Registered here, not by the listener, so a registry send goes through this wrapper's own
+     * `send` and is recorded exactly once. Replacing the listener's sender is the point: the
+     * documented dual-wiring would otherwise record the same frame twice.
+     */
+    init {
+        recorder.senders.register(
+            connectionId,
+            SocketProtocol.WEBSOCKET,
+            SocketSender { request -> sendRegistered(request.text) },
+        )
+    }
+
     override fun request() = delegate.request()
 
     override fun queueSize(): Long = delegate.queueSize()
@@ -120,13 +172,18 @@ class DevConsoleRecordingWebSocket private constructor(
     ): Boolean =
         delegate.close(code, reason).also { accepted ->
             if (accepted) recorder.onClosing(connectionId, code, reason)
+            recorder.senders.unregister(connectionId)
         }
 
     override fun cancel() {
         delegate.cancel()
+        recorder.senders.unregister(connectionId)
         // Not a failure: an intentional cancel by the host, so it must not read as ERROR severity.
         recorder.onCancelled(connectionId, "Cancelled by host")
     }
+
+    private fun sendRegistered(text: String): SocketSendResult =
+        if (send(text)) SocketSendResult.Sent else SocketSendResult.Rejected(SEND_QUEUE_FULL_REASON)
 
     companion object {
         fun wrap(

@@ -4,6 +4,7 @@ package io.devconsole.storage.room
 
 import io.devconsole.storage.api.SessionRetentionPolicy
 import io.devconsole.storage.api.SessionStore
+import io.devconsole.storage.api.StoredAttachment
 import io.devconsole.storage.api.StoredSession
 import io.devconsole.storage.api.StoredSessionStatus
 import kotlinx.coroutines.CancellationException
@@ -52,6 +53,7 @@ class RoomSessionStore(
                         activeDatabase.sessionDao().insertIfAbsent(session.toEntity())
                         activeDatabase.sessionDao().refreshUsage(session.id)
                     }
+                    coordinator.activeSession = session
                     SessionRetentionPruner(activeDatabase, attachmentFiles).prune(policy, session.id, clock())
                 }
             }
@@ -91,6 +93,23 @@ class RoomSessionStore(
         }
     }
 
+    override suspend fun delete(sessionId: String): Boolean =
+        coordinator.exclusive {
+            withContext(Dispatchers.IO) {
+                execute(false) { activeDatabase ->
+                    SessionRetentionPruner(activeDatabase, attachmentFiles).deleteFinished(sessionId)
+                }
+            }
+        }
+
+    override suspend fun setPinned(
+        sessionId: String,
+        pinned: Boolean,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            execute(false) { activeDatabase -> activeDatabase.sessionDao().setPinned(sessionId, pinned) > 0 }
+        }
+
     private suspend fun finish(
         sessionId: String,
         status: StoredSessionStatus,
@@ -102,6 +121,7 @@ class RoomSessionStore(
                 execute(Unit) { activeDatabase ->
                     activeDatabase.sessionDao().refreshUsage(sessionId)
                     activeDatabase.sessionDao().finish(sessionId, status.name, endedAtMs)
+                    if (coordinator.activeSession?.id == sessionId) coordinator.activeSession = null
                     SessionRetentionPruner(activeDatabase, attachmentFiles).prune(policy, null, clock())
                 }
             }
@@ -144,10 +164,14 @@ class RoomSessionStore(
 }
 
 /** Session-first retention: delete whole completed runs, then trim only an oversized active run. */
-class SessionRetentionPruner(
+class SessionRetentionPruner internal constructor(
     private val database: DevConsoleDatabase,
-    private val attachmentFiles: FileAttachmentStore,
+    /** Injected so tests can simulate a failed file delete without subclassing [FileAttachmentStore]. */
+    private val deleteAttachment: suspend (StoredAttachment) -> FileDeletion,
 ) {
+    constructor(database: DevConsoleDatabase, attachmentFiles: FileAttachmentStore) :
+        this(database, attachmentFiles::delete)
+
     // The capacity-trim loop below breaks both when no further candidate exists and when a
     // deletion fails partway; a single-exit rewrite would obscure which condition stopped pruning.
     @Suppress("LoopWithTooManyJumpStatements")
@@ -159,19 +183,25 @@ class SessionRetentionPruner(
         val sessions = database.sessionDao()
         val cutoff = (nowMs - policy.maxAgeMs).coerceAtLeast(0)
         for (session in sessions.deletingSessions()) {
-            if (!completeSessionDeletion(session.id)) return
+            completeSessionDeletion(session.id)
         }
         reconcilePending()
-        for (session in sessions.expiredCompleted(cutoff)) {
-            if (!deleteSession(session)) return
-        }
+        for (session in sessions.expiredCompleted(cutoff)) deleteSession(session)
 
         while (
             sessions.sessionCount() > policy.maxSessions ||
             sessions.totalEstimatedBytes() > policy.maxBytes
         ) {
-            val candidate = sessions.completedOldestFirst().firstOrNull() ?: break
-            if (!deleteSession(candidate)) break
+            val candidates = sessions.completedOldestFirst()
+            if (candidates.isEmpty()) break
+            var deleted = false
+            for (candidate in candidates) {
+                if (deleteSession(candidate)) {
+                    deleted = true
+                    break
+                }
+            }
+            if (!deleted) break
         }
 
         val active = activeSessionId?.let(sessions::session) ?: return
@@ -185,6 +215,12 @@ class SessionRetentionPruner(
             trimActiveSession(active.id, policy.maxBytes)
             sessions.refreshUsage(active.id)
         }
+    }
+
+    /** Explicit delete of one completed or crashed run, pinned or not; the active run is refused. */
+    suspend fun deleteFinished(sessionId: String): Boolean {
+        val session = database.sessionDao().session(sessionId) ?: return false
+        return session.status in FINISHED_STATUSES && deleteSession(session)
     }
 
     private suspend fun deleteSession(session: SessionEntity): Boolean {
@@ -220,15 +256,27 @@ class SessionRetentionPruner(
     ) {
         val attachments = database.attachmentDao()
         for (attachment in attachments.oldestUnbookmarkedForSession(sessionId)) {
-            if (sessionBytes(sessionId) <= maxBytes) return
+            if (sessionBytes(sessionId) <= maxBytes) break
             database.runInTransaction { attachments.markPendingDeletion(attachment.id) }
             reconcilePendingForSession(sessionId)
         }
-        while (sessionBytes(sessionId) > maxBytes) {
-            val ids = database.eventDao().oldestUnbookmarkedLowSeverityFirstForSession(sessionId, 1)
-            if (ids.isEmpty()) return
-            database.timelineAnnotationDao().deleteEvents(ids)
-            database.eventDao().deleteByIds(ids)
+        val currentBytes = sessionBytes(sessionId)
+        if (currentBytes <= maxBytes) return
+        val events = database.eventDao().activeSessionTrimCandidates(sessionId)
+        var bytesAfterDelete = currentBytes
+        val idsToDelete = mutableListOf<String>()
+        for (entity in events) {
+            if (bytesAfterDelete <= maxBytes) break
+            bytesAfterDelete -= entity.bytes
+            idsToDelete += entity.id
+        }
+        if (idsToDelete.isNotEmpty()) {
+            idsToDelete.chunked(EVENT_PRUNE_BATCH_SIZE).forEach { batch ->
+                database.runInTransaction {
+                    database.timelineAnnotationDao().deleteEvents(batch)
+                    database.eventDao().deleteByIds(batch)
+                }
+            }
         }
     }
 
@@ -252,16 +300,25 @@ class SessionRetentionPruner(
     }
 
     private suspend fun reconcilePendingForSession(sessionId: String): Boolean {
+        var failedDeletes = 0
         for (attachment in database.attachmentDao().pendingDeletionForSession(sessionId)) {
-            if (attachmentFiles.delete(attachment.toStoredAttachment()) == FileDeletion.Failed) return false
+            if (deleteAttachment(attachment.toStoredAttachment()) == FileDeletion.Failed) {
+                failedDeletes++
+                continue
+            }
             database.attachmentDao().deleteById(attachment.id)
         }
         database.sessionDao().refreshUsage(sessionId)
-        return true
+        // Keep failed rows pending; the next prune pass will retry them.
+        return failedDeletes == 0
     }
 }
 
+private const val EVENT_PRUNE_BATCH_SIZE = 256
+
 private fun Long?.orZero(): Long = this ?: 0L
+
+private val FINISHED_STATUSES = setOf(StoredSessionStatus.COMPLETED.name, StoredSessionStatus.CRASHED.name)
 
 private fun StoredSession.toEntity(): SessionEntity =
     SessionEntity(
@@ -279,9 +336,12 @@ private fun StoredSession.toEntity(): SessionEntity =
         deviceOsVersion,
         recordCount,
         estimatedBytes,
+        pinned,
     )
 
-private fun SessionEntity.toStoredSession(): StoredSession =
+internal fun StoredSession.toSessionEntity(): SessionEntity = toEntity()
+
+internal fun SessionEntity.toStoredSession(): StoredSession =
     StoredSession(
         id = id,
         status = StoredSessionStatus.valueOf(status),
@@ -297,4 +357,5 @@ private fun SessionEntity.toStoredSession(): StoredSession =
         deviceOsVersion = deviceOsVersion,
         recordCount = recordCount,
         estimatedBytes = estimatedBytes,
+        pinned = pinned,
     )

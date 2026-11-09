@@ -21,6 +21,9 @@ class EventStreamHub(
     val events = mutableEvents.asSharedFlow()
     val currentSequence: Long get() = sequence.get()
 
+    /** Live stream connections currently collecting [events]; lets tests pin subscribe-before-welcome. */
+    internal val subscriberCount: Int get() = mutableEvents.subscriptionCount.value
+
     init {
         require(capacity > 0) { "capacity must be positive" }
     }
@@ -53,25 +56,3 @@ private fun Map<String, String>.toStreamJson(): String =
         .joinToString(prefix = "{", postfix = "}") { (name, value) ->
             "\"${name.escapeJson()}\":\"${value.escapeJson()}\""
         }
-
-private fun String.escapeJson(): String =
-    buildString(length + 16) {
-        for (char in this@escapeJson) {
-            when (char) {
-                '"' -> append("\\\"")
-                '\\' -> append("\\\\")
-                '\b' -> append("\\b")
-                '\u000C' -> append("\\f")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> {
-                    if (char.code < 0x20) {
-                        append("\\u").append(char.code.toString(16).padStart(4, '0'))
-                    } else {
-                        append(char)
-                    }
-                }
-            }
-        }
-    }

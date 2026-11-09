@@ -580,17 +580,19 @@ class OkHttpAdapterFullNoopParityTest {
         val parts = mutableListOf<String>()
         var depth = 0
         val current = StringBuilder()
-        for (character in text) {
-            when (character) {
-                '(', '{', '[' -> {
+        for ((index, character) in text.withIndex()) {
+            // Generic brackets count too (`Map<String, String>`), but not the `>` of a lambda's `->`.
+            val isArrow = character == '>' && index > 0 && text[index - 1] == '-'
+            when {
+                character in "({[<" -> {
                     depth++
                     current.append(character)
                 }
-                ')', '}', ']' -> {
+                character in ")}]>" && !isArrow -> {
                     depth--
                     current.append(character)
                 }
-                delimiter ->
+                character == delimiter ->
                     if (depth == 0) {
                         parts.add(current.toString())
                         current.clear()

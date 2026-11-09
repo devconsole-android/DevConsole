@@ -107,6 +107,68 @@ import io.ktor.server.websocket.WebSockets as ServerWebSockets
 
 class DevConsoleKtorModuleTest {
     @Test
+    fun `oversized text mutation rejects from Content-Length`() =
+        testApplication {
+            val sessions = SessionAuthority()
+            val sessionCodes = SessionCodeAuthority(sessions)
+            application { protectedDevConsoleModule(sessions, sessionCodes) }
+            val session = client.exchangeSession(sessions, sessionCodes)
+
+            val response =
+                client.post("/api/v1/network/postman") {
+                    header(HttpHeaders.Host, "localhost")
+                    header(HttpHeaders.Authorization, "Bearer ${session.token}")
+                    header(HttpHeaders.Origin, "http://localhost")
+                    header("X-DevConsole-CSRF", session.csrfToken)
+                    header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+                    setBody("id=" + "x".repeat(1024 * 1024 + 1))
+                }
+
+            assertEquals(HttpStatusCode.PayloadTooLarge, response.status)
+            assertTrue(response.bodyAsText().contains("\"code\":\"PAYLOAD_TOO_LARGE\""))
+        }
+
+    @Test
+    fun `editing a disabled mock rule keeps its enabled state and predicates`() =
+        testApplication {
+            val sessions = SessionAuthority()
+            val sessionCodes = SessionCodeAuthority(sessions)
+            val existing =
+                MockRule(
+                    id = "orders",
+                    priority = 1,
+                    path = "/orders",
+                    queryPredicates = mapOf("mode" to "safe"),
+                    headerPredicates = mapOf("X-Mode" to "safe"),
+                    bodyPredicate = "approved",
+                ).withPersistence(io.devconsole.mocks.MockRulePersistence(enabled = false))
+            val mocks = MockEngine(listOf(existing))
+            application {
+                protectedDevConsoleModule(sessions, sessionCodes) {
+                    mockEngine = mocks
+                    mocksEditable = true
+                }
+            }
+            val session = client.exchangeSession(sessions, sessionCodes)
+            val response =
+                client.post("/api/v1/mocks/rules") {
+                    header(HttpHeaders.Host, "localhost")
+                    header(HttpHeaders.Authorization, "Bearer ${session.token}")
+                    header(HttpHeaders.Origin, "http://localhost")
+                    header("X-DevConsole-CSRF", session.csrfToken)
+                    header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded)
+                    setBody("id=orders&priority=2&path=%2Forders&status=201")
+                }
+
+            assertEquals(HttpStatusCode.Created, response.status)
+            val updated = mocks.rules().single()
+            assertFalse(updated.persistence.enabled)
+            assertEquals(mapOf("mode" to "safe"), updated.queryPredicates)
+            assertEquals(mapOf("X-Mode" to "safe"), updated.headerPredicates)
+            assertEquals("approved", updated.bodyPredicate)
+        }
+
+    @Test
     fun `open browser mode exposes data and mutations without credentials`() =
         testApplication {
             application {
@@ -642,6 +704,9 @@ class DevConsoleKtorModuleTest {
 
                     val welcome = (incoming.receive() as Frame.Text).data.decodeToString()
                     assertTrue(welcome.contains("server.welcome"))
+                    // The hub has no replay: the stream must already be subscribed when the welcome
+                    // arrives, or the event published below could be dropped and receive() hang.
+                    assertEquals(1, testStreamHub.subscriberCount)
 
                     testStreamHub.publish(
                         EventEnvelope(
@@ -2067,7 +2132,7 @@ class DevConsoleKtorModuleTest {
                     header(HttpHeaders.Origin, "http://localhost")
                     header("X-DevConsole-CSRF", session.csrfToken)
                     header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded)
-                    setBody("method=GET&url=https%3A%2F%2Fapi.example.test%2Forders")
+                    setBody("method=GET&url=https%3A%2F%2F%24%7Bhost%7D%2Forders&variable=host%3Dapi.example.test")
                 }
 
             assertEquals(HttpStatusCode.OK, result.status)
@@ -2830,7 +2895,13 @@ class DevConsoleKtorModuleTest {
         testApplication {
             val sessions = SessionAuthority()
             val sessionCodes = SessionCodeAuthority(sessions)
-            val flags = SessionFeatureFlags(listOf(FeatureFlag("checkout_v2", defaultValue = false)))
+            val flags =
+                SessionFeatureFlags(
+                    listOf(
+                        FeatureFlag("checkout_v2", defaultValue = false),
+                        FeatureFlag.ofOptions("stage_name", "prod", setOf("prod", "true")),
+                    ),
+                )
             val mocks = MockEngine(emptyList())
             application {
                 protectedDevConsoleModule(sessions, sessionCodes) {
@@ -2858,6 +2929,15 @@ class DevConsoleKtorModuleTest {
             val dirtyBody = dirty.bodyAsText()
             assertTrue("expected a dirty session, got $dirtyBody", "\"pristine\":false" in dirtyBody)
             assertTrue("\"checkout_v2\":true" in dirtyBody)
+
+            flags.override("stage_name", "true")
+            val stringFlag =
+                client
+                    .get("/api/v1/session/integrity") {
+                        header(HttpHeaders.Host, "localhost")
+                        header(HttpHeaders.Authorization, "Bearer ${session.token}")
+                    }.bodyAsText()
+            assertTrue(stringFlag.contains("\"stage_name\":\"true\""))
 
             val reset =
                 client.post("/api/v1/session/integrity/reset") {
@@ -2945,6 +3025,15 @@ class DevConsoleKtorModuleTest {
                     commandAuditLog = audit
                     attachmentReader = { id ->
                         if (id == "attachment-2") "token=attachment-secret".encodeToByteArray() else null
+                    }
+                    attachmentMetadataReader = { id ->
+                        if (id == "attachment-2") {
+                            testAttachment("attachment-2", RedactionApplicability.APPLIED).copy(
+                                storedLength = "token=attachment-secret".encodeToByteArray().size.toLong(),
+                            )
+                        } else {
+                            null
+                        }
                     }
                 }
             }

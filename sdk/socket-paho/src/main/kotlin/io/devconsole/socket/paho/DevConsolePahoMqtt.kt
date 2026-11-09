@@ -8,12 +8,18 @@ import io.devconsole.socket.MqttFrameMetadata
 import io.devconsole.socket.SocketDirection
 import io.devconsole.socket.SocketProtocol
 import io.devconsole.socket.SocketRecorder
+import io.devconsole.socket.SocketSendRequest
+import io.devconsole.socket.SocketSendResult
+import io.devconsole.socket.SocketSender
 import org.eclipse.paho.client.mqttv3.IMqttAsyncClient
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
 import org.eclipse.paho.client.mqttv3.IMqttToken
 import org.eclipse.paho.client.mqttv3.MqttCallback
 import org.eclipse.paho.client.mqttv3.MqttCallbackExtended
 import org.eclipse.paho.client.mqttv3.MqttMessage
+
+/** Also enforced by the registry; kept here so a directly-invoked sender cannot publish to no topic. */
+private const val MISSING_TOPIC_REASON = "MQTT publish requires a non-blank topic"
 
 /** Paho adapter that records MQTT callbacks without altering the client's own control flow. */
 class DevConsolePahoMqttCallback
@@ -73,6 +79,15 @@ class DevConsoleRecordingMqttPublisher private constructor(
     private val recorder: SocketRecorder,
     val connectionId: String,
 ) {
+    /** Publishes through this class's own `publish`, so a registry send is recorded exactly once. */
+    init {
+        recorder.senders.register(
+            connectionId,
+            SocketProtocol.MQTT,
+            SocketSender { request -> sendFromRegistry(request) },
+        )
+    }
+
     fun publish(
         topic: String,
         message: MqttMessage,
@@ -93,9 +108,34 @@ class DevConsoleRecordingMqttPublisher private constructor(
 
     fun disconnect(): IMqttToken =
         delegate.disconnect().also {
+            recorder.senders.unregister(connectionId)
             recorder.onClosing(connectionId)
             recorder.onClosed(connectionId)
         }
+
+    /**
+     * Connection state is checked at send time rather than at registration time: `connectionLost`
+     * keeps the sender registered because Paho reconnects on its own, and the dashboard should get
+     * [SocketSendResult.NotConnected] only for as long as the gap actually lasts.
+     */
+    private fun sendFromRegistry(request: SocketSendRequest): SocketSendResult {
+        val topic = request.topic
+        return when {
+            !delegate.isConnected -> SocketSendResult.NotConnected
+            topic == null -> SocketSendResult.Rejected(MISSING_TOPIC_REASON)
+            else ->
+                runCatching {
+                    publish(topic, request.text.toByteArray(Charsets.UTF_8), request.qos, request.retained)
+                }.fold(
+                    onSuccess = { SocketSendResult.Sent },
+                    onFailure = { failure ->
+                        SocketSendResult.Rejected(
+                            failure.message?.takeIf(String::isNotBlank) ?: failure.javaClass.simpleName,
+                        )
+                    },
+                )
+        }
+    }
 
     private fun recordSent(
         topic: String,

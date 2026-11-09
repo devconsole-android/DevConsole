@@ -89,6 +89,26 @@ class ComposerExecutorTest {
     }
 
     @Test
+    fun `redirect Location with spaces and unicode is percent encoded and followed`() {
+        val dispatched = mutableListOf<ResolvedComposerRequest>()
+        val executor =
+            ComposerExecutor(
+                ComposerTransport { request ->
+                    dispatched += request
+                    if (dispatched.size == 1) {
+                        ComposerResponse(statusCode = 302, headers = mapOf("Location" to "/login?next=/a b&name=雪"))
+                    } else {
+                        ComposerResponse(statusCode = 200)
+                    }
+                },
+            )
+
+        executor.execute(ComposerRequest(method = "GET", url = "https://api.example.test/start"))
+
+        assertEquals("https://api.example.test/login?next=/a%20b&name=%E9%9B%AA", dispatched[1].url)
+    }
+
+    @Test
     fun `303 redirect converts post to get and drops every body representation`() {
         val dispatched = mutableListOf<ResolvedComposerRequest>()
         val executor =

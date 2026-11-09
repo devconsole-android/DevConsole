@@ -12,6 +12,13 @@
   // and shares one request between identical concurrent GETs, so a burst of view switches does not
   // trip the limiter. It delegates to window.fetch, which adds the 401 session tracking below.
   const inFlightGets = new Map();
+  const requestGenerations = new Map();
+  function nextGen(key) {
+    const gen = (requestGenerations.get(key) || 0) + 1;
+    requestGenerations.set(key, gen);
+    return gen;
+  }
+  const isLatest = (key, gen) => requestGenerations.get(key) === gen;
 
   function getAuthHeader(headers) {
     if (!headers) return '';
@@ -169,6 +176,21 @@
   }
   let openAccess = false;
   let currentView = 'overview';
+  // Deep link: `#view=<name>` restores the view after reload/sharing. Read once at startup, since
+  // pairing strips the hash; never carries tokens (the `code=` pairing param is handled separately).
+  const DEEP_LINK_VIEWS = new Set(['overview', 'timeline', 'network', 'socket', 'state', 'remoteConfig', 'preferences',
+    'database', 'files', 'push', 'crashes', 'composer', 'mocks', 'captureRules', 'sdkHealth', 'evidence', 'session']);
+  const viewFromHash = () => {
+    const view = new URLSearchParams(location.hash.slice(1)).get('view');
+    return view && DEEP_LINK_VIEWS.has(view) ? view : null;
+  };
+  let pendingDeepLinkView = viewFromHash();
+  // `#view=network&tx=<id>` opens one capture, so a link can point a teammate at a specific request.
+  const DEEP_LINK_TX_RE = /^[A-Za-z0-9._:-]{1,128}$/;
+  let pendingDeepLinkTx = (() => {
+    const id = new URLSearchParams(location.hash.slice(1)).get('tx');
+    return id && DEEP_LINK_TX_RE.test(id) ? id : null;
+  })();
   let sessionRetryTimer = 0;
   let csrf = '';
   let paused = true;
@@ -181,6 +203,7 @@
   let selectedTransactionId = '';
   let selectedTransactionDetail = null;
   let selectedEventId = '';
+  let eventNotesById = new Map();
   let eventDetailQuery = '';
   let selectedPushIndex = -1;
   let pushDetailQuery = '';
@@ -194,6 +217,10 @@
   // draft came from "Mock this response" (or an edit of a rule that already had one), reset on
   // every dialog open, and included in the save payload as-is (never re-derived from edited fields).
   let mockRuleDraftSourceBodySnapshot = null;
+  // The sequence editor's in-memory steps; re-rendered from the DOM before every add/remove so
+  // half-typed values survive the re-render.
+  let mockRuleSteps = [];
+  let mockRuleDraftUnsupported = false;
   // Full-window mode for the mock rule dialog. Deliberately outside openMockRuleDialog so it
   // sticks for the rest of the page session: someone hand-writing JSON bodies wants the big
   // editor on every rule, not one dialog at a time.
@@ -212,6 +239,11 @@
   let selectedFilePath = '';
   let stream = null;
   let streamRetry = null;
+  let streamRetryDelay = 1500;
+  let overviewRefreshAt = 0;
+  let overviewRefreshTimer = null;
+  let lastSocketFetchAt = 0;
+  let lastRenderedSocketMode = '';
   // Highest Timeline event.sequence this browser has taken delivery of, whether via a live WS
   // frame or a full /api/v1/events refetch -- compared against server.welcome's currentSequence on
   // every (re)connect so a reconnect that missed events while the socket was down can tell that
@@ -283,6 +315,11 @@
     }
   }
   let networkHostDropOpen = false;
+  // HAR 1.2 opened entirely in this tab: { name, entries, total, truncated }. Non-null means the
+  // Network view is an offline viewer over that file — no request in it may reach the server,
+  // whose ids would not resolve to these imported rows.
+  const HAR_MAX_ENTRIES = 5000;
+  let harOffline = null;
 
   // WebSockets: `socketConnections` from /connections; `socketMessages_` from /messages for the
   // active connection/frame-type/direction filters (fetched broad, connection multi-select and
@@ -344,7 +381,14 @@
         evidenceFlags.delete(key);
         updateEvidenceUi();
         if (!hasSession()) return;
-        const r = await fetch('/api/v1/evidence/' + encodeURIComponent(kind) + '/' + encodeURIComponent(id), { method: 'DELETE', headers: controlHeaders() });
+        let r;
+        try { r = await fetch('/api/v1/evidence/' + encodeURIComponent(kind) + '/' + encodeURIComponent(id), { method: 'DELETE', headers: controlHeaders() }); }
+        catch (err) {
+          evidenceFlags.set(key, prev);
+          updateEvidenceUi();
+          toast('Could not remove evidence: ' + (err?.message || 'network error'), 'error');
+          return;
+        }
         if (r.ok) {
           toast('Removed from evidence.');
           if (currentView === 'evidence') loadEvidence();
@@ -358,11 +402,17 @@
         evidenceFlags.set(key, { kind: String(kind).toLowerCase(), id, label, flaggedAtMs: Date.now() });
         updateEvidenceUi();
         if (!hasSession()) return;
-        const r = await fetch('/api/v1/evidence', {
+        let r;
+        try { r = await fetch('/api/v1/evidence', {
           method: 'POST',
           headers: { ...controlHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({ kind, id }),
-        });
+        }); } catch (err) {
+          evidenceFlags.delete(key);
+          updateEvidenceUi();
+          toast('Could not flag evidence: ' + (err?.message || 'network error'), 'error');
+          return;
+        }
         if (r.ok) {
           const item = await r.json();
           evidenceFlags.set(key, {
@@ -435,6 +485,8 @@
     if (h < 24) return h + 'h ago';
     return Math.floor(h / 24) + 'd ago';
   }
+  /** "1 file" / "3 files": a count with its noun in the right number. */
+  const countLabel = (n, one, many = one + 's') => n + ' ' + (Number(n) === 1 ? one : many);
   const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   /** Shared byte formatter — used anywhere the server reports a raw byte count (database size,
    * export size estimate) so the same value always reads the same way across views. */
@@ -893,15 +945,33 @@
 
   /** `chipsLabel` (e.g. "N of M shown ·") is optional — callers only pass it when
    * they already track a distinct shown/total pair; never invented for views that don't. */
+  /** Live batches re-render toolbars many times a second; rewriting identical markup would drop
+   * keyboard focus mid-Tab. Skip unchanged markup, and when it did change, put focus back on the
+   * control with the same data-value / data-chip-index / data-chip-reset, if it still exists. */
+  function setHtmlPreservingFocus(el, html) {
+    if (!el || el.dataset.renderedHtml === html) return;
+    const focused = el.contains(document.activeElement) ? document.activeElement : null;
+    const focusKey = focused
+      ? ['value', 'chipIndex', 'chipReset'].map((k) => (focused.dataset[k] !== undefined ? k + ':' + focused.dataset[k] : '')).join('|')
+      : null;
+    el.innerHTML = html;
+    el.dataset.renderedHtml = html;
+    if (focusKey == null) return;
+    const match = [...el.querySelectorAll('button')].find(
+      (b) => ['value', 'chipIndex', 'chipReset'].map((k) => (b.dataset[k] !== undefined ? k + ':' + b.dataset[k] : '')).join('|') === focusKey,
+    );
+    match?.focus({ preventScroll: true });
+  }
   function appliedFiltersHtml(containerId, chips, resetFn, chipsLabel) {
     const wrap = $(containerId);
     if (!chips.length) {
       wrap.hidden = true;
       wrap.innerHTML = '';
+      delete wrap.dataset.renderedHtml;
       return;
     }
     wrap.hidden = false;
-    wrap.innerHTML =
+    setHtmlPreservingFocus(wrap,
       (chipsLabel ? `<span class="applied-filters-label">${esc(chipsLabel)}</span>` : '') +
       chips
         .map(
@@ -910,7 +980,7 @@
               c.label,
             )}</span><span class="applied-filter-x">&times;</span></button>`,
         )
-        .join('') + `<button type="button" class="applied-filters-reset" data-chip-reset>Reset all</button>`;
+        .join('') + `<button type="button" class="applied-filters-reset" data-chip-reset>Reset all</button>`);
     wrap.onclick = (e) => {
       const resetBtn = e.target.closest('[data-chip-reset]');
       if (resetBtn) {
@@ -1083,10 +1153,20 @@
       .map((r) => {
         const inner = `<span class="card-row-k">${esc(r.k)}</span><span class="card-row-v tone-text-${r.tone || 'ink'}">${esc(r.v)}</span>${
           r.tag ? `<span class="card-row-tag tone-text-${r.tagTone || 'muted'}">${esc(r.tag)}</span>` : '<span></span>'
-        }`;
-        return r.click
+        }${r.sub ? `<span class="card-row-sub">${esc(r.sub)}</span>` : ''}`;
+        const row = r.click
           ? `<button type="button" class="card-row card-row-click" data-card-row="${esc(r.click)}" title="${esc(r.clickTitle || r.k)}">${inner}</button>`
           : `<div class="card-row">${inner}</div>`;
+        if (!r.actions?.length && !r.editorHtml) return row;
+        // Actions are real <button>s and cannot nest inside the row's own button, so a row that
+        // carries them renders as a group: the row keeps its click/focus behaviour, the actions
+        // and any inline editor sit beneath it inside the same separator.
+        const actions = r.actions?.length
+          ? `<div class="card-row-actions">${r.actions
+              .map((a) => `<button type="button" class="card-row-action${a.tone ? ' tone-text-' + a.tone : ''}" data-card-row-action="${esc(a.id)}" title="${esc(a.title || a.label)}">${esc(a.label)}</button>`)
+              .join('')}</div>`
+          : '';
+        return `<div class="card-row-group">${row}${actions}${r.editorHtml ? `<div class="card-row-editor">${r.editorHtml}</div>` : ''}</div>`;
       })
       .join('')}</div>`;
   }
@@ -1228,7 +1308,12 @@
     if (wiredCardGrids.has(containerId)) return;
     wiredCardGrids.add(containerId);
     $(containerId).addEventListener('click', (e) => {
-      const { onToggle, onButton, onTree, onDelete, onEdit, onRow } = cardGridHandlers[containerId];
+      const { onToggle, onButton, onTree, onDelete, onEdit, onRow, onRowAction } = cardGridHandlers[containerId];
+      const ra = e.target.closest('[data-card-row-action]');
+      if (ra && onRowAction) {
+        onRowAction(ra.dataset.cardRowAction);
+        return;
+      }
       const ed = e.target.closest('[data-card-edit]');
       if (ed && onEdit) {
         onEdit(ed.dataset.cardEdit);
@@ -1599,7 +1684,7 @@
   // ================================================================
   function openConfirm(title, message, confirmLabel) {
     const overlay = $('confirmModal');
-    if (!overlay) return Promise.resolve(window.confirm(message));
+    if (!overlay) return Promise.resolve(false);
     $('confirmTitle').textContent = title;
     $('confirmMessage').textContent = message;
     $('confirmSubmit').textContent = confirmLabel || 'Confirm';
@@ -1785,7 +1870,76 @@
       id: $('mockRuleId'), method: $('mockRuleMethod'), scheme: $('mockRuleScheme'), host: $('mockRuleHost'),
       path: $('mockRulePath'), status: $('mockRuleStatus'), delay: $('mockRuleDelay'), headers: $('mockRuleHeaders'),
       body: $('mockRuleBody'), priority: $('mockRulePriority'), scope: $('mockRuleScope'),
+      actionType: $('mockRuleActionType'), failureMessage: $('mockRuleFailureMessage'), timeoutMs: $('mockRuleTimeoutMs'),
+      remoteScheme: $('mockRuleRemoteScheme'), remoteHost: $('mockRuleRemoteHost'), remotePort: $('mockRuleRemotePort'),
+      remotePath: $('mockRuleRemotePath'), bytesPerSecond: $('mockRuleBytesPerSecond'),
+      throttleLatency: $('mockRuleThrottleLatency'), queryPredicates: $('mockRuleQueryPredicates'),
+      headerPredicates: $('mockRuleHeaderPredicates'), bodyPredicate: $('mockRuleBodyPredicate'),
     };
+  }
+  /** Shows only the fields the selected action type needs. */
+  function syncMockRuleActionFields() {
+    const type = $('mockRuleActionType').value;
+    document.querySelectorAll('#mockRuleModal [data-mock-fields]').forEach((el) => {
+      el.hidden = !el.dataset.mockFields.split(' ').includes(type);
+    });
+  }
+  /** Maps an `actionDetail` tree onto the editor's flat form values, or null when the shape is
+   * richer than this form can express (e.g. a Delay wrapping a sequence, a nested throttle). */
+  function mockActionForm(detail) {
+    if (!detail || !detail.type) return null;
+    switch (detail.type) {
+      case 'passthrough': return { type: 'passthrough' };
+      case 'static':
+        return detail.bodyTruncated ? null : { type: 'static', status: detail.statusCode, body: detail.body, headers: detail.headers || {} };
+      case 'template':
+        return detail.templateTruncated ? null : { type: 'template', status: detail.statusCode, body: detail.template, headers: detail.headers || {} };
+      case 'delay': {
+        const inner = mockActionForm(detail.next);
+        if (!inner || (inner.type !== 'static' && inner.type !== 'template') || inner.delayMs != null) return null;
+        return { ...inner, delayMs: detail.durationMs };
+      }
+      case 'status_override': return { type: 'status_override', status: detail.statusCode };
+      case 'body_replacement': return detail.bodyTruncated ? null : { type: 'body_replacement', body: detail.body };
+      case 'connection_failure': return { type: 'connection_failure', message: detail.message || '' };
+      case 'timeout': return { type: 'timeout', timeoutMs: detail.durationMs };
+      case 'map_remote': return { type: 'map_remote', scheme: detail.scheme, host: detail.host, port: detail.port, path: detail.path };
+      case 'throttle':
+        return detail.next && detail.next.type !== 'passthrough'
+          ? null
+          : { type: 'throttle', bytesPerSecond: detail.bytesPerSecond, latencyMs: detail.latencyMs };
+      case 'sequence': return mockSequenceForm(detail);
+      default: return null;
+    }
+  }
+  function mockSequenceForm(detail) {
+    const steps = [];
+    for (const step of detail.steps || []) {
+      const form = mockActionForm(step);
+      if (!form || !['static', 'connection_failure', 'timeout', 'passthrough'].includes(form.type)) return null;
+      // Sequence steps can't carry headers in the form; reject those rather than dropping them.
+      if (form.headers && Object.keys(form.headers).length) return null;
+      steps.push({ type: form.type, status: form.status, body: form.body, delayMs: form.delayMs, timeoutMs: form.timeoutMs, message: form.message });
+    }
+    return { type: 'sequence', steps, loop: detail.loop === true };
+  }
+  /** Readable one-line summary of a rule's action for the rule list. */
+  function mockActionLabel(rule) {
+    const d = rule.actionDetail;
+    if (!d) return rule.action || 'Passthrough';
+    switch (d.type) {
+      case 'static': return 'Static';
+      case 'template': return 'Template';
+      case 'delay': return 'Delay ' + d.durationMs + ' ms';
+      case 'sequence': return 'Sequence · ' + countLabel((d.steps || []).length, 'step');
+      case 'throttle': return 'Throttle ' + formatBytes(d.bytesPerSecond) + '/s';
+      case 'map_remote': return 'Map remote → ' + (d.host || d.path || (d.scheme || '') + (d.port != null ? ':' + d.port : ''));
+      case 'connection_failure': return 'Connection failure';
+      case 'timeout': return 'Timeout ' + d.durationMs + ' ms';
+      case 'status_override': return 'Status override';
+      case 'body_replacement': return 'Body replacement';
+      default: return rule.action || d.type;
+    }
   }
   function setMockDialogError(msg) {
     const el = $('mockRuleFormError');
@@ -1804,9 +1958,11 @@
   }
   function syncMockRuleDialogGate() {
     const btn = $('mockRuleSave');
-    const ok = canEditMocks();
+    const ok = canEditMocks() && !mockRuleDraftUnsupported;
     btn.disabled = !ok;
-    btn.title = ok ? 'Save rule' : hasSession() ? 'The mocks capability is off for this build' : 'Sign in and enable the mocks capability';
+    btn.title = mockRuleDraftUnsupported
+      ? 'This rule’s action cannot be expressed by this editor'
+      : ok ? 'Save rule' : hasSession() ? 'The mocks capability is off for this build' : 'Sign in and enable the mocks capability';
   }
   /** Same rule server's `validMockHeader` (DevConsoleKtorModule.kt) enforces at the POST boundary
    * — validated here too so a typo surfaces as an inline dialog error instead of a round trip. */
@@ -1984,18 +2140,20 @@
     el.focus({ preventScroll: true });
     el.closest('.field')?.scrollIntoView({ block: 'start' });
   }
-  /** Only a plain (optionally delayed) static response with an untruncated body survives a round
-   * trip through this dialog -- richer actions (ConnectionFailure/Timeout/TemplateResponse/etc.)
-   * and truncated bodies have no representation in the form, so saving one back would silently
-   * collapse it into StaticResponse(200, ""). Shared by the mock-rule-list edit-button gate, the
-   * open guard, and the save-time id-collision guard below so all three agree on the same rule. */
+  /** Every rule can be opened: unsupported shapes land in the dialog read-only with an inline
+   * explanation instead of being silently rewritten as a static response. */
   function isMockRuleEditable(rule) {
-    return Boolean(rule) && (rule.action === 'StaticResponse' || rule.action === 'Delay') && rule.bodyTruncated !== true;
+    return Boolean(rule);
+  }
+  /** True only for actions this editor can round-trip without losing fields. */
+  function isMockRuleRoundTrippable(rule) {
+    return Boolean(rule) && Boolean(mockActionForm(rule.actionDetail));
   }
   function openMockRuleDialog(rule, { editing = false } = {}) {
     const overlay = $('mockRuleModal');
     if (!overlay) return;
     mockRuleDraftSourceBodySnapshot = rule?.sourceBodySnapshot || null;
+    mockRuleDraftUnsupported = rule?.unsupported === true;
     const f = mockRuleFieldEls();
     f.id.value = rule?.id || '';
     f.id.disabled = editing;
@@ -2003,16 +2161,34 @@
     f.scheme.value = rule?.scheme || '';
     f.host.value = rule?.host || '';
     f.path.value = rule?.path || '';
+    f.actionType.value = rule?.actionType || 'static';
     f.status.value = rule?.status ?? 200;
     f.delay.value = rule?.delayMs ?? '';
     f.headers.value = rule?.headers || '';
     f.body.value = rule?.body || '';
+    f.failureMessage.value = rule?.failureMessage || '';
+    f.timeoutMs.value = rule?.timeoutMs ?? 1000;
+    f.remoteScheme.value = rule?.remoteScheme || '';
+    f.remoteHost.value = rule?.remoteHost || '';
+    f.remotePort.value = rule?.remotePort ?? '';
+    f.remotePath.value = rule?.remotePath || '';
+    f.bytesPerSecond.value = rule?.bytesPerSecond ?? 50000;
+    f.throttleLatency.value = rule?.latencyMs ?? 0;
+    f.queryPredicates.value = rule?.queryPredicates || '';
+    f.headerPredicates.value = rule?.headerPredicates || '';
+    f.bodyPredicate.value = rule?.bodyPredicate || '';
     f.priority.value = rule?.priority ?? 0;
     f.scope.value = rule?.scope || 'SESSION';
+    mockRuleSteps = (rule?.steps || []).map((step) => ({ ...step }));
+    $('mockRuleSequenceLoop').checked = rule?.loop === true;
+    renderMockRuleSteps();
+    syncMockRuleActionFields();
     setFieldError(f.id, false, 'mockRuleIdHelp');
     setFieldError(f.status, false);
     setFieldError(f.headers, false);
-    setMockDialogError('');
+    setMockDialogError(mockRuleDraftUnsupported
+      ? 'This rule uses ' + (rule?.actionLabel || rule?.action || 'an action') + ' that this editor cannot express — saving here would overwrite it. Delete and recreate it instead.'
+      : '');
     $('mockRuleModalTitleText').textContent = editing ? 'Edit mock rule' : 'New mock rule';
     setMockBodyExpanded(mockBodyExpanded);
     $('mockRuleBodyFind').value = '';
@@ -2049,19 +2225,27 @@
   function editMockRule(id) {
     const rule = mockRulesCache.find((r) => r.id === id);
     if (!rule) return;
-    // Defense in depth alongside the pencil button's own `editable` gate (cardTogglesHtml/
-    // loadMockRules) -- this is the only function that actually opens the dialog for an existing
-    // rule, so it refuses on its own rather than trusting the button was never reachable.
-    if (!isMockRuleEditable(rule)) {
-      toast('This rule uses ' + rule.action + ' and can’t be edited here — saving would replace it with a plain 200 response. Delete and recreate it instead.', 'error');
-      return;
-    }
+    const form = mockActionForm(rule.actionDetail);
     openMockRuleDialog(
       {
         id: rule.id, method: rule.method || '', scheme: rule.scheme || '', host: rule.host || '',
-        path: rule.path, status: rule.statusCode, delayMs: rule.delayMs,
-        headers: Object.entries(rule.headers || {}).map(([k, v]) => k + ': ' + v).join('\n'),
-        body: rule.body || '', priority: rule.priority, scope: rule.scope,
+        path: rule.path, priority: rule.priority, scope: rule.scope,
+        actionType: form?.type,
+        status: form?.status ?? rule.statusCode,
+        delayMs: form?.delayMs,
+        headers: Object.entries(form?.headers || {}).map(([k, v]) => k + ': ' + v).join('\n'),
+        body: form?.body || '',
+        failureMessage: form?.message || '',
+        timeoutMs: form?.timeoutMs,
+        remoteScheme: form?.scheme || '', remoteHost: form?.host || '',
+        remotePort: form?.port ?? '', remotePath: form?.path || '',
+        bytesPerSecond: form?.bytesPerSecond, latencyMs: form?.latencyMs,
+        steps: form?.steps || [], loop: form?.loop === true,
+        queryPredicates: Object.entries(rule.queryPredicates || {}).map(([k, v]) => k + '=' + v).join('\n'),
+        headerPredicates: Object.entries(rule.headerPredicates || {}).map(([k, v]) => k + '=' + v).join('\n'),
+        bodyPredicate: rule.bodyPredicate || '',
+        unsupported: !form,
+        actionLabel: mockActionLabel(rule),
         // `sourceBodySnapshotTruncated` (see MockRule.json()) means the 64KB-capped value below is
         // an unparseable prefix of the real snapshot, not the snapshot itself — carrying it into
         // the draft (and back out to the server on save) would permanently clobber the engine's
@@ -2072,43 +2256,197 @@
       { editing: true },
     );
   }
+  const MOCK_STEP_TYPES = ['static', 'connection_failure', 'timeout', 'passthrough'];
+  function mockStepDefaults() {
+    return { type: 'static', status: '200', body: '', delayMs: '', timeoutMs: '1000', message: '' };
+  }
+  function readMockRuleSteps() {
+    const rows = [...document.querySelectorAll('#mockRuleSteps [data-step-row]')];
+    if (!rows.length) return;
+    mockRuleSteps = rows.map((row) => ({
+      type: row.querySelector('[data-step-type]').value,
+      status: row.querySelector('[data-step-status]')?.value ?? '',
+      body: row.querySelector('[data-step-body]')?.value ?? '',
+      delayMs: row.querySelector('[data-step-delay]')?.value ?? '',
+      timeoutMs: row.querySelector('[data-step-timeout]')?.value ?? '',
+      message: row.querySelector('[data-step-message]')?.value ?? '',
+    }));
+  }
+  const MOCK_STEP_LABELS = {
+    static: 'Static response',
+    connection_failure: 'Connection failure',
+    timeout: 'Timeout',
+    passthrough: 'Passthrough (real network)',
+  };
+  function mockStepHtml(step, index) {
+    const options = MOCK_STEP_TYPES
+      .map((type) => `<option value="${type}"${step.type === type ? ' selected' : ''}>${esc(MOCK_STEP_LABELS[type] || type)}</option>`)
+      .join('');
+    let fields = '';
+    if (step.type === 'static') {
+      fields = `<label class="field"><span>Status</span><input data-step-status type="number" min="100" max="599" value="${esc(step.status || '200')}"></label>
+        <label class="field"><span>Delay ms</span><input data-step-delay type="number" min="0" max="30000" value="${esc(step.delayMs || '')}"></label>
+        <label class="field field-full"><span>Body</span><input data-step-body value="${esc(step.body || '')}"></label>`;
+    } else if (step.type === 'connection_failure') {
+      fields = `<label class="field field-full"><span>Message (optional)</span><input data-step-message value="${esc(step.message || '')}"></label>`;
+    } else if (step.type === 'timeout') {
+      fields = `<label class="field"><span>Timeout ms</span><input data-step-timeout type="number" min="0" max="30000" value="${esc(step.timeoutMs || '1000')}"></label>`;
+    }
+    return `<div class="mock-step-row" data-step-row="${index}">
+      <label class="field"><span>Step ${index + 1}</span><select data-step-type>${options}</select></label>
+      ${fields}
+      <button type="button" class="xs mock-step-remove" data-step-remove="${index}" title="Remove step">Remove</button>
+    </div>`;
+  }
+  function renderMockRuleSteps() {
+    $('mockRuleSteps').innerHTML = mockRuleSteps.map(mockStepHtml).join('');
+  }
+  function addMockRuleStep() {
+    readMockRuleSteps();
+    mockRuleSteps.push(mockStepDefaults());
+    renderMockRuleSteps();
+  }
+  function removeMockRuleStep(index) {
+    readMockRuleSteps();
+    mockRuleSteps.splice(index, 1);
+    renderMockRuleSteps();
+  }
+  function changeMockRuleStepType(index, type) {
+    readMockRuleSteps();
+    mockRuleSteps[index].type = type;
+    renderMockRuleSteps();
+  }
+  function mockPredicateLines(text, label) {
+    const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+    const bad = lines.find((line) => line.indexOf('=') <= 0);
+    if (bad) throw new Error(label + ' line "' + bad + '" must be key=value.');
+    return lines;
+  }
+  function mockFormFromDialog() {
+    const f = mockRuleFieldEls();
+    return {
+      type: f.actionType.value, status: Number(f.status.value), body: f.body.value,
+      headersText: f.headers.value, delayMs: f.delay.value.trim(), message: f.failureMessage.value.trim(),
+      timeoutMs: f.timeoutMs.value.trim(), scheme: f.remoteScheme.value.trim(), host: f.remoteHost.value.trim(),
+      port: f.remotePort.value.trim(), path: f.remotePath.value.trim(),
+      bytesPerSecond: f.bytesPerSecond.value.trim(), latencyMs: f.throttleLatency.value.trim(),
+      steps: mockRuleSteps, loop: $('mockRuleSequenceLoop').checked,
+    };
+  }
+  function validateMockActionForm(form) {
+    const number = (value) => Number(value);
+    if (['static', 'template', 'status_override'].includes(form.type) && !(Number.isInteger(form.status) && form.status >= 100 && form.status <= 599)) {
+      return 'Status must be an integer between 100 and 599.';
+    }
+    if (form.type === 'timeout') {
+      const ms = number(form.timeoutMs);
+      if (!(Number.isInteger(ms) && ms >= 0 && ms <= 30000)) return 'Timeout must be between 0 and 30000 ms.';
+    }
+    if (form.type === 'map_remote') {
+      if (!form.scheme && !form.host && !form.port && !form.path) return 'Map remote needs at least one of scheme, host, port, or path.';
+      if (form.scheme && !['http', 'https'].includes(form.scheme)) return 'Remote scheme must be http or https.';
+      if (form.path && !form.path.startsWith('/')) return "Remote path must start with '/'.";
+      if (form.port && !(Number.isInteger(number(form.port)) && number(form.port) >= 1 && number(form.port) <= 65535)) return 'Remote port must be between 1 and 65535.';
+    }
+    if (form.type === 'throttle') {
+      const bps = number(form.bytesPerSecond), latency = number(form.latencyMs || 0);
+      if (!(Number.isInteger(bps) && bps >= 1 && bps <= 104857600)) return 'Bytes per second must be between 1 and 104857600.';
+      if (!(Number.isInteger(latency) && latency >= 0 && latency <= 30000)) return 'Throttle latency must be between 0 and 30000 ms.';
+    }
+    if (form.type === 'sequence') {
+      if (!form.steps.length) return 'A sequence needs at least one step.';
+      if (form.steps.length > 20) return 'A sequence may contain at most 20 steps.';
+      for (const step of form.steps) {
+        if (step.type === 'static' && !(Number.isInteger(number(step.status)) && number(step.status) >= 100 && number(step.status) <= 599)) return 'Every static step needs a status between 100 and 599.';
+        if (step.type === 'timeout' && !(Number.isInteger(number(step.timeoutMs)) && number(step.timeoutMs) >= 0 && number(step.timeoutMs) <= 30000)) return 'Every timeout step needs a value between 0 and 30000 ms.';
+        if (step.type === 'static' && step.delayMs !== '' && !(Number.isInteger(number(step.delayMs)) && number(step.delayMs) >= 0 && number(step.delayMs) <= 30000)) return 'Step delays must be between 0 and 30000 ms.';
+      }
+    }
+    return null;
+  }
+  function applyMockActionParams(params, form) {
+    // Imported rules build `form` from JSON, where an absent value is undefined/null rather than the
+    // editor's ''; without this guard String(undefined) went out as "undefined" and every imported
+    // static/template rule without a delay failed validation.
+    const has = (v) => v != null && v !== '';
+    params.set('actionType', form.type);
+    if (['static', 'template', 'status_override'].includes(form.type)) params.set('status', String(form.status));
+    if (['static', 'template', 'body_replacement'].includes(form.type)) params.set('body', form.body || '');
+    if (form.type === 'static' || form.type === 'template') {
+      if ((form.headersText || '').trim()) params.set('headers', form.headersText);
+      if (has(form.delayMs)) params.set('delayMs', String(form.delayMs));
+    } else if (form.type === 'connection_failure') {
+      if (form.message) params.set('failureMessage', form.message);
+    } else if (form.type === 'timeout') {
+      if (has(form.timeoutMs)) params.set('timeoutMs', String(form.timeoutMs));
+    } else if (form.type === 'map_remote') {
+      if (form.scheme) params.set('remoteScheme', form.scheme);
+      if (form.host) params.set('remoteHost', form.host);
+      if (form.port) params.set('remotePort', form.port);
+      if (form.path) params.set('remotePath', form.path);
+    } else if (form.type === 'throttle') {
+      if (has(form.bytesPerSecond)) params.set('bytesPerSecond', String(form.bytesPerSecond));
+      params.set('latencyMs', form.latencyMs || '0');
+    } else if (form.type === 'sequence') {
+      form.steps.forEach((step) => {
+        params.append('stepType', step.type);
+        params.append('stepStatus', step.type === 'static' ? String(step.status ?? '') : '');
+        params.append('stepBody', step.type === 'connection_failure' ? (step.message || '') : (step.body || ''));
+        params.append('stepDelayMs', step.type === 'static' ? String(step.delayMs ?? '') : '');
+        params.append('stepTimeoutMs', step.type === 'timeout' ? String(step.timeoutMs ?? '') : '');
+      });
+      params.set('loop', form.loop ? 'true' : 'false');
+    }
+  }
   async function saveMockRuleDialog() {
-    if (!canEditMocks()) return;
+    if (!canEditMocks() || mockRuleDraftUnsupported) return;
     const f = mockRuleFieldEls();
     const id = f.id.value.trim();
-    const status = Number(f.status.value);
     const idValid = MOCK_RULE_ID_RE.test(id);
-    const statusValid = Number.isInteger(status) && status >= 100 && status <= 599;
     setFieldError(f.id, !idValid, 'mockRuleIdHelp');
-    setFieldError(f.status, !statusValid);
-    if (!idValid || !statusValid) {
-      setMockDialogError(!idValid ? 'Rule id must start with a letter or digit and contain only letters, digits, dot, underscore, or hyphen.' : 'Status must be an integer between 100 and 599.');
-      (!idValid ? f.id : f.status).focus();
+    if (!idValid) {
+      setMockDialogError('Rule id must start with a letter or digit and contain only letters, digits, dot, underscore, or hyphen.');
+      f.id.focus();
       return;
     }
     // POST /api/v1/mocks/rules upserts by id, so a "new rule" save whose id happens to collide
-    // with an existing non-editable rule (a fault-injection/template action, or a truncated body)
-    // would silently replace it with this form's plain StaticResponse -- exactly the destructive
-    // save the pencil-button gate exists to prevent, just reached from the New-rule dialog instead.
+    // with an existing rule this editor cannot round-trip would silently replace it.
     const collision = mockRulesCache.find((r) => r.id === id);
-    if (collision && !isMockRuleEditable(collision)) {
-      const msg = 'A rule named "' + id + '" already exists as ' + collision.action + ' — saving here would replace it with a plain 200 response. Delete it first or choose a different id.';
+    if (collision && !isMockRuleRoundTrippable(collision)) {
+      const msg = 'A rule named "' + id + '" already exists as ' + mockActionLabel(collision) + ' — saving here would replace it. Delete it first or choose a different id.';
       setMockDialogError(msg);
       toast(msg, 'error');
       return;
     }
-    const headerErr = f.headers.value.trim() ? validateMockRuleHeaders(f.headers.value) : null;
+    readMockRuleSteps();
+    const form = mockFormFromDialog();
+    const headerErr =
+      (form.type === 'static' || form.type === 'template') && form.headersText.trim()
+        ? validateMockRuleHeaders(form.headersText)
+        : null;
     setFieldError(f.headers, Boolean(headerErr));
     if (headerErr) { setMockDialogError(headerErr); f.headers.focus(); return; }
+    const actionErr = validateMockActionForm(form);
+    if (actionErr) { setMockDialogError(actionErr); toast(actionErr, 'error'); return; }
+    let queryPredicateLines = [], headerPredicateLines = [];
+    try {
+      queryPredicateLines = mockPredicateLines(f.queryPredicates.value, 'Query predicate');
+      headerPredicateLines = mockPredicateLines(f.headerPredicates.value, 'Header predicate');
+    } catch (err) { setMockDialogError(err.message); return; }
+    setMockDialogError('');
     const params = new URLSearchParams({
-      id, status: String(status), path: f.path.value.trim() || '.*',
-      priority: String(Number(f.priority.value) || 0), scope: f.scope.value || 'SESSION', body: f.body.value,
+      id, path: f.path.value.trim() || '.*',
+      priority: String(Number(f.priority.value) || 0), scope: f.scope.value || 'SESSION',
     });
     if (f.method.value) params.set('method', f.method.value);
     if (f.scheme.value.trim()) params.set('scheme', f.scheme.value.trim());
     if (f.host.value.trim()) params.set('host', f.host.value.trim());
-    if (f.delay.value.trim()) params.set('delayMs', f.delay.value.trim());
-    if (f.headers.value.trim()) params.set('headers', f.headers.value);
+    applyMockActionParams(params, form);
+    queryPredicateLines.forEach((line) => params.append('queryPredicate', line));
+    headerPredicateLines.forEach((line) => params.append('headerPredicate', line));
+    if (f.bodyPredicate.value.trim()) params.set('bodyPredicate', f.bodyPredicate.value.trim());
+    const editingRule = mockRulesCache.find((rule) => rule.id === id);
+    if (editingRule) params.set('enabled', String(editingRule.enabled === true));
     // Carries through as captured at dialog-open time — never re-derived from the (possibly
     // user-edited) body field, since the whole point is a diff against the untouched original.
     if (mockRuleDraftSourceBodySnapshot) params.set('sourceBodySnapshot', mockRuleDraftSourceBodySnapshot);
@@ -2814,7 +3152,7 @@
       if (spanSec > 0) cells.push(metricHtml('Rate', (events.length / spanSec).toFixed(1), '/s', 'ink'));
     }
     $('timelineMetrics').innerHTML = cells.join('');
-    $('timelineBadge').textContent = events.length + ' events';
+    $('timelineBadge').textContent = countLabel(events.length, 'event');
   }
 
   function timelineChips(shownCount) {
@@ -2848,6 +3186,13 @@
 
   const TIMELINE_EMPTY_HTML = '<div class="list-empty">' + spot('search') + '<div class="list-empty-title">No events match</div><div class="list-empty-sub">Clear a filter to see the other captured events.</div></div>';
   const render = () => {
+    const noteInput = $('eventNoteInput');
+    const noteEventId = $('eventDetail').dataset.noteEventId;
+    const noteSavedValue = eventNotesById.get(selectedEventId) ?? events.find((event) => event.id === selectedEventId)?.note;
+    const noteDirty = noteInput && noteEventId === selectedEventId && (noteSavedValue == null || noteInput.value !== noteSavedValue);
+    const noteEditing = noteInput && document.activeElement === noteInput;
+    const noteDraft = noteDirty ? noteInput.value : null;
+    const noteSelection = noteEditing ? [noteInput.selectionStart, noteInput.selectionEnd, noteInput.selectionDirection] : null;
     const q = $('search').value.toLowerCase();
     const rows = events.filter(
       (e) =>
@@ -2888,7 +3233,18 @@
     $('timelineFootRight').textContent = paused ? 'paused' : 'tailing';
     timelineMetrics(rows);
     timelineChips(rows.length);
-    renderEventDetail();
+    if (noteDirty && selectedEventId === $('eventDetail').dataset.noteEventId) {
+      const event = events.find((entry) => entry.id === selectedEventId);
+      const previous = event?.note;
+      if (event) event.note = noteDraft;
+      renderEventDetail();
+      if (event) event.note = previous;
+      const restored = $('eventNoteInput');
+      if (noteEditing && restored) {
+        restored.focus({ preventScroll: true });
+        restored.setSelectionRange(noteSelection[0], noteSelection[1], noteSelection[2]);
+      }
+    } else if (!noteEditing) renderEventDetail();
   };
 
   viewControllers.timeline = {
@@ -2904,9 +3260,9 @@
     if (!sources.includes(timelineSourceFilter)) timelineSourceFilter = '';
     const counts = {};
     events.forEach((e) => { counts[e.pluginId] = (counts[e.pluginId] || 0) + 1; });
-    $('timelineSourceSeg').innerHTML =
+    setHtmlPreservingFocus($('timelineSourceSeg'),
       `<button type="button" class="${timelineSourceFilter === '' ? 'active' : ''}" data-value="" aria-pressed="${timelineSourceFilter === ''}">All</button>` +
-      sources.map((s) => `<button type="button" class="${timelineSourceFilter === s ? 'active' : ''}" data-value="${esc(s)}" aria-pressed="${timelineSourceFilter === s}">${esc(s)}<span class="seg-count">${counts[s]}</span></button>`).join('');
+      sources.map((s) => `<button type="button" class="${timelineSourceFilter === s ? 'active' : ''}" data-value="${esc(s)}" aria-pressed="${timelineSourceFilter === s}">${esc(s)}<span class="seg-count">${counts[s]}</span></button>`).join(''));
   }
   const refreshSources = renderTimelineSourceSeg;
 
@@ -2930,6 +3286,11 @@
   // for any row with an attachmentId ("APPLIED"/"NOT_APPLICABLE"/omitted-as-null when unknown) —
   // never inferred from pluginId here. Only meaningful when eventAttachmentIdsById also has the id.
   const eventRedactionApplicabilityById = new Map();
+  function boundedSet(map, key, value, cap = 200) {
+    map.delete(key);
+    map.set(key, value);
+    while (map.size > cap) map.delete(map.keys().next().value);
+  }
   // Negative cache: event ids renderEventDetail() has already scheduled exactly one
   // ensureEventPayloadsLoaded().then(rerender) for. Without this, an event whose payload is
   // permanently absent (host never wired retention, or it aged out of the retained store — both
@@ -2968,10 +3329,10 @@
         const rows = body?.data || [];
         if (rows.length) retainedStoreConfirmedWired = true;
         rows.forEach((e) => {
-          if (e.payloadJson) eventPayloadsById.set(e.id, e.payloadJson);
+          if (e.payloadJson) boundedSet(eventPayloadsById, e.id, e.payloadJson);
           if (e.attachmentId) {
-            eventAttachmentIdsById.set(e.id, e.attachmentId);
-            eventRedactionApplicabilityById.set(e.id, e.redactionApplicability ?? null);
+            boundedSet(eventAttachmentIdsById, e.id, e.attachmentId);
+            boundedSet(eventRedactionApplicabilityById, e.id, e.redactionApplicability ?? null);
           }
         });
       })
@@ -2985,6 +3346,7 @@
   function renderEventDetail() {
     const pane = $('eventDetail');
     const event = events.find((e) => e.id === selectedEventId);
+    if (event) pane.dataset.noteEventId = event.id;
     if (!event) {
       renderEmpty(pane, 'activity', 'No event selected', 'Select a timeline event from the list to inspect it.');
       return;
@@ -3068,7 +3430,7 @@
         ${screenshotHtml}
         ${kvGridHtml(kvs, true)}
         ${stackTraceHtml}
-        <details class="fold"${event.note ? ' open' : ''}><summary>${icon('chevron', 'ic-sm fold-chevron')}Add note</summary><div class="fold-content"><label class="detail-note"><span>Note — stored in the session export</span><textarea id="eventNoteInput" rows="2" placeholder="Add a non-sensitive note…" ${token ? '' : 'disabled'}>${esc(event.note || '')}</textarea></label>
+        <details class="fold"${(eventNotesById.get(event.id) ?? event.note) ? ' open' : ''}><summary>${icon('chevron', 'ic-sm fold-chevron')}Add note</summary><div class="fold-content"><label class="detail-note"><span>Note — stored in the session export</span><textarea id="eventNoteInput" rows="2" placeholder="Add a non-sensitive note…" ${token ? '' : 'disabled'}>${esc(eventNotesById.get(event.id) ?? event.note ?? '')}</textarea></label>
         <div class="detail-actions-row"><button type="button" id="eventNoteSaveBtn" ${token ? '' : 'disabled'} title="${token ? 'Save note' : 'Sign in required'}">${icon('check', 'ic-sm')}Save note</button></div></div></details>
       </div>`;
     restoreFocus(focusSnap, pane);
@@ -3111,7 +3473,7 @@
   // active) — yanking them back to page 1 loses selection and place. Fresh page = safe refresh.
   // Scroll is preserved around the reload for all three list bodies.
   const LIVE_TAIL_LOADERS = {
-    network: () => { if (!networkCursorActive()) liveTailPreservingScroll('transactions', loadNetwork); },
+    network: () => { if (!harOffline && !networkCursorActive() && !networkRunId) liveTailPreservingScroll('transactions', loadNetwork); },
     socket: () => liveTailPreservingScroll('sockets', liveTailRefreshSockets),
     push: () => liveTailPreservingScroll('pushEvents', loadPush),
   };
@@ -3135,7 +3497,17 @@
    * plain loadSockets() would silently reselect whatever now sits at the old index once a live
    * frame prepends. Re-locates the previously selected frame by its (connection, direction,
    * timestamp) identity after reloading so it stays selected instead of swapping under the user. */
+  // Live tail only (never a user-driven filter change): at most one frame refetch per
+  // SOCKET_LIVE_TAIL_MIN_MS, and none while the tab is hidden -- the trailing timer catches up.
+  const SOCKET_LIVE_TAIL_MIN_MS = 2000;
+  let socketLiveTailTimer = null;
   async function liveTailRefreshSockets() {
+    const wait = document.hidden ? SOCKET_LIVE_TAIL_MIN_MS : SOCKET_LIVE_TAIL_MIN_MS - (Date.now() - lastSocketFetchAt);
+    if (wait > 0) {
+      clearTimeout(socketLiveTailTimer);
+      socketLiveTailTimer = setTimeout(() => { if (currentView === 'socket') LIVE_TAIL_LOADERS.socket(); }, wait);
+      return;
+    }
     const prev = socketSelectedIndex >= 0 ? socketMessages_[socketSelectedIndex] : null;
     await loadSockets();
     if (!prev) return;
@@ -3274,7 +3646,9 @@
         return;
       }
       if (value.type === 'server.welcome') {
+        streamRetryDelay = 1500;
         $('lamp').classList.remove('expired');
+        $('lamp').classList.remove('reconnecting');
         $('lamp').classList.add('live');
         $('status').textContent = paused ? 'Paused' : 'Live';
         // lastKnownSequence starts at -1, so this only fires on a genuine reconnect (one that
@@ -3306,10 +3680,19 @@
         scheduleTimelineMerge();
       }
       const liveTailKind = LIVE_TAIL_KIND_BY_PLUGIN[value.event.pluginId];
+      if (currentView === 'overview') {
+        const wait = Math.max(0, 3000 - (Date.now() - overviewRefreshAt));
+        clearTimeout(overviewRefreshTimer);
+        overviewRefreshTimer = setTimeout(() => {
+          overviewRefreshAt = Date.now();
+          if (currentView === 'overview' && !paused) loadOverview();
+        }, wait);
+      }
       if (liveTailKind) scheduleLiveTailRefresh(liveTailKind);
     };
     stream.onclose = (event) => {
       $('lamp').classList.remove('live');
+      $('lamp').classList.add('reconnecting');
       // A queued merge flush must not fire after the socket that queued it is gone -- but the
       // frames it buffered were already delivered by that socket, so flush them synchronously now
       // instead of discarding: reconnect never re-fetches, and the buffered batch is exactly the
@@ -3327,11 +3710,27 @@
         return;
       }
       if (token) {
-        $('status').textContent = 'RECONNECTING LIVE STREAM';
-        streamRetry = setTimeout(connectStream, 1500);
+        setStatus(navigator.onLine === false ? 'Offline — reconnecting when online' : 'Reconnecting…');
+        if (navigator.onLine !== false) {
+          const delay = Math.min(30000, streamRetryDelay) * (0.8 + Math.random() * 0.4);
+          streamRetryDelay = Math.min(30000, streamRetryDelay * 2);
+          streamRetry = setTimeout(connectStream, delay);
+        }
       }
     };
   }
+  window.addEventListener('hashchange', () => {
+    const view = viewFromHash();
+    if (view && view !== currentView && hasSession()) show(view);
+  });
+  window.addEventListener('online', () => { if (token && !streamRetry) connectStream(); });
+  window.addEventListener('offline', () => {
+    clearTimeout(streamRetry); streamRetry = null;
+    if (token) setStatus('Offline — reconnecting when online');
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && token && stream?.readyState !== WebSocket.OPEN && stream?.readyState !== WebSocket.CONNECTING) connectStream();
+  });
 
   // ================================================================
   // Session expiry
@@ -3353,6 +3752,7 @@
     token = '';
     invalidateSessionCache();
     csrf = '';
+    try { sessionStorage.removeItem('devconsole.browserSession'); } catch { /* storage unavailable */ }
     stream?.close();
     stream = null;
     $('lamp').classList.remove('live');
@@ -3469,7 +3869,8 @@
     const runs = runsRes.ok ? (await runsRes.json()).data || [] : [];
     const previousRun = runs.find((run) => run.status !== 'ACTIVE') || null;
     const crashSample = crashesRes.ok ? ((await crashesRes.json()).data || []).map(decorateCrashRow) : [];
-    renderOverview(await overviewRes.json(), meta, netSample, eventSample, previousRun, crashSample);
+    const currentRunId = (runs.find((run) => run.current) || {}).id || null;
+    renderOverview(await overviewRes.json(), meta, netSample, eventSample, previousRun, crashSample, currentRunId);
   }
   /** Keeps the session-pill's visible label and its hover tooltip (the full text, for when the
    * pill has ellipsised at a narrow width — see the topbar breakpoint ladder in dashboard.css) in
@@ -3485,6 +3886,11 @@
     openAccess = isOpen;
     token = isOpen ? 'open' : accessToken;
     csrf = isOpen ? '' : csrfToken;
+    if (!isOpen) {
+      try { sessionStorage.setItem('devconsole.browserSession', JSON.stringify({ token: accessToken, csrf: csrfToken })); } catch { /* storage unavailable */ }
+    } else {
+      try { sessionStorage.removeItem('devconsole.browserSession'); } catch { /* storage unavailable */ }
+    }
     sessionExpired = false;
     consecutiveAuthFailures = 0;
     Object.values(viewContainers).forEach((id) => {
@@ -3503,6 +3909,8 @@
     // history still re-pauses (see the cursor check in the timeline load).
     setPaused(false);
     loadOverview();
+    if (pendingDeepLinkView && pendingDeepLinkView !== 'overview') show(pendingDeepLinkView);
+    pendingDeepLinkView = null;
     // Prime the mocks/composer capability flags so "Mock this response"/"Resend" aren't dead
     // until Mocks/Composer are visited.
     loadMockRules();
@@ -3522,15 +3930,13 @@
       body: 'code=' + encodeURIComponent(code) + '&browserLabel=' + encodeURIComponent(navigator.userAgent.slice(0, 96)),
     });
     if (!r.ok) {
-      setStatus(
-        r.status === 401 ? 'Code expired or invalid' : 'Code rejected',
-        (r.status === 401 ? 'Code expired or invalid' : 'Code rejected') + " — get a fresh one from the device's More screen (codes are single-use and expire after five minutes)",
-      );
-      if (source === 'manual') toast('Session code rejected.', 'error');
+      const message = r.status === 401 ? 'Code expired or invalid' : 'Code rejected';
+      setStatus(message + ' — ' + unavailableReason(r.status), message + " — get a fresh one from the device's More screen (codes are single-use and expire after five minutes)");
+      toast(message + ': ' + unavailableReason(r.status), 'error');
       // Codes are single-use, so a code that just failed exchange is burned either way — strip it
       // from the URL on the auto-connect path same as the success branch below does, or a refresh
       // just resubmits the same dead code and repeats this failure forever.
-      if (source !== 'manual') history.replaceState(null, '', location.pathname);
+      history.replaceState(null, '', location.pathname);
       return;
     }
     const b = await r.json();
@@ -3561,8 +3967,8 @@
       <span class="overview-result"><span class="overview-status tone-text-${statusTone(t.status)}">${esc(t.status || 'Failed')}</span><span aria-hidden="true">·</span><span>${esc(t.durationMs != null ? t.durationMs + ' ms' : '—')}</span></span>
     </button>`;
   }
-  function renderOverview(body, meta, netSample, eventSample, previousRun, crashSample = []) {
-    $('overviewCrashBanner').hidden = true;
+  function renderOverview(body, meta, netSample, eventSample, previousRun, crashSample = [], currentRunId = null) {
+    renderOverviewCrashBanner(previousRun);
     $('overviewMetrics').innerHTML = '';
     $('overviewCards').classList.remove('cards-grid');
     const latest = netSample.slice().sort((a, b) => (b.startedAtEpochMs || 0) - (a.startedAtEpochMs || 0));
@@ -3570,10 +3976,15 @@
     const p95 = percentile(durations, 0.95);
     const requestCount = body ? Object.values(body.networkStatusDistribution || {}).reduce((sum, count) => sum + Number(count), 0) : 0;
     $('overviewSubtitle').textContent = body
-      ? (requestCount || netSample.length) + ' requests in this session' + (p95 != null ? ' · p95 ' + p95 + ' ms' : '')
+      ? countLabel(requestCount || netSample.length, 'request') + ' in this session' + (p95 != null ? ' · p95 ' + p95 + ' ms' : '')
       : 'Connect this browser to see session activity.';
     const failures = latest.filter(failing).map((t) => ({ time: t.startedAtEpochMs || 0, html: overviewNetworkRow(t) }));
-    const crashes = crashSample.map((e) => ({ time: e.wallTimeMs || 0, html: `<button type="button" class="overview-row" data-overview-crash="${esc(e.id)}"><span class="overview-method">${crashKindOf(e) === 'ANR' ? 'ANR' : 'CRASH'}</span><span class="overview-path">${esc(e.summary)}</span><span class="overview-result">${esc(time(e.wallTimeMs))}</span></button>` }));
+    // Retained crashes span every run; one from an earlier run is labelled as such (with its date)
+    // so it does not read as something that just happened in the session this page is about.
+    const crashWhen = (e) => (currentRunId && e.sessionId && e.sessionId !== currentRunId
+      ? 'earlier run · ' + new Date(e.wallTimeMs || 0).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : time(e.wallTimeMs));
+    const crashes = crashSample.map((e) => ({ time: e.wallTimeMs || 0, html: `<button type="button" class="overview-row" data-overview-crash="${esc(e.id)}"><span class="overview-method">${crashKindOf(e) === 'ANR' ? 'ANR' : 'CRASH'}</span><span class="overview-path">${esc(e.summary)}</span><span class="overview-result">${esc(crashWhen(e))}</span></button>` }));
     const attention = failures.concat(crashes).sort((a, b) => b.time - a.time).slice(0, 5);
     const connect = body ? '' : `<form id="overviewConnect" class="overview-connect"><label class="field"><span>Session code from DevConsole → More on the device</span><input id="connectCode" placeholder="Single-use session code" maxlength="12" autocomplete="off" required></label><button type="submit" class="primary">Connect</button></form>`;
     $('overviewCards').innerHTML = `${connect}
@@ -3734,6 +4145,19 @@
   /** Shared by loadNetwork and loadMoreNetworkIfPossible so a scroll-triggered "load more"
    * request always respects exactly the filters the operator has applied — never a subtly
    * different set. */
+  /** "Yesterday 23:03 · completed · 1 record" -- a bare time read as today for a run from last week. */
+  function networkRunLabel(run) {
+    const started = new Date(run.startedAtEpochMs);
+    const today = new Date();
+    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    const sameDay = (a, b) => a.toDateString() === b.toDateString();
+    const day = sameDay(started, today) ? '' : sameDay(started, yesterday) ? 'Yesterday ' :
+      started.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ';
+    const parts = [day + time(run.startedAtEpochMs), run.status.toLowerCase()];
+    if (run.pinned) parts.push('pinned');
+    if (run.recordCount != null) parts.push(run.recordCount + (run.recordCount === 1 ? ' record' : ' records'));
+    return parts.join(' · ');
+  }
   function networkFilterEntries() {
     return [
       ['query', 'networkSearch'],
@@ -3750,37 +4174,96 @@
       ['error', 'networkError'],
       ['correlationId', 'networkCorrelation'],
       ['tag', 'networkTag'],
+      ['body', 'networkBody'],
     ]
       .map(([name, id]) => [name, $(id).value.trim()])
       .filter(([, value]) => value);
   }
+  // '' is the live run; otherwise a completed run's id, read back from its durable captures
+  // (server: `?sessionId=` on the list, detail, cURL and HAR/Postman routes). Past runs never live-tail.
+  let networkRunId = '';
+  function networkRunParam() {
+    return networkRunId ? 'sessionId=' + encodeURIComponent(networkRunId) : '';
+  }
+  function withNetworkRun(url) {
+    const param = networkRunParam();
+    if (!param) return url;
+    return url + (url.includes('?') ? '&' : '?') + param;
+  }
+  /** Fills the Run picker from GET /api/v1/runs; hidden until there is a past run to pick. */
+  async function refreshNetworkRunPicker() {
+    const res = await cachedJson('/api/v1/runs', 30000).catch(() => null);
+    if (!res?.ok) return;
+    const runs = ((await res.json()).data || []).filter((run) => !run.current);
+    if (networkRunId && !runs.some((run) => run.id === networkRunId)) {
+      networkRunId = '';
+      toast('That run is no longer retained — showing the live run.', 'error');
+    }
+    const select = $('networkRun');
+    select.innerHTML = '<option value="">Live run</option>' + runs
+      .map((run) => `<option value="${esc(run.id)}">${esc(networkRunLabel(run))}</option>`)
+      .join('');
+    select.value = networkRunId;
+    $('networkRunGroup').hidden = runs.length === 0 && !networkRunId;
+  }
+  function selectNetworkRun(id) {
+    if (id === networkRunId) return;
+    networkRunId = id;
+    networkSelectedIds.clear();
+    networkDetailCache.clear();
+    selectedTransactionId = '';
+    selectedTransactionDetail = null;
+    $('networkBadge').textContent = id ? 'Past run' : '';
+    loadNetwork();
+  }
   async function loadNetwork(cursor = null) {
+    // An open HAR is the whole data source: never fetch, and never let the 5s view cache or a
+    // live-tail refresh replace the imported rows with the live ones.
+    if (harOffline) return loadHarOffline();
     if (!hasSession()) return loadNetworkImpl(cursor);
     return runViewLoader('network', () => loadNetworkImpl(cursor));
   }
+  function loadHarOffline() {
+    networkPage = harOffline.entries;
+    networkCursor = null;
+    networkPagedIntoHistory = false;
+    setNavCount('navCountNetwork', networkPage.length);
+    applyNetworkFilters();
+  }
   async function loadNetworkImpl(cursor = null) {
     if (!token) return;
-    networkPagedIntoHistory = Boolean(cursor);
+    const gen = nextGen('network');
+    if (!cursor) networkPagedIntoHistory = false;
     const params = new URLSearchParams({ limit: String(NETWORK_FETCH_LIMIT) });
     if (cursor) params.set('cursor', cursor);
     networkFilterEntries().forEach(([name, value]) => params.append(name, value));
+    if (networkRunId) params.set('sessionId', networkRunId);
+    if (!cursor) refreshNetworkRunPicker();
     const r = await fetch('/api/v1/network/transactions?' + params, { headers: auth() });
+    if (r.status === 404 && networkRunId) {
+      selectNetworkRun('');
+      return;
+    }
     requireLoad(r);
     const body = await r.json();
+    if (!isLatest('network', gen)) return;
     networkPage = body.data || [];
     networkCursor = body.page?.nextCursor || null;
     $('networkOlder').disabled = !body.page?.hasMore;
-    if (networkHostFilter.size) {
+    if (!cursor && networkHostFilter.size) {
       // Drop hosts from the selection that no longer appear on this page.
       [...networkHostFilter].forEach((h) => { if (!networkPage.some((t) => t.host === h)) networkHostFilter.delete(h); });
     }
-    if (networkSelectedIds.size) {
+    if (!cursor && networkSelectedIds.size) {
       // Same pruning rule as networkHostFilter above: an exported-selection checkbox can only ever
       // refer to a row the operator can currently see evidence of.
       [...networkSelectedIds].forEach((id) => { if (!networkPage.some((t) => t.id === id)) networkSelectedIds.delete(id); });
     }
     setNavCount('navCountNetwork', networkPage.length);
     applyNetworkFilters();
+    // Keep an open latency panel in step with the list: new captures, a reconnect to a restarted
+    // app, or a run switch all land here, and the panel otherwise kept the previous numbers.
+    if (!cursor && networkEndpointsOpen) loadNetworkEndpoints();
   }
 
   /** Infinite-scroll companion to the Older/Newest pager: fired by the Network virtualizer when
@@ -3797,6 +4280,7 @@
     try {
       const params = new URLSearchParams({ limit: String(NETWORK_FETCH_LIMIT), cursor: networkCursor });
       networkFilterEntries().forEach(([name, value]) => params.append(name, value));
+      if (networkRunId) params.set('sessionId', networkRunId);
       const r = await fetch('/api/v1/network/transactions?' + params, { headers: auth() });
       if (!r.ok) return;
       const body = await r.json();
@@ -3820,7 +4304,14 @@
   /** Applies Status/Method/Service/Failures-only client-side over the broad `networkPage`,
    * recomputing `transactions` (the visible subset), then re-renders everything downstream. */
   function applyNetworkFilters() {
+    // The live list's search is a server query; an imported HAR has no server, so the same box
+    // filters the mapped rows client-side over the fields the row/detail actually show.
+    const offlineQuery = harOffline ? $('networkSearch').value.trim().toLowerCase() : '';
     transactions = networkPage.filter((t) => {
+      if (offlineQuery) {
+        const haystack = [t.method, t.host, t.path, t.query, t.status, t.request?.url].join(' ').toLowerCase();
+        if (!haystack.includes(offlineQuery)) return false;
+      }
       if (networkFailOnly && !failing(t)) return false;
       if (networkMethodFilter && t.method !== networkMethodFilter) return false;
       if (networkHostFilter.size && !networkHostFilter.has(t.host)) return false;
@@ -3871,7 +4362,253 @@
 
   let networkOrder = [];
   const NETWORK_EMPTY_HTML = '<div class="list-empty">' + spot('search') + '<div class="list-empty-title">No transactions match</div><div class="list-empty-sub">Clear a filter or widen the status/method selection to see the other captures.</div></div>';
+  // With nothing narrowing the list, an empty page means no traffic yet -- "clear a filter" would mislead.
+  const NETWORK_IDLE_HTML = '<div class="list-empty">' + spot('search') + '<div class="list-empty-title">No requests captured yet</div><div class="list-empty-sub">Requests the app makes appear here as they happen.</div></div>';
+  const NETWORK_RUN_IDLE_HTML = '<div class="list-empty">' + spot('search') + '<div class="list-empty-title">No requests in this run</div><div class="list-empty-sub">This run finished without capturing any network traffic.</div></div>';
+  const NETWORK_HAR_EMPTY_HTML = '<div class="list-empty">' + spot('search') + '<div class="list-empty-title">No requests match</div><div class="list-empty-sub">Clear the search or the status/method filter to see the rest of this HAR file.</div></div>';
+  const NETWORK_HAR_NONE_HTML = '<div class="list-empty">' + spot('search') + '<div class="list-empty-title">This HAR file has no entries</div><div class="list-empty-sub">A HAR 1.2 export records its requests under <code>log.entries</code>.</div></div>';
+  function networkEmptyHtml() {
+    if (harOffline) return networkPage.length ? NETWORK_HAR_EMPTY_HTML : NETWORK_HAR_NONE_HTML;
+    if (networkFilterEntries().length || networkHostFilter.size) return NETWORK_EMPTY_HTML;
+    return networkRunId ? NETWORK_RUN_IDLE_HTML : NETWORK_IDLE_HTML;
+  }
+
+  // ----------------------------------------------------------------
+  // HAR 1.2 import — read, parsed, and rendered entirely in this tab. The file is never uploaded:
+  // a HAR often carries auth headers and bodies, so it must not leave the browser.
+  // ----------------------------------------------------------------
+  function renderHarBanner() {
+    const banner = $('networkHarBanner');
+    if (!banner) return;
+    if (!harOffline) { banner.hidden = true; banner.innerHTML = ''; return; }
+    const truncated = harOffline.truncated
+      ? ` · first ${HAR_MAX_ENTRIES.toLocaleString()} of ${harOffline.total.toLocaleString()} requests`
+      : '';
+    banner.hidden = false;
+    banner.innerHTML = `<span class="har-banner-text">${icon('folder', 'ic-sm')}<span>Viewing <strong class="har-banner-file">${esc(harOffline.name)}</strong> · ${countLabel(harOffline.entries.length, 'request')} (offline)${esc(truncated)}</span></span><button type="button" id="networkHarClose" class="har-banner-close">${icon('close', 'ic-sm')}Close</button>`;
+    $('networkHarClose').onclick = closeHarOffline;
+  }
+
+  /** Hides or restores every control whose action would either fetch the live capture store or
+   * address a transaction id that only exists on the device. Client-side controls (search, the
+   * status/method segments, host dropdown, Full endpoint) stay live. */
+  function applyHarOfflineChrome() {
+    const off = Boolean(harOffline);
+    const setHidden = (id, hidden) => { const el = $(id); if (el) el.hidden = hidden; };
+    ['networkAdvFilters', 'networkEndpointsBtn', 'networkSelectAllVisible', 'networkNewest', 'networkOlder', 'networkRefresh']
+      .forEach((id) => setHidden(id, off));
+    if (off) setHidden('networkRunGroup', true);
+    const har = $('networkHarDownload');
+    const postman = $('networkPostmanDownload');
+    if (har) { har.disabled = off; har.title = off ? 'Not available while viewing a HAR file' : 'Export every captured transaction (up to 500)'; }
+    if (postman) { postman.disabled = off; postman.title = off ? 'Not available while viewing a HAR file' : 'Export every captured transaction (up to 500)'; }
+    const clear = $('networkClear');
+    if (clear) {
+      clear.disabled = off || !hasSession();
+      clear.title = off ? 'Not available while viewing a HAR file' : hasSession() ? 'Discard every captured request on the device' : 'Connect this browser first';
+    }
+    if (off) {
+      const bar = $('networkSelectionBar');
+      if (bar) { bar.hidden = true; bar.innerHTML = ''; }
+    }
+  }
+
+  function readLocalFileText(file) {
+    if (typeof file.text === 'function') return file.text();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('Could not read the file'));
+      reader.readAsText(file);
+    });
+  }
+
+  /** Whether a MIME type is worth base64-decoding to text. Everything else keeps an honest
+   * "binary body (N bytes)" placeholder instead of mojibake. */
+  function harIsTextualMime(mimeType) {
+    const mime = String(mimeType || '').toLowerCase();
+    return mime.startsWith('text/')
+      || /(json|xml|javascript|ecmascript|x-www-form-urlencoded|graphql|yaml|csv|xhtml|svg)/.test(mime);
+  }
+
+  function harBase64ByteLength(text) {
+    const clean = String(text || '').replace(/\s/g, '');
+    const padding = (clean.match(/=+$/) || [''])[0].length;
+    return Math.max(0, Math.floor((clean.length * 3) / 4) - padding);
+  }
+
+  function harDecodeBase64(text) {
+    try {
+      const binary = atob(String(text || '').replace(/\s/g, ''));
+      if (typeof TextDecoder === 'function') {
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return new TextDecoder('utf-8').decode(bytes);
+      }
+      return binary;
+    } catch {
+      return null;
+    }
+  }
+
+  /** HAR `content`/`postData` → the BodyPreview shape the detail pane already renders. */
+  function harBodyPreview(content) {
+    if (!content) return null;
+    const text = content.text;
+    if (typeof text !== 'string' || !text) {
+      const size = Number(content.size);
+      return Number.isFinite(size) && size > 0 ? { type: 'binary', length: size } : null;
+    }
+    if (String(content.encoding || '').toLowerCase() === 'base64') {
+      if (!harIsTextualMime(content.mimeType)) {
+        return { type: 'binary', length: harBase64ByteLength(text) || Number(content.size) || text.length };
+      }
+      const decoded = harDecodeBase64(text);
+      if (decoded == null) return { type: 'binary', length: harBase64ByteLength(text) };
+      return { type: 'text', value: decoded };
+    }
+    return { type: 'text', value: text };
+  }
+
+  function harHeaderRows(headers) {
+    return (Array.isArray(headers) ? headers : [])
+      .map((header) => ({ name: String(header?.name ?? ''), value: String(header?.value ?? '') }))
+      .filter((header) => header.name);
+  }
+
+  function harContentTypeOf(headers) {
+    return (headers.find((header) => header.name.toLowerCase() === 'content-type') || {}).value || '';
+  }
+
+  /** One HAR entry → the same transaction shape the Network list and detail already render. */
+  function harEntryToTransaction(entry, index) {
+    const request = entry?.request || {};
+    const response = entry?.response || {};
+    const url = String(request.url || '');
+    let host = '';
+    let path = '/';
+    let query = '';
+    try {
+      const parsed = new URL(url);
+      host = parsed.host;
+      path = parsed.pathname || '/';
+      query = parsed.search.replace(/^\?/, '');
+    } catch {
+      const noHash = url.split('#')[0];
+      const question = noHash.indexOf('?');
+      query = question >= 0 ? noHash.slice(question + 1) : '';
+      const pathPart = question >= 0 ? noHash.slice(0, question) : noHash;
+      const slash = pathPart.indexOf('/');
+      host = slash >= 0 ? pathPart.slice(0, slash) : pathPart;
+      path = slash >= 0 ? pathPart.slice(slash) : '/';
+    }
+    const requestHeaders = harHeaderRows(request.headers);
+    const responseHeaders = harHeaderRows(response.headers);
+    const postData = request.postData || null;
+    const requestBody = postData && typeof postData.text === 'string' && postData.text
+      ? { type: 'text', value: postData.text }
+      : null;
+    const statusValue = Number(response.status);
+    const status = Number.isFinite(statusValue) && statusValue > 0 ? statusValue : undefined;
+    const duration = Number(entry?.time);
+    const started = Date.parse(entry?.startedDateTime || '');
+    return {
+      id: 'har:' + index,
+      method: String(request.method || 'GET').toUpperCase(),
+      host,
+      path,
+      query,
+      status,
+      durationMs: Number.isFinite(duration) && duration >= 0 ? Math.round(duration) : null,
+      startedAtEpochMs: Number.isFinite(started) ? started : 0,
+      error: entry?._error || response._error || undefined,
+      request: {
+        url,
+        headers: requestHeaders,
+        contentType: String(postData?.mimeType || harContentTypeOf(requestHeaders)),
+        body: requestBody,
+      },
+      response: {
+        headers: responseHeaders,
+        contentType: String(response.content?.mimeType || harContentTypeOf(responseHeaders)),
+        body: harBodyPreview(response.content),
+      },
+      correlationId: '',
+      tags: {},
+    };
+  }
+
+  function openHarFilePicker() {
+    $('networkHarFile')?.click();
+  }
+
+  async function handleHarFileSelected(event) {
+    const input = event.target;
+    const file = input.files && input.files[0];
+    // Reset first so picking the same file again still fires `change`.
+    input.value = '';
+    if (!file) return;
+    let text;
+    try {
+      text = await readLocalFileText(file);
+    } catch {
+      toast('Not a HAR file', 'error');
+      return;
+    }
+    const parsed = parseJsonText(text);
+    const entries = parsed?.log?.entries;
+    if (!Array.isArray(entries)) {
+      // Nothing about the current view changes when the file is rejected.
+      toast('Not a HAR file', 'error');
+      return;
+    }
+    const total = entries.length;
+    const mapped = entries.slice(0, HAR_MAX_ENTRIES).map(harEntryToTransaction);
+    enterHarOffline({ name: file.name || 'HAR file', entries: mapped, total, truncated: total > HAR_MAX_ENTRIES });
+  }
+
+  function enterHarOffline(har) {
+    harOffline = har;
+    networkSelectedIds.clear();
+    networkHostFilter.clear();
+    selectedTransactionId = '';
+    selectedTransactionDetail = null;
+    networkPinnedId = '';
+    networkActionsMenuOpen = false;
+    if (networkTab === 'diff' || networkTab === 'related') networkTab = 'response';
+    networkPage = har.entries;
+    transactions = [];
+    toggleNetworkEndpoints(false);
+    if (currentView !== 'network') show('network');
+    // Render explicitly even when show()'s 5s view cache short-circuits its loader.
+    loadHarOffline();
+    if (!har.entries.length) renderNetworkEmpty();
+  }
+
+  function closeHarOffline() {
+    if (!harOffline) return;
+    harOffline = null;
+    networkSelectedIds.clear();
+    networkHostFilter.clear();
+    networkPage = [];
+    transactions = [];
+    selectedTransactionId = '';
+    selectedTransactionDetail = null;
+    networkTab = networkTab === 'diff' || networkTab === 'related' ? 'response' : networkTab;
+    renderHarBanner();
+    applyHarOfflineChrome();
+    if (hasSession() || openAccess) {
+      loadNetwork();
+    } else {
+      setNavCount('navCountNetwork', 0);
+      renderNetwork();
+      renderNetworkEmpty();
+    }
+  }
+
   function renderNetwork() {
+    renderHarBanner();
+    applyHarOfflineChrome();
     $('networkMainColLabel').textContent = 'Path';
     $('networkFullEndpoint').setAttribute('aria-pressed', String(networkFullEndpoint));
     // Normalize the selection BEFORE painting, like the other four list views: rows gate tabindex
@@ -3885,7 +4622,9 @@
         const t = transactions[i];
         return rowHtml({
           id: t.id, selected: selectedTransactionId === t.id,
-          checkbox: true, checked: networkSelectedIds.has(t.id),
+          // Export selection and evidence flagging both resolve ids on the server; neither can
+          // point at an imported row, so both affordances disappear in offline mode.
+          checkbox: !harOffline, checked: !harOffline && networkSelectedIds.has(t.id),
           badgeText: t.method, badgeTone: methodTone(t.method),
           mainText: t.path,
           mainPrefix: networkFullEndpoint ? t.host : '',
@@ -3893,27 +4632,44 @@
           // dimmed and after the path, which stays the part that survives the ellipsis.
           mainSub: t.query ? '?' + t.query : '',
           // Single row-tag slot: a pinned diff baseline always wins over the mocked marker.
-          tagText: false,
+          tagText: networkPinnedId === t.id ? 'PINNED' : (t.tags?.mocked === 'true' || t.mocked === true) ? 'MOCKED' : false,
           tagTone: 'put',
           duration: t.durationMs != null ? t.durationMs + ' ms' : t.error ? 'failed' : '—',
           statusText: t.status != null ? String(t.status) : t.error ? 'ERR' : '—', sTone: t.status != null ? statusTone(t.status) : t.error ? 'error' : 'muted',
           metricsInline: true,
-          flagKind: 'network', flagLabel: t.method + ' ' + t.path,
+          flagKind: harOffline ? null : 'network', flagLabel: t.method + ' ' + t.path,
           posinset: i + 1, setsize: total,
         });
       },
-      NETWORK_EMPTY_HTML,
+      networkEmptyHtml(),
     );
     networkOrder = transactions.map((t) => t.id);
-    $('networkFootLeft').textContent = transactions.length + ' of ' + networkPage.length + ' · newest first';
-    $('networkFootRight').textContent = networkHostFilter.size ? networkHostFilter.size + ' service' + (networkHostFilter.size === 1 ? '' : 's') + ' selected' : 'all services';
-    $('networkBadge').textContent = networkPage.length + ' captured';
+    $('networkFootLeft').textContent = harOffline
+      ? transactions.length + ' of ' + networkPage.length + ' · offline'
+      : transactions.length + ' of ' + networkPage.length + ' · newest first';
+    $('networkFootRight').textContent = harOffline
+      ? 'client-side view'
+      : networkHostFilter.size ? networkHostFilter.size + ' service' + (networkHostFilter.size === 1 ? '' : 's') + ' selected' : 'all services';
+    $('networkBadge').textContent = harOffline ? countLabel(networkPage.length, 'request') + ' offline' : networkPage.length + ' captured';
     updateNetworkFacetCounts();
     renderNetworkMetrics();
     renderNetworkChips();
     renderNetworkHostDrop();
     renderNetworkSelectionBar();
-    if (networkSelectionStale) {
+    if (harOffline) {
+      // The `tx=` deep link points at live-row ids; never chase one in offline mode.
+      if (networkSelectionStale) {
+        if (transactions.length) showTransaction(selectedTransactionId);
+        else renderNetworkEmpty();
+      }
+      return;
+    }
+    if (pendingDeepLinkTx) {
+      // Fetched by id, so the linked capture opens even when the current filters or page hide its row.
+      const id = pendingDeepLinkTx;
+      pendingDeepLinkTx = null;
+      showTransaction(id);
+    } else if (networkSelectionStale) {
       if (transactions.length) showTransaction(selectedTransactionId);
       else renderNetworkEmpty();
     }
@@ -3962,24 +4718,14 @@
       return;
     }
     const params = new URLSearchParams({ limit: String(500) });
-    [
-      ['query', 'networkSearch'],
-      ['from', 'networkFrom'],
-      ['to', 'networkTo'],
-      ['path', 'networkPath'],
-      ['contentType', 'networkContentType'],
-      ['minDurationMs', 'networkMinDuration'],
-      ['maxDurationMs', 'networkMaxDuration'],
-      ['error', 'networkError'],
-      ['correlationId', 'networkCorrelation'],
-      ['tag', 'networkTag'],
-    ].forEach(([name, id]) => {
-      const value = $(id).value.trim();
-      if (value) params.append(name, value);
-    });
+    // Same advanced filters the visible list was loaded with (networkFilterEntries), plus the
+    // quick method/host/status controls layered on top of them.
+    const advanced = networkFilterEntries();
+    advanced.forEach(([name, value]) => params.append(name, value));
     if (networkMethodFilter) params.append('method', networkMethodFilter);
     networkHostFilter.forEach((h) => params.append('host', h));
-    if (networkStatusFilter) {
+    const hasStatusRange = advanced.some(([name]) => name === 'statusFrom' || name === 'statusTo');
+    if (networkStatusFilter && !hasStatusRange) {
       const from = Number(networkStatusFilter[0]) * 100;
       params.append('statusFrom', String(from));
       params.append('statusTo', String(from + 99));
@@ -3990,7 +4736,7 @@
     (body.data || []).forEach((t) => networkSelectedIds.add(t.id));
     renderNetwork();
     toast(
-      'Selected ' + (body.data || []).length + ' matching transaction(s)' +
+      'Selected ' + countLabel((body.data || []).length, 'matching transaction') +
         (body.page?.hasMore ? ' — more than 500 matched; only the first 500 were selected.' : '.'),
     );
   }
@@ -4007,9 +4753,9 @@
     }
     const toolbarHar = $('networkHarDownload');
     const toolbarPostman = $('networkPostmanDownload');
-    const scopeTitle = count ? `Export the ${count} selected transaction(s)` : 'Export every captured transaction (up to 500)';
-    if (toolbarHar) toolbarHar.title = scopeTitle;
-    if (toolbarPostman) toolbarPostman.title = scopeTitle;
+    const scopeTitle = count ? `Export the ${countLabel(count, 'selected transaction')}` : 'Export every captured transaction (up to 500)';
+    if (toolbarHar && !harOffline) toolbarHar.title = scopeTitle;
+    if (toolbarPostman && !harOffline) toolbarPostman.title = scopeTitle;
     bar.hidden = count === 0;
     if (count === 0) return;
     bar.innerHTML = `<span class="selection-count">${count} selected</span>
@@ -4041,10 +4787,13 @@
     if (networkMethodFilter) chips.push({ label: 'method ' + networkMethodFilter, title: 'Clear the method filter', on: () => { networkMethodFilter = ''; $('networkMethodSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === '')); applyNetworkFilters(); } });
     networkHostFilter.forEach((h) => chips.push({ label: h, title: 'Remove ' + h, on: () => { networkHostFilter.delete(h); applyNetworkFilters(); } }));
     if (networkFailOnly) chips.push({ label: 'failures only', title: 'Show all statuses again', on: () => { networkFailOnly = false; applyNetworkFilters(); } });
+    const advanced = [['from','networkFrom'],['to','networkTo'],['method','networkMethod'],['host','networkHost'],['path','networkPath'],['type','networkContentType'],['min ms','networkMinDuration'],['max ms','networkMaxDuration'],['error','networkError'],['correlation','networkCorrelation'],['tag','networkTag'],['body','networkBody'],['status ≥','networkStatusFrom'],['status ≤','networkStatusTo']];
+    advanced.forEach(([label,id]) => { const input = $(id); if (input?.value.trim()) chips.push({ label: label + ' ' + input.value.trim(), title: 'Clear ' + label, on: () => { input.value = ''; loadNetwork(); } }); });
     appliedFiltersHtml(
       'networkChips', chips,
       () => {
         $('networkSearch').value = '';
+        ['networkFrom','networkTo','networkMethod','networkHost','networkPath','networkContentType','networkMinDuration','networkMaxDuration','networkError','networkCorrelation','networkTag','networkBody','networkStatusFrom','networkStatusTo'].forEach((id) => { if ($(id)) $(id).value = ''; });
         networkStatusFilter = ''; networkMethodFilter = ''; networkHostFilter.clear(); networkFailOnly = false;
         $('networkStatusSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === ''));
         $('networkMethodSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === ''));
@@ -4054,13 +4803,107 @@
     );
   }
 
+  let networkEndpointsOpen = false;
+  function endpointLiteralPrefix(pathTemplate) {
+    const template = String(pathTemplate || '');
+    const idx = template.indexOf('{id}');
+    const raw = idx >= 0 ? template.slice(0, idx) : template;
+    return raw.length > 1 && raw.endsWith('/') ? raw.slice(0, -1) : raw;
+  }
+  async function loadNetworkEndpoints() {
+    if (!token) {
+      $('networkEndpointsBadge').textContent = '';
+      $('networkEndpointsBody').innerHTML = '<p class="card-lede">Connect this browser to inspect endpoint latency.</p>';
+      return;
+    }
+    const gen = nextGen('network-endpoints');
+    const r = await fetch(withNetworkRun('/api/v1/network/endpoints'), { headers: auth() });
+    if (!isLatest('network-endpoints', gen)) return;
+    if (!r.ok) {
+      $('networkEndpointsBadge').textContent = '';
+      renderLoadFailure($('networkEndpointsBody'), 'Could not load endpoint statistics', r.status, loadNetworkEndpoints);
+      return;
+    }
+    const body = await r.json();
+    const rows = body.data || [];
+    const sampleSize = body.sampleSize ?? 0;
+    $('networkEndpointsBadge').textContent = sampleSize + ' sampled';
+    if (!rows.length) {
+      $('networkEndpointsBody').innerHTML = '<p class="card-lede">No completed requests captured yet.</p>';
+      return;
+    }
+    // Host rides under the path instead of in its own column: a full hostname is the widest cell and,
+    // in a narrow window, pushed the count/error/latency columns -- the point of the panel -- off-screen.
+    const cols = ['Method', 'Endpoint', 'Count', 'Errors', 'p50', 'p95', 'p99', 'Max'];
+    const tbody = rows
+      .map((row) => {
+        const prefix = endpointLiteralPrefix(row.pathTemplate);
+        const errTone = row.errorCount > 0 ? 'error' : 'muted';
+        return `<tr class="endpoint-row" tabindex="0" role="button" data-endpoint-prefix="${esc(prefix)}" aria-label="Filter by ${esc(row.method)} ${esc(row.host)}${esc(row.pathTemplate)}">
+          <td class="tone-text-${methodTone(row.method)}">${esc(row.method)}</td>
+          <td class="endpoint-cell" title="${esc(row.host)}${esc(row.pathTemplate)}"><span class="tone-text-ink">${esc(row.pathTemplate)}</span><span class="endpoint-host tone-text-muted">${esc(row.host)}</span></td>
+          <td class="tone-text-ink">${esc(String(row.count))}</td>
+          <td class="tone-text-${errTone}">${esc(String(row.errorCount))}</td>
+          <td class="tone-text-ink">${esc(row.p50Ms + ' ms')}</td>
+          <td class="tone-text-warn">${esc(row.p95Ms + ' ms')}</td>
+          <td class="tone-text-ink">${esc(row.p99Ms + ' ms')}</td>
+          <td class="tone-text-muted">${esc(row.maxMs + ' ms')}</td>
+        </tr>`;
+      })
+      .join('');
+    $('networkEndpointsBody').innerHTML = `<div class="card-table-wrap"><table class="card-table"><thead><tr>${cols.map((c) => `<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${tbody}</tbody></table></div>`;
+  }
+  function toggleNetworkEndpoints(force) {
+    const panel = $('networkEndpointsPanel');
+    const btn = $('networkEndpointsBtn');
+    if (!panel || !btn) return;
+    networkEndpointsOpen = force !== undefined ? force : panel.hidden;
+    panel.hidden = !networkEndpointsOpen;
+    btn.classList.toggle('active', networkEndpointsOpen);
+    btn.setAttribute('aria-expanded', String(networkEndpointsOpen));
+    if (networkEndpointsOpen) loadNetworkEndpoints();
+  }
+  function wireNetworkEndpointsPanel() {
+    const panel = $('networkEndpointsPanel');
+    const btn = $('networkEndpointsBtn');
+    if (!panel || !btn) return;
+    btn.onclick = () => toggleNetworkEndpoints();
+    $('networkEndpointsRefresh').onclick = () => loadNetworkEndpoints();
+    $('networkEndpointsClose').onclick = () => { toggleNetworkEndpoints(false); btn.focus(); };
+    const activateRow = (row) => {
+      const prefix = row.dataset.endpointPrefix || '';
+      $('networkSearch').value = prefix;
+      loadNetwork();
+    };
+    panel.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-endpoint-prefix]');
+      if (row) activateRow(row);
+    });
+    panel.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        toggleNetworkEndpoints(false);
+        btn.focus();
+        return;
+      }
+      if (e.key === 'Enter' || e.key === ' ') {
+        const row = e.target.closest('[data-endpoint-prefix]');
+        if (row) {
+          e.preventDefault();
+          activateRow(row);
+        }
+      }
+    });
+  }
+
   viewControllers.network = {
     containerId: 'transactions',
     order: () => networkOrder,
     getSelected: () => selectedTransactionId,
     select: (id) => showTransaction(id),
-    flagCurrent: () => { const t = transactions.find((x) => x.id === selectedTransactionId); if (t) toggleEvidenceFlag('network', t.id, t.method + ' ' + t.host + t.path); },
-    pinCurrent: () => pinNetworkBaseline(selectedTransactionId),
+    // Imported HAR ids do not exist server-side, so Enter must not attempt to flag one.
+    flagCurrent: () => { if (harOffline) return; const t = transactions.find((x) => x.id === selectedTransactionId); if (t) toggleEvidenceFlag('network', t.id, t.method + ' ' + t.host + t.path); },
+    pinCurrent: () => { if (!harOffline) pinNetworkBaseline(selectedTransactionId); },
   };
 
   /** Generic labeled multi-select dropdown (the `.drop*` classes): a button
@@ -4213,6 +5056,7 @@
   }
   async function loadSocketMessagesImpl() {
     if (!token) return;
+    const gen = nextGen('socket-messages');
     const params = new URLSearchParams();
     socketSelectedConnIds.forEach((id) => params.append('connectionId', id));
     if (socketDirectionFilter) params.append('direction', socketDirectionFilter);
@@ -4224,11 +5068,14 @@
     });
     const r = await fetch('/api/v1/websockets/messages?' + params, { headers: auth() });
     if (!r.ok) {
+      if (!isLatest('socket-messages', gen)) return;
       renderLoadFailure($('sockets'), 'Could not load messages', r.status, loadSocketMessages);
       viewLoadedAt.delete('socket');
       return false;
     }
+    if (!isLatest('socket-messages', gen)) return;
     socketMessages_ = formatSocketMessages((await r.json()).data || []);
+    lastSocketFetchAt = Date.now();
     if (socketSelectedIndex >= socketMessages_.length) socketSelectedIndex = -1;
     renderSockets();
   }
@@ -4247,6 +5094,7 @@
     // height var it reads switches with the mode (--d-trace-h vs --d-row-h, both scaled by
     // body.mode-simple/advanced), so a List↔Timeline toggle just changes what `update()` supplies.
     const socketsVirt = virtualList('sockets', { rowHeightVar: () => (socketMode === 'timeline' ? '--d-trace-h' : '--d-row-h') });
+    if (lastRenderedSocketMode !== socketMode) { socketsVirt.remeasure(); lastRenderedSocketMode = socketMode; }
     if (timelineMode) {
       const chrono = socketMessages_.map((m, i) => ({ m, i })).sort((a, b) => a.m.timestampEpochMs - b.m.timestampEpochMs);
       const maxBytes = Math.max(1, ...chrono.map((x) => frameSizeValue(x.m)));
@@ -4312,13 +5160,13 @@
       : socketConnections;
     const socketTotalFrames = socketConnScope.reduce((sum, s) => sum + s.sentCount + s.receivedCount, 0);
     $('socketFootLeft').textContent = timelineMode
-      ? socketMessages_.length + ' frames · oldest first'
-      : socketMessages_.length + ' of ' + socketTotalFrames + ' frames';
+      ? countLabel(socketMessages_.length, 'frame') + ' · oldest first'
+      : socketMessages_.length + ' of ' + countLabel(socketTotalFrames, 'frame');
     $('socketFootRight').textContent = timelineMode
       ? 'bar width ∝ payload size'
       : socketSelectedConnIds.size === 1
         ? (() => { const s = socketConnections.find((x) => socketSelectedConnIds.has(x.id)); return s ? s.state + ' · ' + s.sentCount + '↑ ' + s.receivedCount + '↓' : ''; })()
-        : socketSelectedConnIds.size ? socketSelectedConnIds.size + ' connections' : socketConnections.length + ' connections';
+        : socketSelectedConnIds.size ? countLabel(socketSelectedConnIds.size, 'connection') : countLabel(socketConnections.length, 'connection');
     renderSocketMetrics();
     renderSocketChips();
     renderSocketConnDrop();
@@ -4363,7 +5211,7 @@
     order: () => socketOrder,
     getSelected: () => String(socketSelectedIndex),
     select: (id) => { socketSelectedIndex = Number(id); renderSockets(); },
-    flagCurrent: () => { const m = socketMessages_[socketSelectedIndex]; if (m) toggleEvidenceFlag('socket', socketSelectedIndex + '@' + m.timestampEpochMs, m.direction + ' ' + m.frameType); },
+    flagCurrent: () => { const m = socketMessages_[socketSelectedIndex]; if (m) toggleEvidenceFlag('socket', socketFlagId(socketSelectedIndex, m), m.direction + ' ' + m.frameType); },
   };
 
   function renderSocketConnDrop() {
@@ -4389,6 +5237,128 @@
       else socketSelectedConnIds.clear();
       loadSocketMessages(); renderSocketConnDrop(); positionDropPanel('socketConnDropBtn');
     });
+  }
+
+  // ================================================================
+  // Socket send composer
+  // ================================================================
+  const socketSendDrafts = new Map(); // connId -> { text: '', topic: '', qos: 0, retained: false }
+
+  function getSocketDraft(conn, m) {
+    if (!conn) return { text: '', topic: '', qos: 0, retained: false };
+    if (!socketSendDrafts.has(conn.id)) {
+      socketSendDrafts.set(conn.id, {
+        text: '',
+        topic: conn.sendProtocol === 'mqtt' ? (m?.topic ?? '') : '',
+        qos: conn.sendProtocol === 'mqtt' ? (m?.qos ?? 0) : 0,
+        retained: false,
+      });
+    }
+    return socketSendDrafts.get(conn.id);
+  }
+
+  function socketSendErrorMessage(code, message) {
+    if (code === 'NOT_CONNECTED') return 'Connection is not open';
+    if (code === 'SEND_REJECTED') return message || 'Send rejected';
+    if (code === 'VALIDATION_FAILED') return message || 'Validation failed';
+    if (code === 'SOCKET_SEND_DISABLED') return 'Sending is disabled by the host (request execution capability)';
+    if (code === 'SEND_UNSUPPORTED') return "This connection's adapter can't send";
+    if (code === 'CSRF_INVALID') return 'Security check failed (invalid CSRF token)';
+    return (message || 'Failed to send frame') + (code ? ': ' + code : '');
+  }
+
+  async function sendSocketFrame(connId) {
+    const conn = socketConnections.find((s) => s.id === connId);
+    if (!conn) return;
+    const draft = socketSendDrafts.get(connId) || { text: '', topic: '', qos: 0, retained: false };
+    if (!draft.text.trim()) return;
+    if (conn.sendProtocol === 'mqtt' && !draft.topic.trim()) return;
+
+    const btn = $('socketComposerSend');
+    if (btn) btn.disabled = true;
+
+    try {
+      const params = new URLSearchParams();
+      params.set('text', draft.text);
+      if (conn.sendProtocol === 'mqtt') {
+        params.set('topic', draft.topic);
+        params.set('qos', String(draft.qos ?? 0));
+        params.set('retained', String(Boolean(draft.retained)));
+      }
+
+      const r = await fetch(`/api/v1/websockets/connections/${encodeURIComponent(connId)}/send`, {
+        method: 'POST',
+        headers: { ...controlHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params,
+      });
+
+      if (!r.ok) {
+        let errData = {};
+        try { errData = await r.json(); } catch {}
+        toast(socketSendErrorMessage(errData.code, errData.message), 'error');
+        return;
+      }
+
+      toast('Frame sent');
+      draft.text = '';
+      const textEl = $('socketComposerText');
+      if (textEl) textEl.value = '';
+      loadSocketMessages();
+    } catch {
+      toast('Failed to send frame', 'error');
+    } finally {
+      syncSocketComposerSendButton(connId);
+    }
+  }
+
+  function syncSocketComposerSendButton(connId) {
+    const btn = $('socketComposerSend');
+    if (!btn) return;
+    const conn = socketConnections.find((s) => s.id === connId);
+    if (!conn || !conn.canSend) {
+      btn.disabled = true;
+      return;
+    }
+    const draft = socketSendDrafts.get(connId) || { text: '', topic: '', qos: 0, retained: false };
+    const textEmpty = !draft.text.trim();
+    const mqttTopicEmpty = conn.sendProtocol === 'mqtt' && !draft.topic.trim();
+    btn.disabled = textEmpty || mqttTopicEmpty;
+  }
+
+  function socketComposerHtml(conn, m) {
+    if (!conn || !conn.canSend) return '';
+    const draft = getSocketDraft(conn, m);
+    const isMqtt = conn.sendProtocol === 'mqtt';
+    return `<div class="socket-composer" data-conn-id="${esc(conn.id)}">
+      <div class="socket-composer-head">${icon('send', 'ic-sm')}<span>Send frame</span></div>
+      ${isMqtt ? `<div class="socket-composer-mqtt">
+        <label class="field">
+          <span>Topic</span>
+          <input type="text" id="socketComposerTopic" value="${esc(draft.topic)}" placeholder="app/events/…">
+        </label>
+        <label class="field field-qos">
+          <span>QoS</span>
+          <select id="socketComposerQos">
+            <option value="0"${draft.qos === 0 ? ' selected' : ''}>0</option>
+            <option value="1"${draft.qos === 1 ? ' selected' : ''}>1</option>
+            <option value="2"${draft.qos === 2 ? ' selected' : ''}>2</option>
+          </select>
+        </label>
+        <label class="socket-composer-checkbox">
+          <input type="checkbox" id="socketComposerRetained"${draft.retained ? ' checked' : ''}>
+          <span>Retained</span>
+        </label>
+      </div>` : ''}
+      <label class="field">
+        <span>Frame text</span>
+        <textarea id="socketComposerText" rows="3" placeholder="Type frame payload…">${esc(draft.text)}</textarea>
+      </label>
+      <div class="socket-composer-foot">
+        <button type="button" class="btn primary" id="socketComposerSend" ${(!draft.text.trim() || (isMqtt && !draft.topic.trim())) ? 'disabled' : ''}>
+          ${icon('send', 'ic-sm')}Send
+        </button>
+      </div>
+    </div>`;
   }
 
   // Keyed on connection+timestamp, never the list index: live-tail prepends frames and would
@@ -4436,14 +5406,20 @@
     }
     const findBar = findBarHtml(query, lines ? countPaneHits([{ groups: [{ code: lines }] }]) : 0, 'socketDetailFindInput');
     if (redactionShown()) body += `<div class="detail-footnote">${icon('lock', 'ic-sm')}<span>Frame payloads are redacted on device.</span></div>`;
+    const composer = socketComposerHtml(conn, m);
     const focusSnap = captureFocus(pane);
-    pane.innerHTML = head + findBar + `<div class="detail-body">${body}</div>`;
+    pane.innerHTML = head + findBar + `<div class="detail-body">${body}${composer}</div>`;
     mountBodyViewers(pane);
     restoreFocus(focusSnap, pane);
   }
   function wireSocketDetailPane() {
     $('socketMessages').addEventListener('click', (e) => {
       if (e.target.closest('[data-action="toggle-zoom"]')) { toggleDetailZoom(); return; }
+      if (e.target.closest('#socketComposerSend')) {
+        const wrap = e.target.closest('.socket-composer');
+        if (wrap?.dataset.connId) sendSocketFrame(wrap.dataset.connId);
+        return;
+      }
       const actionBtn = e.target.closest('[data-detail-action]');
       if (!actionBtn) return;
       const m = socketMessages_[socketSelectedIndex];
@@ -4453,7 +5429,29 @@
       else if (id === 'copy-frame') copyToClipboard(m.payload?.kind === 'binary' ? '[binary frame]' : (m.payload?.preview ?? ''), 'Frame payload');
       else if (id === 'copy-all-frames') copyToClipboard(JSON.stringify(socketMessages_, null, 2), 'All frames');
     });
-    $('socketMessages').addEventListener('input', (e) => { if (e.target.id === 'socketDetailFindInput') { socketDetailQuery = e.target.value; renderSocketDetail(); } });
+    $('socketMessages').addEventListener('input', (e) => {
+      if (e.target.id === 'socketDetailFindInput') { socketDetailQuery = e.target.value; renderSocketDetail(); return; }
+      const wrap = e.target.closest('.socket-composer');
+      if (wrap && wrap.dataset.connId) {
+        const connId = wrap.dataset.connId;
+        const conn = socketConnections.find((s) => s.id === connId);
+        const draft = getSocketDraft(conn, socketMessages_[socketSelectedIndex]);
+        if (e.target.id === 'socketComposerText') draft.text = e.target.value;
+        else if (e.target.id === 'socketComposerTopic') draft.topic = e.target.value;
+        syncSocketComposerSendButton(connId);
+      }
+    });
+    $('socketMessages').addEventListener('change', (e) => {
+      const wrap = e.target.closest('.socket-composer');
+      if (wrap && wrap.dataset.connId) {
+        const connId = wrap.dataset.connId;
+        const conn = socketConnections.find((s) => s.id === connId);
+        const draft = getSocketDraft(conn, socketMessages_[socketSelectedIndex]);
+        if (e.target.id === 'socketComposerQos') draft.qos = Number(e.target.value) || 0;
+        else if (e.target.id === 'socketComposerRetained') draft.retained = Boolean(e.target.checked);
+        syncSocketComposerSendButton(connId);
+      }
+    });
   }
 
   // ================================================================
@@ -4471,6 +5469,7 @@
           (!pushProviderFilter || p.provider === pushProviderFilter) &&
           (!q || `${p.messageId || ''} ${p.source || ''} ${p.lifecycle || ''} ${p.notification?.title || ''}`.toLowerCase().includes(q)),
       );
+    rows.reverse();
     pushOrder = rows.map(({ i }) => String(i));
     if (!pushOrder.includes(String(selectedPushIndex))) selectedPushIndex = rows.length ? rows[0].i : -1;
     virtualList('pushEvents').update(
@@ -4483,7 +5482,7 @@
           mainText: p.notification?.title || p.messageId || '(untitled)',
           tagText: p.simulated ? 'SIMULATED' : false, tagTone: 'warn',
           duration: p.lifecycle, statusText: time(p.receivedAtEpochMs), sTone: 'muted',
-          flagKind: 'push', flagLabel: p.provider + ' · ' + p.lifecycle,
+          flagKind: 'push', flagId: pushFlagId(p, i), flagLabel: p.provider + ' · ' + p.lifecycle,
           posinset: n + 1, setsize: total,
         });
       },
@@ -4491,7 +5490,7 @@
     );
     $('pushFootLeft').textContent = rows.length + ' of ' + pushes.length;
     $('pushFootRight').textContent = redactionShown() ? 'push tokens are redacted' : '';
-    $('pushBadge').textContent = pushes.length + ' events';
+    $('pushBadge').textContent = countLabel(pushes.length, 'event');
     renderPushMetrics();
     renderPushDetail();
   }
@@ -4513,14 +5512,16 @@
     order: () => pushOrder,
     getSelected: () => String(selectedPushIndex),
     select: (id) => { selectedPushIndex = Number(id); renderPush(); },
-    flagCurrent: () => { const p = pushes[selectedPushIndex]; if (p) toggleEvidenceFlag('push', String(selectedPushIndex), p.provider + ' · ' + p.lifecycle); },
+    flagCurrent: () => { const p = pushes[selectedPushIndex]; if (p) toggleEvidenceFlag('push', pushFlagId(p, selectedPushIndex), p.provider + ' · ' + p.lifecycle); },
   };
 
+  // The server keys push evidence by a stable id (list positions shift when the bounded store evicts).
+  const pushFlagId = (p, index) => (p && p.id ? String(p.id) : String(index));
   function renderPushDetail() {
     const pane = $('pushDetail');
     const p = pushes[selectedPushIndex];
     if (!p) { renderEmpty(pane, 'push', 'No push notification selected', 'Select a push event from the list to inspect its payload.'); return; }
-    const flagged = isFlagged('push', String(selectedPushIndex));
+    const flagged = isFlagged('push', pushFlagId(p, selectedPushIndex));
     const head = detailHeadHtml({
       badgeText: p.provider.toUpperCase(), badgeTone: p.simulated ? 'warn' : 'signal',
       title: p.notification?.title || p.messageId || '(untitled)', statusText: p.lifecycle, sTone: 'muted',
@@ -4552,7 +5553,7 @@
       const p = pushes[selectedPushIndex];
       if (!p) return;
       const id = actionBtn.dataset.detailAction;
-      if (id === 'flag') { toggleEvidenceFlag('push', String(selectedPushIndex), p.provider + ' · ' + p.lifecycle); renderPushDetail(); }
+      if (id === 'flag') { toggleEvidenceFlag('push', pushFlagId(p, selectedPushIndex), p.provider + ' · ' + p.lifecycle); renderPushDetail(); }
       else if (id === 'replay') replayPush(p);
       else if (id === 'copy-payload') copyToClipboard(JSON.stringify(p, null, 2), 'Payload');
     });
@@ -4648,8 +5649,14 @@
   // ================================================================
   let crashEvents = [];
   let selectedCrashId = '';
+  let selectedCrashGroup = '';
+  let currentCrashGroups = [];
   let crashOrder = [];
   let crashKindFilter = '';
+  // Per-viewer convenience only, never server state: remembering the grouping toggle across reloads
+  // must not make a failed localStorage access break the Crashes view.
+  let crashGroupMode = false;
+  try { crashGroupMode = localStorage.getItem('devconsole.crashes.group') === 'true'; } catch { /* storage unavailable */ }
   let crashRunsById = new Map(); // sessionId -> row from GET /api/v1/runs, refreshed by loadCrashes()
   const CRASHES_EMPTY_HTML = listEmptyHtml('bug', 'No crashes or ANRs match', 'Clear the kind filter or search to see the other captured events.');
   const CRASHES_NONE_HTML = listEmptyHtml('bug', 'No crashes yet', 'Crashes and ANRs from this session appear here.');
@@ -4699,6 +5706,103 @@
     if (!e?.payloadJson) return null;
     try { return JSON.parse(e.payloadJson); } catch { return null; }
   }
+
+  // ================================================================
+  // Crash grouping — a direct port of InspectorCrashGrouping.kt so the same crashes fingerprint
+  // identically on the Android inspector and here (same normalization, same framework skips).
+  // A group answers "is this the same bug again?" by keeping only the exception class and the
+  // first non-framework frame's `Class.method`, without `(File.kt:123)` — a moved line must not
+  // split a group.
+  // ================================================================
+  const CRASH_FRAMEWORK_PACKAGE_PREFIXES = [
+    'java.', 'javax.', 'kotlin.', 'kotlinx.', 'android.', 'androidx.',
+    'com.android.', 'dalvik.', 'libcore.', 'sun.',
+  ];
+
+  function crashSummaryHead(summary) {
+    return String(summary || '').split(':')[0].trim();
+  }
+
+  /** A summary like "java.io.IOException boom" names its class first; otherwise keep the head. */
+  function exceptionClassFromSummary(summaryHead) {
+    const leadingToken = summaryHead.split(' ')[0].trim();
+    const looksLikeClass = leadingToken.includes('.')
+      || leadingToken.endsWith('Exception')
+      || leadingToken.endsWith('Error');
+    return looksLikeClass ? leadingToken : summaryHead;
+  }
+
+  function extractExceptionClass(lines, summary) {
+    const candidate = lines.find((line) => !line.startsWith('at ') && !line.startsWith('"') && !line.startsWith('...'));
+    const candidateFromStack = candidate ? candidate.split(':')[0].trim() : '';
+    const summaryHead = crashSummaryHead(summary);
+    if (candidateFromStack) return candidateFromStack;
+    if (summaryHead) return exceptionClassFromSummary(summaryHead);
+    return lines.length ? lines[0].split(':')[0].trim() : '';
+  }
+
+  function extractFrameClassMethod(frameLine) {
+    const afterAt = frameLine.replace(/^at /, '').trim();
+    if (!afterAt) return null;
+    const withoutSource = afterAt.split('(')[0].trim();
+    const withoutModule = withoutSource.split('/').pop();
+    return withoutModule || null;
+  }
+
+  function isFrameworkFrame(classMethod) {
+    return CRASH_FRAMEWORK_PACKAGE_PREFIXES.some((prefix) => classMethod.startsWith(prefix));
+  }
+
+  function crashFingerprint(e) {
+    const payload = crashPayloadOf(e);
+    const lines = String(payload?.stackTrace || '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const exceptionClass = extractExceptionClass(lines, e.summary);
+    const frameMethods = lines.filter((line) => line.startsWith('at ')).map(extractFrameClassMethod).filter(Boolean);
+    const primaryFrame = frameMethods.find((frame) => !isFrameworkFrame(frame)) || frameMethods[0];
+    return primaryFrame ? exceptionClass + '|' + primaryFrame : exceptionClass;
+  }
+
+  /** `java.lang.IllegalStateException` -> `IllegalStateException`. */
+  function simpleClassName(qualified) {
+    return String(qualified).split('.').pop() || String(qualified);
+  }
+  /** `io.example.MainActivity.onCreate` -> `MainActivity.onCreate`: the package rarely tells two groups apart. */
+  function shortFrameName(classMethod) {
+    const parts = String(classMethod).split('.');
+    return parts.length > 2 ? parts.slice(-2).join('.') : String(classMethod);
+  }
+
+  /** Groups by fingerprint, newest crash of each group first, groups newest-first. */
+  function groupCrashes(crashes) {
+    if (!crashes.length) return [];
+    const sortedNewestFirst = crashes.slice().sort((a, b) => (b.wallTimeMs || 0) - (a.wallTimeMs || 0));
+    const byFingerprint = new Map();
+    sortedNewestFirst.forEach((crash) => {
+      const fingerprint = crashFingerprint(crash);
+      if (!byFingerprint.has(fingerprint)) byFingerprint.set(fingerprint, []);
+      byFingerprint.get(fingerprint).push(crash);
+    });
+    return [...byFingerprint.entries()]
+      .map(([fingerprint, members]) => ({
+        fingerprint,
+        newest: members[0],
+        count: members.length,
+        lastSeenEpochMs: members[0].wallTimeMs || 0,
+        crashes: members,
+      }))
+      .sort((a, b) => b.lastSeenEpochMs - a.lastSeenEpochMs);
+  }
+
+  function syncCrashGroupToggle() {
+    const btn = $('crashesGroupToggle');
+    if (!btn) return;
+    btn.setAttribute('aria-pressed', String(crashGroupMode));
+    btn.classList.toggle('active', crashGroupMode);
+  }
+
   /** Cross-session by design (see the module doc above): pluginId=crash with no sessionId reads
    * every retained run, not just the live one — the entire point, since a crash's process is gone
    * by the time anyone reopens the app to look for it. GET /api/v1/runs is fetched alongside it so
@@ -4738,13 +5842,62 @@
       metricHtml('Flagged', String([...evidenceFlags.values()].filter((v) => v.kind === 'crash').length), 'as evidence', 'signal'),
     ].join('');
   }
-  function renderCrashes() {
+  function crashRowsForFilters() {
     const q = $('crashesSearch').value.toLowerCase();
-    const rows = crashEvents.filter(
+    return crashEvents.filter(
       (e) =>
         (!crashKindFilter || crashKindOf(e) === crashKindFilter) &&
         (!q || (e.summary + ' ' + crashThreadOf(e)).toLowerCase().includes(q)),
     );
+  }
+  function renderCrashes() {
+    syncCrashGroupToggle();
+    const rows = crashRowsForFilters();
+    const emptyHtml = crashEvents.length ? CRASHES_EMPTY_HTML : CRASHES_NONE_HTML;
+    if (crashGroupMode) {
+      const groups = groupCrashes(rows);
+      currentCrashGroups = groups;
+      crashOrder = groups.map((group) => group.fingerprint);
+      if (!crashOrder.includes(selectedCrashGroup)) selectedCrashGroup = crashOrder[0] || '';
+      const selected = groups.find((group) => group.fingerprint === selectedCrashGroup);
+      // Keep an explicitly opened older occurrence selected; only fall back to the newest crash
+      // when the current selection isn't part of this group anymore (a filter change, new load).
+      if (!selected) selectedCrashId = '';
+      else if (!selected.crashes.some((crash) => crash.id === selectedCrashId)) selectedCrashId = selected.newest.id;
+      virtualList('crashesList').update(
+        groups.length,
+        (n, total) => {
+          const group = groups[n];
+          const kind = crashKindOf(group.newest);
+          const split = group.fingerprint.indexOf('|');
+          const exceptionType = split >= 0 ? group.fingerprint.slice(0, split) : group.fingerprint;
+          const topFrame = split >= 0 ? group.fingerprint.slice(split + 1) : '';
+          return rowHtml({
+            id: group.fingerprint, selected: selectedCrashGroup === group.fingerprint,
+            badgeText: kind === 'ANR' ? 'ANR' : 'CRASH', badgeTone: 'error',
+            // Simple names: the Summary column is narrow, and a fully-qualified `java.lang.…` plus
+            // a package-qualified frame ellipsised to nothing. The detail pane keeps the full text.
+            mainText: simpleClassName(exceptionType), mainSub: topFrame ? shortFrameName(topFrame) : undefined,
+            // The count lives in the tag slot rather than the duration column: the duration column
+            // is hidden below 620px, and the count is the whole point of grouping. "×N" stays
+            // legible where "N crashes" was squeezed to "2.".
+            tagText: '×' + group.count, tagTone: group.count > 1 ? 'error' : 'muted',
+            duration: '',
+            statusText: time(group.lastSeenEpochMs), sTone: 'muted',
+            flagKind: 'crash', flagId: group.newest.id, flagLabel: group.newest.summary,
+            posinset: n + 1, setsize: total,
+          });
+        },
+        emptyHtml,
+      );
+      $('crashesFootLeft').textContent = countLabel(groups.length, 'group') + ' · ' + countLabel(rows.length, 'crash');
+      $('crashesFootRight').textContent = 'grouped by exception + top frame';
+      $('crashesBadge').textContent = countLabel(rows.length, 'crash') + ' in ' + countLabel(groups.length, 'group');
+      renderCrashesMetrics();
+      renderCrashDetail();
+      return;
+    }
+    currentCrashGroups = [];
     crashOrder = rows.map((e) => e.id);
     if (!crashOrder.includes(selectedCrashId)) selectedCrashId = rows[0]?.id || '';
     // No onNearEnd — see the module doc above; retained-events has no cursor and loadCrashes()
@@ -4765,7 +5918,7 @@
           posinset: n + 1, setsize: total,
         });
       },
-      crashEvents.length ? CRASHES_EMPTY_HTML : CRASHES_NONE_HTML,
+      emptyHtml,
     );
     $('crashesFootLeft').textContent = rows.length + ' of ' + crashEvents.length;
     $('crashesFootRight').textContent = 'auto-flagged as evidence';
@@ -4773,11 +5926,29 @@
     renderCrashesMetrics();
     renderCrashDetail();
   }
+  /** One select path for both modes: a group id focuses its newest crash, a crash id selected from
+   * a group's occurrence list keeps that exact crash in the detail pane. */
+  function selectCrashRow(id) {
+    if (!crashGroupMode) { selectedCrashId = id; renderCrashes(); return; }
+    const group = currentCrashGroups.find((item) => item.fingerprint === id)
+      || currentCrashGroups.find((item) => item.crashes.some((crash) => crash.id === id));
+    if (group) {
+      selectedCrashGroup = group.fingerprint;
+      selectedCrashId = group.fingerprint === id ? group.newest.id : id;
+    }
+    renderCrashes();
+  }
+  function setCrashGroupMode(on) {
+    crashGroupMode = Boolean(on);
+    try { localStorage.setItem('devconsole.crashes.group', String(crashGroupMode)); } catch { /* storage unavailable */ }
+    syncCrashGroupToggle();
+    renderCrashes();
+  }
   viewControllers.crashes = {
     containerId: 'crashesList',
     order: () => crashOrder,
-    getSelected: () => selectedCrashId,
-    select: (id) => { selectedCrashId = id; renderCrashes(); },
+    getSelected: () => (crashGroupMode ? selectedCrashGroup : selectedCrashId),
+    select: selectCrashRow,
     flagCurrent: () => { const e = crashEvents.find((x) => x.id === selectedCrashId); if (e) toggleEvidenceFlag('crash', e.id, e.summary); },
   };
   /** Target of the Overview "previous run crashed" banner (renderOverviewCrashBanner) — landing on
@@ -4802,12 +5973,32 @@
     }
     if ($('crashesSearch').value) $('crashesSearch').value = '';
     await viewControllers.crashes.select(target.id);
-    focusSelectedRow('crashesList', crashOrder.indexOf(target.id));
+    focusSelectedRow('crashesList', crashOrder.indexOf(viewControllers.crashes.getSelected()));
   }
   const crashGroupOpen = {};
+  /** The group the detail pane is currently showing, or null when grouping is off (and for the
+   * fallback where the selected crash is no longer inside the filtered group list). */
+  function selectedCrashGroupEntry() {
+    if (!crashGroupMode) return null;
+    return currentCrashGroups.find((group) => group.crashes.some((crash) => crash.id === selectedCrashId)) || null;
+  }
+  function crashOccurrencesHtml(group) {
+    if (!group) return '';
+    const others = group.crashes.filter((crash) => crash.id !== selectedCrashId);
+    const rows = others.map((crash) => {
+      const run = crashRunInfo(crash);
+      return `<button type="button" class="crash-occurrence" data-crash-occurrence="${esc(crash.id)}">
+        <span class="crash-occurrence-time">${esc(time(crash.wallTimeMs))}</span>
+        <span class="crash-occurrence-run tone-text-muted">${esc(run ? run.text : 'previous run')}</span>
+      </button>`;
+    }).join('');
+    return `<div class="block-title">Other occurrences · ${countLabel(group.count - 1, 'crash')}</div>
+      <div class="crash-occurrences" aria-label="Other occurrences in this group">${rows || '<span class="detail-group-empty">This is the only recorded occurrence.</span>'}</div>`;
+  }
   function renderCrashDetail() {
     const pane = $('crashDetail');
-    const e = crashEvents.find((x) => x.id === selectedCrashId);
+    const group = selectedCrashGroupEntry();
+    const e = (group && group.crashes.find((x) => x.id === selectedCrashId)) || crashEvents.find((x) => x.id === selectedCrashId);
     if (!e) { renderEmpty(pane, 'bug', 'No crash selected', 'Select a crash or ANR from the list to inspect its breadcrumbs and all-thread dump.'); return; }
     const kind = crashKindOf(e);
     const flagged = isFlagged('crash', e.id);
@@ -4819,6 +6010,7 @@
       extraBadge: run?.current ? { text: 'CURRENT RUN', tone: 'signal' } : null,
       facts: [{ k: 'thread', v: crashThreadOf(e) || '—' }, { k: 'type', v: e.type }]
         .concat(run ? [{ k: 'run', v: run.text }] : [])
+        .concat(group ? [{ k: 'group', v: countLabel(group.count, 'crash') + ' · same exception + frame' }] : [])
         .concat(payload?.breadcrumbs ? [{ k: 'breadcrumbs', v: String(payload.breadcrumbs.length) }] : []),
       actions: [
         { id: 'flag', label: flagged ? 'Flagged as evidence' : 'Flag as evidence', icon: 'flag', on: flagged, title: 'Attach this crash to the evidence tray (Enter) — crashes auto-flag at capture time, so this is usually already on' },
@@ -4837,11 +6029,12 @@
     })();
     const dumpGroup = detailGroupHtml(
       'crash/dump',
-      { label: 'All-thread dump', code: payload?.stackTrace ? plainCodeLines(payload.stackTrace) : null, empty: payload?.stackTrace ? undefined : (payload ? 'No stack trace recorded.' : crashPayloadMissingMessage('Stack trace')), meta: payload?.stackTrace ? payload.stackTrace.split('\n').length + ' lines' : '' },
+      { label: 'All-thread dump', code: payload?.stackTrace ? plainCodeLines(payload.stackTrace) : null, empty: payload?.stackTrace ? undefined : (payload ? 'No stack trace recorded.' : crashPayloadMissingMessage('Stack trace')), meta: payload?.stackTrace ? countLabel(payload.stackTrace.split('\n').length, 'line') : '' },
       crashGroupOpen,
     );
     const focusSnap = captureFocus(pane);
     pane.innerHTML = head + `<div class="detail-body">
+      ${crashOccurrencesHtml(group)}
       <div class="block-title">Breadcrumbs</div>
       ${breadcrumbsHtml}
       ${dumpGroup}
@@ -4854,6 +6047,8 @@
       if (e.target.closest('[data-action="toggle-zoom"]')) { toggleDetailZoom(); return; }
       const groupToggle = e.target.closest('[data-group-toggle]');
       if (groupToggle) { crashGroupOpen[groupToggle.dataset.groupToggle] = groupToggle.getAttribute('aria-expanded') !== 'true'; renderCrashDetail(); return; }
+      const occurrence = e.target.closest('[data-crash-occurrence]');
+      if (occurrence) { selectedCrashId = occurrence.dataset.crashOccurrence; renderCrashDetail(); renderCrashes(); return; }
       const actionBtn = e.target.closest('[data-detail-action]');
       if (!actionBtn) return;
       const ev = crashEvents.find((x) => x.id === selectedCrashId);
@@ -4882,6 +6077,7 @@
   let selectedStateProviderId = '';
   let selectedStateValue; // undefined = not loaded yet
   let selectedStateMutators = [];
+  let stateReadError = '';
   let cachedFlags = [];
   async function loadState() {
     if (!hasSession()) return loadStateImpl();
@@ -4889,9 +6085,11 @@
   }
   async function loadStateImpl() {
     if (!token) return;
+    const gen = nextGen('state-providers');
     const [statesRes, flagsRes] = await Promise.all([fetch('/api/v1/state', { headers: auth() }), fetch('/api/v1/flags', { headers: auth() })]);
     requireLoad(statesRes);
     requireLoad(flagsRes);
+    if (!isLatest('state-providers', gen)) return;
     stateProviderIds = statesRes.ok ? ((await statesRes.json()).data || []).map((s) => s.id) : [];
     if (!stateProviderIds.includes(selectedStateProviderId)) {
       selectedStateProviderId = stateProviderIds[0] || '';
@@ -4903,12 +6101,22 @@
   }
   async function showState(id) {
     if (!token || !id) return;
+    const gen = nextGen('state-provider');
     selectedStateProviderId = id;
     selectedStateValue = undefined;
     selectedStateMutators = [];
     renderStateCards();
     const r = await fetch('/api/v1/state/' + encodeURIComponent(id), { headers: auth() });
-    const body = r.ok ? await r.json() : null;
+    if (!isLatest('state-provider', gen) || selectedStateProviderId !== id) return;
+    if (!r.ok) {
+      selectedStateValue = null;
+      selectedStateMutators = [];
+      stateReadError = unavailableReason(r.status);
+      renderStateCards();
+      return;
+    }
+    const body = await r.json();
+    stateReadError = '';
     selectedStateValue = body ? body.values : null;
     selectedStateMutators = body?.mutators || [];
     renderStateCards();
@@ -5015,7 +6223,7 @@
       },
       {
         icon: 'grid', iconTone: 'signal', title: selectedStateProviderId ? 'App state · ' + selectedStateProviderId : 'App state', span: 2,
-        lede: selectedStateProviderId ? (selectedStateValue === undefined ? 'Loading…' : false) : 'Choose a provider to inspect its typed snapshot.',
+        lede: stateReadError ? 'State unavailable. ' + stateReadError : selectedStateProviderId ? (selectedStateValue === undefined ? 'Loading…' : false) : 'Choose a provider to inspect its typed snapshot.',
         code: selectedStateValue !== undefined && selectedStateValue !== null ? formatJsonLines(selectedStateValue, '') : false,
         bodyHtml: stateMutatorsFieldsHtml(selectedStateProviderId, selectedStateMutators),
         buttons: (selectedStateValue != null ? [{ id: 'copy-state', label: 'Copy JSON', icon: 'copy' }] : []).concat(
@@ -5032,9 +6240,21 @@
   // Remote Config
   // ================================================================
   let remoteConfigProviders = [];
+  let remoteConfigOverridesEditable = false;
   let remoteConfigQuery = '';
   let remoteConfigSourceFilter = 'all';
   const REMOTE_CONFIG_SOURCE_TONE = { remote: 'signal', override: 'warn', default: 'muted', static: 'muted', unknown: 'muted' };
+
+  function remoteConfigErrorMessage(code, defaultMsg) {
+    if (code === 'REMOTE_CONFIG_OVERRIDES_DISABLED') return 'Remote config overrides are disabled by the host.';
+    if (code === 'REMOTE_CONFIG_OVERRIDES_UNAVAILABLE') return 'Remote config overrides are unavailable.';
+    if (code === 'REMOTE_CONFIG_PROVIDER_NOT_FOUND') return 'Remote config provider not found.';
+    if (code === 'VALIDATION_FAILED') return 'Validation failed for remote config override.';
+    if (code === 'CSRF_INVALID') return 'Security check failed (invalid CSRF token).';
+    if (code === 'AUTH_REQUIRED') return 'Connect this browser first.';
+    return (defaultMsg || 'Remote config action failed') + (code ? ': ' + code : '');
+  }
+
   function loadLocationPings() {
     if (!window.DevConsoleLocationPings) return undefined;
     return window.DevConsoleLocationPings.load({
@@ -5058,7 +6278,9 @@
     if (!token) return;
     const r = await fetch('/api/v1/remote-config', { headers: auth() });
     requireLoad(r);
-    remoteConfigProviders = (await r.json()).data || [];
+    const body = await r.json();
+    remoteConfigProviders = body.data || [];
+    remoteConfigOverridesEditable = body.overridesEditable === true;
     renderRemoteConfigCards();
   }
   /** Never-fetched is spelled out; rendering epoch 0 (or a sentinel) as a date would read as a real fetch. */
@@ -5075,6 +6297,13 @@
     $('remoteConfigBadge').textContent = remoteConfigProviders.length
       ? total + ' key' + (total === 1 ? '' : 's') + ' · ' + remoteConfigProviders.length + ' provider' + (remoteConfigProviders.length === 1 ? '' : 's')
       : 'no providers';
+
+    const hasAnyOverride = remoteConfigProviders.some((p) => (p.entries || []).some((e) => e.providerSource != null));
+    const clearAllBtn = $('remoteConfigClearOverrides');
+    if (clearAllBtn) {
+      clearAllBtn.hidden = !(remoteConfigOverridesEditable && hasAnyOverride);
+    }
+
     if (!remoteConfigProviders.length) {
       cardsGridHtml('remoteConfigCards', [{
         icon: 'cloud', iconTone: 'signal', title: 'Remote Config', span: 2,
@@ -5100,18 +6329,28 @@
         title: 'Remote Config · ' + provider.id,
         badge: remoteConfigFetchLine(provider), badgeTone: provider.unavailableReason ? 'warn' : 'muted',
         lede,
-        rows: shown.map((e) => ({
-          k: e.key,
-          v: e.redacted ? '<redacted>' : e.value,
-          // A [providerId, key] pair, not a position in `shown`: the search box and the source
-          // filter re-render this list constantly, and an index would point at a different key
-          // after either one changes. Same composite-dataset-key shape the mock diff rows use.
-          click: JSON.stringify([provider.id, e.key]),
-          clickTitle: 'Show the full value of ' + e.key,
-          tone: e.source === 'remote' ? 'ink' : 'muted',
-          tag: (e.source || 'unknown').toUpperCase() + (e.truncated ? ' · TRUNCATED' : ''),
-          tagTone: REMOTE_CONFIG_SOURCE_TONE[e.source] || 'muted',
-        })),
+        rows: shown.map((e) => {
+          const rowObj = {
+            k: e.key,
+            v: e.redacted ? '<redacted>' : e.value,
+            click: JSON.stringify([provider.id, e.key]),
+            clickTitle: 'Show the full value of ' + e.key,
+            tone: e.source === 'remote' ? 'ink' : 'muted',
+            tag: (e.source || 'unknown').toUpperCase() + (e.truncated ? ' · TRUNCATED' : ''),
+            tagTone: REMOTE_CONFIG_SOURCE_TONE[e.source] || 'muted',
+          };
+          if (e.source === 'override' && e.providerValue != null) {
+            rowObj.sub = 'Provider value: ' + e.providerValue + (e.providerSource ? ' (' + e.providerSource + ')' : '');
+          }
+          if (remoteConfigOverridesEditable) {
+            rowObj.actions = [{
+              id: 'override:' + JSON.stringify([provider.id, e.key]),
+              label: 'Override',
+              title: 'Override ' + e.key,
+            }];
+          }
+          return rowObj;
+        }),
       };
     }));
   }
@@ -5177,6 +6416,106 @@
     $('remoteConfigValueBody').innerHTML = remoteConfigValueMode === 'json' && view.jsonOk
       ? codeLinesHtml(formatJsonLines(view.parsed, ''), true)
       : `<div class="code-block code-block-lg"><div class="code-line rc-raw-line">${esc(view.text)}</div></div>`;
+
+    const overrideSection = $('remoteConfigOverrideSection');
+    if (overrideSection) {
+      overrideSection.hidden = !remoteConfigOverridesEditable;
+      if (remoteConfigOverridesEditable) {
+        const fallback = $('remoteConfigProviderFallback');
+        if (fallback) {
+          if (entry && entry.providerValue != null) {
+            fallback.hidden = false;
+            fallback.textContent = 'Provider value: ' + entry.providerValue + (entry.providerSource ? ' (' + entry.providerSource + ')' : '');
+          } else {
+            fallback.hidden = true;
+            fallback.textContent = '';
+          }
+        }
+        const input = $('remoteConfigOverrideInput');
+        if (input) {
+          // A redacted value is a placeholder, not the real string: never offer it for re-saving.
+          input.value = entry && !entry.redacted ? (entry.value ?? '') : '';
+        }
+        const clearBtn = $('remoteConfigClearOverride');
+        if (clearBtn) {
+          // providerSource is set only while a DevConsole override is active; a provider's own
+          // `override` source is not ours to clear.
+          clearBtn.hidden = entry?.providerSource == null;
+        }
+      }
+    }
+  }
+
+  async function saveRemoteConfigOverride() {
+    if (!remoteConfigValueTarget) return;
+    const { providerId, key } = remoteConfigValueTarget;
+    const input = $('remoteConfigOverrideInput');
+    const val = input ? input.value : '';
+    try {
+      const r = await fetch(`/api/v1/remote-config/${encodeURIComponent(providerId)}/overrides/${encodeURIComponent(key)}`, {
+        method: 'PUT',
+        headers: { ...controlHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ value: val }),
+      });
+      if (!r.ok) {
+        let errData = {};
+        try { errData = await r.json(); } catch {}
+        toast(remoteConfigErrorMessage(errData.code, 'Failed to save override'), 'error');
+        return;
+      }
+      toast('Override saved');
+      closeRemoteConfigValue();
+      loadRemoteConfig();
+    } catch {
+      toast('Failed to save override', 'error');
+    }
+  }
+
+  async function clearRemoteConfigOverride() {
+    if (!remoteConfigValueTarget) return;
+    const { providerId, key } = remoteConfigValueTarget;
+    try {
+      const r = await fetch(`/api/v1/remote-config/${encodeURIComponent(providerId)}/overrides/${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+        headers: controlHeaders(),
+      });
+      if (!r.ok) {
+        let errData = {};
+        try { errData = await r.json(); } catch {}
+        toast(remoteConfigErrorMessage(errData.code, 'Failed to clear override'), 'error');
+        return;
+      }
+      toast('Override cleared');
+      closeRemoteConfigValue();
+      loadRemoteConfig();
+    } catch {
+      toast('Failed to clear override', 'error');
+    }
+  }
+
+  async function clearAllRemoteConfigOverrides() {
+    const ok = await openConfirm(
+      'Clear all Remote Config overrides?',
+      'Removes every active override so each key falls back to its provider value. This cannot be undone.',
+      'Clear all',
+    );
+    if (!ok) return;
+    try {
+      const r = await fetch('/api/v1/remote-config/overrides', {
+        method: 'DELETE',
+        headers: controlHeaders(),
+      });
+      if (!r.ok) {
+        let errData = {};
+        try { errData = await r.json(); } catch {}
+        toast(remoteConfigErrorMessage(errData.code, 'Failed to clear overrides'), 'error');
+        return;
+      }
+      toast('All overrides cleared');
+      loadRemoteConfig();
+    } catch {
+      toast('Failed to clear overrides', 'error');
+    }
   }
   function openRemoteConfigValue(rowId) {
     let providerId, key;
@@ -5267,7 +6606,7 @@
       },
       file
         ? {
-            icon: 'sliders', iconTone: 'signal', title: name, span: 2, editFold: 'Add or change a key', badge: entries.length + ' entries', badgeTone: 'muted',
+            icon: 'sliders', iconTone: 'signal', title: name, span: 2, editFold: 'Add or change a key', badge: countLabel(entries.length, 'entry', 'entries'), badgeTone: 'muted',
             lede: entries.length ? false : 'This file has no entries.',
             table: entries.length
               ? {
@@ -5371,8 +6710,10 @@
     const name = $('dbName').value;
     if (!name || !table) return;
     dbSelectedTable = table;
+    const gen = nextGen('table-rows');
     const r = await fetch('/api/v1/database/' + encodeURIComponent(name) + '/tables/' + encodeURIComponent(table), { headers: auth() });
-    dbLastRows = r.ok ? await r.json() : null;
+    if (!isLatest('table-rows', gen) || $('dbName').value !== name || dbSelectedTable !== table) return;
+    dbLastRows = r.ok ? await r.json() : { error: unavailableReason(r.status) };
     renderDbCards();
   }
   function renderDbCards() {
@@ -5403,8 +6744,8 @@
       },
       {
         icon: 'grid', iconTone: 'signal', title: table ? table.name : 'Table rows', span: 2,
-        badge: table ? (rows ? rows.length : 0) + ' of ' + table.rowCount.toLocaleString() + ' rows' : false, badgeTone: 'muted',
-        lede: !table
+        badge: table ? (rows ? rows.length : 0) + ' of ' + countLabel(table.rowCount.toLocaleString(), 'row') : false, badgeTone: 'muted',
+        lede: dbLastRows?.error ? 'Rows unavailable. ' + dbLastRows.error : !table
           ? 'Choose a table to inspect its rows.'
           : rows && !rows.length
             ? 'This table is empty — nothing has been written to it in this session.'
@@ -5546,6 +6887,13 @@
   let fileEntries = [];
   let filePreviewStatus = 'Choose a file to preview its contents.';
   let filePreviewContent = null; // raw text, only when preview.kind === 'TEXT'
+  let filePreviewEditable = false;
+  const clearFileSelection = () => {
+    selectedFilePath = '';
+    filePreviewContent = null;
+    filePreviewEditable = false;
+    filePreviewStatus = 'Choose a file to preview its contents.';
+  };
   async function loadFileRoots() {
     if (!hasSession()) return loadFileRootsImpl();
     return runViewLoader('files', () => loadFileRootsImpl());
@@ -5565,20 +6913,27 @@
     const root = fileRoots.includes(selected) ? selected : (fileRoots.includes('files') ? 'files' : fileRoots[0] || '');
     $('fileRoot').value = root;
     $('filePath').value = '';
-    selectedFilePath = '';
-    filePreviewContent = null;
-    filePreviewStatus = 'Choose a file to preview its contents.';
+    clearFileSelection();
     if (root) loadFileListing(root, '');
     else renderFilesCards();
   }
   async function loadFileListing(root, path) {
     if (!token || !root) return;
+    if ($('fileRoot').value !== root) {
+      $('fileRoot').value = root;
+      $('fileRoot').dataset.listingRoot = '';
+      clearFileSelection();
+    }
+    const previousRoot = $('fileRoot').dataset.listingRoot || '';
+    const previousPath = $('filePath').value || '';
+    if (root !== previousRoot || (path || '') !== previousPath) clearFileSelection();
     const r = await fetch('/api/v1/files/' + encodeURIComponent(root) + '?path=' + encodeURIComponent(path || ''), { headers: auth() });
     if (!r.ok) {
       cardsGridHtml('filesCards', [{ icon: 'folder', iconTone: 'signal', title: 'Tree', lede: 'Listing unavailable. ' + unavailableReason(r.status) }]);
       return;
     }
     const listing = await r.json();
+    $('fileRoot').dataset.listingRoot = root;
     $('filePath').value = listing.relativePath || '';
     fileEntries = listing.entries || [];
     $('filesBadge').textContent = '/' + (listing.relativePath || '');
@@ -5592,6 +6947,7 @@
       return;
     }
     selectedFilePath = relativePath;
+    filePreviewEditable = false;
     filePreviewContent = null;
     filePreviewStatus = 'Loading…';
     renderFilesCards();
@@ -5602,25 +6958,46 @@
       return;
     }
     const preview = await r.json();
+    // A slower response for a file the user already navigated away from must not overwrite it.
+    if (selectedFilePath !== relativePath) return;
     if (preview.kind === 'TEXT') {
-      filePreviewContent = preview.content + (preview.truncated ? '\n…(truncated)' : '');
-      filePreviewStatus = false;
+      // Previews are always redacted (FileInspector contract), so they are never saved back. An
+      // untruncated text file is edited from its raw bytes (the same download route) instead.
+      filePreviewEditable = false;
+      filePreviewContent = preview.content;
+      filePreviewStatus = preview.truncated
+        ? 'Preview is truncated — editing disabled to protect the file'
+        : false;
+      if (!preview.truncated && canEditFiles()) {
+        const requestedPath = relativePath;
+        try {
+          const raw = await fetch('/api/v1/files/' + encodeURIComponent(root) + '/download?path=' + encodeURIComponent(requestedPath), { headers: auth() });
+          if (raw.ok && selectedFilePath === requestedPath) {
+            filePreviewContent = new TextDecoder('utf-8', { fatal: true }).decode(await raw.arrayBuffer());
+            filePreviewEditable = true;
+          }
+        } catch { /* not UTF-8 or unavailable: keep the read-only redacted preview */ }
+        if (!filePreviewEditable) filePreviewStatus = 'Showing a redacted preview — editing disabled to protect the file';
+      }
     } else {
+      filePreviewEditable = false;
       filePreviewContent = null;
       filePreviewStatus = preview.kind === 'BINARY' ? `[binary, ${preview.sizeBytes} bytes]` : 'Unavailable: ' + preview.reason;
     }
     renderFilesCards();
   }
   async function deleteSelectedFile() {
-    if (!canEditFiles() || !selectedFilePath) return;
+    const displayedPath = $('filesCards').querySelector('[data-tree-id].selected')?.dataset.treeId || '';
+    if (!canEditFiles() || !selectedFilePath || selectedFilePath !== displayedPath || $('fileRoot').value !== $('fileRoot').dataset.listingRoot) return;
     const root = $('fileRoot').value;
     if (!root) return;
-    if (!(await openConfirm('Delete file', 'Delete ' + selectedFilePath + '?', 'Delete'))) return;
     const path = selectedFilePath;
+    if (!(await openConfirm('Delete file', 'Delete ' + path + '?', 'Delete'))) return;
     const r = await fetch('/api/v1/files/' + encodeURIComponent(root) + '?path=' + encodeURIComponent(path), { method: 'DELETE', headers: controlHeaders() });
     if (r.ok) {
       selectedFilePath = '';
       filePreviewContent = null;
+      filePreviewEditable = false;
       filePreviewStatus = 'File deleted.';
       toast('File deleted.');
       loadFileListing(root, $('filePath').value);
@@ -5649,9 +7026,10 @@
     }
   }
   async function saveFileContent() {
-    if (!canEditFiles() || !selectedFilePath) return;
+    if (!canEditFiles() || !selectedFilePath || !filePreviewEditable) return;
     const root = $('fileRoot').value;
-    if (!root) return;
+    if (!root || root !== $('fileRoot').dataset.listingRoot
+      || $('filesCards').querySelector('#fileEditor')?.dataset.filePath !== selectedFilePath) return;
     const body = new URLSearchParams({ path: selectedFilePath, content: $('fileEditor')?.value || '' });
     const r = await fetch('/api/v1/files/' + encodeURIComponent(root), {
       method: 'POST',
@@ -5663,6 +7041,8 @@
   async function renameSelectedFile() {
     if (!canEditFiles() || !selectedFilePath) return;
     const root = $('fileRoot').value;
+    if (root !== $('fileRoot').dataset.listingRoot
+      || $('filesCards').querySelector('[data-tree-id].selected')?.dataset.treeId !== selectedFilePath) return;
     const newPath = $('fileTargetPath')?.value.trim();
     if (!root || !newPath) return;
     const body = new URLSearchParams({ path: selectedFilePath, newPath });
@@ -5690,19 +7070,14 @@
       return;
     }
     const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = selectedFilePath.split('/').pop() || 'download';
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, selectedFilePath.split('/').pop() || 'download');
   }
   function renderFilesCards() {
     const base = $('filePath').value || '';
     const indent = 8 + (base ? base.split('/').filter(Boolean).length : 0) * 16;
     cardsGridHtml('filesCards', [
       {
-        icon: 'folder', iconTone: 'signal', title: 'Tree', badge: fileEntries.length + ' entries', badgeTone: 'muted',
+        icon: 'folder', iconTone: 'signal', title: 'Tree', badge: countLabel(fileEntries.length, 'entry', 'entries'), badgeTone: 'muted',
         lede: fileEntries.length ? false : 'This directory is empty.',
         tree: fileEntries.map((e) => ({
           id: e.relativePath, label: e.name + (e.isDirectory ? '/' : ''), icon: e.isDirectory ? 'folder' : 'file',
@@ -5716,12 +7091,13 @@
         lede: filePreviewStatus || false,
         code: filePreviewContent != null ? filePreviewContent.split('\n').map((line) => ({ pad: '', k: '', v: line, cls: 'tone-text-ink' })) : false,
         fieldsHtml: `<div class="card-fields mt-12">
-          <label class="field"><span>Content (create / save changes)</span><textarea id="fileEditor" rows="6" placeholder="Text content for create / save changes">${esc(filePreviewContent || '')}</textarea></label>
+          ${selectedFilePath && !filePreviewEditable ? '<p class="card-lede" role="status">Preview is truncated/redacted — editing disabled to protect the file</p>' : ''}
+          <label class="field"><span>Content (create / save changes)</span><textarea id="fileEditor" data-file-path="${esc(selectedFilePath)}" rows="6" placeholder="Text content for create / save changes" ${selectedFilePath && !filePreviewEditable ? 'readonly' : ''}>${esc(filePreviewContent || '')}</textarea></label>
           <label class="field"><span>New / rename target</span><input id="fileTargetPath" placeholder="relative/path.txt"></label>
         </div>`,
         buttons: [
           { id: 'rename', label: 'Rename', icon: 'pencil', disabled: !canEditFiles() || !selectedFilePath, title: canEditFiles() ? 'Rename to the target path above' : 'Sign in and enable the files capability' },
-          { id: 'save', label: 'Save changes', icon: 'check', kind: canEditFiles() ? 'primary' : 'default', disabled: !canEditFiles() || !selectedFilePath, title: canEditFiles() ? 'Save changes' : 'Sign in and enable the files capability' },
+          { id: 'save', label: 'Save changes', icon: 'check', kind: canEditFiles() ? 'primary' : 'default', disabled: !canEditFiles() || !selectedFilePath || !filePreviewEditable, title: !filePreviewEditable && selectedFilePath ? 'Editing disabled for truncated or redacted previews' : canEditFiles() ? 'Save changes' : 'Sign in and enable the files capability' },
           { id: 'download', label: 'Download', icon: 'download', disabled: !canEditFiles() || !selectedFilePath, title: canEditFiles() ? 'Download' : 'Sign in and enable the files capability' },
           { id: 'delete', label: 'Delete', icon: 'trash', kind: 'danger', disabled: !canEditFiles() || !selectedFilePath, title: canEditFiles() ? 'Delete' : 'Sign in and enable the files capability' },
         ],
@@ -5895,9 +7271,26 @@
       loadSession();
     }
   }
+  /** Signs only this browser out (revokes its own bearer session); other browsers and the server stay up. */
+  async function endBrowserSession() {
+    if (!hasSession() || openAccess) return;
+    if (!(await openConfirm('Sign out this browser?', 'You will need a fresh connect code from the device to reconnect.', 'Sign out'))) return;
+    try { await fetch('/api/v1/auth/logout', { method: 'POST', headers: controlHeaders() }); } catch { /* signing out locally regardless */ }
+    clearTimeout(streamRetry); streamRetry = null;
+    token = '';
+    csrf = '';
+    invalidateSessionCache();
+    try { sessionStorage.removeItem('devconsole.browserSession'); } catch { /* storage unavailable */ }
+    stream?.close();
+    stream = null;
+    $('lamp').classList.remove('live', 'reconnecting');
+    setStatus('Signed out', "Signed out — get a fresh connect code from the device's More screen");
+    toast('Signed out of this browser session.');
+    updateControlUi();
+  }
   async function stopServer() {
     if (!hasSession()) return;
-    if (!(await openConfirm('Stop the DevConsole server?', 'All connected browsers will be disconnected.', 'Stop server'))) return;
+    if (!(await openConfirm('Stop the DevConsole server?', 'Stops the DevConsole server for every connected browser.', 'Stop server'))) return;
     await fetch('/api/v1/session/stop', { method: 'POST', headers: controlHeaders() });
     toast('Server stop requested.');
   }
@@ -5919,16 +7312,49 @@
    * crashed, and roughly how much each is holding. Read-only, newest-first (server-sorted). */
   const RUN_STATUS_TONE = { CRASHED: 'error', ACTIVE: 'signal', DELETING: 'warn', COMPLETED: 'muted' };
   function retainedRunsTableHtml(runs) {
-    return cardTableHtml({
-      cols: ['Status', 'Started', 'App', 'Device', 'Records'],
-      rows: runs.map((r) => [
-        { v: r.status, tone: RUN_STATUS_TONE[r.status] || 'muted' },
-        { v: time(r.startedAtEpochMs), tone: 'muted' },
-        { v: [r.applicationId, r.appVersionName].filter(Boolean).join(' ') || '—', tone: 'ink' },
-        { v: [r.deviceModel, r.deviceOsVersion].filter(Boolean).join(' · ') || '—', tone: 'muted' },
-        { v: r.recordCount != null ? String(r.recordCount) : '—', tone: 'ink' },
-      ]),
+    const cells = (r) => [
+      { v: r.current ? 'LIVE' : (r.pinned ? r.status + ' · pinned' : r.status), tone: RUN_STATUS_TONE[r.status] || 'muted' },
+      { v: time(r.startedAtEpochMs), tone: 'muted' },
+      { v: [r.applicationId, r.appVersionName].filter(Boolean).join(' ') || '—', tone: 'ink' },
+      { v: [r.deviceModel, r.deviceOsVersion].filter(Boolean).join(' · ') || '—', tone: 'muted' },
+      { v: r.recordCount != null ? String(r.recordCount) : '—', tone: 'ink' },
+    ];
+    // Finished runs only: the live run can be neither pinned nor deleted.
+    const actions = (r) => (!hasSession() || r.current || !['COMPLETED', 'CRASHED'].includes(r.status) ? '' : `
+      <button type="button" class="row-flag" data-run-pin="${esc(r.id)}" data-pinned="${r.pinned ? 'true' : 'false'}" title="${r.pinned ? 'Unpin: let retention remove it' : 'Pin: keep it through retention'}" aria-label="${r.pinned ? 'Unpin' : 'Pin'} run from ${esc(time(r.startedAtEpochMs))}" aria-pressed="${r.pinned ? 'true' : 'false'}">${icon('star', 'ic-sm')}</button>
+      <button type="button" class="row-flag" data-run-delete="${esc(r.id)}" title="Delete run" aria-label="Delete run from ${esc(time(r.startedAtEpochMs))}">${icon('trash', 'ic-sm')}</button>`);
+    const head = ['Status', 'Started', 'App', 'Device', 'Records', ''].map((h) => `<th scope="col">${esc(h)}</th>`).join('');
+    const body = runs
+      .map((r) => `<tr>${cells(r).map((c) => `<td class="tone-text-${c.tone}" title="${esc(c.v)}">${esc(c.v)}</td>`).join('')}<td class="run-actions"><span class="run-actions-row">${actions(r)}</span></td></tr>`)
+      .join('');
+    return `<div class="card-table-wrap"><table class="card-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+  /** Drops every cached copy of [url] so the next cachedJson() read refetches it. */
+  function forgetCachedJson(url) {
+    [...jsonCache.keys()].filter((key) => key.endsWith(':' + url)).forEach((key) => jsonCache.delete(key));
+  }
+  async function setRunPinned(id, pinned) {
+    if (!hasSession()) return;
+    const r = await fetch('/api/v1/runs/' + encodeURIComponent(id) + '/pin', {
+      method: 'POST',
+      headers: { ...controlHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ pinned: String(pinned) }),
     });
+    if (!r.ok) { toast('Could not ' + (pinned ? 'pin' : 'unpin') + ' that run: ' + r.status, 'error'); return; }
+    toast(pinned ? 'Run pinned — retention will keep it.' : 'Run unpinned.');
+    forgetCachedJson('/api/v1/runs');
+    loadSession();
+  }
+  async function deleteRun(id) {
+    if (!hasSession()) return;
+    const ok = await openConfirm('Delete this run?', 'Its captures, logs, crashes and attachments are removed from the device. This cannot be undone.', 'Delete run');
+    if (!ok) return;
+    const r = await fetch('/api/v1/runs/' + encodeURIComponent(id), { method: 'DELETE', headers: controlHeaders() });
+    if (!r.ok) { toast('Could not delete that run: ' + r.status, 'error'); return; }
+    toast('Run deleted.');
+    forgetCachedJson('/api/v1/runs');
+    if (networkRunId === id) selectNetworkRun('');
+    loadSession();
   }
   function renderSessionCards(meta, capabilities) {
     const endpoint = meta?.endpoint;
@@ -5979,7 +7405,8 @@
             : [],
         ),
         buttons: [
-          { id: 'end-session', label: openAccess ? 'Stop server' : 'End session', icon: 'trash', kind: 'danger', disabled: !hasSession(), title: hasSession() ? (openAccess ? 'Stop the DevConsole server' : 'End this browser session') : 'Connect this browser first' },
+          ...(openAccess ? [] : [{ id: 'end-session', label: 'Sign out this browser', icon: 'close', disabled: !hasSession(), title: hasSession() ? 'End this browser session only; the server keeps running' : 'Connect this browser first' }]),
+          { id: 'stop-server', label: 'Stop server', icon: 'trash', kind: 'danger', disabled: !hasSession(), title: hasSession() ? 'Stop the DevConsole server for every connected browser' : 'Connect this browser first' },
           { id: 'rotate-code', label: 'Rotate code now', icon: 'refresh', disabled: !hasSession() || openAccess, title: openAccess ? 'Session codes are disabled in open mode' : hasSession() ? 'Invalidate the current session code and mint a new one' : 'Connect this browser first' },
         ],
       },
@@ -5990,7 +7417,7 @@
       },
       {
         icon: 'database', iconTone: retainedRuns.some((r) => r.status === 'CRASHED') ? 'error' : 'signal', title: 'Run history', span: 2,
-        bodyFold: 'Retained runs', foldCount: retainedRuns.length + ' runs',
+        bodyFold: 'Retained runs', foldCount: countLabel(retainedRuns.length, 'run'),
         emptyText: 'No retained runs on this device yet.',
         bodyHtml: retainedRuns.length ? retainedRunsTableHtml(retainedRuns) : '',
       },
@@ -6029,7 +7456,8 @@
     updateExportScope();
     wireCardGrid('sessionCards', {
       onButton: (id) => {
-        if (id === 'end-session') stopServer();
+        if (id === 'end-session') endBrowserSession();
+        else if (id === 'stop-server') stopServer();
         else if (id === 'rotate-code') rotateSessionCode();
         else if (id === 'export-estimate') estimateExportSize();
         else if (id === 'export-create') createExport();
@@ -6038,6 +7466,8 @@
       },
     });
     $('sessionCards').querySelectorAll('[data-revoke-principal]').forEach((btn) => { btn.onclick = () => revokePrincipal(btn.dataset.revokePrincipal); });
+    $('sessionCards').querySelectorAll('[data-run-pin]').forEach((btn) => { btn.onclick = () => setRunPinned(btn.dataset.runPin, btn.dataset.pinned !== 'true'); });
+    $('sessionCards').querySelectorAll('[data-run-delete]').forEach((btn) => { btn.onclick = () => deleteRun(btn.dataset.runDelete); });
   }
   function updateExportScope() {
     const scope = $('exportScope').value;
@@ -6114,12 +7544,7 @@
       return;
     }
     const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'devconsole-export.zip';
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, 'devconsole-export.zip');
     if (status) { delete status.dataset.busy; status.textContent = 'Export ready. Verify manifest.json before sharing.'; }
     toast('Export downloaded.');
     if (btn) btn.disabled = false;
@@ -6228,6 +7653,20 @@
     if (body.report) evidenceReport = body.report;
     updateEvidenceUi();
     return { items: [...evidenceFlags.values()], report: evidenceReport };
+  }
+  /** The tray is per app run (Room keeps every run's); this saves the newest finished run's as JSON. */
+  async function downloadPreviousRunEvidence() {
+    if (!hasSession()) return;
+    const runsRes = await cachedJson('/api/v1/runs', 30000).catch(() => null);
+    const runs = runsRes?.ok ? (await runsRes.json()).data || [] : [];
+    const previous = runs.find((run) => !run.current);
+    if (!previous) { toast('No previous run is retained on this device.', 'error'); return; }
+    const r = await fetch('/api/v1/evidence?sessionId=' + encodeURIComponent(previous.id), { headers: auth() });
+    if (!r.ok) { toast('Evidence unavailable: ' + r.status, 'error'); return; }
+    const body = await r.json();
+    if (!(body.data || []).length) { toast('The previous run has no flagged evidence.'); return; }
+    const blob = new Blob([JSON.stringify({ run: previous, ...body }, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, 'devconsole-evidence-' + previous.id + '.json');
   }
   async function loadEvidence() {
     if (!hasSession()) return loadEvidenceImpl();
@@ -6338,17 +7777,24 @@
     );
     const text = results.filter(Boolean).join('\n\n');
     if (!text) { toast('cURL unavailable for the flagged transactions', 'error'); return; }
-    await copyToClipboard(text, results.filter(Boolean).length + ' capture(s) as cURL');
+    await copyToClipboard(text, countLabel(results.filter(Boolean).length, 'capture') + ' as cURL');
   }
-  async function downloadBlobResponse(r, filename) {
-    if (!r.ok) return false;
-    const blob = await r.blob();
+  /** Revoking the object URL right after click() can cancel the download in some browsers, so it
+   * is released a while later instead. */
+  function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+  async function downloadBlobResponse(r, filename) {
+    if (!r.ok) return false;
+    const blob = await r.blob();
+    downloadBlob(blob, filename);
     return true;
   }
   function flaggedNetworkIds(items) {
@@ -6476,6 +7922,108 @@
   // ---- Screenshot capture (B): POST /api/v1/screenshots, then flag the resulting event as
   // SCREENSHOT-kind evidence so a capture is immediately visible in the tray with a thumbnail --
   // the capture flow *is* the flag flow here, matching "capture button ... in the evidence tray".
+  function captureControlErrorMessage(code, defaultMsg) {
+    if (code === 'CAPTURE_CONTROL_UNAVAILABLE') return 'Capture control is unavailable on this device.';
+    if (code === 'VALIDATION_FAILED') return 'Validation failed for capture request.';
+    if (code === 'CSRF_INVALID') return 'Security check failed (invalid CSRF token).';
+    if (code === 'AUTH_REQUIRED') return 'Connect this browser first.';
+    return (defaultMsg || 'Capture action failed') + (code ? ': ' + code : '');
+  }
+
+  let captureStateAvailable = false;
+  let capturePausedState = false;
+
+  function updateCaptureControlsUi(available, paused) {
+    captureStateAvailable = Boolean(available);
+    capturePausedState = Boolean(paused);
+
+    const toggleBtn = $('capturePausedToggle');
+    const purgeBtn = $('capturePurge');
+    const pill = $('capturePausedPill');
+
+    if (toggleBtn) {
+      toggleBtn.hidden = !captureStateAvailable;
+      const labelText = capturePausedState ? 'Resume capture' : 'Pause capture';
+      const labelSpan = toggleBtn.querySelector('span');
+      if (labelSpan) labelSpan.textContent = labelText;
+      toggleBtn.setAttribute('aria-label', labelText);
+      const useEl = toggleBtn.querySelector('svg use');
+      if (useEl) {
+        useEl.setAttribute('href', capturePausedState ? '#dc-record' : '#dc-pause');
+      }
+    }
+    if (purgeBtn) {
+      purgeBtn.hidden = !captureStateAvailable;
+    }
+    if (pill) {
+      pill.hidden = !capturePausedState;
+    }
+  }
+
+  async function loadCaptureState() {
+    if (!token) return;
+    try {
+      const r = await fetch('/api/v1/capture', { headers: auth() });
+      if (!r.ok) return;
+      const data = await r.json();
+      updateCaptureControlsUi(data.available, data.paused);
+    } catch {
+      /* ignore transient failure */
+    }
+  }
+
+  async function setCapturePaused(nextPaused) {
+    if (!hasSession()) { toast('Connect this browser first.', 'error'); return; }
+    try {
+      const r = await fetch('/api/v1/capture/paused', {
+        method: 'POST',
+        headers: { ...controlHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: String(Boolean(nextPaused)),
+      });
+      if (!r.ok) {
+        let code; try { code = (await r.json()).code; } catch { code = undefined; }
+        toast(captureControlErrorMessage(code, 'Failed to update capture state'), 'error');
+        return;
+      }
+      const data = await r.json();
+      updateCaptureControlsUi(true, data.paused);
+      toast(data.paused ? 'Capture paused' : 'Capture resumed');
+    } catch {
+      toast('Failed to update capture state', 'error');
+    }
+  }
+
+  async function purgeCaptureData() {
+    if (!hasSession()) { toast('Connect this browser first.', 'error'); return; }
+    const ok = await openConfirm(
+      'Purge captured data?',
+      "Removes this run's captured network, socket and push data from the device, and deletes old unpinned runs. This cannot be undone.",
+      'Purge',
+    );
+    if (!ok) return;
+    try {
+      const r = await fetch('/api/v1/capture/purge', { method: 'POST', headers: controlHeaders() });
+      if (!r.ok) {
+        let code; try { code = (await r.json()).code; } catch { code = undefined; }
+        toast(captureControlErrorMessage(code, 'Failed to purge captured data'), 'error');
+        return;
+      }
+      const data = await r.json();
+      // Same wording as the in-app inspector: name only what was removed, never a row of zeros.
+      const parts = [
+        [data.networkTransactions ?? 0, 'request'],
+        [data.socketConnections ?? 0, 'connection'],
+        [data.pushEvents ?? 0, 'push event'],
+        [data.retainedRunsDeleted ?? 0, 'old run'],
+      ].filter(([n]) => n > 0).map(([n, noun]) => `${n} ${noun}${n === 1 ? '' : 's'}`);
+      toast(parts.length === 0 ? 'Nothing to purge'
+        : 'Removed ' + (parts.length === 1 ? parts[0] : parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1]));
+      reloadActiveView();
+    } catch {
+      toast('Failed to purge captured data', 'error');
+    }
+  }
+
   function screenshotErrorMessage(code) {
     if (code === 'SCREENSHOT_DISABLED') return 'Screenshot capture is off by default — the host must set screenshotPolicy.enabled = true (DevConsoleConfig.withScreenshotPolicy(...)) to turn it on.';
     if (code === 'NO_FOREGROUND_ACTIVITY') return 'Nothing to capture — no foreground Activity on the device right now.';
@@ -6555,11 +8103,16 @@
           bodyHtml: foldHtml('How the tray works', '<p class="card-lede">' + esc("Flag a transaction, frame, push event, timeline event or crash with the flag button at the end of its row — or from its detail header — and it lands here with the full redacted detail the server captured at flag time, not just a label. Draft the report while the session is still live; once it ends the proof is gone. A browser refresh keeps everything: flagged items and any typed report text are saved server-side.") + '</p>'),
           buttons: [
             { id: 'go-network', label: 'Go to Network', icon: 'network', kind: 'primary' },
+            { id: 'previous-run-evidence', label: "Previous run's evidence", icon: 'download', disabled: !hasSession(), title: 'The tray is per app run; download what was flagged before the last restart' },
             { id: 'capture-screenshot', label: 'Capture screenshot', icon: 'camera', disabled: !hasSession(), title: hasSession() ? 'Capture the device\'s foreground screen — off by default; set screenshotPolicy.enabled to allow it' : 'Connect this browser first' },
           ],
         },
       ]);
-      wireCardGrid('evidenceList', { onButton: (id) => { if (id === 'go-network') show('network'); else if (id === 'capture-screenshot') captureScreenshot(); } });
+      wireCardGrid('evidenceList', { onButton: (id) => {
+        if (id === 'go-network') show('network');
+        else if (id === 'capture-screenshot') captureScreenshot();
+        else if (id === 'previous-run-evidence') downloadPreviousRunEvidence();
+      } });
       return;
     }
     $('evidenceMetrics').innerHTML = metricsStripHtml([
@@ -6619,7 +8172,7 @@
         buttons: [{ id: 'capture-screenshot', label: 'Capture screenshot', icon: 'camera', disabled: !hasSession(), title: hasSession() ? 'Capture the device\'s foreground screen — off by default; set screenshotPolicy.enabled to allow it' : 'Connect this browser first' }],
       },
       {
-        icon: 'flag', iconTone: 'signal', title: 'Attachments', span: 3, badge: items.length + ' items', badgeTone: 'muted',
+        icon: 'flag', iconTone: 'signal', title: 'Attachments', span: 3, badge: countLabel(items.length, 'item'), badgeTone: 'muted',
         // Bespoke table, not cardTableHtml: the last column needs real download/unflag buttons per
         // row, which a plain escaped-text cell can't hold.
         bodyHtml: evidenceAttachmentsTableHtml(items),
@@ -6661,6 +8214,7 @@
    * (and the still-persisted report draft, if any) render from the real post-clear server state
    * rather than an assumed-empty local one. */
   async function clearEvidenceTray() {
+    if (!(await openConfirm('Clear evidence tray?', 'Remove all persisted evidence items from this session? This cannot be undone.', 'Clear tray'))) return;
     if (!hasSession()) { evidenceFlags.clear(); updateEvidenceUi(); loadEvidence(); return; }
     const r = await fetch('/api/v1/evidence', { method: 'DELETE', headers: controlHeaders() });
     if (r.ok) { toast('Evidence tray cleared.'); clearAttachmentInfoCache(); }
@@ -6722,6 +8276,7 @@
     // ever gated on "is a session connected", exactly like Export; SCREENSHOT_DISABLED is
     // surfaced as a toast naming the config property once a capture is actually attempted.
     $('captureScreenshot').disabled = !token;
+    if (token) loadCaptureState();
     syncConnectPrompts(enabled);
   };
 
@@ -6770,21 +8325,29 @@
       return false;
     }
     const collections = (await r.json()).data || [];
+    composerCollectionsCache = collections;
     $('composerCollectionList').innerHTML = collections.length
-      ? cardRowsHtml(
-          collections.map((c) => ({
-            k: c.name, v: (c.request?.method || 'GET') + ' ' + (c.request?.url || ''), tone: 'ink',
-            tag: hasSession() ? 'DELETE' : false, tagTone: 'error',
-          })),
-        )
+      ? `<div class="card-rows">${collections.map((c) => `<div class="composer-collection-row" data-collection-id="${esc(c.id)}">
+          <button type="button" class="card-row card-row-click composer-collection-load" data-collection-load="${esc(c.id)}" title="Load ${esc(c.name)} into Composer">
+            <span class="card-row-k">${esc(c.name)}</span><span class="card-row-v tone-text-ink">${esc((c.request?.method || 'GET') + ' ' + (c.request?.url || ''))}</span>
+          </button>${hasSession() ? `<button type="button" class="row-flag composer-collection-delete" data-collection-delete="${esc(c.id)}" title="Delete ${esc(c.name)}" aria-label="Delete ${esc(c.name)}">${icon('trash', 'ic-sm')}</button>` : ''}
+        </div>`).join('')}</div>`
       : 'Collections contain no persisted secret variable values.';
-    if (hasSession()) {
-      $('composerCollectionList').querySelectorAll('.card-row').forEach((row, i) => {
-        row.style.cursor = 'pointer';
-        row.title = 'Delete this collection';
-        row.onclick = () => deleteComposerCollection(collections[i].id);
-      });
-    }
+  }
+  let composerCollectionsCache = [];
+  function loadComposerCollection(collection) {
+    const request = collection.request || {};
+    $('composerMethod').value = request.method || 'GET';
+    $('composerUrl').value = request.url || '';
+    $('composerBodyType').value = request.bodyType || 'NONE';
+    $('composerTimeout').value = request.timeoutMs || 15000;
+    $('composerRedirects').value = String(request.followRedirects ?? true);
+    $('composerBody').value = '';
+    $('composerHeaders').value = '';
+    $('composerQuery').value = '';
+    $('composerForm').value = '';
+    $('composerMultipart').value = '';
+    toast('Loaded "' + collection.name + '" into Composer.');
   }
   const COMPOSER_DEVICE_EXECUTOR = 'device';
   const COMPOSER_AGENT_PREFIX = 'agent:';
@@ -7336,8 +8899,9 @@
     toast(r.ok ? 'Collection saved without secret values.' : 'Save failed: ' + r.status, r.ok ? undefined : 'error');
     if (r.ok) loadComposerCollections();
   }
-  async function deleteComposerCollection(id) {
+  async function deleteComposerCollection(id, name = 'this saved Composer collection') {
     if (!hasSession()) return;
+    if (!(await openConfirm('Delete collection?', 'Delete "' + name + '"?', 'Delete'))) return;
     const r = await fetch('/api/v1/composer/collections/' + encodeURIComponent(id), { method: 'DELETE', headers: controlHeaders() });
     toast(r.ok ? 'Collection deleted.' : 'Delete failed: ' + r.status, r.ok ? undefined : 'error');
     if (r.ok) loadComposerCollections();
@@ -7347,7 +8911,8 @@
   // Mocks
   // ================================================================
   const canEditMocks = () => hasSession() && mocksEditable;
-  const canResend = () => hasSession() && composerCapabilityEnabled;
+  // A past run's capture can still be copied as cURL or cloned into Composer, but not re-sent.
+  const canResend = () => hasSession() && composerCapabilityEnabled && !networkRunId;
   let mockConflictCount = 0;
   let mockPendingHighlightId = '';
   async function loadMockRules() {
@@ -7368,13 +8933,12 @@
       $('mockRuleList').innerHTML = rules.length
         ? cardTogglesHtml(
             rules.map((rule) => ({
-              // Only StaticResponse (± Delay) rules survive a dialog round-trip; editing a
-              // fault-injection/template rule here would silently rewrite it as a static 200,
-              // and a truncated body would save the truncation as content.
+              // Every action type is welcome in the editor; shapes it cannot express open
+              // read-only with an inline note instead of being silently rewritten.
               id: rule.id, checked: rule.enabled, disabled: !canEditMocks(), deletable: canEditMocks(),
               editable: isMockRuleEditable(rule),
               k: rule.id,
-              sub: (rule.method || '*') + ' ' + rule.path + ' → ' + rule.action + (rule.statusCode != null ? ' ' + rule.statusCode : '') + ' · ' + rule.scope
+              sub: (rule.method || '*') + ' ' + rule.path + ' → ' + mockActionLabel(rule) + (rule.statusCode != null ? ' ' + rule.statusCode : '') + ' · ' + rule.scope
                 + (rule.hitCount ? ' · ' + rule.hitCount + ' hit' + (rule.hitCount === 1 ? '' : 's') + (rule.lastHitEpochMs ? ' · ' + relativeTime(rule.lastHitEpochMs) : '') : ''),
             })),
           )
@@ -7482,6 +9046,75 @@
     });
     toast(r.ok ? 'Mock rule ' + (enabled ? 'enabled.' : 'disabled.') : 'Update failed: ' + r.status, r.ok ? undefined : 'error');
     if (r.ok) loadMockRules();
+  }
+  /** True when any response body inside the action tree was capped by MockRule.json(). */
+  function mockActionHasTruncatedBody(detail) {
+    if (!detail) return false;
+    if (detail.bodyTruncated === true || detail.templateTruncated === true) return true;
+    if (detail.next && mockActionHasTruncatedBody(detail.next)) return true;
+    return Array.isArray(detail.steps) && detail.steps.some(mockActionHasTruncatedBody);
+  }
+  async function exportMockRules() {
+    if (!hasSession()) return;
+    const r = await fetch('/api/v1/mocks/rules', { headers: auth() });
+    if (!r.ok) { toast('Export failed: ' + r.status, 'error'); return; }
+    const rules = (await r.json()).data || [];
+    const exportable = rules.filter((rule) => !mockActionHasTruncatedBody(rule.actionDetail));
+    const payload = {
+      format: 'devconsole-mock-rules', version: 1,
+      rules: exportable.map((rule) => ({
+        id: rule.id, priority: rule.priority, method: rule.method, scheme: rule.scheme, host: rule.host,
+        path: rule.path, scope: rule.scope, enabled: rule.enabled,
+        queryPredicates: rule.queryPredicates || {}, headerPredicates: rule.headerPredicates || {},
+        bodyPredicate: rule.bodyPredicate, action: rule.actionDetail,
+      })),
+    };
+    downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), 'devconsole-mock-rules.json');
+    const skipped = rules.length - exportable.length;
+    toast(
+      'Exported ' + exportable.length + ' rule' + (exportable.length === 1 ? '' : 's') +
+        (skipped ? '; skipped ' + skipped + ' with truncated bodies.' : '.'),
+      skipped ? 'error' : undefined,
+    );
+  }
+  async function importMockRules(file) {
+    if (!file || !canEditMocks()) return;
+    let payload;
+    try { payload = JSON.parse(await file.text()); } catch { toast('Import failed: not valid JSON.', 'error'); return; }
+    if (!payload || payload.format !== 'devconsole-mock-rules' || payload.version !== 1 || !Array.isArray(payload.rules)) {
+      toast('Import failed: expected format devconsole-mock-rules, version 1.', 'error');
+      return;
+    }
+    let created = 0, failed = 0;
+    for (const rule of payload.rules) {
+      const form = mockActionForm(rule.action);
+      if (!form || typeof rule.id !== 'string' || !MOCK_RULE_ID_RE.test(rule.id)) { failed++; continue; }
+      const params = new URLSearchParams({
+        id: rule.id, path: rule.path || '.*', priority: String(Number(rule.priority) || 0), scope: rule.scope || 'SESSION',
+      });
+      if (rule.method) params.set('method', rule.method);
+      if (rule.scheme) params.set('scheme', rule.scheme);
+      if (rule.host) params.set('host', rule.host);
+      params.set('enabled', String(rule.enabled !== false));
+      applyMockActionParams(params, {
+        ...form,
+        headersText: Object.entries(form.headers || {}).map(([k, v]) => k + ': ' + v).join('\n'),
+      });
+      Object.entries(rule.queryPredicates || {}).forEach(([k, v]) => params.append('queryPredicate', k + '=' + v));
+      Object.entries(rule.headerPredicates || {}).forEach(([k, v]) => params.append('headerPredicate', k + '=' + v));
+      if (rule.bodyPredicate) params.set('bodyPredicate', rule.bodyPredicate);
+      const r = await fetch('/api/v1/mocks/rules', {
+        method: 'POST',
+        headers: { ...controlHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params,
+      });
+      if (r.ok) created++; else failed++;
+    }
+    toast(
+      'Imported ' + created + ' rule' + (created === 1 ? '' : 's') + (failed ? '; ' + failed + ' failed.' : '.'),
+      failed ? 'error' : undefined,
+    );
+    loadMockRules();
   }
 
   // ================================================================
@@ -7719,19 +9352,19 @@
     renderEmpty(pane, 'network', 'No transaction selected', 'Select a request to inspect it.');
     pane.insertAdjacentHTML('afterbegin', `<div class="network-empty-head">${networkListToggleHtml()}</div>`);
   }
-  function networkDetailHeadHtml({ badgeText, title, actions, tabs, menuOpen, fullUrl, metaLine }) {
+  function networkDetailHeadHtml({ badgeText, title, actions, tabs, menuOpen, fullUrl, metaLine, offline }) {
     const primary = ['curl', 'clone', 'flag'];
     const menuActions = actions.filter((a) => !primary.includes(a.id));
     return `<div class="detail-head network-detail-head"><div class="detail-head-row">
       ${networkListToggleHtml()}<span class="network-method">${esc(badgeText)}</span>
       <span class="detail-head-title" title="${esc(fullUrl)}">${esc(title)}</span>
-      <div class="network-head-actions">${primary.map((id) => {
+      <div class="network-head-actions">${offline ? '' : `${primary.map((id) => {
         const a = actions.find((item) => item.id === id);
         const label = id === 'curl' ? 'Copy cURL' : id === 'clone' ? 'Open in Composer' : 'Flag as evidence';
         return `<button type="button" class="network-icon-action${a.on ? ' on' : ''}" data-detail-action="${id}" title="${label}" aria-label="${label}"${id === 'flag' ? ` aria-pressed="${Boolean(a.on)}"` : ''}>${icon(a.icon, 'ic-sm')}</button>`;
-      }).join('')}<button type="button" class="detail-menu-btn" id="detailActionsMenuBtn" data-action="toggle-actions-menu" aria-haspopup="menu" aria-controls="detailActionsMenuPanel" aria-expanded="${Boolean(menuOpen)}" title="Actions" aria-label="Actions">${icon('dots', 'ic-sm')}</button></div>
+      }).join('')}<button type="button" class="detail-menu-btn" id="detailActionsMenuBtn" data-action="toggle-actions-menu" aria-haspopup="menu" aria-controls="detailActionsMenuPanel" aria-expanded="${Boolean(menuOpen)}" title="Actions" aria-label="Actions">${icon('dots', 'ic-sm')}</button>`}</div>
       ${menuOpen ? `<div class="detail-menu-panel" id="detailActionsMenuPanel" role="menu" aria-label="Actions">${menuActions.map((a) => `<button type="button" role="menuitem" class="detail-menu-item" data-detail-action="${esc(a.id)}" ${a.disabled ? 'disabled' : ''} title="${esc(a.title || a.label)}">${a.icon ? icon(a.icon, 'ic-sm') : ''}<span>${esc(a.label)}</span></button>`).join('')}</div>` : ''}
-      </div><div class="network-meta">${esc(metaLine)}</div>
+      </div><div class="network-meta">${esc(metaLine)}${offline ? ' · offline HAR' : ''}</div>
       <div class="detail-tabs">${tabs.map((t) => `<button type="button" class="detail-tab${t.active ? ' active' : ''}" data-detail-tab="${esc(t.id)}">${esc(t.label)}</button>`).join('')}</div></div>`;
   }
   const NETWORK_STATUS_REASONS = {
@@ -7742,22 +9375,345 @@
     500: 'Internal Server Error', 502: 'Bad Gateway', 503: 'Service Unavailable', 504: 'Gateway Timeout',
   };
 
+  // ================================================================
+  // Structured decoders — JWT and GraphQL. Mirrors the Android inspector's
+  // InspectorStructuredDecoders.kt so the same token or operation reads the same on both
+  // surfaces. Decoding only: a JWT signature is never verified here (the dashboard has no key),
+  // so every JWT section says so outright rather than implying the token is trustworthy.
+  // ================================================================
+  const JWT_SEGMENT_COUNT = 3;
+  const JWT_TIMESTAMP_CLAIMS = ['exp', 'iat', 'nbf'];
+
+  /** A redacted value (<redacted> / ***) must never be decoded — the marker is not a token. */
+  function isRedactedValue(text) {
+    const value = String(text ?? '');
+    return /<redacted>/i.test(value) || value.includes('***');
+  }
+
+  /** Base64url → UTF-8 text. JWT segments drop their `=` padding, and a length of 1 mod 4 is
+   * never valid base64, so both are normalized/left to throw into the null-returning catch. */
+  function decodeBase64UrlUtf8(segment) {
+    try {
+      const padded = segment.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (segment.length % 4)) % 4);
+      const binary = atob(padded);
+      if (typeof TextDecoder === 'function') {
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return new TextDecoder('utf-8').decode(bytes);
+      }
+      return decodeURIComponent(binary.split('').map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join(''));
+    } catch {
+      return null;
+    }
+  }
+
+  function parseJsonText(text) {
+    try { return JSON.parse(text); } catch { return undefined; }
+  }
+
+  /**
+   * The Android decoder's coarsest-unit span: `45 s`, `15 min`, `2 h 5 min`, `3 days`,
+   * `about 5 months`, `about 3 years`. Partial minutes round up so a token with 30 s left never
+   * reads as `0 min`.
+   */
+  function formatJwtSpan(seconds) {
+    const minutes = Math.ceil(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    if (seconds < 60) return seconds + ' s';
+    if (minutes < 60) return minutes + ' min';
+    if (hours < 24) return hours + ' h' + (minutes % 60 ? ' ' + (minutes % 60) + ' min' : '');
+    if (days < 60) return days + ' day' + (days === 1 ? '' : 's');
+    if (days < 365) return 'about ' + Math.floor(days / 30) + ' months';
+    const years = Math.floor(days / 365);
+    return 'about ' + years + ' year' + (years === 1 ? '' : 's');
+  }
+
+  /** exp/iat/nbf as a local date-time plus the same relative suffix the Android inspector shows. */
+  function jwtTimestamps(payload, nowMs) {
+    const nowSeconds = Math.floor(nowMs / 1000);
+    return JWT_TIMESTAMP_CLAIMS.map((claim) => {
+      const value = payload[claim];
+      if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+      const epochSeconds = Math.trunc(value);
+      const span = formatJwtSpan(Math.abs(epochSeconds - nowSeconds));
+      const inPast = epochSeconds <= nowSeconds;
+      let relative;
+      if (claim === 'exp') relative = inPast ? 'expired ' + span + ' ago' : 'expires in ' + span;
+      else if (claim === 'nbf') relative = inPast ? 'active since ' + span + ' ago' : 'starts in ' + span;
+      else relative = inPast ? 'issued ' + span + ' ago' : 'issued in the future (clock skew?)';
+      return { claim, at: new Date(epochSeconds * 1000).toLocaleString(), relative, expired: claim === 'exp' && inPast };
+    }).filter(Boolean);
+  }
+
+  /**
+   * Decodes one candidate token. Returns null — never throws — unless it is a bare 3-segment
+   * compact JWS whose header parses as a JSON object carrying `alg` and whose payload parses as a
+   * JSON object. That header check is what keeps a dotted package name or a random string from
+   * being presented as a decoded credential.
+   */
+  function decodeJwtValue(raw, source, nowMs) {
+    let token = String(raw ?? '').trim().replace(/^"|"$/g, '');
+    if (/^Bearer\s+/i.test(token)) token = token.replace(/^Bearer\s+/i, '').trim();
+    if (!token || isRedactedValue(token)) return null;
+    const segments = token.split('.');
+    if (segments.length !== JWT_SEGMENT_COUNT || segments.some((segment) => !segment)) return null;
+    const headerText = decodeBase64UrlUtf8(segments[0]);
+    const payloadText = decodeBase64UrlUtf8(segments[1]);
+    if (!headerText || !payloadText || isRedactedValue(headerText) || isRedactedValue(payloadText)) return null;
+    const header = parseJsonText(headerText);
+    const payload = parseJsonText(payloadText);
+    if (!header || typeof header !== 'object' || Array.isArray(header) || !header.alg) return null;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+    return { source, header, payload, signatureLength: segments[2].length, timestamps: jwtTimestamps(payload, nowMs) };
+  }
+
+  /** Every string leaf under `node`, so a token nested anywhere in a JSON body is still found. */
+  function collectJwtCandidatesFromJson(node, out) {
+    if (typeof node === 'string') { out.push(node); return; }
+    if (Array.isArray(node)) { node.forEach((item) => collectJwtCandidatesFromJson(item, out)); return; }
+    if (node && typeof node === 'object') Object.values(node).forEach((value) => collectJwtCandidatesFromJson(value, out));
+  }
+
+  /**
+   * JWTs in a transaction: the request `Authorization: Bearer …` header, then any header or body
+   * value that is itself exactly a bare compact JWS. The Android decoder also pulls
+   * `access_token`/`id_token`/`token` fields out of a JSON response; scanning every leaf string
+   * covers those and can only false-positive on a string that both has 3 segments and decodes to
+   * `{"alg":…}`, so it stays conservative in practice.
+   */
+  function extractTransactionJwts(detail, nowMs) {
+    const found = [];
+    const seen = new Set();
+    const add = (raw, source) => {
+      const decoded = decodeJwtValue(raw, source, nowMs);
+      if (!decoded) return;
+      const key = JSON.stringify([decoded.header, decoded.payload]);
+      if (seen.has(key)) return;
+      seen.add(key);
+      found.push(decoded);
+    };
+    const requestHeaders = detail.request?.headers || [];
+    requestHeaders.forEach((header) => {
+      const name = String(header.name || '');
+      const value = String(header.value || '');
+      if (name.toLowerCase() === 'authorization' && /^Bearer\s+/i.test(value.trim())) add(value, 'request Authorization');
+    });
+    const scanHeaders = (headers, side) => (headers || []).forEach((header) => {
+      const name = String(header.name || '');
+      if (name.toLowerCase() === 'authorization') return;
+      const value = String(header.value || '').trim();
+      if (value.split('.').length === JWT_SEGMENT_COUNT) add(value, side + ' header ' + name);
+    });
+    scanHeaders(detail.request?.headers, 'request');
+    scanHeaders(detail.response?.headers, 'response');
+    const scanBody = (body, side) => {
+      if (body?.type !== 'text' || !body.value) return;
+      const text = body.value.trim();
+      const json = parseJsonText(text);
+      if (json !== undefined) {
+        const strings = [];
+        collectJwtCandidatesFromJson(json, strings);
+        strings.forEach((value) => add(value, side + ' body'));
+      } else {
+        add(text, side + ' body');
+      }
+    };
+    scanBody(detail.request?.body, 'request');
+    scanBody(detail.response?.body, 'response');
+    return found;
+  }
+
+  /** Same header regex as the Android decoder: `query|mutation|subscription <Name>`. */
+  function parseGraphQlOperationHeader(query) {
+    const stripped = String(query || '')
+      .split('\n')
+      .map((line) => line.split('#')[0].trim())
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    const match = /^(query|mutation|subscription)\b(?:\s+([_A-Za-z][_0-9A-Za-z]*))?/.exec(stripped);
+    if (!match) return { type: 'query', name: null };
+    return { type: match[1].toLowerCase(), name: match[2] || null };
+  }
+
+  function graphQlOperationFromPayload(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+    const query = typeof payload.query === 'string' ? payload.query.trim() : '';
+    if (!query || isRedactedValue(query)) return null;
+    const explicitName = typeof payload.operationName === 'string'
+      && payload.operationName.trim()
+      && !isRedactedValue(payload.operationName) ? payload.operationName.trim() : null;
+    const parsed = parseGraphQlOperationHeader(query);
+    let variables = null;
+    if (payload.variables != null) {
+      if (typeof payload.variables === 'string') {
+        const parsedVariables = parseJsonText(payload.variables);
+        variables = parsedVariables !== undefined ? JSON.stringify(parsedVariables, null, 2) : payload.variables;
+      } else {
+        variables = JSON.stringify(payload.variables, null, 2);
+      }
+    }
+    return { operationType: parsed.type, operationName: explicitName || parsed.name, query, variables };
+  }
+
+  /** GraphQL operations in a POST JSON body (single or batched array), or in a GET's `query=`. */
+  function decodeGraphQlOperations(detail) {
+    const operations = [];
+    const method = String(detail.method || '').toUpperCase();
+    const body = detail.request?.body;
+    if (method === 'POST' && body?.type === 'text' && body.value) {
+      const parsed = parseJsonText(body.value.trim());
+      if (parsed !== undefined) {
+        const payloads = Array.isArray(parsed) ? parsed : [parsed];
+        payloads.forEach((payload) => {
+          const operation = graphQlOperationFromPayload(payload);
+          if (operation) operations.push(operation);
+        });
+      }
+    }
+    if (operations.length) return operations;
+    if (method !== 'GET') return operations;
+    let queryString = String(detail.query || '');
+    if (!queryString) {
+      try { queryString = new URL(detail.request?.url || '').search.slice(1); } catch { queryString = ''; }
+    }
+    const params = new URLSearchParams(queryString);
+    const query = params.get('query');
+    if (query && query.trim() && !isRedactedValue(query)) {
+      const operation = graphQlOperationFromPayload({ query, variables: params.get('variables') || undefined });
+      if (operation) operations.push(operation);
+    }
+    return operations;
+  }
+
+  /** GraphQL `errors[]` from the response body, including a batched array of `{errors}` results. */
+  function graphQlErrorsFromDetail(detail) {
+    const body = detail.response?.body;
+    if (body?.type !== 'text' || !body.value) return [];
+    const parsed = parseJsonText(body.value.trim());
+    if (parsed === undefined) return [];
+    const errors = [];
+    const collect = (node) => {
+      if (Array.isArray(node)) { node.forEach(collect); return; }
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node.errors)) {
+        node.errors.forEach((error) => {
+          if (!error || typeof error !== 'object') return;
+          errors.push({
+            message: typeof error.message === 'string' ? error.message : JSON.stringify(error),
+            path: Array.isArray(error.path) ? error.path.join('.') : null,
+          });
+        });
+      }
+    };
+    collect(parsed);
+    return errors;
+  }
+
+  /** A collapsible section inside the detail body that shares the group collapse state. */
+  function structuredGroupHtml(key, label, meta, inner) {
+    const state = networkGroupOpen[key];
+    const open = state === undefined ? true : state;
+    return `<div class="detail-group decoded-group">
+      <div class="detail-group-head">
+        <button type="button" class="detail-group-toggle" data-group-toggle="${esc(key)}" aria-expanded="${open}" title="${open ? 'Hide' : 'Show'} ${esc(label.toLowerCase())}">${icon('chevron')}<span class="detail-group-label">${esc(label)}</span></button>
+        <span class="detail-group-rule"></span>
+        <span class="detail-group-meta">${esc(meta || '')}</span>
+      </div>
+      ${open ? inner : '<span class="detail-group-empty">hidden</span>'}
+    </div>`;
+  }
+
+  function jwtSectionHtml(jwt, index, query) {
+    const claims = jwt.timestamps.map((stamp) => ({
+      k: stamp.claim,
+      v: stamp.at + ' · ' + stamp.relative,
+      tone: stamp.expired ? 'error' : 'muted',
+    }));
+    const meta = [jwt.header.alg, jwt.header.typ].filter(Boolean).join(' · ');
+    return structuredGroupHtml('jwt/' + index + '/' + jwt.source, 'JWT', meta, `
+      <div class="decoded-source">${icon('lock', 'ic-sm')}<span>${esc(jwt.source)}</span></div>
+      <div class="network-section-label">Header</div>
+      ${codeBlockHtml(formatJsonLines(jwt.header, query), false, 'JWT header')}
+      <div class="network-section-label">Payload</div>
+      ${codeBlockHtml(formatJsonLines(jwt.payload, query), false, 'JWT payload')}
+      ${claims.length ? `<div class="network-section-label">Claims</div>${kvGridHtml(claims, true)}` : ''}
+      <div class="decoded-note">${icon('alert', 'ic-sm')}<span>Signature not verified · ${esc(String(jwt.signatureLength))} base64url chars.</span></div>`);
+  }
+
+  function graphQlSectionHtml(operation, index, query, errors) {
+    const label = operation.operationType + ' ' + (operation.operationName || 'anonymous');
+    let inner = `<div class="decoded-source">${icon('network', 'ic-sm')}<span>${esc(label)}</span></div>`;
+    inner += `<div class="network-section-label">Query</div>${codeBlockHtml(plainCodeLines(operation.query), false, 'GraphQL query')}`;
+    if (operation.variables != null) {
+      const parsed = parseJsonText(operation.variables);
+      const lines = formatJsonLines(parsed !== undefined ? parsed : operation.variables, query);
+      if (lines.length) inner += `<div class="network-section-label">Variables</div>${codeBlockHtml(lines, false, 'GraphQL variables')}`;
+    }
+    inner += graphQlErrorsHtml(errors);
+    return structuredGroupHtml('graphql/' + index, 'GraphQL', label, inner);
+  }
+
+  function graphQlErrorsHtml(errors) {
+    if (!errors.length) return '';
+    const rows = errors.map((error) => ({
+      k: error.path ? 'path ' + error.path : 'error',
+      v: error.message,
+      tone: 'error',
+    }));
+    return `<div class="network-section-label tone-text-error">Errors · ${errors.length}</div>${kvGridHtml(rows, true)}`;
+  }
+
+  /** Everything the structured decoders found for this transaction, ready to append to a pane. */
+  function structuredSectionsHtml(detail, responseSide, query) {
+    const jwts = extractTransactionJwts(detail, Date.now());
+    const operations = decodeGraphQlOperations(detail);
+    const errors = graphQlErrorsFromDetail(detail);
+    const sections = [];
+    jwts.forEach((jwt, index) => sections.push(jwtSectionHtml(jwt, index, query)));
+    if (operations.length) {
+      operations.forEach((operation, index) => sections.push(graphQlSectionHtml(operation, index, query, responseSide ? errors : [])));
+    } else if (responseSide && errors.length) {
+      sections.push(structuredGroupHtml('graphql/errors', 'GraphQL', 'errors', graphQlErrorsHtml(errors)));
+    }
+    return sections.length ? `<div class="decoded-sections">${sections.join('')}</div>` : '';
+  }
+
   async function fetchTransactionDetail(id) {
     if (networkDetailCache.has(id)) {
       const cached = networkDetailCache.get(id);
       cacheNetworkDetail(id, cached); // touch: refresh recency on hit
       return cached;
     }
-    const r = await fetch('/api/v1/network/transactions/' + encodeURIComponent(id), { headers: auth() });
+    const r = await fetch(withNetworkRun('/api/v1/network/transactions/' + encodeURIComponent(id)), { headers: auth() });
     if (!r.ok) return null;
     const detail = await r.json();
     cacheNetworkDetail(id, detail);
     return detail;
   }
   async function showTransaction(id) {
-    if (!token || !id) return;
+    if (!id) return;
+    if (harOffline) {
+      // Imported rows are already complete transaction details; there is nothing to fetch and
+      // their ids are meaningless to the server.
+      const detail = harOffline.entries.find((entry) => entry.id === id) || null;
+      selectedTransactionId = detail ? id : '';
+      selectedTransactionDetail = detail;
+      if (!detail) { renderNetworkEmpty(); return; }
+      if (networkTab === 'diff' && !networkPinnedId) networkTab = 'response';
+      renderNetwork();
+      renderNetworkDetail();
+      return;
+    }
+    if (!token) return;
+    const gen = nextGen('transaction-detail');
     selectedTransactionId = id;
     selectedTransactionDetail = await fetchTransactionDetail(id);
+    if (!isLatest('transaction-detail', gen) || selectedTransactionId !== id) return;
+    if (currentView === 'network' && !location.hash.includes('code=') && DEEP_LINK_TX_RE.test(id)) {
+      history.replaceState(null, '', location.pathname + '#view=network&tx=' + encodeURIComponent(id));
+    }
     if (networkTab === 'diff' && !networkPinnedId) networkTab = 'response';
     renderNetwork();
     renderNetworkDetail();
@@ -8042,6 +9998,7 @@
     if (!detail) { renderNetworkEmpty(); return; }
     normalizeNetworkTabForMode();
     resetBodyViewers();
+    const offline = Boolean(harOffline);
     const pinId = networkPinnedId;
     const samePin = pinId === selectedTransactionId;
     const hasPin = Boolean(pinId) && !samePin && networkDetailCache.has(pinId);
@@ -8074,7 +10031,10 @@
     // always being rebuilt from scratch — distinct whenever the rule or its snapshot differs, and
     // stable (so the cache actually hits) across renders where neither changed.
     const mockDiffSig = mockDiff ? (mockRule.id || '') + ':' + mockRule.sourceBodySnapshot : '';
-    const actions = [
+    // A HAR row has no server-side identity: flagging, resend, pin/diff, mock-from-response,
+    // cURL through the device and related-events all address the live capture store, so the
+    // offline pane is deliberately read-only (copy buttons in the body viewers still work).
+    const actions = offline ? [] : [
       { id: 'flag', label: flagged ? 'Flagged as evidence' : 'Flag as evidence', icon: 'flag', on: flagged, title: 'Attach this transaction to the evidence tray (Enter)' },
       // Pin stays out of Simple mode's action row (brief: Flag/Mock/cURL/Clone only) *unless* a
       // baseline is already pinned — once one exists, hiding Pin would strand that state (no way
@@ -8097,8 +10057,8 @@
       mocked: isMocked,
       // No facts strip: time/duration/content type/correlation/mock rule now live in the Timing
       // tab (see networkSummaryKvs) instead of being repeated under the title.
-      actions, tabs, networkHeader: { fullUrl, metaLine },
-      actionsMenu: true, menuOpen: networkActionsMenuOpen,
+      actions, tabs, networkHeader: { fullUrl, metaLine, offline },
+      actionsMenu: !offline, menuOpen: !offline && networkActionsMenuOpen,
     });
     let findBar = '';
     let bodyHtml;
@@ -8115,6 +10075,7 @@
       else if (lines) bodyHtml += bodyViewerHtml(bodyRawText(side?.body), side?.contentType, lines, response ? 'Response body' : 'Request body', true, 'network/' + detail.id + '/' + networkTab, response ? mockDiff : undefined, response ? mockDiffSig : undefined, true);
       else bodyHtml += `<div class="network-body-empty">${esc(response ? 'No response body.' : detail.method + ' request — no body sent.')}</div>`;
       bodyHtml += `</div><details class="fold network-headers-fold"><summary>${icon('chevron', 'ic-sm fold-chevron')}${response ? 'Response' : 'Request'} headers · ${headers.length}</summary><div class="fold-content">${kvGridHtml(markKvHits(headers, networkDetailQuery), true)}</div></details>`;
+      bodyHtml += structuredSectionsHtml(detail, response, networkDetailQuery);
     } else if (networkTab === 'diff') {
       if (!hasPin) {
         bodyHtml = `<div class="sbs-grid stacked">${sbsPaneHtml({
@@ -8138,7 +10099,7 @@
       } else {
         bodyHtml = barsHtml(bars);
         if (fallback) {
-          bodyHtml += `<div class="detail-group-empty">Phase-level timing (DNS/connect/TLS/wait/receive) requires the OkHttp event listener to be installed; showing total duration only.</div>`;
+          bodyHtml += `<div class="detail-group-empty">${offline ? 'A HAR entry carries only its total time; phase-level timing is not part of the format.' : 'Phase-level timing (DNS/connect/TLS/wait/receive) requires the OkHttp event listener to be installed; showing total duration only.'}</div>`;
         }
       }
       bodyHtml += kvGridHtml(networkSummaryKvs(detail, { mockRuleId, mockDiffTotal }), true);
@@ -8155,7 +10116,7 @@
         bodyHtml = `<span class="detail-group-empty">No related timeline events found for this transaction's correlation id.</span>`;
       }
     }
-    if (redactionShown()) bodyHtml += `<div class="detail-footnote">${icon('lock', 'ic-sm')}<span title="Headers and bodies are redacted by the on-device allowlist before they reach this browser. Values shown as •••• never left the app.">Redacted on device.</span></div>`;
+    if (redactionShown() && !offline) bodyHtml += `<div class="detail-footnote">${icon('lock', 'ic-sm')}<span title="Headers and bodies are redacted by the on-device allowlist before they reach this browser. Values shown as •••• never left the app.">Redacted on device.</span></div>`;
     pane.innerHTML = head + findBar + `<div class="detail-body">${bodyHtml}</div>`;
     mountBodyViewers(pane);
     // The menu panel is position: fixed (the detail pane is overflow: hidden, so an absolutely
@@ -8296,9 +10257,8 @@
     const method = selectedTransactionDetail?.method || '';
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
       const ok = await openConfirm(
-        'Resend without body',
-        method + ' bodies are not retained by capture, so this replays the request with an EMPTY body '
-          + 'and the redacted stored headers. Use Clone to composer to author the body first.',
+        'Resend captured request',
+        'This replays the captured request body (which may be redacted or truncated) and the redacted stored headers.',
         'Resend anyway',
       );
       if (!ok) return;
@@ -8316,8 +10276,8 @@
   }
   async function cloneCapturedRequest() {
     if (!token || !selectedTransactionId) return;
-    const r = await fetch('/api/v1/network/transactions/' + encodeURIComponent(selectedTransactionId) + '/curl', { headers: auth() });
-    if (!r.ok) return;
+    const r = await fetch(withNetworkRun('/api/v1/network/transactions/' + encodeURIComponent(selectedTransactionId) + '/curl'), { headers: auth() });
+    if (!r.ok) { toast('Request unavailable: ' + unavailableReason(r.status), 'error'); return; }
     $('composerCurl').value = await r.text();
     renderEmpty(
       $('composerResult'),
@@ -8410,8 +10370,8 @@
   }
   async function copyNetworkCurl() {
     if (!token || !selectedTransactionId) return;
-    const r = await fetch('/api/v1/network/transactions/' + encodeURIComponent(selectedTransactionId) + '/curl', { headers: auth() });
-    if (!r.ok) return;
+    const r = await fetch(withNetworkRun('/api/v1/network/transactions/' + encodeURIComponent(selectedTransactionId) + '/curl'), { headers: auth() });
+    if (!r.ok) { toast('cURL unavailable: ' + unavailableReason(r.status), 'error'); return; }
     await copyToClipboard(await r.text(), 'cURL');
   }
   function headersToObject(headers) {
@@ -8453,24 +10413,19 @@
     if (!token) return;
     const useSelection = networkSelectedIds.size > 0;
     const r = useSelection
-      ? await fetch(path, {
+      ? await fetch(withNetworkRun(path), {
           method: 'POST',
           headers: { ...controlHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams([...networkSelectedIds].map((id) => ['id', id])),
         })
-      : await fetch(path + '?' + new URLSearchParams({ limit: '500' }), { headers: auth() });
+      : await fetch(withNetworkRun(path + '?' + new URLSearchParams({ limit: '500' })), { headers: auth() });
     if (!r.ok) { toast('Export failed: ' + r.status, 'error'); return; }
     if (r.headers.get('X-DevConsole-Export-Truncated') === 'true') {
       const count = r.headers.get('X-DevConsole-Export-Count');
       toast('Export truncated to ' + (count ?? 'the first 500') + ' transactions — narrow the filter or selection to get the rest.', 'error');
     }
     const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, filename);
   }
   async function downloadHar() {
     await downloadNetworkExport('/api/v1/network/har', 'devconsole-network.har');
@@ -8537,6 +10492,7 @@
     const input = $('eventNoteInput');
     if (!input) return;
     const r = await fetch('/api/v1/events/' + encodeURIComponent(selectedEventId) + '/note', { method: 'PUT', headers: controlHeaders(), body: input.value });
+    if (r.ok) eventNotesById.set(selectedEventId, input.value);
     toast(r.ok ? 'Note saved.' : 'Save failed: ' + r.status, r.ok ? undefined : 'error');
   }
 
@@ -8618,6 +10574,7 @@
       else button.removeAttribute('aria-current');
     });
     currentView = view;
+    if (!location.hash.includes('code=')) history.replaceState(null, '', location.pathname + '#view=' + encodeURIComponent(view));
     // This nav already loads the view fresh below, so any live-tail refresh queued while it was
     // off-screen (or paused) would just be redundant work once resumed.
     if (liveTailDirty[view] !== undefined) liveTailDirty[view] = false;
@@ -8659,6 +10616,11 @@
     return loaders[view] ? loaders[view]() : undefined;
   }
 
+  function reloadActiveView() {
+    viewLoadedAt.delete(currentView);
+    return show(currentView);
+  }
+
   // ================================================================
   // Session-code exchange
   // ================================================================
@@ -8683,6 +10645,14 @@
       activateBrowserAccess('', '', 'open', true);
       return;
     }
+    try {
+      const saved = location.hash.includes('code=') ? null : JSON.parse(sessionStorage.getItem('devconsole.browserSession') || 'null');
+      if (saved?.token && saved?.csrf) {
+        const response = await fetch('/api/v1/overview', { headers: { Authorization: 'Bearer ' + saved.token } });
+        if (response.ok) { activateBrowserAccess(saved.token, saved.csrf, 'restore'); return; }
+        if (response.status === 401) sessionStorage.removeItem('devconsole.browserSession');
+      }
+    } catch { /* storage or validation unavailable; continue normal connection flow */ }
     if (location.hash.includes('code=')) beginSessionCode();
     else loadOverview();
   }
@@ -8700,6 +10670,7 @@
     }
     try {
       const [overviewRes, metaRes] = await Promise.all([fetch('/api/v1/overview', { headers: auth() }), cachedJson('/api/v1/meta', 30000)]);
+      loadCaptureState();
       const overview = overviewRes.ok ? await overviewRes.json() : null;
       const meta = metaRes.ok ? await metaRes.json() : null;
       if (currentView === 'network') renderNetworkDetail();
@@ -8819,7 +10790,7 @@
     wireRowList('transactions', { onSelect: (id) => { showTransaction(id); networkListController?.close(); }, onCheck: (id) => toggleNetworkSelection(id) });
     wireRowList('sockets', { onSelect: (id) => { socketSelectedIndex = Number(id); renderSockets(); }, rowSelector: '.row, .trace-row' });
     wireRowList('pushEvents', { onSelect: (id) => { selectedPushIndex = Number(id); renderPush(); } });
-    wireRowList('crashesList', { onSelect: (id) => { selectedCrashId = id; renderCrashes(); } });
+    wireRowList('crashesList', { onSelect: selectCrashRow });
     wireNetworkDetailPane();
     wireSocketDetailPane();
     wirePushDetailPane();
@@ -8883,15 +10854,32 @@
     $('timelineBookmarkOnly').onclick = () => { timelineBookmarkedOnly = !timelineBookmarkedOnly; updateBookmarkOnlyButton(); render(); };
     $('eventDetail').addEventListener('click', (e) => { if (e.target.closest('[data-action="toggle-zoom"]')) toggleDetailZoom(); });
     $('eventDetail').addEventListener('input', (e) => { if (e.target.id === 'eventDetailFindInput') { eventDetailQuery = e.target.value; renderEventDetail(); } });
+    $('composerCollectionList').addEventListener('click', (e) => {
+      const del = e.target.closest('[data-collection-delete]');
+      if (del) {
+        const collection = composerCollectionsCache.find((item) => item.id === del.dataset.collectionDelete);
+        deleteComposerCollection(del.dataset.collectionDelete, collection?.name || 'saved Composer collection');
+        return;
+      }
+      const load = e.target.closest('[data-collection-load]');
+      if (load) {
+        const collection = composerCollectionsCache.find((item) => item.id === load.dataset.collectionLoad);
+        if (collection) loadComposerCollection(collection);
+      }
+    });
 
     // ---- Network -----------------------------------------------------------------
     wireSeg($('networkStatusSeg'), (value) => { networkStatusFilter = value; applyNetworkFilters(); });
     wireSeg($('networkMethodSeg'), (value) => { networkMethodFilter = value; applyNetworkFilters(); });
     wireServerSearch('networkSearch', () => loadNetwork());
+    $('networkRun').addEventListener('change', (event) => selectNetworkRun(event.target.value));
     $('networkRefresh').onclick = () => loadNetwork();
     $('networkNewest').onclick = () => loadNetwork();
     $('networkOlder').onclick = () => networkCursor && loadNetwork(networkCursor);
+    wireNetworkEndpointsPanel();
     wireNetworkExportMenu();
+    $('networkHarOpen').onclick = openHarFilePicker;
+    $('networkHarFile').addEventListener('change', handleHarFileSelected);
     $('networkHarDownload').onclick = downloadHar;
     $('networkPostmanDownload').onclick = downloadPostman;
     $('networkClear').onclick = clearNetworkCaptures;
@@ -8918,6 +10906,17 @@
     wireSeg($('socketProtocolSeg'), (value) => { socketProtocolFilter = value || 'all'; loadSockets(); });
     wireSeg($('socketModeSeg'), (value) => { socketMode = value; renderSockets(); });
     $('socketApply').onclick = () => loadSocketMessages();
+    // Enter in any "More filters" field applies the group, as it would in a form -- before this the
+    // only way to run a typed filter was to find and click Apply.
+    document.querySelectorAll('details.adv-filters').forEach((group) => {
+      const apply = group.querySelector('.filter-actions button');
+      if (!apply || apply.id === 'pushSimulate') return;
+      group.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || e.isComposing || !e.target.matches('input')) return;
+        e.preventDefault();
+        apply.click();
+      });
+    });
     $('socketClearFilters').onclick = () => {
       ['socketSearch', 'socketFrom', 'socketTo', 'socketError'].forEach((id) => ($(id).value = ''));
       socketFrameTypeFilter = ''; socketDirectionFilter = ''; socketSelectedConnIds.clear();
@@ -8961,6 +10960,8 @@
     // ---- Crashes -----------------------------------------------------------------
     $('crashesSearch').addEventListener('input', renderCrashes);
     wireSeg($('crashesKindSeg'), (value) => { crashKindFilter = value; renderCrashes(); });
+    $('crashesGroupToggle').onclick = () => setCrashGroupMode(!crashGroupMode);
+    syncCrashGroupToggle();
     $('crashesRefresh').onclick = loadCrashes;
 
     $('viewOverview').onclick = () => show('overview');
@@ -8981,9 +10982,19 @@
     $('viewSession').onclick = () => show('session');
 
     $('remoteConfigRefresh').onclick = loadRemoteConfig;
+    $('remoteConfigClearOverrides').onclick = clearAllRemoteConfigOverrides;
+    $('remoteConfigSaveOverride').onclick = saveRemoteConfigOverride;
+    $('remoteConfigClearOverride').onclick = clearRemoteConfigOverride;
     $('remoteConfigSearch').oninput = (e) => { remoteConfigQuery = e.target.value; renderRemoteConfigCards(); };
     wireSeg($('remoteConfigSourceSeg'), (value) => { remoteConfigSourceFilter = value; renderRemoteConfigCards(); });
-    wireCardGrid('remoteConfigCards', { onRow: openRemoteConfigValue });
+    wireCardGrid('remoteConfigCards', {
+      onRow: openRemoteConfigValue,
+      onRowAction: (actionId) => {
+        if (actionId.startsWith('override:')) {
+          openRemoteConfigValue(actionId.slice('override:'.length));
+        }
+      },
+    });
     $('remoteConfigValueClose').onclick = closeRemoteConfigValue;
     $('remoteConfigValueCopy').onclick = copyRemoteConfigValue;
     $('remoteConfigValueModal').addEventListener('click', (e) => { if (e.target.id === 'remoteConfigValueModal') closeRemoteConfigValue(); });
@@ -9000,7 +11011,7 @@
     $('dbTableSearch').addEventListener('input', (e) => { dbTableQuery = e.target.value; renderDbCards(); });
     wireSeg($('dbSortSeg'), (value) => { dbSort = value; renderDbCards(); });
 
-    $('fileRoot').onchange = (e) => loadFileListing(e.target.value, '');
+    $('fileRoot').onchange = (e) => { clearFileSelection(); $('filePath').value = ''; loadFileListing(e.target.value, ''); };
     $('fileGo').onclick = () => loadFileListing($('fileRoot').value, $('filePath').value);
     $('fileCreate').onclick = () => createFile();
 
@@ -9030,6 +11041,34 @@
 
     $('mockDisable').onclick = toggleMockEngine;
     $('mockNewRule').onclick = () => openMockRuleDialog(null);
+    $('mockExportRules').onclick = exportMockRules;
+    $('mockImportRules').onclick = () => $('mockImportRulesFile').click();
+    $('mockImportRulesFile').addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      await importMockRules(file);
+    });
+    $('mockRuleActionType').addEventListener('change', () => {
+      // A sequence with no steps can't be saved; start it with one so the editor shows what a step is.
+      if ($('mockRuleActionType').value === 'sequence') {
+        readMockRuleSteps();
+        if (!mockRuleSteps.length) {
+          mockRuleSteps.push(mockStepDefaults());
+          renderMockRuleSteps();
+        }
+      }
+      syncMockRuleActionFields();
+    });
+    $('mockRuleStepAdd').onclick = addMockRuleStep;
+    $('mockRuleSteps').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-step-remove]');
+      if (btn) removeMockRuleStep(Number(btn.dataset.stepRemove));
+    });
+    $('mockRuleSteps').addEventListener('change', (e) => {
+      const select = e.target.closest('[data-step-type]');
+      if (!select) return;
+      changeMockRuleStepType(Number(select.closest('[data-step-row]').dataset.stepRow), select.value);
+    });
     $('mockRuleModalClose').onclick = closeMockRuleDialog;
     $('mockRuleCancel').onclick = closeMockRuleDialog;
     $('mockRuleSave').onclick = saveMockRuleDialog;
@@ -9081,6 +11120,9 @@
     $('viewEvidence').onclick = () => show('evidence');
     $('viewCrashes').onclick = () => show('crashes');
     $('captureScreenshot').onclick = () => captureScreenshot();
+    $('capturePausedToggle').onclick = () => setCapturePaused(!capturePausedState);
+    $('captureResumePill').onclick = () => setCapturePaused(false);
+    $('capturePurge').onclick = () => purgeCaptureData();
     updateEvidenceUi();
 
     function setRailHidden(next) {
@@ -9107,12 +11149,7 @@
           return;
         }
         const blob = await r.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'devconsole-session.zip';
-        a.click();
-        URL.revokeObjectURL(url);
+        downloadBlob(blob, 'devconsole-session.zip');
         toast('Session ZIP exported.');
       } finally {
         btn.disabled = !token;

@@ -76,3 +76,11 @@ mirroring the "record on the delegate's own success signal" rule the OkHttp WebS
 
 See `samples/compose-app`'s "Open sample MQTT connection" action for a complete, crash-safe example
 against a public test broker.
+
+## Publishing from DevConsole
+
+A Paho client wrapped by `DevConsolePahoMqtt` can also publish from the dashboard or the inspector:
+open one of its frames and use the composer (topic required, QoS 0–2, retained). The publish goes
+through the same wrapper, so it is captured as a sent frame. While Paho is reconnecting the composer
+answers "Connection is not open". See [WEBSOCKET_INSPECTOR.md](WEBSOCKET_INSPECTOR.md#sending-a-frame)
+for the gate and the route.

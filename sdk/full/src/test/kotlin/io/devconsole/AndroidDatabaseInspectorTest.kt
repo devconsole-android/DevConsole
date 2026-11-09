@@ -46,6 +46,14 @@ class AndroidDatabaseInspectorTest {
     }
 
     @Test
+    fun `devconsole's own capture database is neither listed nor queryable`() {
+        application.openOrCreateDatabase("devconsole-events.db", Context.MODE_PRIVATE, null).close()
+
+        assertFalse("devconsole-events.db" in inspector.databases())
+        assertNull(inspector.tables("devconsole-events.db"))
+    }
+
+    @Test
     fun `default policy preserves columns covered by built in personal data heuristics`() {
         val unmasked = AndroidDatabaseInspector(application, RedactionEngine(RedactionPolicy.default()))
         val result = requireNotNull(unmasked.query("demo.db", "users"))
@@ -73,6 +81,22 @@ class AndroidDatabaseInspectorTest {
         // `email` is a personal-data column, so the cell is redacted rather than shown verbatim.
         assertFalse(result.rows.single()[1].contains("a@example.test"))
         assertFalse(result.truncated)
+    }
+
+    @Test
+    fun `query truncates large text cells and reports blob byte length`() {
+        val db = application.openOrCreateDatabase("demo.db", Context.MODE_PRIVATE, null)
+        db.execSQL("CREATE TABLE IF NOT EXISTS payloads (id INTEGER PRIMARY KEY, payload TEXT, image BLOB)")
+        db.execSQL(
+            "INSERT INTO payloads (id, payload, image) VALUES (1, ?, ?)",
+            arrayOf("x".repeat(8_000), byteArrayOf(1, 2, 3)),
+        )
+        db.close()
+
+        val result = requireNotNull(inspector.query("demo.db", "payloads"))
+
+        assertEquals(4_096, result.rows.single()[1].length)
+        assertEquals("[blob 3 bytes]", result.rows.single()[2])
     }
 
     @Test

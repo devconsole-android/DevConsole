@@ -61,12 +61,38 @@ fun NetworkTransactionStore.resolveExportSelection(
     baseQuery: NetworkTransactionQuery = NetworkTransactionQuery(limit = NetworkTransactionQuery.MAX_PAGE_LIMIT),
 ): List<NetworkTransaction>? =
     when (selection) {
-        ExportSelection.All -> page(baseQuery).let { if (it.invalidCursor) null else it.transactions }
+        ExportSelection.All -> pageAll(baseQuery)
         is ExportSelection.Ids -> selection.ids.mapNotNull(::find)
         is ExportSelection.TimeRange ->
-            page(
+            pageAll(
                 baseQuery.withFilters(
                     baseQuery.filters.copy(fromEpochMs = selection.fromEpochMs, toEpochMs = selection.toEpochMs),
                 ),
-            ).let { if (it.invalidCursor) null else it.transactions }
+            )
     }
+
+private fun NetworkTransactionStore.pageAll(query: NetworkTransactionQuery): List<NetworkTransaction>? {
+    val results = mutableListOf<NetworkTransaction>()
+    var cursor: String? = query.cursor
+    var hasMore = true
+    while (hasMore) {
+        val pageQuery =
+            NetworkTransactionQuery(
+                limit = query.limit,
+                cursor = cursor,
+                methods = query.methods,
+                hosts = query.hosts,
+                statuses = query.statuses,
+                correlationId = query.correlationId,
+            ).withFilters(query.filters)
+        val page = page(pageQuery)
+        // An invalid cursor, or a page claiming more without a cursor to reach it, means the
+        // selection cannot be exported completely -- fail rather than return a silent partial.
+        val brokenPaging = page.invalidCursor || (page.hasMore && page.nextCursor == null)
+        if (brokenPaging) return null
+        results += page.transactions
+        hasMore = page.hasMore
+        cursor = page.nextCursor
+    }
+    return results
+}

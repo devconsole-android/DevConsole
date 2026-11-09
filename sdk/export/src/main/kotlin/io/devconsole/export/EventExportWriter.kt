@@ -11,12 +11,48 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.InputStream
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import java.security.MessageDigest
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 const val DEFAULT_EXPORT_LIMIT_BYTES: Long = 100L * 1024L * 1024L
+private const val MAX_TEXT_SNIFF_BYTES = 4L * 1024L * 1024L
+private const val STREAM_BUFFER_SIZE = 8 * 1024
+private const val SHA256_HEX_LENGTH = 64
+private const val README_BYTES = 200L
+private const val JSON_PLACEHOLDER_BYTES = 72L
+private const val ZIP_ENTRY_OVERHEAD_BYTES = 256L
+private const val UTF16_BYTES_PER_CHAR = 2L
+private const val ESTIMATED_MANIFEST_BASE_BYTES = 256L
+private const val ESTIMATED_MANIFEST_ENTRY_BYTES = 220L
+private const val ESTIMATED_ATTACHMENT_DIGEST_BYTES = 64L
+private const val ESTIMATED_ATTACHMENT_INDEX_BASE_BYTES = 180L
+private const val ESTIMATED_ATTACHMENT_INDEX_OVERHEAD_BYTES = 12L
+private const val ESTIMATED_TEXT_BASE_BYTES = 512L
+private const val ESTIMATED_ANNOTATION_BASE_BYTES = 128L
+private const val ESTIMATED_EVENT_BASE_BYTES = 256L
+private const val ESTIMATED_EVENT_OVERHEAD_BYTES = 128L
+private const val ESTIMATED_EVIDENCE_SESSION_BYTES = 6L
+private const val ESTIMATED_EVIDENCE_ENTRY_BYTES = 180L
+private const val ESTIMATED_EVIDENCE_PATH_BYTES = 6L
+private const val ESTIMATED_REDACTED_ATTACHMENT_MULTIPLIER = 4L
+private const val ESTIMATED_EVIDENCE_MANIFEST_BYTES = 256L
+private const val ESTIMATED_ARCHIVE_FIXED_ENTRIES = 5
+private const val ESTIMATED_ATTACHMENTLESS_ARCHIVE_ENTRIES = 4
+private const val ESTIMATED_ARCHIVE_OPTIONAL_ENTRY_COUNT = 1
+private const val MAX_UTF8_ONE_BYTE_CODE = 0x7f
+private const val MAX_UTF8_TWO_BYTE_CODE = 0x7ff
+private const val UTF8_TWO_BYTE_WIDTH = 2L
+private const val UTF8_FOUR_BYTE_WIDTH = 4L
+private const val UTF8_THREE_BYTE_WIDTH = 3L
+private const val CONTROL_CHARACTER_LIMIT = 0x20
+private const val UNICODE_ESCAPE_WIDTH = 4
+private const val UTF8_SURROGATE_PAIR_INDEX_ADJUSTMENT = 1
 
 sealed interface ExportScope {
     data object WholeSession : ExportScope
@@ -78,6 +114,13 @@ data class EvidenceBundleAttachment(
     val open: suspend () -> ByteArray?,
 )
 
+/** Lazy, metadata-backed source for one standard session attachment. */
+data class ExportAttachmentSource(
+    val byteCount: Long,
+    val mimeType: String,
+    val open: suspend () -> InputStream?,
+)
+
 /**
  * Everything [EventExportWriter] needs to assemble an [ExportScope.Evidence] bundle. The caller (the
  * `/api/v1/evidence`-owning route) resolves flagged items, the report draft, live network transactions
@@ -117,6 +160,9 @@ data class ExportRequest(
     var attachments: Map<String, ByteArray> = emptyMap()
         private set
 
+    internal var attachmentSources: Map<String, ExportAttachmentSource> = emptyMap()
+        private set
+
     /** Only consulted when [scope] is [ExportScope.Evidence]; every other scope ignores this. */
     var evidenceBundle: EvidenceBundleContent? = null
         private set
@@ -133,6 +179,9 @@ data class ExportRequest(
             it.attachments = attachments.mapValues { (_, bytes) -> bytes.copyOf() }
         }
 
+    fun withAttachmentSources(sources: Map<String, ExportAttachmentSource>): ExportRequest =
+        duplicate().also { it.attachmentSources = sources.toMap() }
+
     fun withEvidenceBundle(bundle: EvidenceBundleContent): ExportRequest =
         duplicate().also { it.evidenceBundle = bundle }
 
@@ -142,6 +191,7 @@ data class ExportRequest(
             it.scope = scope
             it.metadataOnly = metadataOnly
             it.attachments = attachments.mapValues { (_, bytes) -> bytes.copyOf() }
+            it.attachmentSources = attachmentSources.toMap()
             it.evidenceBundle = evidenceBundle
         }
 }
@@ -190,28 +240,72 @@ class EventExportWriter(
             estimateEvidenceBytes(request)
         } else {
             val selected = request.events.select(request.sessionId, request.scope)
-            val payloads = buildStandardPayloads(request, selected)
-            val manifestBytes = manifest(request, selected.size, payloads).encodeToByteArray()
-            estimatedBytesOf(payloads, manifestBytes)
+            estimateStandardBytes(request, selected)
         }
 
-    private fun estimatedBytesOf(
-        payloads: List<PayloadFile>,
-        manifestBytes: ByteArray,
+    private fun estimateStandardBytes(
+        request: ExportRequest,
+        events: List<StoredEvent>,
+    ): Long {
+        val textBytes = standardTextEstimate(request, events)
+        val attachments = if (request.metadataOnly) emptyList() else standardAttachments(request, events)
+        val attachmentBytes =
+            attachments.sumOf { attachment ->
+                attachment.byteCount
+            }
+        val attachmentIndexBytes =
+            if (attachments.isEmpty()) {
+                0L
+            } else {
+                attachments.sumOf {
+                    (it.id.length + it.eventId.length) * UTF16_BYTES_PER_CHAR +
+                        ESTIMATED_ATTACHMENT_INDEX_BASE_BYTES + decimalLength(it.byteCount)
+                } + ESTIMATED_ATTACHMENT_INDEX_OVERHEAD_BYTES
+            }
+        val manifestEntryCount =
+            ESTIMATED_ATTACHMENTLESS_ARCHIVE_ENTRIES + attachments.size +
+                if (attachments.isEmpty()) 0 else ESTIMATED_ARCHIVE_OPTIONAL_ENTRY_COUNT
+        val manifestBytes =
+            ESTIMATED_MANIFEST_BASE_BYTES + request.sessionId.length * UTF16_BYTES_PER_CHAR +
+                decimalLength(events.size.toLong()) + manifestEntryCount * ESTIMATED_MANIFEST_ENTRY_BYTES +
+                attachments.size * ESTIMATED_ATTACHMENT_DIGEST_BYTES
+        return textBytes + attachmentBytes + attachmentIndexBytes + manifestBytes +
+            estimatedZipOverhead(attachments.size)
+    }
+
+    private fun estimatedZipOverhead(attachmentCount: Int): Long {
+        val optionalIndexCount = if (attachmentCount == 0) 0 else ESTIMATED_ARCHIVE_OPTIONAL_ENTRY_COUNT
+        return (ESTIMATED_ARCHIVE_FIXED_ENTRIES + attachmentCount + optionalIndexCount) * ZIP_ENTRY_OVERHEAD_BYTES
+    }
+
+    private fun decimalLength(value: Long): Long = value.toString().length.toLong()
+
+    private fun standardTextEstimate(
+        request: ExportRequest,
+        events: List<StoredEvent>,
     ): Long =
-        payloads.sumOf { it.bytes.size.toLong() } +
-            manifestBytes.size +
-            (payloads.size + 1L) * ZIP_ENTRY_OVERHEAD_BYTES
+        ESTIMATED_TEXT_BASE_BYTES + events.sumOf(::eventEstimate) +
+            events.sumOf { event ->
+                request.annotations[event.id]?.let {
+                    (event.id.length + (it.note?.length ?: 0) + ESTIMATED_ANNOTATION_BASE_BYTES) *
+                        UTF16_BYTES_PER_CHAR
+                } ?: 0L
+            } + ESTIMATED_ATTACHMENT_INDEX_OVERHEAD_BYTES + README_BYTES
+
+    private fun eventEstimate(event: StoredEvent): Long =
+        (
+            event.id.length + event.sessionId.length + event.pluginId.length + event.type.length +
+                event.summary.length +
+                event.tagsJson.length + (event.correlationId?.length ?: 0) + (event.payloadJson?.length ?: 0) +
+                (event.attachmentId?.length ?: 0) + ESTIMATED_EVENT_BASE_BYTES
+        ) * UTF16_BYTES_PER_CHAR + ESTIMATED_EVENT_OVERHEAD_BYTES
 
     private suspend fun writeInternal(request: ExportRequest): ExportResult {
         require(request.maxBytes > 0) { "maxBytes must be positive" }
         if (request.scope is ExportScope.Evidence) return writeEvidenceInternal(request)
 
         val selected = request.events.select(request.sessionId, request.scope)
-        val payloads = buildStandardPayloads(request, selected)
-        val manifest = manifest(request, selected.size, payloads)
-        val manifestBytes = manifest.encodeToByteArray()
-        val estimatedBytes = estimatedBytesOf(payloads, manifestBytes)
+        val estimatedBytes = estimateStandardBytes(request, selected)
         if (estimatedBytes > request.maxBytes) return ExportResult.ExceedsSizeLimit
 
         var temporary: File? = null
@@ -221,9 +315,19 @@ class EventExportWriter(
             if (!ensureDirectoryExists(parent)) return ExportResult.Unavailable
             temporary = File.createTempFile(".${destination.name}.", ".tmp", parent)
             ZipOutputStream(temporary.outputStream().buffered()).use { zip ->
+                val payloads = standardTextPayloads(request, selected)
+                val manifestEntries = mutableListOf<ManifestData>()
+                payloads.forEach { payload ->
+                    zip.writeBytes(payload.path, payload.bytes)
+                    manifestEntries += ManifestData(payload.path, payload.bytes.sha256(), payload.bytes.size.toLong())
+                }
+                manifestEntries += zip.writeTimeline(selected, request)
+                if (!request.metadataOnly) zip.streamStandardAttachments(request, selected, manifestEntries)
+                val manifestBytes = manifest(request, selected.size, manifestEntries).encodeToByteArray()
                 zip.writeBytes("manifest.json", manifestBytes)
-                payloads.forEach { payload -> zip.writeBytes(payload.path, payload.bytes) }
             }
+            // The pre-write estimate is metadata-only; the archive actually written is the final gate.
+            if (temporary.length() > request.maxBytes) return ExportResult.ExceedsSizeLimit
             publishAtomically(temporary, destination)
             temporary = null
             ExportResult.Success(destination, selected.size)
@@ -247,12 +351,15 @@ class EventExportWriter(
 
     private fun estimateEvidenceBytes(request: ExportRequest): Long {
         val bundle = request.evidenceBundle ?: return 0L
-        val textPayloads = evidenceTextPayloads(bundle)
-        val textEntries = textPayloads.map { it.toAppliedManifestEntry() }
+        val textMetadata = evidenceTextMetadata(bundle)
+        val textEntries =
+            textMetadata.map { (path, size) ->
+                ManifestFileEntry(path, PLACEHOLDER_SHA256, size, RedactionApplicability.APPLIED)
+            }
         // Attachments are never opened here: the placeholder hash is a fixed-length stand-in (a real
         // sha256 hex digest is always PLACEHOLDER_SHA256.length characters, regardless of content) and
-        // sizeBytes stands in for the eventual (post-redaction) byte count. Redaction can only shrink
-        // an attachment's bytes (see redactedCopy), so this can only ever over-, never under-, estimate.
+        // sizeBytes stands in for the eventual attachment length, with a conservative multiplier for
+        // text redaction and UTF-8 expansion. This keeps the estimate independent of attachment content.
         val attachmentEntries =
             bundle.attachments.map { attachment ->
                 ManifestFileEntry(
@@ -263,11 +370,23 @@ class EventExportWriter(
                 )
             }
         val manifestBytes =
-            evidenceManifestJson(request.sessionId, bundle.itemCount, textEntries + attachmentEntries)
-                .encodeToByteArray()
-        val payloadBytes = textPayloads.sumOf { it.bytes.size.toLong() } + bundle.attachments.sumOf { it.sizeBytes }
-        val entryCount = textPayloads.size + bundle.attachments.size + 1L
-        return payloadBytes + manifestBytes.size + entryCount * ZIP_ENTRY_OVERHEAD_BYTES
+            ESTIMATED_EVIDENCE_MANIFEST_BYTES + request.sessionId.length * ESTIMATED_EVIDENCE_SESSION_BYTES +
+                decimalLength(bundle.itemCount.toLong()) +
+                (textEntries.size + attachmentEntries.size) * ESTIMATED_EVIDENCE_ENTRY_BYTES +
+                bundle.attachments.sumOf {
+                    it.path.length * ESTIMATED_EVIDENCE_PATH_BYTES + decimalLength(it.sizeBytes)
+                }
+        val payloadBytes =
+            textMetadata.sumOf { it.second } +
+                bundle.attachments.sumOf { attachment ->
+                    if (attachment.redactionApplicability == RedactionApplicability.NOT_APPLICABLE) {
+                        attachment.sizeBytes
+                    } else {
+                        attachment.sizeBytes * ESTIMATED_REDACTED_ATTACHMENT_MULTIPLIER
+                    }
+                }
+        val entryCount = textMetadata.size + bundle.attachments.size + ESTIMATED_ARCHIVE_OPTIONAL_ENTRY_COUNT.toLong()
+        return payloadBytes + manifestBytes + entryCount * ZIP_ENTRY_OVERHEAD_BYTES
     }
 
     private suspend fun writeEvidenceInternal(request: ExportRequest): ExportResult {
@@ -290,6 +409,8 @@ class EventExportWriter(
                         .encodeToByteArray()
                 zip.writeBytes("manifest.json", manifestBytes)
             }
+            // The pre-write estimate is metadata-only; the archive actually written is the final gate.
+            if (temporary.length() > request.maxBytes) return ExportResult.ExceedsSizeLimit
             publishAtomically(temporary, destination)
             temporary = null
             ExportResult.Success(destination, bundle.itemCount)
@@ -344,13 +465,45 @@ class EventExportWriter(
 
     /** report.md/report.json/network.har/postman_collection.json/session.json, redacted a second time. */
     private fun evidenceTextPayloads(bundle: EvidenceBundleContent): List<PayloadFile> =
+        evidenceTextMetadata(bundle).map { (path, _) ->
+            val content =
+                when (path) {
+                    "report.md" -> bundle.reportMarkdown
+                    "report.json" -> bundle.reportJson
+                    "network.har" -> bundle.networkHar
+                    "postman_collection.json" -> bundle.postmanCollection
+                    else -> bundle.sessionJson
+                }
+            redactedTextPayload(path, content)
+        }
+
+    private fun evidenceTextMetadata(bundle: EvidenceBundleContent): List<Pair<String, Long>> =
         listOf(
-            redactedTextPayload("report.md", bundle.reportMarkdown),
-            redactedTextPayload("report.json", bundle.reportJson),
-            redactedTextPayload("network.har", bundle.networkHar),
-            redactedTextPayload("postman_collection.json", bundle.postmanCollection),
-            redactedTextPayload("session.json", bundle.sessionJson),
+            "report.md" to utf8ByteCount(bundle.reportMarkdown),
+            "report.json" to maxOf(utf8ByteCount(bundle.reportJson), JSON_PLACEHOLDER_BYTES),
+            "network.har" to maxOf(utf8ByteCount(bundle.networkHar), JSON_PLACEHOLDER_BYTES),
+            "postman_collection.json" to maxOf(utf8ByteCount(bundle.postmanCollection), JSON_PLACEHOLDER_BYTES),
+            "session.json" to maxOf(utf8ByteCount(bundle.sessionJson), JSON_PLACEHOLDER_BYTES),
         )
+
+    private fun utf8ByteCount(value: String): Long {
+        var bytes = 0L
+        var index = 0
+        while (index < value.length) {
+            val char = value[index]
+            when {
+                char.code <= MAX_UTF8_ONE_BYTE_CODE -> bytes++
+                char.code <= MAX_UTF8_TWO_BYTE_CODE -> bytes += UTF8_TWO_BYTE_WIDTH
+                char.isHighSurrogate() && index + 1 < value.length && value[index + 1].isLowSurrogate() -> {
+                    bytes += UTF8_FOUR_BYTE_WIDTH
+                    index += UTF8_SURROGATE_PAIR_INDEX_ADJUSTMENT
+                }
+                else -> bytes += UTF8_THREE_BYTE_WIDTH
+            }
+            index++
+        }
+        return bytes
+    }
 
     private data class ManifestFileEntry(
         val path: String,
@@ -383,7 +536,7 @@ class EventExportWriter(
                 }
             }]}"
 
-    private fun buildStandardPayloads(
+    private fun standardTextPayloads(
         request: ExportRequest,
         events: List<StoredEvent>,
     ): List<PayloadFile> =
@@ -395,14 +548,6 @@ class EventExportWriter(
                     "{\"sessionId\":\"${escape(redaction.redactText(request.sessionId))}\"," +
                         "\"scope\":$scopeJson,\"metadataOnly\":${request.metadataOnly}," +
                         "\"eventCount\":${events.size}}",
-                ),
-            )
-            add(
-                PayloadFile.text(
-                    "timeline.jsonl",
-                    events.joinToString("\n") { event ->
-                        event.toJsonLine(request.annotations[event.id], request.metadataOnly)
-                    },
                 ),
             )
             val bookmarkJson =
@@ -419,9 +564,6 @@ class EventExportWriter(
                     }.joinToString(",")
             add(PayloadFile.text("bookmarks.json", "{\"data\":[$bookmarkJson]}"))
 
-            if (!request.metadataOnly) {
-                addAll(attachmentPayloads(request, events))
-            }
             add(
                 PayloadFile.text(
                     "README.txt",
@@ -433,51 +575,130 @@ class EventExportWriter(
             )
         }
 
-    /** One redacted `attachments/<hash>.bin` per event that has a non-empty attachment, plus an index. */
-    private fun attachmentPayloads(
+    private data class StandardAttachment(
+        val id: String,
+        val eventId: String,
+        val mimeType: String,
+        val byteCount: Long,
+        val open: suspend () -> InputStream?,
+    )
+
+    private fun standardAttachments(
         request: ExportRequest,
         events: List<StoredEvent>,
-    ): List<PayloadFile> =
-        buildList {
-            val attachmentIndex = mutableListOf<String>()
-            events.forEach { event ->
-                val attachmentId = event.attachmentId ?: return@forEach
-                val capturedBytes = request.attachments[attachmentId]?.copyOf() ?: return@forEach
-                if (capturedBytes.isEmpty()) return@forEach
-                val bytes =
-                    redaction
-                        .redactText(capturedBytes.decodeToString(), capturedBytes.size)
-                        .encodeToByteArray()
-                        .let { redacted ->
-                            if (redacted.size <= capturedBytes.size) redacted else redacted.copyOf(capturedBytes.size)
-                        }
-                val nameHash = attachmentId.encodeToByteArray().sha256().take(ATTACHMENT_NAME_HASH_CHARS)
-                val path = "attachments/$nameHash.bin"
-                add(PayloadFile(path, bytes))
-                attachmentIndex +=
-                    "{\"eventId\":\"${escape(redaction.redactText(event.id))}\"," +
-                    "\"attachmentId\":\"${escape(redaction.redactText(attachmentId))}\"," +
-                    "\"path\":\"$path\",\"bytes\":${bytes.size}}"
-            }
-            if (attachmentIndex.isNotEmpty()) {
-                add(PayloadFile.text("attachments/index.json", "{\"data\":[${attachmentIndex.joinToString(",")}]}"))
+    ): List<StandardAttachment> =
+        events
+            .mapNotNull { event ->
+                val id = event.attachmentId ?: return@mapNotNull null
+                val source = request.attachmentSources[id]
+                if (source != null) {
+                    return@mapNotNull StandardAttachment(id, event.id, source.mimeType, source.byteCount, source.open)
+                }
+                request.attachments[id]?.let { bytes ->
+                    // Legacy in-memory attachments carry no MIME type. Redact as text only when they
+                    // decode as UTF-8.
+                    val mimeType = if (bytes.isUtf8Text()) "text/plain" else "application/octet-stream"
+                    StandardAttachment(id, event.id, mimeType, bytes.size.toLong()) { ByteArrayInputStream(bytes) }
+                }
+            }.distinctBy { it.id }
+            .filter { it.byteCount > 0 }
+
+    private fun attachmentPath(id: String): String =
+        "attachments/${id.encodeToByteArray().sha256().take(ATTACHMENT_NAME_HASH_CHARS)}.bin"
+
+    private suspend fun ZipOutputStream.streamStandardAttachments(
+        request: ExportRequest,
+        events: List<StoredEvent>,
+        manifestEntries: MutableList<ManifestData>,
+    ) {
+        val attachmentIndex = mutableListOf<String>()
+        standardAttachments(request, events).forEach { attachment ->
+            val path = attachmentPath(attachment.id)
+            val result = streamStandardAttachment(attachment, path) ?: return@forEach
+            val (digest, byteCount) = result
+            manifestEntries += ManifestData(path, digest, byteCount)
+            attachmentIndex += attachmentIndexEntry(attachment, path, byteCount)
+        }
+        if (attachmentIndex.isNotEmpty()) {
+            val index = "{\"data\":[${attachmentIndex.joinToString(",")}]}"
+            val indexBytes = index.encodeToByteArray()
+            writeBytes("attachments/index.json", indexBytes)
+            manifestEntries += ManifestData("attachments/index.json", indexBytes.sha256(), indexBytes.size.toLong())
+        }
+    }
+
+    private suspend fun ZipOutputStream.streamStandardAttachment(
+        attachment: StandardAttachment,
+        path: String,
+    ): Pair<String, Long>? {
+        val input = attachment.open() ?: return null
+        return input.use { source ->
+            if (isTextMime(attachment.mimeType)) {
+                val bytes = redactTextBytes(source.readBytes())
+                writeBytes(path, bytes)
+                bytes.sha256() to bytes.size.toLong()
+            } else if (attachment.byteCount <= MAX_TEXT_SNIFF_BYTES) {
+                // Capture-capped bodies are small: sniff them, so text stored without a
+                // textual MIME type still gets its second redaction pass while binary bytes
+                // are copied untouched.
+                val raw = source.readBytes()
+                val bytes = if (raw.isUtf8Text()) redactTextBytes(raw) else raw
+                writeBytes(path, bytes)
+                bytes.sha256() to bytes.size.toLong()
+            } else {
+                writeStream(path, source)
             }
         }
+    }
+
+    private fun attachmentIndexEntry(
+        attachment: StandardAttachment,
+        path: String,
+        byteCount: Long,
+    ): String =
+        "{\"eventId\":\"${escape(redaction.redactText(attachment.eventId))}\"," +
+            "\"attachmentId\":\"${escape(
+                redaction.redactText(attachment.id),
+            )}\",\"path\":\"$path\",\"bytes\":$byteCount}"
+
+    private fun isTextMime(mimeType: String): Boolean {
+        val mime = mimeType.substringBefore(';').trim().lowercase()
+        return mime.startsWith("text/") ||
+            mime.contains("json") ||
+            mime.contains("xml") ||
+            mime.contains("x-www-form-urlencoded") ||
+            mime.contains("javascript")
+    }
+
+    private fun ByteArray.isUtf8Text(): Boolean =
+        runCatching {
+            Charsets.UTF_8
+                .newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(this))
+        }.isSuccess
+
+    private fun redactTextBytes(raw: ByteArray): ByteArray =
+        redaction.redactText(raw.decodeToString(), raw.size.coerceAtLeast(1)).encodeToByteArray()
+
+    private data class ManifestData(
+        val path: String,
+        val sha256: String,
+        val bytes: Long,
+    )
 
     private fun manifest(
         request: ExportRequest,
         eventCount: Int,
-        payloads: List<PayloadFile>,
+        payloads: List<ManifestData>,
     ): String =
         "{\"format\":\"devconsole-export-v2\"," +
             "\"sessionId\":\"${escape(redaction.redactText(request.sessionId))}\"," +
             "\"eventCount\":$eventCount,\"metadataOnly\":${request.metadataOnly}," +
-            "\"manifestSelfExcluded\":true,\"files\":[${
-                payloads.joinToString(",") { payload ->
-                    "{\"path\":\"${escape(payload.path)}\",\"sha256\":\"${payload.bytes.sha256()}\"," +
-                        "\"bytes\":${payload.bytes.size}}"
-                }
-            }]}"
+            "\"manifestSelfExcluded\":true,\"files\":[${payloads.joinToString(",") { entry ->
+                "{\"path\":\"${escape(entry.path)}\",\"sha256\":\"${entry.sha256}\",\"bytes\":${entry.bytes}}"
+            }}]}"
 
     private fun List<StoredEvent>.select(
         sessionId: String,
@@ -554,6 +775,53 @@ class EventExportWriter(
         closeEntry()
     }
 
+    private fun ZipOutputStream.writeTimeline(
+        events: List<StoredEvent>,
+        request: ExportRequest,
+    ): ManifestData {
+        val digest = MessageDigest.getInstance("SHA-256")
+        var total = 0L
+        putNextEntry(ZipEntry("timeline.jsonl"))
+        events.forEachIndexed { index, event ->
+            if (index > 0) {
+                write('\n'.code)
+                digest.update('\n'.code.toByte())
+                total++
+            }
+            val line = event.toJsonLine(request.annotations[event.id], request.metadataOnly).encodeToByteArray()
+            write(line)
+            digest.update(line)
+            total += line.size
+        }
+        closeEntry()
+        return ManifestData(
+            "timeline.jsonl",
+            digest.digest().joinToString("") {
+                "%02x".format(it.toInt() and BYTE_MASK)
+            },
+            total,
+        )
+    }
+
+    private fun ZipOutputStream.writeStream(
+        name: String,
+        input: InputStream,
+    ): Pair<String, Long> {
+        val digest = MessageDigest.getInstance("SHA-256")
+        var total = 0L
+        putNextEntry(ZipEntry(name))
+        val buffer = ByteArray(STREAM_BUFFER_SIZE)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            write(buffer, 0, count)
+            digest.update(buffer, 0, count)
+            total += count
+        }
+        closeEntry()
+        return digest.digest().joinToString("") { "%02x".format(it.toInt() and BYTE_MASK) } to total
+    }
+
     private fun ExportScope.json(): String =
         when (this) {
             ExportScope.WholeSession -> "{\"type\":\"WHOLE_SESSION\"}"
@@ -567,22 +835,40 @@ class EventExportWriter(
         }
 
     private fun escape(value: String): String =
-        value
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\b", "\\b")
-            .replace("\u000C", "\\f")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t")
-
-    /** [RedactionEngine.redactText]'s `maxLength` must never be 0; evidence bundle files can legitimately be empty. */
-    private fun String.boundedLength(): Int = length.coerceAtLeast(1)
+        buildString(value.length) {
+            value.forEach { char ->
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\b' -> append("\\b")
+                    '\u000C' -> append("\\f")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else ->
+                        if (char.code < CONTROL_CHARACTER_LIMIT) {
+                            append("\\u%0${UNICODE_ESCAPE_WIDTH}x".format(char.code))
+                        } else {
+                            append(char)
+                        }
+                }
+            }
+        }
 
     private fun redactedTextPayload(
         path: String,
         content: String,
-    ): PayloadFile = PayloadFile.text(path, redaction.redactText(content, content.boundedLength()))
+    ): PayloadFile {
+        val redacted = redaction.redactText(content, Int.MAX_VALUE)
+        val structured = path.endsWith(".json") || path.endsWith(".har")
+        val safe =
+            if (structured && redacted.encodeToByteArray().size > content.encodeToByteArray().size) {
+                "{\"_comment\":\"redacted structured body omitted to preserve valid JSON\"}"
+            } else {
+                redacted
+            }
+        return PayloadFile.text(path, safe)
+    }
 
     /**
      * Second redaction pass for a bundle attachment whose text content is already redacted (a
@@ -616,8 +902,6 @@ class EventExportWriter(
     }
 
     private companion object {
-        const val ZIP_ENTRY_OVERHEAD_BYTES = 256L
-
         // Truncated hex of the attachment id's SHA-256: enough to avoid collisions while keeping
         // archive entry names short and free of any characters recovered from the id itself.
         const val ATTACHMENT_NAME_HASH_CHARS = 32
@@ -625,7 +909,7 @@ class EventExportWriter(
         // A real sha256 hex digest is always 64 characters; used as a fixed-length stand-in in the
         // Evidence-scope size estimate so an un-opened attachment's manifest entry is sized correctly
         // without ever computing (or needing) its real digest.
-        val PLACEHOLDER_SHA256 = "0".repeat(64)
+        val PLACEHOLDER_SHA256 = "0".repeat(SHA256_HEX_LENGTH)
 
         fun ensureDirectoryExists(directory: File): Boolean = directory.isDirectory || directory.mkdirs()
 

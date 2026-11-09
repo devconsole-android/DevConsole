@@ -8,3 +8,13 @@ public final class io/devconsole/network/ktor/DevConsoleKtorClientPluginKt {
 	public static final fun getDevConsoleKtorClientPlugin ()Lio/ktor/client/plugins/api/ClientPlugin;
 }
 
+public final class io/devconsole/network/ktor/DevConsoleKtorMocksConfig {
+	public fun <init> ()V
+	public final fun getMockEngine ()Lio/devconsole/mocks/MockEngine;
+	public final fun setMockEngine (Lio/devconsole/mocks/MockEngine;)V
+}
+
+public final class io/devconsole/network/ktor/DevConsoleKtorMocksKt {
+	public static final fun getDevConsoleKtorMocks ()Lio/ktor/client/plugins/api/ClientPlugin;
+}
+

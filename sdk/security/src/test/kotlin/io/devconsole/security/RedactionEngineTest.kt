@@ -127,4 +127,15 @@ class RedactionEngineTest {
 
         assertEquals("<redacted>", engine.redactText("a".repeat(32_768) + "!", maxLength = 4_096))
     }
+
+    @Test(timeout = 1_000)
+    fun `pathological unclosed JSON secret string remains bounded`() {
+        val input = "{\"token\":\"" + "\\".repeat(100_000)
+
+        val redacted = engine.redactText(input)
+
+        // Completes (no catastrophic backtracking / stack overflow) and the secret-looking value is masked.
+        assertTrue(redacted.length <= RedactionEngine.DEFAULT_TEXT_LIMIT)
+        assertFalse(redacted.contains("\\".repeat(10)))
+    }
 }

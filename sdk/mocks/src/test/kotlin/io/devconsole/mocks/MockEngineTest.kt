@@ -3,8 +3,37 @@ package io.devconsole.mocks
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 class MockEngineTest {
+    @Test fun `rejects invalid mock response header values during upsert`() {
+        val engine = MockEngine(emptyList())
+        val result =
+            runCatching {
+                engine.upsert(
+                    MockRule(
+                        "invalid",
+                        1,
+                        action =
+                            MockAction.StaticResponse(
+                                200,
+                                "body",
+                                mapOf(
+                                    "X-Note" to "café",
+                                ),
+                            ),
+                    ),
+                )
+            }
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()!!.message!!.contains("Invalid mock response header value"))
+        assertTrue(engine.rules().isEmpty())
+    }
+
     @Test
     fun `mock engine is enabled by default`() {
         assertTrue(MockEngine(emptyList()).isEnabled())
@@ -103,6 +132,49 @@ class MockEngineTest {
                 bodyMatchingEnabled = true,
                 maxBodyPredicateBytes = 4,
             ).decide(request) is MockDecision.Passthrough,
+        )
+    }
+
+    @Test fun `asks adapters for a body only when a live rule has a body predicate`() {
+        val plain = MockRule("plain", 1)
+        val bodyRule = MockRule("body", 1, bodyPredicate = "accepted")
+        assertEquals(null, MockEngine(listOf(bodyRule)).requestBodyLimitBytes())
+        assertEquals(null, MockEngine(listOf(plain), bodyMatchingEnabled = true).requestBodyLimitBytes())
+        val engine = MockEngine(listOf(plain, bodyRule), bodyMatchingEnabled = true, maxBodyPredicateBytes = 64)
+        assertEquals(64, engine.requestBodyLimitBytes())
+        engine.setEnabled(false)
+        assertEquals(null, engine.requestBodyLimitBytes())
+    }
+
+    @Test fun `template renders a missing header or query value as empty instead of failing the rule`() {
+        val engine =
+            MockEngine(
+                listOf(
+                    MockRule(
+                        "tpl",
+                        1,
+                        action =
+                            MockAction.TemplateResponse(
+                                200,
+                                "ua=[{{header.User-Agent}}] page=[{{query.page}}] {{body}}",
+                            ),
+                    ),
+                ),
+            )
+        val decision = engine.decide(MockRequest("GET", "https", "api.test", "/", headers = mapOf("X" to "{{path}}")))
+        val action = (decision as MockDecision.Matched).action as MockAction.StaticResponse
+        assertEquals("ua=[] page=[] ", action.body)
+    }
+
+    @Test fun `unknown template placeholder names itself in the evaluation error`() {
+        val outcomes = mutableListOf<MockOutcome>()
+        val engine =
+            MockEngine(listOf(MockRule("typo", 1, action = MockAction.TemplateResponse(200, "{{pathh}}"))))
+                .withOutcomeSink { outcomes += it }
+        assertTrue(engine.decide(MockRequest("GET", "https", "api.test", "/")) is MockDecision.Passthrough)
+        assertEquals(
+            "Unknown template placeholder {{pathh}}",
+            (outcomes.single() as MockOutcome.EvaluationError).message,
         )
     }
 
@@ -347,5 +419,203 @@ class MockEngineTest {
 
         assertTrue(result.isFailure)
         assertTrue(engine.rules().isEmpty())
+    }
+
+    @Test
+    fun `serialized persistence keeps the later rule mutation on disk`() {
+        val firstSaveStarted = CountDownLatch(1)
+        val releaseFirstSave = CountDownLatch(1)
+        val saveCount = AtomicInteger()
+        val savedRules = AtomicReference<List<MockRule>>(emptyList())
+        val store =
+            object : MockRuleStore {
+                override fun load(): List<MockRule> = savedRules.get()
+
+                override fun save(rules: List<MockRule>) {
+                    if (saveCount.incrementAndGet() == 1) {
+                        firstSaveStarted.countDown()
+                        check(releaseFirstSave.await(2, TimeUnit.SECONDS))
+                    }
+                    savedRules.set(rules)
+                }
+            }
+        val engine = MockEngine(emptyList())
+        engine.bindPersistence(store, currentAppVersion = "1", installationId = "install-a")
+
+        val first = Thread { engine.upsert(MockRule("first", 1, scope = MockScope.PERSISTENT_INTERNAL)) }
+        first.start()
+        assertTrue(firstSaveStarted.await(2, TimeUnit.SECONDS))
+        val second = Thread { engine.upsert(MockRule("second", 1, scope = MockScope.PERSISTENT_INTERNAL)) }
+        second.start()
+        releaseFirstSave.countDown()
+        first.join(2_000)
+        second.join(2_000)
+
+        assertTrue(!first.isAlive)
+        assertTrue(!second.isAlive)
+        assertEquals(listOf("first", "second"), savedRules.get().map(MockRule::id))
+    }
+
+    @Test
+    fun `sequence non-loop sticks to last step after exhausting steps`() {
+        val step0 = MockAction.StaticResponse(503, "first")
+        val step1 = MockAction.StaticResponse(200, "second")
+        val engine =
+            MockEngine(
+                listOf(
+                    MockRule(
+                        "seq",
+                        1,
+                        path = "/orders",
+                        action = MockAction.Sequence(listOf(step0, step1), loop = false),
+                    ),
+                ),
+            )
+        val request = MockRequest("GET", "https", "api.test", "/orders")
+
+        assertEquals(step0, (engine.decide(request) as MockDecision.Matched).action)
+        assertEquals(step1, (engine.decide(request) as MockDecision.Matched).action)
+        assertEquals(step1, (engine.decide(request) as MockDecision.Matched).action)
+    }
+
+    @Test
+    fun `sequence loop wraps around to first step`() {
+        val step0 = MockAction.StaticResponse(500, "fail")
+        val step1 = MockAction.StaticResponse(200, "ok")
+        val engine =
+            MockEngine(
+                listOf(
+                    MockRule(
+                        "seq-loop",
+                        1,
+                        path = "/orders",
+                        action = MockAction.Sequence(listOf(step0, step1), loop = true),
+                    ),
+                ),
+            )
+        val request = MockRequest("GET", "https", "api.test", "/orders")
+
+        assertEquals(step0, (engine.decide(request) as MockDecision.Matched).action)
+        assertEquals(step1, (engine.decide(request) as MockDecision.Matched).action)
+        assertEquals(step0, (engine.decide(request) as MockDecision.Matched).action)
+        assertEquals(step1, (engine.decide(request) as MockDecision.Matched).action)
+    }
+
+    @Test
+    fun `sequence counter resets on upsert removal and clearSessionRules`() {
+        val step0 = MockAction.StaticResponse(503, "first")
+        val step1 = MockAction.StaticResponse(200, "second")
+        val rule =
+            MockRule(
+                "seq",
+                1,
+                path = "/orders",
+                scope = MockScope.SESSION,
+                action = MockAction.Sequence(listOf(step0, step1), loop = false),
+            )
+        val engine = MockEngine(listOf(rule))
+        val request = MockRequest("GET", "https", "api.test", "/orders")
+
+        assertEquals(step0, (engine.decide(request) as MockDecision.Matched).action)
+        assertEquals(step1, (engine.decide(request) as MockDecision.Matched).action)
+
+        engine.upsert(rule.copy(priority = 2))
+        assertEquals(step0, (engine.decide(request) as MockDecision.Matched).action)
+
+        engine.clearSessionRules()
+        engine.upsert(rule)
+        assertEquals(step0, (engine.decide(request) as MockDecision.Matched).action)
+    }
+
+    @Test
+    fun `resolves nested template inside sequence step and throttle next`() {
+        val engine =
+            MockEngine(
+                listOf(
+                    MockRule(
+                        "nested",
+                        1,
+                        path = "/orders",
+                        action =
+                            MockAction.Sequence(
+                                listOf(
+                                    MockAction.TemplateResponse(200, "step:{{path}}"),
+                                    MockAction.Throttle(
+                                        bytesPerSecond = 1_024,
+                                        latencyMs = 10,
+                                        next = MockAction.TemplateResponse(201, "throttled:{{method}}"),
+                                    ),
+                                ),
+                            ),
+                    ),
+                ),
+            )
+        val request = MockRequest("POST", "https", "api.test", "/orders")
+
+        assertEquals(
+            MockAction.StaticResponse(200, "step:/orders"),
+            (engine.decide(request) as MockDecision.Matched).action,
+        )
+        assertEquals(
+            MockAction.Throttle(
+                bytesPerSecond = 1_024,
+                latencyMs = 10,
+                next = MockAction.StaticResponse(201, "throttled:POST"),
+            ),
+            (engine.decide(request) as MockDecision.Matched).action,
+        )
+    }
+
+    @Test
+    fun `validates sequence mapRemote throttle init and nested headers`() {
+        assertTrue(runCatching { MockAction.Sequence(emptyList()) }.isFailure)
+        assertTrue(
+            runCatching {
+                MockAction.Sequence(List(21) { MockAction.Passthrough })
+            }.isFailure,
+        )
+        assertTrue(
+            runCatching {
+                MockAction.Sequence(listOf(MockAction.Sequence(listOf(MockAction.Passthrough))))
+            }.isFailure,
+        )
+
+        assertTrue(runCatching { MockAction.MapRemote() }.isFailure)
+        assertTrue(runCatching { MockAction.MapRemote(scheme = "ftp") }.isFailure)
+        assertTrue(runCatching { MockAction.MapRemote(port = 0) }.isFailure)
+        assertTrue(runCatching { MockAction.MapRemote(port = 70_000) }.isFailure)
+        assertTrue(runCatching { MockAction.MapRemote(host = " ") }.isFailure)
+        assertTrue(runCatching { MockAction.MapRemote(host = "bad/host") }.isFailure)
+        assertTrue(runCatching { MockAction.MapRemote(path = "no-slash") }.isFailure)
+        assertEquals("staging.test", MockAction.MapRemote(host = "staging.test").host)
+
+        assertTrue(runCatching { MockAction.Throttle(bytesPerSecond = 0) }.isFailure)
+        assertTrue(runCatching { MockAction.Throttle(bytesPerSecond = 104_857_601) }.isFailure)
+        assertTrue(runCatching { MockAction.Throttle(bytesPerSecond = 100, latencyMs = -1) }.isFailure)
+        assertTrue(runCatching { MockAction.Throttle(bytesPerSecond = 100, latencyMs = 30_001) }.isFailure)
+        assertTrue(
+            runCatching {
+                MockAction.Throttle(bytesPerSecond = 100, next = MockAction.Throttle(bytesPerSecond = 100))
+            }.isFailure,
+        )
+
+        val engine = MockEngine(emptyList())
+        val badHeaderAction = MockAction.StaticResponse(200, "ok", mapOf("X-Bad" to "café"))
+        assertTrue(
+            runCatching {
+                engine.upsert(MockRule("seq-bad", 1, action = MockAction.Sequence(listOf(badHeaderAction))))
+            }.isFailure,
+        )
+        assertTrue(
+            runCatching {
+                engine.upsert(
+                    MockRule(
+                        "throttle-bad",
+                        1,
+                        action = MockAction.Throttle(bytesPerSecond = 1_000, next = badHeaderAction),
+                    ),
+                )
+            }.isFailure,
+        )
     }
 }

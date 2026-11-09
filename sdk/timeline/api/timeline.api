@@ -51,8 +51,9 @@ public final class io/devconsole/timeline/CursorMarker {
 }
 
 public final class io/devconsole/timeline/InMemoryTimeline : io/devconsole/timeline/Timeline, io/devconsole/timeline/TimelineAppender {
-	public static final field LEGACY_MONOTONIC_NANOS J
 	public fun <init> (Ljava/util/List;Lio/devconsole/timeline/CursorCodec;)V
+	public fun <init> (Ljava/util/List;Lio/devconsole/timeline/CursorCodec;I)V
+	public synthetic fun <init> (Ljava/util/List;Lio/devconsole/timeline/CursorCodec;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun append (Lio/devconsole/storage/api/StoredEvent;)V
 	public fun contains (Ljava/lang/String;)Z
 	public fun page (Lio/devconsole/timeline/TimelineQuery;)Lio/devconsole/timeline/TimelinePage;

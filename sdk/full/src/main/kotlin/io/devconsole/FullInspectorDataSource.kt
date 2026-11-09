@@ -2,7 +2,7 @@
  * @author Shakib
  * @since 24/07/26
  */
-@file:Suppress("TooManyFunctions") // Adapter of many small engine→UI mapper functions.
+@file:Suppress("TooManyFunctions", "LargeClass") // Cohesive adapter of the full runtime's inspector capabilities.
 
 package io.devconsole
 
@@ -52,6 +52,8 @@ import io.devconsole.socket.SocketConnection
 import io.devconsole.socket.SocketMessage
 import io.devconsole.socket.SocketPayload
 import io.devconsole.socket.SocketProtocol
+import io.devconsole.socket.SocketSendRequest
+import io.devconsole.socket.SocketSendResult
 import io.devconsole.socket.SocketStore
 import io.devconsole.state.FeatureFlag
 import io.devconsole.state.FeatureFlagProvider
@@ -85,6 +87,7 @@ import io.devconsole.ui.compose.InspectorFilePreviewUi
 import io.devconsole.ui.compose.InspectorHealthUi
 import io.devconsole.ui.compose.InspectorLocationPingStreamUi
 import io.devconsole.ui.compose.InspectorLogUi
+import io.devconsole.ui.compose.InspectorMockActionType
 import io.devconsole.ui.compose.InspectorMockRuleUi
 import io.devconsole.ui.compose.InspectorPreferenceEntryUi
 import io.devconsole.ui.compose.InspectorPreferenceFileUi
@@ -94,6 +97,7 @@ import io.devconsole.ui.compose.InspectorRemoteConfigEntryUi
 import io.devconsole.ui.compose.InspectorRemoteConfigUi
 import io.devconsole.ui.compose.InspectorRetentionUi
 import io.devconsole.ui.compose.InspectorServerStartPermissionProvider
+import io.devconsole.ui.compose.InspectorSessionCaptures
 import io.devconsole.ui.compose.InspectorSessionUi
 import io.devconsole.ui.compose.InspectorSnapshot
 import io.devconsole.ui.compose.InspectorSocketFrameUi
@@ -135,6 +139,12 @@ internal class FullInspectorDataSource(
      */
     private val remoteConfigRegistry: RemoteConfigRegistry? = null,
     /**
+     * Whether the developer may edit local overrides on this surface. Wired by
+     * `PlatformFacadeProvider` to the live STATE-category/feature-flag capability pair, so turning
+     * either off withdraws the editor without tearing the registry down.
+     */
+    private val remoteConfigOverridesEditable: () -> Boolean = { false },
+    /**
      * The host's live [RedactionEngine], supplied so [readRemoteConfig] does not rebuild one (and
      * recompile every text pattern) on each snapshot. Null on a build that wires no engine, where
      * one is constructed from the active policy as before.
@@ -151,6 +161,11 @@ internal class FullInspectorDataSource(
     /** Backed by `SessionAuthority.revokeIfPresent`; returns false for an unknown/already-expired id. */
     private val revokePrincipalHandler: (id: String) -> Boolean = { false },
     private val retainedCaptures: RetainedCaptureQuery? = null,
+    /** Past-run network/socket/push views; null keeps every past run's traffic tabs empty. */
+    private val retainedSessions: RetainedSessionCaptures? = null,
+    /** Same delete/pin as the dashboard's run controls; false means the run was refused. */
+    private val deleteRunHandler: suspend (sessionId: String) -> Boolean = { false },
+    private val pinRunHandler: suspend (sessionId: String, pinned: Boolean) -> Boolean = { _, _ -> false },
     /**
      * Resolves a real [java.io.File] for the Compose Files screen's Share action. `FileInspector`
      * itself never exposes `java.io.File` (it stays platform-neutral), so this comes from
@@ -214,9 +229,8 @@ internal class FullInspectorDataSource(
 
     override suspend fun logsForSession(sessionId: String?): List<InspectorLogUi> =
         retainedCaptures
-            ?.events(sessionId)
+            ?.events(sessionId, pluginIds = setOf(LOGS_PLUGIN_ID, CRASH_PLUGIN_ID))
             .orEmpty()
-            .filter { it.pluginId == LOGS_PLUGIN_ID || it.pluginId == CRASH_PLUGIN_ID }
             .asReversed()
             .take(SNAPSHOT_LOG_LIMIT)
             .map { it.toLogUi() }
@@ -224,12 +238,67 @@ internal class FullInspectorDataSource(
     /** Session-scoped counterpart of [logsForSession] for the Crashes tab; same retained-store read, crash-only. */
     override suspend fun crashesForSession(sessionId: String?): List<InspectorCrashUi> =
         retainedCaptures
-            ?.events(sessionId)
+            ?.events(sessionId, pluginIds = setOf(CRASH_PLUGIN_ID))
             .orEmpty()
-            .filter { it.pluginId == CRASH_PLUGIN_ID }
             .asReversed()
             .take(SNAPSHOT_LOG_LIMIT)
             .map { it.toCrashUi() }
+
+    override suspend fun setSessionPinned(
+        sessionId: String,
+        pinned: Boolean,
+    ): InspectorCommandResult =
+        if (runCatching { pinRunHandler(sessionId, pinned) }.getOrDefault(false)) {
+            InspectorCommandResult.Success(summary = if (pinned) "Run pinned" else "Run unpinned")
+        } else {
+            InspectorCommandResult.Invalid("This run cannot be pinned")
+        }
+
+    override suspend fun deleteSession(sessionId: String): InspectorCommandResult =
+        if (runCatching { deleteRunHandler(sessionId) }.getOrDefault(false)) {
+            InspectorCommandResult.Success(summary = "Run deleted")
+        } else {
+            InspectorCommandResult.Invalid("This run cannot be deleted")
+        }
+
+    override suspend fun capturesForSession(sessionId: String?): InspectorSessionCaptures {
+        val categories = configSupplier()?.captureCategories ?: CaptureCategory.all()
+        val retained = retainedSessions
+        return when {
+            sessionId == null ->
+                InspectorSessionCaptures(
+                    transactions = transactionsFor(categories, InspectorTrafficQuery()),
+                    sockets = socketsFor(categories),
+                    pushEvents = pushEventsFor(categories),
+                )
+            retained == null -> InspectorSessionCaptures()
+            else -> retained.capturesFor(sessionId, categories)
+        }
+    }
+
+    private suspend fun RetainedSessionCaptures.capturesFor(
+        sessionId: String,
+        categories: Set<CaptureCategory>,
+    ): InspectorSessionCaptures =
+        InspectorSessionCaptures(
+            transactions =
+                if (CaptureCategory.NETWORK in categories) {
+                    networkStore(sessionId).page(InspectorTrafficQuery().toEngineQuery()).transactions.map { it.toUi() }
+                } else {
+                    emptyList()
+                },
+            sockets =
+                sockets(sessionId)
+                    .filter { it.protocol.enabledIn(categories) }
+                    .take(SNAPSHOT_SOCKET_LIMIT)
+                    .map { it.toUi() },
+            pushEvents =
+                if (CaptureCategory.PUSH in categories) {
+                    pushEvents(sessionId).take(SNAPSHOT_PUSH_LIMIT).map { it.toUi() }
+                } else {
+                    emptyList()
+                },
+        )
 
     override suspend fun flaggedTransactionIds(): Set<String> {
         val store = evidenceStore ?: return emptySet()
@@ -470,6 +539,8 @@ internal class FullInspectorDataSource(
                             source = entry.source.wireName,
                             redacted = entry.redacted,
                             truncated = entry.truncated,
+                            providerValue = entry.providerValue,
+                            providerSource = entry.providerSource?.wireName,
                         )
                     },
                 lastFetchEpochMs = snapshot.fetchInfo.lastFetchEpochMs,
@@ -482,20 +553,39 @@ internal class FullInspectorDataSource(
 
     private fun readStateProviders(): List<InspectorStateProviderUi> {
         val registry = stateRegistry ?: return emptyList()
-        return registry.providerIds().mapNotNull { id ->
-            val snapshot = registry.snapshot(id) ?: return@mapNotNull null
-            InspectorStateProviderUi(
-                id = id,
-                entries =
-                    snapshot.values.map { (key, value) ->
-                        InspectorStateEntryUi(
-                            key = key,
-                            value = value.toDisplay(),
-                            redacted = value is StateValue.Redacted,
+        return registry
+            .providerIds()
+            .map { id ->
+                val snapshot = runCatching { registry.snapshot(id) }
+                snapshot.fold(
+                    onSuccess = { value ->
+                        if (value == null) return@map null
+                        InspectorStateProviderUi(
+                            id = id,
+                            entries =
+                                value.values.map { (key, stateValue) ->
+                                    InspectorStateEntryUi(
+                                        key,
+                                        stateValue.toDisplay(),
+                                        stateValue is StateValue.Redacted,
+                                    )
+                                },
                         )
                     },
-            )
-        }
+                    onFailure = { error ->
+                        InspectorStateProviderUi(
+                            id,
+                            listOf(
+                                InspectorStateEntryUi(
+                                    "error",
+                                    error.message ?: "Provider unavailable",
+                                    false,
+                                ),
+                            ),
+                        )
+                    },
+                )
+            }.filterNotNull()
     }
 
     private fun readLogs(): List<InspectorLogUi> {
@@ -555,9 +645,13 @@ internal class FullInspectorDataSource(
             )
         return try {
             val execution = composerExecutor.execute(composerRequest) { url -> permitsComposerHost(config, url) }
+            val statusCode = execution.response.statusCode
+            val summary =
+                "${request.method} ${request.url} -> $statusCode" +
+                    (execution.response.durationMs?.let { " · $it ms" } ?: "")
             InspectorCommandResult.Success(
-                summary = "${request.method} ${request.url} -> ${execution.response.statusCode}",
-                statusCode = execution.response.statusCode,
+                summary = summary,
+                statusCode = statusCode,
                 body = execution.response.body,
             )
         } catch (rejected: ComposerDestinationRejectedException) {
@@ -582,64 +676,127 @@ internal class FullInspectorDataSource(
     override fun mockRules(): List<InspectorMockRuleUi> = mockEngine.rules().map { it.toUi(mockEngine.stats(it.id)) }
 
     /**
-     * Invalid id/status/scope/delay input surfaces as [InspectorCommandResult.Invalid]; an invalid
-     * path or body regular expression is only discovered when [MockEngine.upsert] compiles it, so
-     * that failure surfaces as [InspectorCommandResult.Failed] instead. A positive [InspectorMockRuleUi.delayMs]
-     * wraps the response in [MockAction.Delay], mirroring what the browser dashboard's mock-rule form
-     * can express; zero or absent stays a plain [MockAction.StaticResponse].
+     * Builds the [MockAction] named by [InspectorMockRuleUi.actionType] and carries the rule's
+     * predicates. Invalid id/status/scope/delay or an out-of-range throttle/timeout/map-remote value
+     * surfaces as [InspectorCommandResult.Invalid]; an invalid path or body regular expression is
+     * only discovered when [MockEngine.upsert] compiles it, so that failure surfaces as
+     * [InspectorCommandResult.Failed] instead. [InspectorMockActionType.OTHER] is refused rather than
+     * clobbering a sequence/template rule the form cannot express.
      */
     override fun upsertMockRule(rule: InspectorMockRuleUi): InspectorCommandResult =
         withMocksCapability {
-            if (!rule.id.matches(MOCK_RULE_ID_PATTERN)) {
-                return@withMocksCapability InspectorCommandResult.Invalid(
-                    "Mock rule id must match ${MOCK_RULE_ID_PATTERN.pattern}",
-                )
+            when (val built = rule.buildMockAction()) {
+                is MockActionBuild.Invalid -> InspectorCommandResult.Invalid(built.message)
+                is MockActionBuild.Ready -> saveMockRule(rule, built.action)
             }
-            if (rule.statusCode !in MIN_STATUS_CODE..MAX_STATUS_CODE) {
-                return@withMocksCapability InspectorCommandResult.Invalid("Response status must be between 100 and 599")
-            }
-            if (rule.delayMs != null && rule.delayMs !in 0..MAX_MOCK_RULE_DELAY_MS) {
-                return@withMocksCapability InspectorCommandResult.Invalid(
-                    "Delay must be between 0 and $MAX_MOCK_RULE_DELAY_MS ms",
-                )
-            }
-            val scope =
-                runCatching { MockScope.valueOf(rule.scope) }
-                    .getOrElse {
-                        return@withMocksCapability InspectorCommandResult.Invalid("Unknown mock scope ${rule.scope}")
-                    }
-            rule.headers.forEach { (name, value) ->
-                val nameOk = name.matches(MOCK_HEADER_NAME_PATTERN)
-                val valueOk = value.all { it == '\t' || it in ' '..'~' }
-                if (!nameOk || !valueOk) {
-                    // Mirrors the server route's boundary check: OkHttp would throw for these
-                    // characters on the host app's request thread at interception time.
-                    return@withMocksCapability InspectorCommandResult.Invalid("Invalid response header: $name")
-                }
-            }
-            val staticResponse = MockAction.StaticResponse(rule.statusCode, rule.body, rule.headers)
-            val delayMs = rule.delayMs
-            val action =
-                if (delayMs != null && delayMs > 0) MockAction.Delay(delayMs, staticResponse) else staticResponse
-            val engineRule =
-                MockRule(
-                    id = rule.id.trim(),
-                    priority = rule.priority,
-                    method = rule.method?.uppercase()?.takeIf(String::isNotBlank),
-                    scheme = rule.scheme?.lowercase()?.takeIf(String::isNotBlank),
-                    host = rule.host?.takeIf(String::isNotBlank),
-                    path = rule.pathPattern.takeIf(String::isNotBlank) ?: DEFAULT_MOCK_RULE_PATH,
-                    scope = scope,
-                    action = action,
-                    // Set only by mockRuleDraftFromTransaction's "Mock this response" flow; carried
-                    // through untouched by the create/edit form's other fields (never user-editable).
-                    sourceBodySnapshot = rule.sourceBodySnapshot,
-                ).withPersistence(MockRulePersistence(enabled = rule.enabled))
-            runCatching { mockEngine.upsert(engineRule) }.fold(
-                onSuccess = { InspectorCommandResult.Success(summary = "Mock rule ${engineRule.id} saved") },
-                onFailure = { InspectorCommandResult.Failed(it.mockRuleMessage()) },
-            )
         }
+
+    /**
+     * Validates [rule] into a [MockAction] (or a readable [MockActionBuild.Invalid]), translating
+     * the engine constructors' `IllegalArgumentException` ranges into Invalid rather than Failed.
+     */
+    private fun InspectorMockRuleUi.buildMockAction(): MockActionBuild {
+        val validationMessage =
+            when {
+                !id.matches(MOCK_RULE_ID_PATTERN) -> "Mock rule id must match ${MOCK_RULE_ID_PATTERN.pattern}"
+                statusCode !in MIN_STATUS_CODE..MAX_STATUS_CODE -> "Response status must be between 100 and 599"
+                delayMs?.let { it !in 0..MAX_MOCK_RULE_DELAY_MS } == true ->
+                    "Delay must be between 0 and $MAX_MOCK_RULE_DELAY_MS ms"
+                actionType == InspectorMockActionType.OTHER -> "This rule's action can't be edited on device"
+                queryPredicates.keys.any(String::isBlank) || headerPredicates.keys.any(String::isBlank) ->
+                    "Match condition keys must not be blank"
+                else -> null
+            }
+        return validationMessage?.let { MockActionBuild.Invalid(it) }
+            ?: runCatching { MockActionBuild.Ready(buildMockActionOrThrow()) }
+                .getOrElse { MockActionBuild.Invalid(it.mockRuleMessage()) }
+    }
+
+    private fun InspectorMockRuleUi.buildMockActionOrThrow(): MockAction {
+        val staticResponse = MockAction.StaticResponse(statusCode, body, headers)
+        return when (actionType) {
+            InspectorMockActionType.STATIC -> {
+                val delay = delayMs?.takeIf { it > 0 }
+                if (delay != null) MockAction.Delay(delay, staticResponse) else staticResponse
+            }
+            InspectorMockActionType.STATUS_OVERRIDE -> MockAction.StatusOverride(statusCode)
+            InspectorMockActionType.BODY_REPLACEMENT -> MockAction.BodyReplacement(body)
+            InspectorMockActionType.CONNECTION_FAILURE ->
+                MockAction.ConnectionFailure(
+                    failureMessage?.takeIf(String::isNotBlank) ?: MockAction.ConnectionFailure().message,
+                )
+            InspectorMockActionType.TIMEOUT -> MockAction.Timeout(timeoutMs ?: DEFAULT_MOCK_TIMEOUT_MS)
+            InspectorMockActionType.THROTTLE ->
+                MockAction.Throttle(
+                    bytesPerSecond = requireNotNull(throttleBytesPerSecond) { "Throttle rate is required" },
+                    latencyMs = throttleLatencyMs ?: 0,
+                )
+            InspectorMockActionType.MAP_REMOTE ->
+                MockAction.MapRemote(
+                    scheme = remoteScheme?.trim()?.takeIf(String::isNotBlank)?.lowercase(Locale.US),
+                    host = remoteHost?.trim()?.takeIf(String::isNotBlank),
+                    port = remotePort,
+                    path = remotePath?.trim()?.takeIf(String::isNotBlank),
+                )
+            // Unreachable: buildMockAction refuses OTHER before this point.
+            InspectorMockActionType.OTHER -> MockAction.Passthrough
+        }
+    }
+
+    private fun saveMockRule(
+        rule: InspectorMockRuleUi,
+        action: MockAction,
+    ): InspectorCommandResult {
+        val scope = runCatching { MockScope.valueOf(rule.scope) }.getOrNull()
+        // Mirrors the server route's boundary check: OkHttp would throw for these characters on the
+        // host app's request thread at interception time.
+        val invalidHeader =
+            rule.headers.entries
+                .firstOrNull { (name, value) -> !isValidMockHeader(name, value) }
+                ?.key
+        return when {
+            scope == null -> InspectorCommandResult.Invalid("Unknown mock scope ${rule.scope}")
+            invalidHeader != null -> InspectorCommandResult.Invalid("Invalid response header: $invalidHeader")
+            else -> persistMockRule(rule, scope, action)
+        }
+    }
+
+    private fun isValidMockHeader(
+        name: String,
+        value: String,
+    ): Boolean = name.matches(MOCK_HEADER_NAME_PATTERN) && value.all { it == '\t' || it in ' '..'~' }
+
+    private fun persistMockRule(
+        rule: InspectorMockRuleUi,
+        scope: MockScope,
+        action: MockAction,
+    ): InspectorCommandResult {
+        val previousRule = mockEngine.rules().firstOrNull { it.id == rule.id }
+        val engineRule =
+            MockRule(
+                id = rule.id.trim(),
+                priority = rule.priority,
+                method = rule.method?.uppercase()?.takeIf(String::isNotBlank),
+                scheme = rule.scheme?.lowercase()?.takeIf(String::isNotBlank),
+                host = rule.host?.takeIf(String::isNotBlank),
+                path = rule.pathPattern.takeIf(String::isNotBlank) ?: DEFAULT_MOCK_RULE_PATH,
+                queryPredicates = rule.queryPredicates,
+                headerPredicates = rule.headerPredicates,
+                bodyPredicate = rule.bodyPredicate?.takeIf(String::isNotBlank),
+                scope = scope,
+                action = action,
+                // Set only by mockRuleDraftFromTransaction's "Mock this response" flow; carried
+                // through untouched by the create/edit form's other fields (never user-editable).
+                sourceBodySnapshot = rule.sourceBodySnapshot,
+            ).withPersistence(
+                previousRule?.persistence?.copy(enabled = rule.enabled)
+                    ?: MockRulePersistence(enabled = rule.enabled),
+            )
+        return runCatching { mockEngine.upsert(engineRule) }.fold(
+            onSuccess = { InspectorCommandResult.Success(summary = "Mock rule ${engineRule.id} saved") },
+            onFailure = { InspectorCommandResult.Failed(it.mockRuleMessage()) },
+        )
+    }
 
     override fun deleteMockRule(id: String): InspectorCommandResult =
         withMocksCapability {
@@ -759,6 +916,49 @@ internal class FullInspectorDataSource(
         }
     }
 
+    override fun supportsRemoteConfigOverrides(): Boolean =
+        remoteConfigRegistry != null && remoteConfigOverridesEditable()
+
+    override fun setRemoteConfigOverride(
+        providerId: String,
+        key: String,
+        value: String,
+    ): InspectorCommandResult =
+        withRemoteConfigOverrides("Override applied") {
+            remoteConfigRegistry?.overrides?.setOverride(providerId, key, value)
+        }
+
+    override fun clearRemoteConfigOverride(
+        providerId: String,
+        key: String,
+    ): InspectorCommandResult =
+        withRemoteConfigOverrides("Override cleared") {
+            remoteConfigRegistry?.overrides?.clearOverride(providerId, key)
+        }
+
+    override fun clearAllRemoteConfigOverrides(): InspectorCommandResult =
+        withRemoteConfigOverrides("All overrides cleared") {
+            remoteConfigRegistry?.overrides?.clearAll()
+        }
+
+    /**
+     * The store rejects a blank/over-long key or value with [IllegalArgumentException] -- user input
+     * errors, not bugs -- so they surface as [InspectorCommandResult.Invalid] instead of reaching
+     * the UI, matching [setFeatureFlag]'s treatment of the same class of failure.
+     */
+    private inline fun withRemoteConfigOverrides(
+        summary: String,
+        mutation: () -> Unit,
+    ): InspectorCommandResult =
+        if (!supportsRemoteConfigOverrides()) {
+            InspectorCommandResult.Unavailable
+        } else {
+            runCatching(mutation).fold(
+                onSuccess = { InspectorCommandResult.Success(summary = summary) },
+                onFailure = { InspectorCommandResult.Invalid(it.message ?: "Invalid remote config override") },
+            )
+        }
+
     override fun setPreference(
         file: String,
         key: String,
@@ -859,6 +1059,32 @@ internal class FullInspectorDataSource(
         return InspectorCommandResult.Success(summary = "Captured requests cleared")
     }
 
+    /** The full runtime always owns a live capture gate, so the More screen's Capture group is shown. */
+    override fun supportsCaptureControl(): Boolean = true
+
+    override fun isCapturePaused(): Boolean = DevConsole.isCapturePaused()
+
+    /**
+     * Delegates to [DevConsole.setCapturePaused], which returns false while the runtime is disabled
+     * or not yet initialized; that reads as a plain failure here rather than a silent no-op.
+     */
+    override fun setCapturePaused(paused: Boolean): InspectorCommandResult =
+        if (DevConsole.setCapturePaused(paused)) {
+            InspectorCommandResult.Success(summary = if (paused) "Capture paused" else "Capture resumed")
+        } else {
+            InspectorCommandResult.Failed("Capture control is unavailable")
+        }
+
+    /**
+     * Delegates to [DevConsole.purgeCapturedData]; the success summary reports the exact counts the
+     * runtime removed so the snackbar says what actually happened.
+     */
+    override suspend fun purgeCapturedData(): InspectorCommandResult {
+        val result = runCatching { DevConsole.purgeCapturedData() }.getOrNull()
+        if (result == null) return InspectorCommandResult.Failed("Could not purge captured data")
+        return InspectorCommandResult.Success(summary = purgeSummaryText(result))
+    }
+
     /**
      * Ungated by capability: exports read already-captured, already-redacted data, the same as
      * [listFiles]/[previewFile]/[listTables] above.
@@ -894,6 +1120,34 @@ internal class FullInspectorDataSource(
             InspectorCommandResult.Invalid("Unknown or already-expired browser $id")
         }
 
+    /**
+     * The adapter-facing registry, shared by every [io.devconsole.socket.SocketRecorder] copy (see
+     * `SocketRecorder.senders`) and by the HTTP send route, so a connection this screen offers to
+     * write to is exactly one the browser could write to too.
+     */
+    override fun socketSendProtocol(connectionId: String): String? =
+        DevConsole
+            .socketRecorder()
+            .senders
+            .protocol(connectionId)
+            ?.wireName
+
+    override fun sendSocketFrame(
+        connectionId: String,
+        text: String,
+        topic: String?,
+        qos: Int,
+        retained: Boolean,
+    ): InspectorCommandResult {
+        val request = SocketSendRequest(text = text, topic = topic, qos = qos, retained = retained)
+        return when (val result = DevConsole.socketRecorder().senders.send(connectionId, request)) {
+            SocketSendResult.Sent -> InspectorCommandResult.Success(summary = "Frame sent")
+            SocketSendResult.NotConnected -> InspectorCommandResult.Invalid("Connection is not open")
+            is SocketSendResult.Rejected -> InspectorCommandResult.Invalid(result.reason)
+            SocketSendResult.Unsupported -> InspectorCommandResult.Unavailable
+        }
+    }
+
     private companion object {
         const val SNAPSHOT_SOCKET_LIMIT = 100
         const val SNAPSHOT_PUSH_LIMIT = 200
@@ -921,7 +1175,18 @@ private fun InspectorTrafficQuery.toEngineQuery(): NetworkTransactionQuery {
             ?.takeIf(String::isNotBlank)
             ?.let(::setOf)
             .orEmpty()
-    return NetworkTransactionQuery(limit = SNAPSHOT_TRANSACTION_LIMIT, methods = methods).withFilters(filters)
+    val hosts =
+        host
+            ?.trim()
+            ?.lowercase()
+            ?.takeIf(String::isNotEmpty)
+            ?.let(::setOf)
+            .orEmpty()
+    return NetworkTransactionQuery(
+        limit = SNAPSHOT_TRANSACTION_LIMIT,
+        methods = methods,
+        hosts = hosts,
+    ).withFilters(filters)
 }
 
 /** Empty permits any host; otherwise use an exact-host allow-list match. */
@@ -941,7 +1206,9 @@ private fun NetworkTransaction.toUi(): InspectorTransactionUi {
         method = request.method,
         host = request.url.host,
         path = request.url.path,
-        statusCode = response?.statusCode,
+        // Adapters record a call that never got a response as status 0 plus an error; the inspector
+        // renders a missing status as "ERR", so 0 must not reach it as if it were a real code.
+        statusCode = response?.statusCode?.takeIf { it > 0 },
         durationMs = durationMs,
         startedAtEpochMs = startedAtEpochMs,
         requestHeaders = request.headers,
@@ -952,6 +1219,7 @@ private fun NetworkTransaction.toUi(): InspectorTransactionUi {
         url = request.url.display,
         requestBodyKind = request.body.toUiKind(),
         requestBodyTruncated = request.body.isTruncated(),
+        responseBodyTruncated = response?.body?.isTruncated() ?: false,
         timingPhases = response?.metadata?.timings.toUi(),
         isMocked = tags["mocked"] == "true",
         mockRuleId = tags["mockRuleId"],
@@ -1010,8 +1278,10 @@ private fun CaptureRule.toUi(): InspectorCaptureRuleUi =
 private fun Throwable.captureRuleMessage(): String = message ?: javaClass.simpleName
 
 private fun MockRule.toUi(stats: MockRuleStats): InspectorMockRuleUi {
-    val delay = action as? MockAction.Delay
-    val staticResponse = (delay?.next ?: action) as? MockAction.StaticResponse
+    val throttle = action as? MockAction.Throttle
+    val timeout = action as? MockAction.Timeout
+    val failure = action as? MockAction.ConnectionFailure
+    val remote = action as? MockAction.MapRemote
     return InspectorMockRuleUi(
         id = id,
         method = method,
@@ -1021,37 +1291,127 @@ private fun MockRule.toUi(stats: MockRuleStats): InspectorMockRuleUi {
         host = host,
         priority = priority,
         scope = scope.name,
-        statusCode = staticResponse?.statusCode ?: DEFAULT_STATIC_STATUS,
-        body = staticResponse?.body.orEmpty(),
+        statusCode = action.uiStatusCode(),
+        body = action.uiBody(),
         enabled = persistence.enabled,
-        headers = staticResponse?.headers.orEmpty(),
-        delayMs = delay?.durationMs,
+        headers = action.uiHeaders(),
+        delayMs = (action as? MockAction.Delay)?.durationMs,
         hitCount = stats.hitCount,
         lastHitEpochMs = stats.lastHitEpochMs,
         sourceBodySnapshot = sourceBodySnapshot,
+        actionType = action.uiActionType(),
+        timeoutMs = timeout?.durationMs,
+        failureMessage = failure?.message,
+        throttleBytesPerSecond = throttle?.bytesPerSecond,
+        throttleLatencyMs = throttle?.latencyMs,
+        remoteScheme = remote?.scheme,
+        remoteHost = remote?.host,
+        remotePath = remote?.path,
+        remotePort = remote?.port,
+        queryPredicates = queryPredicates,
+        headerPredicates = headerPredicates,
+        bodyPredicate = bodyPredicate,
     )
 }
+
+/**
+ * The action shape the on-device form can rebuild. A [MockAction.Delay] is only representable when
+ * it wraps a plain static response; a [MockAction.Throttle] only when its next action is the default
+ * passthrough. Everything else is [InspectorMockActionType.OTHER] and stays read-only on device.
+ */
+private fun MockAction.uiActionType(): InspectorMockActionType =
+    when (this) {
+        is MockAction.StaticResponse -> InspectorMockActionType.STATIC
+        is MockAction.Delay ->
+            if (next is MockAction.StaticResponse) InspectorMockActionType.STATIC else InspectorMockActionType.OTHER
+        is MockAction.StatusOverride -> InspectorMockActionType.STATUS_OVERRIDE
+        is MockAction.BodyReplacement -> InspectorMockActionType.BODY_REPLACEMENT
+        is MockAction.ConnectionFailure -> InspectorMockActionType.CONNECTION_FAILURE
+        is MockAction.Timeout -> InspectorMockActionType.TIMEOUT
+        is MockAction.Throttle ->
+            if (next == MockAction.Passthrough) InspectorMockActionType.THROTTLE else InspectorMockActionType.OTHER
+        is MockAction.MapRemote -> InspectorMockActionType.MAP_REMOTE
+        is MockAction.Sequence, is MockAction.TemplateResponse, MockAction.Passthrough ->
+            InspectorMockActionType.OTHER
+    }
+
+private fun MockAction.uiStatusCode(): Int =
+    when (this) {
+        is MockAction.StaticResponse -> statusCode
+        is MockAction.Delay -> next.uiStatusCode()
+        is MockAction.StatusOverride -> statusCode
+        is MockAction.TemplateResponse -> statusCode
+        else -> DEFAULT_STATIC_STATUS
+    }
+
+private fun MockAction.uiBody(): String =
+    when (this) {
+        is MockAction.StaticResponse -> body
+        is MockAction.Delay -> next.uiBody()
+        is MockAction.BodyReplacement -> body
+        is MockAction.TemplateResponse -> template
+        else -> ""
+    }
+
+private fun MockAction.uiHeaders(): Map<String, String> =
+    when (this) {
+        is MockAction.StaticResponse -> headers
+        is MockAction.Delay -> next.uiHeaders()
+        is MockAction.TemplateResponse -> headers
+        else -> emptyMap()
+    }
 
 private fun Throwable.mockRuleMessage(): String = message ?: javaClass.simpleName
 
 private const val DEFAULT_STATIC_STATUS = 200
 private const val DEFAULT_MOCK_RULE_PATH = ".*"
+private const val DEFAULT_MOCK_TIMEOUT_MS = 1_000L
 private const val MIN_STATUS_CODE = 100
 private const val MAX_STATUS_CODE = 599
 private const val MAX_MOCK_RULE_DELAY_MS = 30_000L
 private val MOCK_RULE_ID_PATTERN = Regex("[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}")
 
+private sealed interface MockActionBuild {
+    data class Ready(
+        val action: MockAction,
+    ) : MockActionBuild
+
+    data class Invalid(
+        val message: String,
+    ) : MockActionBuild
+}
+
 private fun MockAction.toLabel(): String =
     when (this) {
         is MockAction.StaticResponse -> "Static response ($statusCode)"
         is MockAction.TemplateResponse -> "Template response ($statusCode)"
-        is MockAction.Delay -> "Delay (${durationMs}ms)"
+        is MockAction.Delay -> "Delay (${durationMs}ms) → ${next.toLabel()}"
         is MockAction.ConnectionFailure -> "Connection failure"
         is MockAction.Timeout -> "Timeout (${durationMs}ms)"
         is MockAction.StatusOverride -> "Status override ($statusCode)"
         is MockAction.BodyReplacement -> "Body replacement"
+        is MockAction.Sequence -> "Sequence (${steps.size} steps)"
+        is MockAction.MapRemote -> "Map remote (${listOfNotNull(scheme, host, port, path).joinToString(":")})"
+        is MockAction.Throttle ->
+            buildString {
+                append("Throttle ").append(throttleRateLabel(bytesPerSecond))
+                if (latencyMs > 0) append(" · +").append(latencyMs).append(" ms")
+                if (next != MockAction.Passthrough) append(" → ").append(next.toLabel())
+            }
         MockAction.Passthrough -> "Passthrough"
     }
+
+private const val BYTES_PER_KILOBYTE = 1_024L
+
+/** `65536` reads as `64 KB/s`; whole KB/MB only when exact, so a precise rate is never rounded away. */
+private fun throttleRateLabel(bytesPerSecond: Long): String {
+    val kb = BYTES_PER_KILOBYTE
+    return when {
+        bytesPerSecond % (kb * kb) == 0L -> "${bytesPerSecond / (kb * kb)} MB/s"
+        bytesPerSecond % kb == 0L -> "${bytesPerSecond / kb} KB/s"
+        else -> "$bytesPerSecond B/s"
+    }
+}
 
 private fun SocketConnection.toUi(): InspectorSocketUi =
     InspectorSocketUi(

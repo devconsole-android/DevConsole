@@ -164,7 +164,7 @@ class RemoteConfigRoutesTest {
             val response = client.get("/api/v1/remote-config") { authed(session) }
 
             assertEquals(HttpStatusCode.OK, response.status)
-            assertEquals("{\"data\":[]}", response.bodyAsText())
+            assertEquals("{\"data\":[],\"overridesEditable\":false}", response.bodyAsText())
         }
 
     @Test

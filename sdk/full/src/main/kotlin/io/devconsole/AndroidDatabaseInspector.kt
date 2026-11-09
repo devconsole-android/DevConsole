@@ -15,13 +15,25 @@ import io.devconsole.server.api.DatabaseListingData
 import io.devconsole.server.api.DatabaseQueryData
 import io.devconsole.server.api.DatabaseTableData
 
+private const val AUXILIARY_COLUMN_STRIDE = 3
+private const val ROWID_COLUMN_OFFSET = 1
+
 @Suppress("TooManyFunctions") // Small private cursor/SQL helpers kept beside the four interface methods.
 internal class AndroidDatabaseInspector(
     private val context: Context,
     private val redaction: RedactionEngine,
     private val maxRows: Int = DEFAULT_MAX_ROWS,
 ) : DatabaseInspector {
-    override fun databases(): List<String> = context.databaseList().filterNot { it.isAuxiliaryFile() }.sorted()
+    /**
+     * The host's databases only. DevConsole's own capture store (`devconsole-events.db`) is SDK
+     * state already shown through every other tab; listing it here put it one SQL write away from
+     * corruption while Room holds it open.
+     */
+    override fun databases(): List<String> =
+        context
+            .databaseList()
+            .filterNot { it.isAuxiliaryFile() || INTERNAL_DATABASE_PREFIXES.any(it::startsWith) }
+            .sorted()
 
     override fun tables(database: String): DatabaseListingData? =
         withDatabase(database, writable = false) { db ->
@@ -54,10 +66,10 @@ internal class AndroidDatabaseInspector(
             // table (or any other reason the alias fails) falls back to the plain, rowid-less query.
             runCatching {
                 db
-                    .rawQuery("SELECT rowid AS \"$ROWID_ALIAS\", * FROM \"$quoted\" LIMIT ${maxRows + 1}", null)
+                    .rawQuery(db.boundedTableQuery(quoted, includeRowId = true), null)
                     .use { it.toQueryData(hasRowId = true) }
             }.getOrElse {
-                db.rawQuery("SELECT * FROM \"$quoted\" LIMIT ${maxRows + 1}", null).use { it.toQueryData() }
+                db.rawQuery(db.boundedTableQuery(quoted, includeRowId = false), null).use { it.toQueryData() }
             }
         }
     }
@@ -104,6 +116,35 @@ internal class AndroidDatabaseInspector(
             }
         }.getOrDefault(0L)
 
+    private fun SQLiteDatabase.boundedTableQuery(
+        quotedTable: String,
+        includeRowId: Boolean,
+    ): String {
+        val prefix = if (includeRowId) "rowid AS \"$ROWID_ALIAS\", " else ""
+        val columns =
+            rawQuery("PRAGMA table_info(\"$quotedTable\")", null).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(cursor.getString(1))
+                }
+            }
+        val projection =
+            columns.joinToString(", ") { name ->
+                val quotedColumn = "\"${name.replace("\"", "\"\"")}\""
+                val preview = "substr($quotedColumn, 1, $MAX_CELL_TEXT_CHARS)"
+                "CASE WHEN typeof($quotedColumn) = 'blob' THEN NULL ELSE $preview END AS \"${name.replace(
+                    "\"",
+                    "\"\"",
+                )}\", " +
+                    "length($quotedColumn) AS \"${lengthAlias(name)}\", " +
+                    "typeof($quotedColumn) AS \"${typeAlias(name)}\""
+            }
+        return "SELECT $prefix$projection FROM \"$quotedTable\" LIMIT ${maxRows + 1}"
+    }
+
+    private fun lengthAlias(name: String): String = "${AUXILIARY_PREFIX}l${name.hashCode().toUInt()}"
+
+    private fun typeAlias(name: String): String = "${AUXILIARY_PREFIX}t${name.hashCode().toUInt()}"
+
     private fun SQLiteDatabase.changesCount(): Int =
         runCatching {
             rawQuery("SELECT changes()", null).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
@@ -114,7 +155,13 @@ internal class AndroidDatabaseInspector(
      * split off into [DatabaseQueryData.rowIds] rather than shown as an ordinary, maskable column.
      */
     private fun android.database.Cursor.toQueryData(hasRowId: Boolean = false): DatabaseQueryData {
-        val columns = if (hasRowId) columnNames.drop(1) else columnNames.toList()
+        if (columnNames.none { it.startsWith(AUXILIARY_PREFIX) }) return toDirectQueryData(hasRowId)
+        val physicalColumns = columnNames.toList()
+        val columns = physicalColumns.filterNot { it.startsWith(AUXILIARY_PREFIX) || (hasRowId && it == ROWID_ALIAS) }
+        val physicalIndexes =
+            columns.indices.map { index ->
+                if (hasRowId) ROWID_COLUMN_OFFSET + index * AUXILIARY_COLUMN_STRIDE else index * AUXILIARY_COLUMN_STRIDE
+            }
         val rows = mutableListOf<List<String>>()
         val rowIds = mutableListOf<Long?>()
         var truncated = false
@@ -126,10 +173,28 @@ internal class AndroidDatabaseInspector(
             if (hasRowId) rowIds.add(if (isNull(0)) null else getLong(0))
             rows.add(
                 columns.indices.map { index ->
-                    val cursorIndex = if (hasRowId) index + 1 else index
-                    cellText(cursorIndex, columns[index])
+                    val cursorIndex = physicalIndexes[index]
+                    val lengthIndex = physicalColumns.indexOf(lengthAlias(columns[index]))
+                    val typeIndex = physicalColumns.indexOf(typeAlias(columns[index]))
+                    cellText(cursorIndex, columns[index], lengthIndex, cursorIndex, typeIndex)
                 },
             )
+        }
+        return DatabaseQueryData(columns = columns, rows = rows, truncated = truncated, rowIds = rowIds)
+    }
+
+    private fun android.database.Cursor.toDirectQueryData(hasRowId: Boolean): DatabaseQueryData {
+        val columns = if (hasRowId) columnNames.drop(1) else columnNames.toList()
+        val rows = mutableListOf<List<String>>()
+        val rowIds = mutableListOf<Long?>()
+        var truncated = false
+        while (moveToNext()) {
+            if (rows.size >= maxRows) {
+                truncated = true
+                break
+            }
+            if (hasRowId) rowIds.add(if (isNull(0)) null else getLong(0))
+            rows.add(columns.indices.map { index -> cellText(index + if (hasRowId) 1 else 0, columns[index]) })
         }
         return DatabaseQueryData(columns = columns, rows = rows, truncated = truncated, rowIds = rowIds)
     }
@@ -137,12 +202,21 @@ internal class AndroidDatabaseInspector(
     private fun android.database.Cursor.cellText(
         index: Int,
         column: String,
+    ): String = cellText(index, column, index, index)
+
+    private fun android.database.Cursor.cellText(
+        index: Int,
+        column: String,
+        lengthIndex: Int,
+        previewIndex: Int,
+        typeIndex: Int = -1,
     ): String {
-        if (isNull(index)) return "NULL"
+        val valueType = if (typeIndex >= 0) getString(typeIndex) else null
+        if (valueType == "null" || (valueType != "blob" && isNull(index))) return "NULL"
         val raw =
-            when (getType(index)) {
-                android.database.Cursor.FIELD_TYPE_BLOB -> "[blob ${getBlob(index).size} bytes]"
-                else -> getString(index).orEmpty()
+            when (valueType) {
+                "blob" -> "[blob ${getLong(lengthIndex)} bytes]"
+                else -> getString(previewIndex).orEmpty()
             }
         if (redaction.isEnabled() && column.looksSensitiveColumn()) return redaction.replacement()
         return redaction.redactFields(mapOf(column to raw)).getValue(column)
@@ -199,12 +273,15 @@ internal class AndroidDatabaseInspector(
 
     private companion object {
         const val DEFAULT_MAX_ROWS = 200
+        val INTERNAL_DATABASE_PREFIXES = listOf("devconsole-", "io.devconsole.")
         const val TABLE_LIST_SQL =
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
 
         // Unlikely to collide with a real application column; if it ever does, the SELECT below
         // simply fails and query() falls back to the plain, rowid-less form.
         const val ROWID_ALIAS = "__devconsole_rowid__"
+        const val MAX_CELL_TEXT_CHARS = 4_096
+        const val AUXILIARY_PREFIX = "__devconsole_cell_"
         const val WITH_KEYWORD = "WITH"
         val READ_ONLY_KEYWORDS = setOf("SELECT", "PRAGMA", "EXPLAIN")
         val SENSITIVE_COLUMN_FRAGMENTS =

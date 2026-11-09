@@ -41,9 +41,10 @@ Check a real JitPack build at
 
 `SDK_VERSION` in
 `build-logic/convention-publishing/src/main/kotlin/io/devconsole/buildlogic/PublishingConventionPlugin.kt`
-and `version` in `gradle-plugin/build.gradle.kts` are kept in step. JitPack derives the consumer-
-facing version from the tag or branch rather than from `SDK_VERSION`, but the two should match so
-`publishToMavenLocal` output and the tag agree.
+and `version` in `gradle-plugin/build.gradle.kts` are kept in step. The plugin generates its auto-wire
+version resource from its own declared version, so there is no third version constant to bump. JitPack
+derives the consumer-facing version from the tag or branch rather than from `SDK_VERSION`, but the
+two should match so `publishToMavenLocal` output and the tag agree.
 
 ## The Gradle plugin → Gradle Plugin Portal
 

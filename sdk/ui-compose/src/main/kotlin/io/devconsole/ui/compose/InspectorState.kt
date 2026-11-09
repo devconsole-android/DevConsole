@@ -21,6 +21,10 @@ enum class ObserveTab { TRAFFIC, SOCKETS, PUSH, LOGS, CRASHES, REMOTE_CONFIG }
 data class InspectorState(
     val available: Boolean = false,
     val serverControlSupported: Boolean = false,
+    /** Whether the More screen should offer the Capture group (pause/resume and purge). */
+    val captureControlSupported: Boolean = false,
+    /** Whether live capture is paused; re-read from the data source on every snapshot refresh. */
+    val capturePaused: Boolean = false,
     val transactions: List<InspectorTransactionUi> = emptyList(),
     val capabilities: InspectorEditingUi = InspectorEditingUi(),
     val mocksEnabled: Boolean = false,
@@ -41,11 +45,21 @@ data class InspectorState(
     val stateProviders: List<InspectorStateProviderUi> = emptyList(),
     /** Remote Config providers, already redacted and STATE-gated by the data source. */
     val remoteConfig: List<InspectorRemoteConfigUi> = emptyList(),
+    /** True when the data source can apply local Remote Config overrides; gates the override editor. */
+    val remoteConfigOverridesEditable: Boolean = false,
+    /**
+     * The write protocol ([InspectorDataSource.socketSendProtocol]) per live socket connection id,
+     * read on every snapshot load. A connection missing here cannot be written to, so the send
+     * composer is hidden for it.
+     */
+    val socketSendProtocols: Map<String, String> = emptyMap(),
     val locationPingStreams: List<InspectorLocationPingStreamUi> = emptyList(),
     val preferenceFiles: List<InspectorPreferenceFileUi> = emptyList(),
     val fileRoots: List<String> = emptyList(),
     val fileListing: InspectorFileListingUi? = null,
     val filePreview: InspectorFilePreviewUi? = null,
+    /** The previewed file's name, so the preview card says what it is showing. */
+    val filePreviewName: String? = null,
     /** One-shot: a resolved path awaiting the Share sheet; consumed by [InspectorAction.ConsumeShareFile]. */
     val pendingShareFilePath: String? = null,
     val databases: List<String> = emptyList(),
@@ -74,6 +88,10 @@ data class InspectorState(
     val captureCategories: Set<CaptureCategory> = CaptureCategory.all(),
     /** Mirrors [InspectorSnapshot.redactionEnabled]. */
     val redactionEnabled: Boolean = false,
+    /** Status-class filter applied to the traffic snapshot; see [InspectorTrafficQuery.statusClass]. */
+    val trafficStatusClass: TrafficStatusClass = TrafficStatusClass.ALL,
+    /** Exact host filter applied to the traffic snapshot; null means every host. */
+    val trafficHost: String? = null,
 )
 
 /** True when [category] is enabled for this session; the one-line building block every gate below composes. */

@@ -75,14 +75,30 @@ public interface EventDao {
                     ") ORDER BY mono_time_ns ASC, sequence ASC, id ASC")
     List<EventEntity> recentEvents(int limit);
 
-    @Query("SELECT id FROM events ORDER BY severity ASC, wall_time_ms ASC LIMIT :limit")
-    List<String> oldestLowSeverityFirst(int limit);
+    @Query("SELECT id, 96 + LENGTH(CAST(id AS BLOB)) + LENGTH(CAST(session_id AS BLOB)) + " +
+            "LENGTH(CAST(plugin_id AS BLOB)) + LENGTH(CAST(type AS BLOB)) + " +
+            "LENGTH(CAST(summary AS BLOB)) + LENGTH(CAST(tags_json AS BLOB)) + " +
+            "LENGTH(CAST(COALESCE(correlation_id, '') AS BLOB)) + " +
+            "LENGTH(CAST(COALESCE(payload_json, '') AS BLOB)) + " +
+            "LENGTH(CAST(COALESCE(attachment_id, '') AS BLOB)) AS bytes " +
+            "FROM events WHERE id NOT IN (SELECT event_id FROM timeline_annotations WHERE bookmarked = 1) " +
+            "ORDER BY severity ASC, wall_time_ms ASC, sequence ASC, id ASC")
+    List<EventPruneCandidate> quotaCandidates();
+
+    @Query("SELECT id, 96 + LENGTH(CAST(id AS BLOB)) + LENGTH(CAST(session_id AS BLOB)) + " +
+            "LENGTH(CAST(plugin_id AS BLOB)) + LENGTH(CAST(type AS BLOB)) + " +
+            "LENGTH(CAST(summary AS BLOB)) + LENGTH(CAST(tags_json AS BLOB)) + " +
+            "LENGTH(CAST(COALESCE(correlation_id, '') AS BLOB)) + " +
+            "LENGTH(CAST(COALESCE(payload_json, '') AS BLOB)) + " +
+            "LENGTH(CAST(COALESCE(attachment_id, '') AS BLOB)) AS bytes " +
+            "FROM events WHERE session_id = :sessionId " +
+            "AND id NOT IN (SELECT event_id FROM timeline_annotations WHERE bookmarked = 1) " +
+            "AND NOT EXISTS (SELECT 1 FROM attachments WHERE attachments.event_id = events.id) " +
+            "ORDER BY severity ASC, wall_time_ms ASC, sequence ASC, id ASC")
+    List<EventPruneCandidate> activeSessionTrimCandidates(String sessionId);
 
     @Query("DELETE FROM events WHERE id IN (:ids)")
     void deleteByIds(List<String> ids);
-
-    @Query("SELECT id FROM events WHERE session_id = :sessionId AND id NOT IN (SELECT event_id FROM timeline_annotations WHERE bookmarked = 1) AND NOT EXISTS (SELECT 1 FROM attachments WHERE attachments.event_id = events.id) ORDER BY severity ASC, wall_time_ms ASC LIMIT :limit")
-    List<String> oldestUnbookmarkedLowSeverityFirstForSession(String sessionId, int limit);
 
     /** Distinct owning sessions for rows a global age-based prune is about to delete, captured before the delete. */
     @Query("SELECT DISTINCT session_id FROM events WHERE wall_time_ms < :cutoffEpochMs")

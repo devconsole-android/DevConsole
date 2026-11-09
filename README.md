@@ -441,9 +441,10 @@ Opt-in add-ons (each `-noop` twin is the matching `releaseImplementation`):
 
 | Coordinate | Release twin | Adds |
 |---|---|---|
-| `devconsole-ui-compose` | *(none — `debugImplementation` only)* | Compose launcher-panel API (the on-device inspector itself already ships inside `devconsole`; name this coordinate only to call the panel composables) |
-| `devconsole-ui-views` | *(none — `debugImplementation` only)* | `DevConsolePanelView` launcher for XML/Views hosts |
-| `devconsole-network-ktor` | *(none)* | Ktor `HttpClient` capture plugin (full request + response body capture, any engine; see [Network adapters](docs/NETWORK_ADAPTERS.md)) |
+| `devconsole-ui-compose` | *(none — `debugImplementation` only)* | Compose launcher-panel API; protected variants reject it unless scoped to debug |
+| `devconsole-ui-views` | *(none — `debugImplementation` only)* | `DevConsolePanelView` launcher for XML/Views hosts; protected variants reject it unless scoped to debug |
+| `devconsole-network-ktor` | *(none)* | Ktor `HttpClient` capture plugin (full request + response body capture, any engine; protected variants reject it; see [Network adapters](docs/NETWORK_ADAPTERS.md)) |
+| `devconsole-logs-timber` | *(none)* | Timber tree + `DevConsoleLog` drop-in that forward app logs to the timeline (release-safe: forwards to the no-op recorder in protected variants) |
 | `devconsole-socket-paho` | `devconsole-socket-paho-noop` | MQTT capture via Eclipse Paho |
 | `devconsole-push-firebase` | `devconsole-push-firebase-noop` | FCM push adapter (reflection-based) |
 | `devconsole-remote-config-firebase` | `devconsole-remote-config-firebase-noop` | Firebase Remote Config adapter (reflection-based; see [Remote Config](docs/REMOTE_CONFIG.md)) |
@@ -453,7 +454,7 @@ You never name those. Every module publishes sources, javadoc, and a POM.
 
 ### Versions and unreleased code
 
-All 34 library artifacts come from [JitPack](https://jitpack.io/#devconsole-android/DevConsole),
+All 35 library artifacts come from [JitPack](https://jitpack.io/#devconsole-android/DevConsole),
 which builds a ref on demand. Releases are tagged `v1.3.1`, and JitPack resolves a bare version
 against the `v`-prefixed tag, which is why the coordinates above read `1.3.1` — the same spelling
 the Gradle plugin uses on the Portal. Any branch works as `<branch>-SNAPSHOT`, with `/` written as
@@ -492,7 +493,10 @@ aapt2 dump permissions app/build/outputs/apk/release/app-release.apk
 
 The Gradle plugin enforces the same split mechanically. `verify<Variant>DevConsoleProtectedArtifacts`
 fails the build if the full runtime reaches a protected variant, checking declared dependencies, the
-resolved runtime classpath, and the final APK/AAB bytes. See
+resolved runtime classpath, and (on `assemble<Variant>` / `bundle<Variant>`) the final packaged
+APK/AAB/AAR bytes through separate `verify<Variant>DevConsolePackagedArtifact` and
+`verify<Variant>DevConsolePackagedBundle` tasks. Running the per-variant
+`verify<Variant>DevConsoleProtectedArtifacts` task by itself checks dependencies only. See
 [Build variants and production safety](docs/BUILD_VARIANTS_AND_PRODUCTION_SAFETY.md).
 
 ## Flavored projects: verify the variant you ship
@@ -509,7 +513,8 @@ verifyPartnerReleaseDevConsoleProtectedArtifacts
 ```
 
 Each one is wired onto **its own** `assemble<Variant>` / `bundle<Variant>` and nothing else, so
-`./gradlew :app:assembleProductionRelease` verifies `productionRelease` and resolves
+`./gradlew :app:assembleProductionRelease` checks `productionRelease` dependencies and scans its
+packaged APK, then resolves
 `productionRelease`'s classpath — no other flavor is touched. That matters most when your flavors
 carry environment-specific coordinates:
 
@@ -529,7 +534,9 @@ on the critical path of a single-flavor release build:
 
 ```bash
 ./gradlew :app:assembleProductionRelease                            # ships production, verifies production
-./gradlew :app:verifyProductionReleaseDevConsoleProtectedArtifacts  # the same check on its own
+./gradlew :app:verifyProductionReleaseDevConsoleProtectedArtifacts  # dependency graph check only
+./gradlew :app:verifyProductionReleaseDevConsolePackagedArtifact     # APK/AAR byte scan
+./gradlew :app:verifyProductionReleaseDevConsolePackagedBundle       # AAB byte scan
 ./gradlew :app:verifyDevConsoleProtectedArtifacts                   # full sweep, all flavors, CI
 ```
 
@@ -557,6 +564,8 @@ say — lower the default and name what you protect. Understand that a variant l
 nobody checks:
 
 ```kotlin
+import io.devconsole.gradle.DevConsoleVariantPolicy
+
 devConsole {
     defaultPolicy.set(DevConsoleVariantPolicy.DISABLED)
     protectedVariantPatterns.set(listOf("(?i)production.*release"))

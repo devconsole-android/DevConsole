@@ -8,6 +8,9 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
+private const val DEFAULT_CAPACITY = 5_000
+private const val LEGACY_MONOTONIC_NANOS = Long.MIN_VALUE
+
 enum class TimelineSort { ASC, DESC }
 
 data class TimelineQuery(
@@ -91,109 +94,123 @@ interface TimelineAppender {
 }
 
 /** Reference timeline query implementation used by tests and by the future Room adapter. */
-class InMemoryTimeline(
-    initialEvents: List<StoredEvent>,
-    private val cursors: CursorCodec,
-) : Timeline,
-    TimelineAppender {
-    private val events = initialEvents.toMutableList()
+class InMemoryTimeline
+    @JvmOverloads
+    constructor(
+        initialEvents: List<StoredEvent>,
+        private val cursors: CursorCodec,
+        private val capacity: Int = DEFAULT_CAPACITY,
+    ) : Timeline,
+        TimelineAppender {
+        private val events = ArrayDeque<StoredEvent>()
+        private val eventIds = HashSet<String>()
 
-    // Chained plugin/type/severity/correlation/query/time-range/cursor filters inflate the McCabe
-    // count; splitting them would fragment one cohesive paging pass across multiple functions.
-    @Suppress("CyclomaticComplexMethod")
-    @Synchronized
-    override fun page(query: TimelineQuery): TimelinePage {
-        val cursor = query.cursor?.let { cursors.decode(it, query.scope()) } ?: CursorDecodeResult.Missing
-        if (cursor is CursorDecodeResult.Invalid) return TimelinePage.InvalidCursor
-        val marker = (cursor as? CursorDecodeResult.Valid)?.marker
-        val comparator =
-            compareBy<StoredEvent> { it.monoTimeNs }
-                .thenBy { it.sequence }
-                .thenBy { it.id }
-        // Not comparator.reversed(): that resolves to java.util.Comparator's default method
-        // (API 24) over the Kotlin extension, which crashes below minSdk 24.
-        val directedComparator =
-            if (query.sort == TimelineSort.ASC) comparator else Comparator { a, b -> comparator.compare(b, a) }
-        val matching =
-            events
-                .asSequence()
-                .filter { event -> query.pluginIds.isEmpty() || event.pluginId in query.pluginIds }
-                .filter { event -> query.types.isEmpty() || event.type in query.types }
-                .filter { event -> query.severities.isEmpty() || event.severity in query.severities }
-                .filter { event -> query.correlationId == null || event.correlationId == query.correlationId }
-                .filter { event -> query.query == null || event.summary.contains(query.query, ignoreCase = true) }
-                .filter { event -> query.fromEpochMs == null || event.wallTimeMs >= query.fromEpochMs!! }
-                .filter { event -> query.toEpochMs == null || event.wallTimeMs <= query.toEpochMs!! }
-                .sortedWith(directedComparator)
-                .filter { event -> marker == null || event.isAfter(marker, query.sort) }
-                .take(query.limit + 1)
-                .toList()
-        val pageEvents = matching.take(query.limit)
-        val hasMore = matching.size > query.limit
-        val nextCursor =
-            if (hasMore) {
-                pageEvents.lastOrNull()?.let {
-                    cursors.encode(
-                        CursorMarker(it.sequence, it.id).withMonotonicNanos(it.monoTimeNs),
-                        query.scope(),
-                    )
+        init {
+            require(capacity > 0) { "capacity must be positive" }
+            initialEvents.takeLast(capacity).forEach(::append)
+        }
+
+        // Chained plugin/type/severity/correlation/query/time-range/cursor filters inflate the McCabe
+        // count; splitting them would fragment one cohesive paging pass across multiple functions.
+        @Suppress("CyclomaticComplexMethod")
+        @Synchronized
+        override fun page(query: TimelineQuery): TimelinePage {
+            val cursor = query.cursor?.let { cursors.decode(it, query.scope()) } ?: CursorDecodeResult.Missing
+            if (cursor is CursorDecodeResult.Invalid) return TimelinePage.InvalidCursor
+            val marker = (cursor as? CursorDecodeResult.Valid)?.marker
+            val comparator =
+                compareBy<StoredEvent> { it.monoTimeNs }
+                    .thenBy { it.sequence }
+                    .thenBy { it.id }
+            // Not comparator.reversed(): that resolves to java.util.Comparator's default method
+            // (API 24) over the Kotlin extension, which crashes below minSdk 24.
+            val directedComparator =
+                if (query.sort == TimelineSort.ASC) comparator else Comparator { a, b -> comparator.compare(b, a) }
+            val matching =
+                events
+                    .asSequence()
+                    .filter { event -> query.pluginIds.isEmpty() || event.pluginId in query.pluginIds }
+                    .filter { event -> query.types.isEmpty() || event.type in query.types }
+                    .filter { event -> query.severities.isEmpty() || event.severity in query.severities }
+                    .filter { event -> query.correlationId == null || event.correlationId == query.correlationId }
+                    .filter { event -> query.query == null || event.summary.contains(query.query, ignoreCase = true) }
+                    .filter { event -> query.fromEpochMs == null || event.wallTimeMs >= query.fromEpochMs!! }
+                    .filter { event -> query.toEpochMs == null || event.wallTimeMs <= query.toEpochMs!! }
+                    .sortedWith(directedComparator)
+                    .filter { event -> marker == null || event.isAfter(marker, query.sort) }
+                    .take(query.limit + 1)
+                    .toList()
+            val pageEvents = matching.take(query.limit)
+            val hasMore = matching.size > query.limit
+            val nextCursor =
+                if (hasMore) {
+                    pageEvents.lastOrNull()?.let {
+                        cursors.encode(
+                            CursorMarker(it.sequence, it.id).withMonotonicNanos(it.monoTimeNs),
+                            query.scope(),
+                        )
+                    }
+                } else {
+                    null
                 }
-            } else {
-                null
+            return TimelinePage.Success(pageEvents, nextCursor, hasMore)
+        }
+
+        @Synchronized
+        override fun contains(eventId: String): Boolean = eventId in eventIds
+
+        @Synchronized
+        override fun append(event: StoredEvent) {
+            if (!eventIds.add(event.id)) return
+            events.addLast(event)
+            if (events.size > capacity) eventIds.remove(events.removeFirst().id)
+        }
+
+        /** Atomically replaces hydrated history when the active app-run changes. */
+        @Synchronized
+        fun replace(events: List<StoredEvent>) {
+            this.events.clear()
+            eventIds.clear()
+            events.takeLast(capacity).forEach {
+                if (eventIds.add(it.id)) this.events.addLast(it)
             }
-        return TimelinePage.Success(pageEvents, nextCursor, hasMore)
-    }
+        }
 
-    @Synchronized
-    override fun contains(eventId: String): Boolean = events.any { it.id == eventId }
-
-    @Synchronized
-    override fun append(event: StoredEvent) {
-        events += event
-    }
-
-    /** Atomically replaces hydrated history when the active app-run changes. */
-    @Synchronized
-    fun replace(events: List<StoredEvent>) {
-        this.events.clear()
-        this.events.addAll(events)
-    }
-
-    /** Replaces one app-run while retaining events appended for that same run during hydration. */
-    @Synchronized
-    fun replaceSession(
-        sessionId: String,
-        persisted: List<StoredEvent>,
-    ) {
-        val merged = LinkedHashMap<String, StoredEvent>()
-        persisted.filter { it.sessionId == sessionId }.forEach { merged[it.id] = it }
-        // Not Map.putIfAbsent: that is API 24 (java.util.Map default method) and crashes below minSdk 24.
-        events.filter { it.sessionId == sessionId }.forEach { if (it.id !in merged) merged[it.id] = it }
-        events.clear()
-        events.addAll(merged.values)
-    }
-
-    private fun StoredEvent.isAfter(
-        marker: CursorMarker,
-        sort: TimelineSort,
-    ): Boolean {
-        val compared =
-            if (marker.monotonicNanos == LEGACY_MONOTONIC_NANOS) {
-                sequence.compareTo(marker.sequence).takeIf { it != 0 } ?: id.compareTo(marker.id)
-            } else {
-                monoTimeNs
-                    .compareTo(marker.monotonicNanos)
-                    .takeIf { it != 0 }
-                    ?: sequence.compareTo(marker.sequence).takeIf { it != 0 }
-                    ?: id.compareTo(marker.id)
+        /** Replaces one app-run while retaining events appended for that same run during hydration. */
+        @Synchronized
+        fun replaceSession(
+            sessionId: String,
+            persisted: List<StoredEvent>,
+        ) {
+            val merged = LinkedHashMap<String, StoredEvent>()
+            persisted.filter { it.sessionId == sessionId }.forEach { merged[it.id] = it }
+            // Not Map.putIfAbsent: that is API 24 (java.util.Map default method) and crashes below minSdk 24.
+            events.filter { it.sessionId == sessionId }.forEach { if (it.id !in merged) merged[it.id] = it }
+            val retained = merged.values.toList()
+            events.clear()
+            eventIds.clear()
+            retained.takeLast(capacity).forEach {
+                if (eventIds.add(it.id)) events.addLast(it)
             }
-        return if (sort == TimelineSort.ASC) compared > 0 else compared < 0
-    }
+        }
 
-    private companion object {
-        const val LEGACY_MONOTONIC_NANOS = Long.MIN_VALUE
+        private fun StoredEvent.isAfter(
+            marker: CursorMarker,
+            sort: TimelineSort,
+        ): Boolean {
+            val compared =
+                if (marker.monotonicNanos == LEGACY_MONOTONIC_NANOS) {
+                    sequence.compareTo(marker.sequence).takeIf { it != 0 } ?: id.compareTo(marker.id)
+                } else {
+                    monoTimeNs
+                        .compareTo(marker.monotonicNanos)
+                        .takeIf { it != 0 }
+                        ?: sequence.compareTo(marker.sequence).takeIf { it != 0 }
+                        ?: id.compareTo(marker.id)
+                }
+            return if (sort == TimelineSort.ASC) compared > 0 else compared < 0
+        }
     }
-}
 
 data class CursorMarker(
     val sequence: Long,

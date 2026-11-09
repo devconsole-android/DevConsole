@@ -57,7 +57,7 @@ class EvidenceCascadeDeletionInstrumentedTest {
         runBlocking {
             val sessionId = UUID.randomUUID().toString()
             database.sessionDao().insertIfAbsent(
-                SessionEntity(sessionId, "COMPLETED", 0, 0, 0L, null, null, null, null, null, null, null, 0, 0),
+                SessionEntity(sessionId, "COMPLETED", 0, 0, 0L, null, null, null, null, null, null, null, 0, 0, false),
             )
             val evidenceStore = RoomEvidenceStore(database)
             evidenceStore.flag(

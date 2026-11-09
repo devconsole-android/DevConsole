@@ -1,0 +1,29 @@
+public final class io/devconsole/logs/timber/DevConsoleLog {
+	public static final field INSTANCE Lio/devconsole/logs/timber/DevConsoleLog;
+	public static final fun d (Ljava/lang/String;Ljava/lang/String;)I
+	public static final fun d (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+	public static synthetic fun d$default (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;ILjava/lang/Object;)I
+	public static final fun e (Ljava/lang/String;Ljava/lang/String;)I
+	public static final fun e (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+	public static synthetic fun e$default (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;ILjava/lang/Object;)I
+	public static final fun i (Ljava/lang/String;Ljava/lang/String;)I
+	public static final fun i (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+	public static synthetic fun i$default (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;ILjava/lang/Object;)I
+	public static final fun install (Lio/devconsole/logs/LogRecorder;)V
+	public static final fun v (Ljava/lang/String;Ljava/lang/String;)I
+	public static final fun v (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+	public static synthetic fun v$default (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;ILjava/lang/Object;)I
+	public static final fun w (Ljava/lang/String;Ljava/lang/String;)I
+	public static final fun w (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+	public static synthetic fun w$default (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;ILjava/lang/Object;)I
+	public static final fun wtf (Ljava/lang/String;Ljava/lang/String;)I
+	public static final fun wtf (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I
+	public static synthetic fun wtf$default (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;ILjava/lang/Object;)I
+}
+
+public final class io/devconsole/logs/timber/DevConsoleTimberTree : timber/log/Timber$Tree {
+	public fun <init> (Lio/devconsole/logs/LogRecorder;)V
+	public fun <init> (Lio/devconsole/logs/LogRecorder;I)V
+	public synthetic fun <init> (Lio/devconsole/logs/LogRecorder;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+

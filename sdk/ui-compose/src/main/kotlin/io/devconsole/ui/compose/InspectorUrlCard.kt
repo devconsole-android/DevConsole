@@ -13,7 +13,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +20,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -86,11 +84,13 @@ internal fun InspectorUrlCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 url,
-                modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                // Wraps rather than scrolling sideways: a one-line scroller clipped the tail with no
+                // cue, so `:8080` read as `:80` -- the wrong port for anyone typing it by hand.
+                modifier = Modifier.weight(1f),
                 color = urlColor,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 14.sp,
-                maxLines = 1,
+                maxLines = 3,
             )
             actions.forEach { action ->
                 IconButton(

@@ -4,6 +4,7 @@
  */
 package io.devconsole
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -41,11 +42,23 @@ internal class DevConsoleForegroundService : Service() {
                 runCatching {
                     promoteToForeground(intent.getStringExtra(EXTRA_ENDPOINT_URL).orEmpty())
                 }.onFailure {
-                    // API 31+ can throw ForegroundServiceStartNotAllowedException/SecurityException
-                    // from a background start; without a matching startForeground call the OS
-                    // watchdog kills the process for "did not call startForeground in time" -- stop
-                    // ourselves first so that never fires.
+                    // Keep the started-service contract satisfied when notification setup fails.
                     logcatInfo("DevConsole", "Foreground promotion failed: ${it.javaClass.simpleName}")
+                    runCatching {
+                        ServiceCompat.startForeground(
+                            this,
+                            NOTIFICATION_ID,
+                            fallbackNotification(),
+                            foregroundServiceType(),
+                        )
+                    }.onFailure { promotionFailure ->
+                        if (!isForegroundStartNotAllowed(promotionFailure)) {
+                            logcatInfo(
+                                "DevConsole",
+                                "Foreground fallback failed: ${promotionFailure.javaClass.simpleName}",
+                            )
+                        }
+                    }
                     stopSelf()
                 }
             }
@@ -60,26 +73,42 @@ internal class DevConsoleForegroundService : Service() {
     // the correct "no type" sentinel ServiceCompat.startForeground expects below API 34; androidx's
     // own ServiceCompat internals suppress the same warning.
     private fun promoteToForeground(endpointUrl: String) {
-        createNotificationChannel()
         val notification =
-            NotificationCompat
-                .Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.devconsole_notification)
-                .setLargeIcon(BitmapFactory.decodeResource(resources, R.drawable.devconsole_logo))
-                .setContentTitle("Dev Console server running")
-                .setContentText(endpointUrl)
-                .setOngoing(true)
-                .setContentIntent(hostLaunchIntent())
-                .addAction(0, "Stop server", stopActionIntent())
-                .build()
-        val foregroundServiceType =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            } else {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_NONE
-            }
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, foregroundServiceType)
+            runCatching {
+                createNotificationChannel()
+                NotificationCompat
+                    .Builder(this, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.devconsole_notification)
+                    .setLargeIcon(BitmapFactory.decodeResource(resources, R.drawable.devconsole_logo))
+                    .setContentTitle("Dev Console server running")
+                    .setContentText(endpointUrl)
+                    .setOngoing(true)
+                    .setContentIntent(hostLaunchIntent())
+                    .addAction(0, "Stop server", stopActionIntent())
+                    .build()
+            }.getOrElse { fallbackNotification() }
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, foregroundServiceType())
     }
+
+    @Suppress("DEPRECATION") // FOREGROUND_SERVICE_TYPE_NONE: see promoteToForeground.
+    private fun foregroundServiceType(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        } else {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_NONE
+        }
+
+    private fun fallbackNotification(): Notification =
+        NotificationCompat
+            .Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setContentTitle("Dev Console")
+            .setContentText("Server is stopping")
+            .setOngoing(true)
+            .build()
+
+    private fun isForegroundStartNotAllowed(error: Throwable): Boolean =
+        error.javaClass.name == "android.app.ForegroundServiceStartNotAllowedException"
 
     private fun stopServerAndSelf() {
         // Same public stop path the dashboard uses; PlatformFacadeProvider's stopLocked will also

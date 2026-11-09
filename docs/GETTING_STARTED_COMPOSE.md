@@ -31,7 +31,7 @@ dependencies {
 
 devConsole {
     enabledVariants.set(setOf("debug"))
-    protectedVariantPatterns.set(listOf("release"))
+    protectedVariantPatterns.set(listOf("(?i).*release"))
 }
 ```
 
@@ -42,11 +42,10 @@ form is used here because it also matches the plugin's version on the Gradle Plu
 There is no BOM. `devconsole` (the debug runtime) and `devconsole-noop` are the only two coordinates
 a normal integration names; everything else is `devconsole-<module>`.
 
-**`devconsole-ui-compose` must be `debugImplementation`, never plain `implementation`.** It has no
-release no-op counterpart and merges `DevConsoleActivity` into your manifest, so a plain
-`implementation` dependency ships the whole in-app inspector — and an exported-by-merge Activity —
-into your release build with no build-time warning. The Gradle plugin's variant protection does not
-cover this module today; it is your responsibility to scope it to `debugImplementation` yourself.
+**`devconsole-ui-compose` should be `debugImplementation`, never plain `implementation`.** It has no
+release no-op counterpart and merges `DevConsoleActivity` into your manifest. The Gradle plugin now
+treats it as a protected coordinate and marker: a protected variant that includes it fails with a
+message directing you to use `debugImplementation`.
 
 3. Add `INTERNET` to your own app's manifest. The full debug runtime auto-merges
    `ACCESS_LOCAL_NETWORK`, `NEARBY_WIFI_DEVICES`, `ACCESS_NETWORK_STATE`, and the default
@@ -111,6 +110,27 @@ setContent {
    `StartResult.Started.access.connectUrl` when `SESSION_CODE` is enabled. If the device isn't local, run
    `adb forward tcp:8080 tcp:8080` first — 8080 is only the first port tried, so use whatever port the
    panel actually shows.
+
+## Forwarding Timber / Log calls
+
+Add `devconsole-logs-timber` to hand your existing log calls to the Logs inspector. The module is
+release-safe, so it can stay on `implementation` in every variant — in protected builds it forwards
+to DevConsole's disabled recorder:
+
+```kotlin
+implementation("com.github.devconsole-android.DevConsole:devconsole-logs-timber:1.3.1")
+
+// Once, after DevConsole.initialize:
+Timber.plant(DevConsoleTimberTree(DevConsole.logRecorder()))
+DevConsoleLog.install(DevConsole.logRecorder())
+
+// Existing call sites keep working and now also land on the timeline:
+Timber.i("Checkout reached the timeline")
+DevConsoleLog.w("Checkout", "Payment retried")
+```
+
+Use `DevConsoleTimberTree(recorder, minimumPriority)` to drop lines below a given
+`android.util.Log` priority.
 
 For a full working example, [`samples/compose-app`](../samples/compose-app/src/main/kotlin/io/devconsole/sample/compose/MainActivity.kt)
 has one button per capability: network and WebSocket capture, mocks, push simulation, a feature

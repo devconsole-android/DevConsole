@@ -7,6 +7,7 @@
 package io.devconsole.ui.compose
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -20,11 +21,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,6 +45,7 @@ import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -53,7 +58,10 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /** Which capture the full-screen detail overlay is currently showing, and how to find it in [InspectorState]. */
@@ -109,12 +117,20 @@ internal data class ObserveUiState(
     val logsSearch: String = "",
     val crashesSearch: String = "",
     val remoteConfigSearch: String = "",
+    /** Non-null while the Remote Config override editor is open for one key. */
+    val remoteConfigEditTarget: RemoteConfigOverrideEditTarget? = null,
+    /** True while the Clear all overrides confirmation is showing. */
+    val clearAllRemoteConfigOverridesPending: Boolean = false,
     val flaggedTransactionIds: Set<String> = emptySet(),
     val bookmarkedLogIds: Set<String> = emptySet(),
     val flaggedCrashIds: Set<String> = emptySet(),
     val detailTarget: ObserveDetailTarget? = null,
     /** Non-null while the net detail's "Mock this response" action has a create sheet open. */
     val mockDraft: MockRuleEditorTarget.New? = null,
+    /** Non-null while the net detail's edit-and-resend sheet is open. */
+    val resendDraft: InspectorResendDraft? = null,
+    /** Non-null while a completed resend's response sheet is open. */
+    val resendResult: InspectorResendResult? = null,
     /** True while the Traffic tab's "clear captures" confirmation is showing. */
     val clearTransactionsPending: Boolean = false,
     /** Hero collapse is hoisted per tab, independent of every other tab's. */
@@ -125,6 +141,10 @@ internal data class ObserveUiState(
     val crashesHeroCollapsed: Boolean = true,
     val searchOpen: Boolean = false,
     val trafficFiltersOpen: Boolean = false,
+    /** Whether Observe polls the capture store while it is on screen. */
+    val liveMode: Boolean = true,
+    /** False until the first snapshot settles; the unavailable notice waits for it. */
+    val snapshotLoaded: Boolean = true,
 )
 
 // One callback per distinct Observe interaction; bundling further would just hide the count.
@@ -145,6 +165,16 @@ internal data class ObserveActions(
     val onOpenCrashDetail: (String) -> Unit,
     val onRemoteConfigSearchChange: (String) -> Unit,
     val onOpenRemoteConfigDetail: (String, String) -> Unit,
+    /** Opens the local override editor for one Remote Config key. */
+    val onOpenRemoteConfigOverride: (String, String) -> Unit = { _, _ -> },
+    val onSetRemoteConfigOverride: (String, String, String) -> Unit = { _, _, _ -> },
+    val onClearRemoteConfigOverride: (String, String) -> Unit = { _, _ -> },
+    val onDismissRemoteConfigOverride: () -> Unit = {},
+    val onRequestClearAllRemoteConfigOverrides: () -> Unit = {},
+    val onConfirmClearAllRemoteConfigOverrides: () -> Unit = {},
+    val onCancelClearAllRemoteConfigOverrides: () -> Unit = {},
+    /** Sends one frame over [connectionId]; only a successful result clears the composer. */
+    val onSendSocketFrame: (String, String, String?, Int, Boolean) -> Unit = { _, _, _, _, _ -> },
     val onToggleCrashFlag: (String) -> Unit,
     val onToggleCrashesHero: () -> Unit,
     /** The previous-run-crashed banner's action: opens that session's crash on the Crashes tab. */
@@ -181,6 +211,26 @@ internal data class ObserveActions(
     val onToggleSocketsHero: () -> Unit,
     val onTogglePushHero: () -> Unit,
     val onToggleLogsHero: () -> Unit,
+    val onToggleLiveMode: () -> Unit = {},
+    /** Leaves a selected past run and goes back to the live session. */
+    val onReturnToLiveSession: () -> Unit = {},
+    /** The paused-capture banner's action: resumes live capture. */
+    val onResumeCapture: () -> Unit = {},
+    val onSetSessionPinned: (id: String, pinned: Boolean) -> Unit = { _, _ -> },
+    val onDeleteSession: (id: String) -> Unit = {},
+    /** Traffic header's status-class chips: re-reads the capture store with the new bucket. */
+    val onTrafficStatusClassClick: (TrafficStatusClass) -> Unit = {},
+    /** Traffic header's host dropdown: null shows every host. */
+    val onTrafficHostClick: (String?) -> Unit = {},
+    /** The net detail's "Resend": replays the captured request through the composer. */
+    val onResendTransaction: (InspectorTransactionUi) -> Unit = {},
+    /** The net detail's "Edit & resend": opens the prefilled sheet. */
+    val onEditResendTransaction: (InspectorTransactionUi) -> Unit = {},
+    val onSendResendDraft: (InspectorResendDraft) -> Unit = {},
+    val onCancelResendDraft: () -> Unit = {},
+    /** Copies the response sheet's body and confirms it in a snackbar. */
+    val onCopyResendBody: (String) -> Unit = {},
+    val onDismissResendResult: () -> Unit = {},
 )
 
 /**
@@ -192,10 +242,8 @@ internal data class ObserveActions(
  * by caller-supplied `rememberSaveable`-backed [MutableState]s too, so search text and hero-collapse
  * survive a configuration change such as rotation or a multi-window resize instead of resetting: a
  * config change is not process death, so there's no reason for these to behave as if it were.
- * [detailTarget] and [bookmarkedIds] stay plain `mutableStateOf`: transaction/log ids aren't
- * Bundle-friendly without a custom Saver (see [MockRuleEditorNewSaver] for what that would take), and
- * losing an open detail overlay or the bookmark set across a rotation is a narrower, acceptable
- * tradeoff for this debug-only inspector surface.
+ * [detailTarget] is saved through [ObserveDetailTargetSaver] so rotation keeps the open detail;
+ * [bookmarkedIds] stays plain `mutableStateOf`, a narrower loss for this debug-only surface.
  */
 @Suppress("LongParameterList") // One rememberSaveable-backed MutableState per saved field; see doc above.
 private class ObserveRouteState(
@@ -212,6 +260,8 @@ private class ObserveRouteState(
     pushHeroCollapsedState: MutableState<Boolean>,
     logsHeroCollapsedState: MutableState<Boolean>,
     crashesHeroCollapsedState: MutableState<Boolean>,
+    detailTargetState: MutableState<ObserveDetailTarget?>,
+    liveModeState: MutableState<Boolean>,
 ) {
     var trafficSearch by trafficSearchState
     var trafficChip by trafficChipState
@@ -220,9 +270,25 @@ private class ObserveRouteState(
     var logsSearch by logsSearchState
     var crashesSearch by crashesSearchState
     var remoteConfigSearch by remoteConfigSearchState
+    var remoteConfigEditTarget by mutableStateOf<RemoteConfigOverrideEditTarget?>(null)
+
+    /** A plain state: losing an open confirmation across rotation safely re-arms nothing. */
+    var clearAllRemoteConfigOverridesPending by mutableStateOf(false)
     var bookmarkedIds by mutableStateOf(emptySet<String>())
-    var detailTarget by mutableStateOf<ObserveDetailTarget?>(null)
+    var detailTarget by detailTargetState
+
+    /** Live tail on/off for the Observe poll (see [ObserveLivePoll]); saved across rotation. */
+    var liveMode by liveModeState
     var mockDraft by mockDraftState
+
+    /** Plain state like [clearTransactionsPending]: a half-edited request need not survive rotation. */
+    var resendDraft by mutableStateOf<InspectorResendDraft?>(null)
+
+    /** True between dispatching a resend and its command result arriving. */
+    var awaitingResend by mutableStateOf(false)
+
+    /** The response sheet's result, set only for an actual HTTP response rather than a flash message. */
+    var resendResult by mutableStateOf<InspectorResendResult?>(null)
 
     /**
      * Plain `mutableStateOf`, not `rememberSaveable`: losing an open confirmation across a rotation
@@ -260,6 +326,9 @@ private fun rememberObserveRouteState(mockDraftState: MutableState<MockRuleEdito
     val pushHeroCollapsedState = rememberSaveable { mutableStateOf(true) }
     val logsHeroCollapsedState = rememberSaveable { mutableStateOf(true) }
     val crashesHeroCollapsedState = rememberSaveable { mutableStateOf(true) }
+    val detailTargetState =
+        rememberSaveable(stateSaver = ObserveDetailTargetSaver) { mutableStateOf<ObserveDetailTarget?>(null) }
+    val liveModeState = rememberSaveable { mutableStateOf(true) }
     return remember {
         ObserveRouteState(
             mockDraftState = mockDraftState,
@@ -275,6 +344,8 @@ private fun rememberObserveRouteState(mockDraftState: MutableState<MockRuleEdito
             pushHeroCollapsedState = pushHeroCollapsedState,
             logsHeroCollapsedState = logsHeroCollapsedState,
             crashesHeroCollapsedState = crashesHeroCollapsedState,
+            detailTargetState = detailTargetState,
+            liveModeState = liveModeState,
         )
     }
 }
@@ -292,17 +363,22 @@ private fun ObserveRouteState.toUiState(
     logsSearch = logsSearch,
     crashesSearch = crashesSearch,
     remoteConfigSearch = remoteConfigSearch,
+    remoteConfigEditTarget = remoteConfigEditTarget,
+    clearAllRemoteConfigOverridesPending = clearAllRemoteConfigOverridesPending,
     flaggedTransactionIds = flaggedTransactionIds,
     bookmarkedLogIds = bookmarkedIds,
     flaggedCrashIds = flaggedCrashIds,
     detailTarget = detailTarget,
     mockDraft = mockDraft,
+    resendDraft = resendDraft,
+    resendResult = resendResult,
     clearTransactionsPending = clearTransactionsPending,
     trafficHeroCollapsed = trafficHeroCollapsed,
     socketsHeroCollapsed = socketsHeroCollapsed,
     pushHeroCollapsed = pushHeroCollapsed,
     logsHeroCollapsed = logsHeroCollapsed,
     crashesHeroCollapsed = crashesHeroCollapsed,
+    liveMode = liveMode,
 )
 
 /**
@@ -328,7 +404,11 @@ internal fun ObserveRoute(
     val mockDraftState =
         rememberSaveable(stateSaver = MockRuleEditorNewSaver) { mutableStateOf<MockRuleEditorTarget.New?>(null) }
     val routeState = rememberObserveRouteState(mockDraftState)
-    val ui = routeState.toUiState(rememberAppIdentitySubtitle(), state.flaggedTransactionIds, state.flaggedCrashIds)
+    val snapshotLoaded by viewModel.snapshotLoaded.collectAsStateWithLifecycle()
+    val ui =
+        routeState
+            .toUiState(rememberAppIdentitySubtitle(), state.flaggedTransactionIds, state.flaggedCrashIds)
+            .copy(snapshotLoaded = snapshotLoaded)
     val actions =
         rememberObserveActions(
             viewModel,
@@ -346,15 +426,38 @@ internal fun ObserveRoute(
         viewModel.dispatch(InspectorAction.Refresh)
         onStopOrDispose { }
     }
-    LaunchedEffect(ui.detailTarget, ui.mockDraft) {
-        onDetailOverlayOpen(ui.detailTarget != null || ui.mockDraft != null)
+    ObserveLivePoll(enabled = ui.canLivePoll(state)) { viewModel.dispatch(InspectorAction.Refresh) }
+    LaunchedEffect(ui.detailTarget, ui.mockDraft, ui.resendDraft, ui.resendResult) {
+        onDetailOverlayOpen(
+            ui.detailTarget != null ||
+                ui.mockDraft != null ||
+                ui.resendDraft != null ||
+                ui.resendResult != null,
+        )
     }
     // Same toast+dismiss consumer ControlRoute/MoreRoute already have -- previously missing here
     // entirely, so a mock-rule save's rejection (or the mocks capability being off) vanished
     // silently and the stale result leaked its toast onto whichever screen the operator opened next.
     LaunchedEffect(state.lastCommandResult) {
         state.lastCommandResult?.let { result ->
-            showMessage(result.toFlashMessage())
+            val pendingDraft = routeState.resendDraft?.takeIf { it.sending }
+            if (routeState.awaitingResend || pendingDraft != null) {
+                routeState.awaitingResend = false
+                val resendResult = resendResultFrom(result)
+                when {
+                    resendResult != null -> {
+                        routeState.resendDraft = null
+                        routeState.resendResult = resendResult
+                    }
+                    // A snackbar would sit under the open edit sheet; keep the operator's edits and
+                    // show the rejection there so a typo or a blocked host is fixed in place.
+                    pendingDraft != null ->
+                        routeState.resendDraft = pendingDraft.copy(sending = false, error = result.toFlashMessage())
+                    else -> showMessage(result.toFlashMessage())
+                }
+            } else {
+                showMessage(result.toFlashMessage())
+            }
             if (routeState.mockDraft != null && result is InspectorCommandResult.Success) {
                 routeState.mockDraft = null
             }
@@ -407,6 +510,27 @@ private fun rememberObserveActions(
         onOpenRemoteConfigDetail = { providerId, key ->
             routeState.detailTarget = ObserveDetailTarget.RemoteConfigKey(providerId, key)
         },
+        onOpenRemoteConfigOverride = { providerId, key ->
+            routeState.remoteConfigEditTarget = RemoteConfigOverrideEditTarget(providerId, key)
+        },
+        onSetRemoteConfigOverride = { providerId, key, value ->
+            routeState.remoteConfigEditTarget = null
+            viewModel.dispatch(InspectorAction.SetRemoteConfigOverride(providerId, key, value))
+        },
+        onClearRemoteConfigOverride = { providerId, key ->
+            routeState.remoteConfigEditTarget = null
+            viewModel.dispatch(InspectorAction.ClearRemoteConfigOverride(providerId, key))
+        },
+        onDismissRemoteConfigOverride = { routeState.remoteConfigEditTarget = null },
+        onRequestClearAllRemoteConfigOverrides = { routeState.clearAllRemoteConfigOverridesPending = true },
+        onConfirmClearAllRemoteConfigOverrides = {
+            routeState.clearAllRemoteConfigOverridesPending = false
+            viewModel.dispatch(InspectorAction.ClearAllRemoteConfigOverrides)
+        },
+        onCancelClearAllRemoteConfigOverrides = { routeState.clearAllRemoteConfigOverridesPending = false },
+        onSendSocketFrame = { connectionId, text, topic, qos, retained ->
+            viewModel.dispatch(InspectorAction.SendSocketFrame(connectionId, text, topic, qos, retained))
+        },
         // Flag/unflag now go through the durable EvidenceStore via the ViewModel; the resulting
         // toast comes from InspectorState.lastCommandResult (see ObserveRoute's own LaunchedEffect),
         // not a locally-composed message here.
@@ -450,6 +574,29 @@ private fun rememberObserveActions(
         onToggleSocketsHero = { routeState.socketsHeroCollapsed = !routeState.socketsHeroCollapsed },
         onTogglePushHero = { routeState.pushHeroCollapsed = !routeState.pushHeroCollapsed },
         onToggleLogsHero = { routeState.logsHeroCollapsed = !routeState.logsHeroCollapsed },
+        onToggleLiveMode = { routeState.liveMode = !routeState.liveMode },
+        onReturnToLiveSession = { viewModel.dispatch(InspectorAction.SelectSession(null)) },
+        onResumeCapture = { viewModel.dispatch(InspectorAction.SetCapturePaused(false)) },
+        onSetSessionPinned = { id, pinned -> viewModel.dispatch(InspectorAction.SetSessionPinned(id, pinned)) },
+        onDeleteSession = { id -> viewModel.dispatch(InspectorAction.DeleteSession(id)) },
+        onTrafficStatusClassClick = { statusClass ->
+            viewModel.dispatch(InspectorAction.SelectTrafficStatusClass(statusClass))
+        },
+        onTrafficHostClick = { host -> viewModel.dispatch(InspectorAction.SelectTrafficHost(host)) },
+        // Resend reuses the existing composer path (capability gate + host allow-list), so its
+        // success/rejection toast arrives through lastCommandResult like every other command.
+        onResendTransaction = { transaction ->
+            routeState.awaitingResend = true
+            viewModel.dispatch(InspectorAction.ExecuteComposer(transaction.toComposerRequest()))
+        },
+        onEditResendTransaction = { transaction -> routeState.resendDraft = resendDraftFromTransaction(transaction) },
+        onSendResendDraft = { draft ->
+            routeState.resendDraft = draft.copy(sending = true, error = null)
+            viewModel.dispatch(InspectorAction.ExecuteComposer(draft.toComposerRequest()))
+        },
+        onCancelResendDraft = { routeState.resendDraft = null },
+        onCopyResendBody = { body -> clipboard.setText(AnnotatedString(body)) },
+        onDismissResendResult = { routeState.resendResult = null },
     )
 
 private fun toggleBookmark(
@@ -592,74 +739,32 @@ internal fun ObserveScreen(
     var filtersOpen by rememberSaveable { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     val tabUi = ui.copy(searchOpen = searchOpen, trafficFiltersOpen = filtersOpen)
+    // Composed before the tab content and the detail overlay, so their own BackHandlers win first.
+    ObserveSearchBackHandler(
+        searchOpen = searchOpen,
+        filtersOpen = filtersOpen,
+        onCloseSearch = {
+            clearObserveSearch(state.observeTab, actions)
+            searchOpenTabs = searchOpenTabs - state.observeTab.name
+        },
+        onCloseFilters = { filtersOpen = false },
+    )
     Box(modifier = modifier.background(colors.ground)) {
         Column(Modifier.fillMaxSize()) {
-            InspectorTopArea(
-                subLine = "",
-                title = state.observeTab.title(),
-                actions =
-                    buildList {
-                        add(
-                            InspectorTopAction(
-                                contentDescription = "Search",
-                                onClick = {
-                                    if (searchOpen) clearObserveSearch(state.observeTab, actions)
-                                    searchOpenTabs =
-                                        if (searchOpen) {
-                                            searchOpenTabs - state.observeTab.name
-                                        } else {
-                                            searchOpenTabs + state.observeTab.name
-                                        }
-                                },
-                                icon = { InspectorGlyphIcon(InspectorGlyph.Search, null, tint = colors.muted) },
-                            ),
-                        )
-                        if (state.observeTab == ObserveTab.TRAFFIC) {
-                            add(
-                                InspectorTopAction(
-                                    contentDescription = "Filter",
-                                    onClick = { filtersOpen = !filtersOpen },
-                                    icon = {
-                                        ObserveGlyphIcon(
-                                            ObserveGlyph.Filter,
-                                            null,
-                                            tint =
-                                                if (filtersOpen ||
-                                                    ui.trafficChip != "all"
-                                                ) {
-                                                    colors.signal
-                                                } else {
-                                                    colors.muted
-                                                },
-                                        )
-                                    },
-                                ),
-                            )
-                        }
-                        add(
-                            InspectorTopAction(
-                                contentDescription = "More options",
-                                onClick = { moreOpen = true },
-                                icon = {
-                                    Box {
-                                        DevConsoleIcon(
-                                            R.drawable.devconsole_ic_more_horizontal,
-                                            contentDescription = null,
-                                            modifier = Modifier,
-                                            tint = colors.muted,
-                                            size = 20.dp,
-                                        )
-                                        ObserveOverflowMenu(state, ui, actions, moreOpen) { moreOpen = false }
-                                    }
-                                },
-                            ),
-                        )
-                    },
+            ObserveTopArea(
+                state = state,
+                ui = ui,
+                actions = actions,
+                filtersOpen = filtersOpen,
+                moreOpen = moreOpen,
+                onToggleSearch = { searchOpenTabs = toggledObserveSearch(state, actions, searchOpen, searchOpenTabs) },
+                onToggleFilters = { filtersOpen = !filtersOpen },
+                onOpenMore = { moreOpen = true },
+                onCloseMore = { moreOpen = false },
             )
-            previousCrashedSession(state.sessions)?.let { session ->
-                PreviousRunCrashedBanner(session = session, onViewCrash = { actions.onViewPreviousCrash(session.id) })
-            }
-            val visibleTabs = ObserveTab.entries.toList()
+            ObserveRunBanners(state, actions)
+            val visibleTabs =
+                remember(state.captureCategories, state.remoteConfig.isNotEmpty()) { state.visibleObserveTabs() }
             InspectorTabRow(
                 tabs =
                     visibleTabs.map { tab ->
@@ -668,7 +773,7 @@ internal fun ObserveScreen(
             )
             Box(Modifier.weight(1f)) {
                 when {
-                    !state.available -> ObserveUnavailableNotice()
+                    !state.available -> if (ui.snapshotLoaded) ObserveUnavailableNotice() else ObserveLoadingNotice()
                     else -> ObserveTabPager(state.observeTab, visibleTabs, state, tabUi, actions)
                 }
             }
@@ -688,7 +793,178 @@ internal fun ObserveScreen(
                 onCancel = actions.onCancelMockDraft,
             )
         }
+        ui.resendDraft?.let { draft ->
+            InspectorResendSheet(
+                draft = draft,
+                onSend = actions.onSendResendDraft,
+                onDismiss = actions.onCancelResendDraft,
+            )
+        }
+        ui.resendResult?.let { result ->
+            InspectorResendResultSheet(
+                result = result,
+                onCopyBody = actions.onCopyResendBody,
+                onDismiss = actions.onDismissResendResult,
+            )
+        }
+        ObserveRemoteConfigDialogs(state, ui, actions, started = lifecycleState.isAtLeast(Lifecycle.State.STARTED))
     }
+}
+
+/**
+ * The Remote Config override editor and its clear-all confirmation; both exist only while the data
+ * source reports overrides as editable. [started] keeps the confirmation from reappearing over a
+ * backgrounded inspector.
+ */
+@Composable
+private fun ObserveRemoteConfigDialogs(
+    state: InspectorState,
+    ui: ObserveUiState,
+    actions: ObserveActions,
+    started: Boolean,
+) {
+    if (state.remoteConfigOverridesEditable) {
+        remoteConfigEditEntry(state, ui)?.let { (target, entry) ->
+            RemoteConfigOverrideDialog(
+                entry = entry,
+                onOverride = { value -> actions.onSetRemoteConfigOverride(target.providerId, target.key, value) },
+                onClear = { actions.onClearRemoteConfigOverride(target.providerId, target.key) },
+                onDismiss = actions.onDismissRemoteConfigOverride,
+            )
+        }
+    }
+    if (state.remoteConfigOverridesEditable &&
+        ui.clearAllRemoteConfigOverridesPending &&
+        started
+    ) {
+        ClearAllRemoteConfigOverridesConfirmDialog(
+            onConfirm = actions.onConfirmClearAllRemoteConfigOverrides,
+            onDismiss = actions.onCancelClearAllRemoteConfigOverrides,
+        )
+    }
+}
+
+/** One Remote Config key the override editor is open for. */
+internal data class RemoteConfigOverrideEditTarget(
+    val providerId: String,
+    val key: String,
+)
+
+/** The open override editor's provider entry, or null once the snapshot no longer carries it. */
+private fun remoteConfigEditEntry(
+    state: InspectorState,
+    ui: ObserveUiState,
+): Pair<RemoteConfigOverrideEditTarget, InspectorRemoteConfigEntryUi>? =
+    ui.remoteConfigEditTarget?.let { target ->
+        state.remoteConfig
+            .firstOrNull { it.id == target.providerId }
+            ?.entries
+            ?.firstOrNull { it.key == target.key }
+            ?.let { entry -> target to entry }
+    }
+
+/** Confirms removing every local override before the ViewModel is asked to. */
+@Composable
+private fun ClearAllRemoteConfigOverridesConfirmDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Clear all overrides?") },
+        text = { Text("Every key goes back to the value its provider fetched.") },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                modifier = Modifier.testTag("remoteConfigClearAllConfirm"),
+            ) {
+                Text("Clear all")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+/** The Observe title, live pill and top actions, split out of [ObserveScreen] to keep it simple. */
+@Composable
+private fun ObserveTopArea(
+    state: InspectorState,
+    ui: ObserveUiState,
+    actions: ObserveActions,
+    filtersOpen: Boolean,
+    moreOpen: Boolean,
+    onToggleSearch: () -> Unit,
+    onToggleFilters: () -> Unit,
+    onOpenMore: () -> Unit,
+    onCloseMore: () -> Unit,
+) {
+    val colors = DevConsoleTheme.colors
+    val live = ObserveLivePill.of(state, ui, actions)
+    InspectorTopArea(
+        subLine = "",
+        title = state.observeTab.title(),
+        liveLabel = live.label,
+        liveActive = live.active,
+        onLiveClick = live.onClick,
+        liveDescription = live.description,
+        actions =
+            buildList {
+                add(
+                    InspectorTopAction(
+                        contentDescription = "Search",
+                        onClick = onToggleSearch,
+                        icon = { InspectorGlyphIcon(InspectorGlyph.Search, null, tint = colors.muted) },
+                    ),
+                )
+                if (state.observeTab == ObserveTab.TRAFFIC) {
+                    add(
+                        InspectorTopAction(
+                            contentDescription = "Filter",
+                            onClick = onToggleFilters,
+                            icon = {
+                                ObserveGlyphIcon(
+                                    ObserveGlyph.Filter,
+                                    null,
+                                    tint = if (filtersOpen || ui.trafficChip != "all") colors.signal else colors.muted,
+                                )
+                            },
+                        ),
+                    )
+                }
+                add(
+                    InspectorTopAction(
+                        contentDescription = "More options",
+                        onClick = onOpenMore,
+                        icon = {
+                            Box {
+                                DevConsoleIcon(
+                                    R.drawable.devconsole_ic_more_horizontal,
+                                    contentDescription = null,
+                                    modifier = Modifier,
+                                    tint = colors.muted,
+                                    size = 20.dp,
+                                )
+                                ObserveOverflowMenu(state, ui, actions, moreOpen, onCloseMore)
+                            }
+                        },
+                    ),
+                )
+            },
+    )
+}
+
+/** Toggles the current tab's search open state, clearing its text on close. */
+private fun toggledObserveSearch(
+    state: InspectorState,
+    actions: ObserveActions,
+    searchOpen: Boolean,
+    openTabs: List<String>,
+): List<String> {
+    if (searchOpen) clearObserveSearch(state.observeTab, actions)
+    val tabName = state.observeTab.name
+    return if (searchOpen) openTabs - tabName else openTabs + tabName
 }
 
 private fun clearObserveSearch(
@@ -818,6 +1094,144 @@ private fun previousCrashedSession(sessions: List<InspectorSessionUi>): Inspecto
  * already know to check the Crashes tab. Tapping it jumps straight to that session's crash via
  * [ObserveActions.onViewPreviousCrash].
  */
+private const val LIVE_REFRESH_INTERVAL_MS = 2_000L
+
+/** Polls while the screen is at least STARTED and [enabled]; stops as soon as either goes away. */
+@Composable
+private fun ObserveLivePoll(
+    enabled: Boolean,
+    onTick: () -> Unit,
+) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val currentOnTick by rememberUpdatedState(onTick)
+    LaunchedEffect(enabled, lifecycleOwner) {
+        if (enabled) {
+            lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) {
+                    delay(LIVE_REFRESH_INTERVAL_MS)
+                    currentOnTick()
+                }
+            }
+        }
+    }
+}
+
+/** No polling over a past run or while a detail, mock sheet or clear confirmation is open. */
+private fun ObserveUiState.canLivePoll(state: InspectorState): Boolean {
+    val sheetOpen = mockDraft != null || resendDraft != null || resendResult != null
+    val overlayOpen = detailTarget != null || sheetOpen || clearTransactionsPending
+    return liveMode && state.selectedSessionId == null && !overlayOpen
+}
+
+/** The Observe title's live pill: toggles the poll, or returns to live while a past run is shown. */
+private data class ObserveLivePill(
+    val label: String,
+    val description: String,
+    val active: Boolean,
+    val onClick: () -> Unit,
+) {
+    companion object {
+        fun of(
+            state: InspectorState,
+            ui: ObserveUiState,
+            actions: ObserveActions,
+        ): ObserveLivePill =
+            when {
+                state.selectedSessionId != null ->
+                    ObserveLivePill(
+                        "Past run",
+                        "Viewing a past run. Back to live",
+                        false,
+                        actions.onReturnToLiveSession,
+                    )
+                // Capture pause outranks the refresh toggle: with nothing being recorded, "Live" would
+                // claim a liveness the inspector does not have. Tapping it resumes capture.
+                state.capturePaused ->
+                    ObserveLivePill("Not capturing", "Capture paused. Resume capture", false, actions.onResumeCapture)
+                ui.liveMode -> ObserveLivePill("Live", "Live updates on. Pause", true, actions.onToggleLiveMode)
+                else -> ObserveLivePill("Paused", "Live updates paused. Resume", false, actions.onToggleLiveMode)
+            }
+    }
+}
+
+/** System Back closes an open search first, then the traffic filters panel. */
+@Composable
+private fun ObserveSearchBackHandler(
+    searchOpen: Boolean,
+    filtersOpen: Boolean,
+    onCloseSearch: () -> Unit,
+    onCloseFilters: () -> Unit,
+) {
+    BackHandler(enabled = searchOpen || filtersOpen) {
+        if (searchOpen) onCloseSearch() else onCloseFilters()
+    }
+}
+
+/** Previous-run-crashed and viewing-a-past-run banners above the tab row. */
+@Composable
+private fun ObserveRunBanners(
+    state: InspectorState,
+    actions: ObserveActions,
+) {
+    if (state.capturePaused) {
+        CapturePausedBanner(onResume = actions.onResumeCapture)
+    }
+    // Hidden while a past run is open: its "View" would only re-select what is already on screen.
+    previousCrashedSession(state.sessions)?.takeIf { state.selectedSessionId == null }?.let { session ->
+        PreviousRunCrashedBanner(session = session, onViewCrash = { actions.onViewPreviousCrash(session.id) })
+    }
+    state.sessions.firstOrNull { it.id == state.selectedSessionId }?.let { session ->
+        PastRunBanner(
+            session = session,
+            onReturnToLive = actions.onReturnToLiveSession,
+            onSetPinned = { pinned -> actions.onSetSessionPinned(session.id, pinned) },
+            onDelete = { actions.onDeleteSession(session.id) },
+        )
+    }
+}
+
+/** The capture [target] points at, looked up cheaply so the detail can be memoized on it. */
+private fun detailSubject(
+    target: ObserveDetailTarget,
+    state: InspectorState,
+    recentFrames: List<Pair<InspectorSocketUi, InspectorSocketFrameUi>>,
+): Any? =
+    when (target) {
+        is ObserveDetailTarget.Net -> state.transactions.find { it.id == target.transactionId } to state.mockRules
+        is ObserveDetailTarget.Frame ->
+            recentFrames.firstOrNull { (socket, frame) ->
+                socket.id == target.socketId && frame.timestampEpochMs == target.timestampEpochMs
+            }
+        is ObserveDetailTarget.Push ->
+            state.pushEvents.firstOrNull {
+                it.provider == target.provider && it.receivedAtEpochMs == target.receivedAtEpochMs
+            }
+        is ObserveDetailTarget.Log -> state.logs.find { it.id == target.logId }
+        is ObserveDetailTarget.Crash -> state.crashes.find { it.id == target.crashId }
+        is ObserveDetailTarget.RemoteConfigKey -> state.remoteConfig.firstOrNull { it.id == target.providerId }
+    }
+
+/**
+ * Shown while live capture is paused, so an empty list is never mistaken for a quiet app. Shaped
+ * like [PastRunBanner]: a tagged panel row whose trailing action is the way back.
+ */
+@Composable
+private fun CapturePausedBanner(onResume: () -> Unit) {
+    val colors = DevConsoleTheme.colors
+    TonalListRow(
+        leadText = "PAUSED",
+        leadColor = colors.ink,
+        leadContainerColor = colors.panel,
+        title = "Capture paused",
+        subtitle = "New requests, sockets, logs and push are not recorded",
+        trailValue = "Resume",
+        trailValueColor = colors.signal,
+        containerColor = colors.panel,
+        modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 8.dp),
+        onClick = onResume,
+    )
+}
+
 @Composable
 private fun PreviousRunCrashedBanner(
     session: InspectorSessionUi,
@@ -825,7 +1239,7 @@ private fun PreviousRunCrashedBanner(
 ) {
     val colors = DevConsoleTheme.colors
     TonalListRow(
-        leadText = "CRA",
+        leadText = "CRASH",
         leadColor = colors.error,
         leadContainerColor = colors.errorSoft,
         title = "Previous run crashed",
@@ -836,6 +1250,16 @@ private fun PreviousRunCrashedBanner(
         modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp),
         onClick = onViewCrash,
     )
+}
+
+@Composable
+private fun ObserveLoadingNotice() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(
+            modifier = Modifier.semantics { contentDescription = "Loading captures" },
+            color = DevConsoleTheme.colors.signal,
+        )
+    }
 }
 
 @Composable
@@ -920,6 +1344,19 @@ private fun resolveObserveDetail(
                         },
                         onUnmockThisResponse = actions.onUnmockTransaction,
                         mockDiff = netMockDiff,
+                        // A retained past run is browsed, not driven: only a live capture can be
+                        // replayed through the composer. Disabled reasons are shown on the buttons.
+                        resendActions =
+                            if (state.selectedSessionId == null) {
+                                netResendActions(
+                                    transaction = transaction,
+                                    requestExecutionEnabled = state.capabilities.requestExecution,
+                                    onResend = { actions.onResendTransaction(transaction) },
+                                    onEditResend = { actions.onEditResendTransaction(transaction) },
+                                )
+                            } else {
+                                null
+                            },
                     )
                 target.transactionId to content
             }
@@ -1002,7 +1439,24 @@ private fun ObserveDetailOverlay(
     val colors = DevConsoleTheme.colors
     val recentFrames = rememberRecentFrames(state.sockets)
     val netMockDiff = rememberNetMockDiff(target, state)
-    val resolved = resolveObserveDetail(target, state, ui, actions, colors, recentFrames, netMockDiff)
+    // Keyed on the resolved capture itself (data-class equality), not the whole snapshot: a live
+    // refresh that leaves this capture unchanged must not re-format its bodies.
+    val subject = detailSubject(target, state, recentFrames)
+    val resolved =
+        remember(
+            target,
+            subject,
+            ui.flaggedTransactionIds,
+            ui.flaggedCrashIds,
+            ui.bookmarkedLogIds,
+            colors,
+            netMockDiff,
+            // Resend availability is derived from these two, not from the capture itself.
+            state.selectedSessionId,
+            state.capabilities.requestExecution,
+        ) {
+            resolveObserveDetail(target, state, ui, actions, colors, recentFrames, netMockDiff)
+        }
     if (resolved == null) {
         // The capture aged out of the snapshot while its detail was open. Close explicitly:
         // rendering nothing while `detailTarget` stays set would drop BackHandler from the
@@ -1013,16 +1467,54 @@ private fun ObserveDetailOverlay(
         }
     } else {
         val (resetKey, content) = resolved
-        ObserveDetailFromContent(resetKey, content, actions.onCloseDetail)
+        val composerHost = frameComposerHost(target, state, recentFrames, actions)
+        ObserveDetailFromContent(resetKey, content, actions.onCloseDetail, composerHost)
     }
 }
+
+/**
+ * The send composer for an open socket frame's connection, or null when that connection has no
+ * write protocol (or the target is not a socket frame). The Sockets tab is a flat frame list with no
+ * single-connection selection, so the frame detail is where one connection is in view.
+ */
+private fun frameComposerHost(
+    target: ObserveDetailTarget,
+    state: InspectorState,
+    recentFrames: List<Pair<InspectorSocketUi, InspectorSocketFrameUi>>,
+    actions: ObserveActions,
+): SocketComposerHost? =
+    (target as? ObserveDetailTarget.Frame)?.let { frameTarget ->
+        recentFrames
+            .firstOrNull { (socket, frame) ->
+                socket.id == frameTarget.socketId && frame.timestampEpochMs == frameTarget.timestampEpochMs
+            }?.let { (socket, frame) ->
+                state.socketSendProtocols[socket.id]?.let { protocol ->
+                    SocketComposerHost(
+                        connectionId = socket.id,
+                        protocol = protocol,
+                        initialTopic = frame.topic,
+                        lastResult = state.lastCommandResult,
+                        onSend = { text, topic, qos, retained ->
+                            actions.onSendSocketFrame(socket.id, text, topic, qos, retained)
+                        },
+                    )
+                }
+            }
+    }
 
 @Composable
 private fun ObserveDetailFromContent(
     resetKey: Any,
     content: ObserveDetailContent,
     onBack: () -> Unit,
+    socketComposer: SocketComposerHost? = null,
 ) {
+    val composerContent: (@Composable () -> Unit)? =
+        if (socketComposer != null) {
+            { SocketSendComposer(socketComposer) }
+        } else {
+            null
+        }
     InspectorObserveDetailScreen(
         resetKey = resetKey,
         header = content.header,
@@ -1032,6 +1524,7 @@ private fun ObserveDetailFromContent(
         onBack = onBack,
         searchPlaceholder = content.searchPlaceholder,
         searchOptions = content.searchOptions,
+        trailingContent = composerContent,
     )
 }
 

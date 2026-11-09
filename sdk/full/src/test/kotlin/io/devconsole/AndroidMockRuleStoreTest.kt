@@ -20,6 +20,7 @@ class AndroidMockRuleStoreTest {
     private val application: Application = ApplicationProvider.getApplicationContext()
     private val preferencesName = "mock-rule-test-${UUID.randomUUID()}"
 
+    @Suppress("LongMethod") // One end-to-end scenario; splitting it would hide the ordering it checks.
     @Test
     fun `round trips every supported durable mock action and compatibility metadata`() {
         val store = AndroidMockRuleStore(application, preferencesName)
@@ -39,6 +40,25 @@ class AndroidMockRuleStoreTest {
                 MockAction.ConnectionFailure("offline"),
                 MockAction.Timeout(100),
                 MockAction.BodyReplacement("replacement"),
+                MockAction.Sequence(
+                    steps =
+                        listOf(
+                            MockAction.StaticResponse(503, "retry"),
+                            MockAction.StaticResponse(200, "ok"),
+                        ),
+                    loop = true,
+                ),
+                MockAction.MapRemote(
+                    scheme = "https",
+                    host = "staging.api.test",
+                    port = 8443,
+                    path = "/v2/orders",
+                ),
+                MockAction.Throttle(
+                    bytesPerSecond = 65_536,
+                    latencyMs = 50,
+                    next = MockAction.StaticResponse(200, "throttled"),
+                ),
                 MockAction.Passthrough,
             )
         val rules =

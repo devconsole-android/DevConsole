@@ -76,6 +76,8 @@ public final class io/devconsole/network/CapturedRequest {
 	public final fun getUrl ()Lio/devconsole/network/NetworkUrl;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+	public final fun withAttachmentId (Ljava/lang/String;)Lio/devconsole/network/CapturedRequest;
+	public final fun withMetadata (Lio/devconsole/network/CapturedRequestMetadata;)Lio/devconsole/network/CapturedRequest;
 }
 
 public final class io/devconsole/network/CapturedRequestMetadata {
@@ -115,6 +117,8 @@ public final class io/devconsole/network/CapturedResponse {
 	public final fun getStatusCode ()I
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+	public final fun withAttachmentId (Ljava/lang/String;)Lio/devconsole/network/CapturedResponse;
+	public final fun withMetadata (Lio/devconsole/network/CapturedResponseMetadata;)Lio/devconsole/network/CapturedResponse;
 }
 
 public final class io/devconsole/network/CapturedResponseMetadata {
@@ -133,6 +137,39 @@ public final class io/devconsole/network/CapturedResponseMetadata {
 	public final fun getTimings ()Lio/devconsole/network/NetworkTimingPhases;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/network/EndpointLatency {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIJJJJ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun component6 ()J
+	public final fun component7 ()J
+	public final fun component8 ()J
+	public final fun component9 ()J
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIJJJJ)Lio/devconsole/network/EndpointLatency;
+	public static synthetic fun copy$default (Lio/devconsole/network/EndpointLatency;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIJJJJILjava/lang/Object;)Lio/devconsole/network/EndpointLatency;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCount ()I
+	public final fun getErrorCount ()I
+	public final fun getHost ()Ljava/lang/String;
+	public final fun getMaxMs ()J
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getP50Ms ()J
+	public final fun getP95Ms ()J
+	public final fun getP99Ms ()J
+	public final fun getPathTemplate ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/devconsole/network/EndpointLatencyStats {
+	public static final field INSTANCE Lio/devconsole/network/EndpointLatencyStats;
+	public final fun from (Ljava/util/List;I)Ljava/util/List;
+	public static synthetic fun from$default (Lio/devconsole/network/EndpointLatencyStats;Ljava/util/List;IILjava/lang/Object;)Ljava/util/List;
 }
 
 public abstract interface class io/devconsole/network/ExportSelection {
@@ -509,19 +546,22 @@ public final class io/devconsole/network/NetworkTransactionPage {
 public final class io/devconsole/network/NetworkTransactionQuery {
 	public static final field Companion Lio/devconsole/network/NetworkTransactionQuery$Companion;
 	public static final field DEFAULT_PAGE_LIMIT I
+	public static final field MAX_BODY_QUERY_LENGTH I
 	public static final field MAX_PAGE_LIMIT I
 	public fun <init> ()V
-	public fun <init> (ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;)V
-	public synthetic fun <init> (ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()I
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Ljava/util/Set;
 	public final fun component4 ()Ljava/util/Set;
 	public final fun component5 ()Ljava/util/Set;
 	public final fun component6 ()Ljava/lang/String;
-	public final fun copy (ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;)Lio/devconsole/network/NetworkTransactionQuery;
-	public static synthetic fun copy$default (Lio/devconsole/network/NetworkTransactionQuery;ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/network/NetworkTransactionQuery;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun copy (ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/lang/String;)Lio/devconsole/network/NetworkTransactionQuery;
+	public static synthetic fun copy$default (Lio/devconsole/network/NetworkTransactionQuery;ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/devconsole/network/NetworkTransactionQuery;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBodyQuery ()Ljava/lang/String;
 	public final fun getCorrelationId ()Ljava/lang/String;
 	public final fun getCursor ()Ljava/lang/String;
 	public final fun getFilters ()Lio/devconsole/network/NetworkTransactionFilters;

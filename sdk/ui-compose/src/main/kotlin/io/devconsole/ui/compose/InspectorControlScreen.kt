@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
@@ -39,6 +40,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -64,6 +68,111 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.devconsole.api.CaptureCategory
 import kotlinx.coroutines.launch
 
+private val MockRuleEditorTargetSaver: Saver<MockRuleEditorTarget?, Any> =
+    listSaver(
+        save = { target ->
+            when (target) {
+                null -> listOf("closed")
+                is MockRuleEditorTarget.New ->
+                    listOf(
+                        "new",
+                        target.draft.id,
+                        target.draft.method,
+                        target.draft.pathPattern,
+                        target.draft.actionLabel,
+                        target.draft.statusCode,
+                        target.draft.body,
+                        target.draft.headers.toMockRuleHeaderLines(),
+                        target.draft.scope,
+                        target.draft.host,
+                        target.draft.scheme,
+                        target.draft.priority,
+                        target.draft.enabled,
+                        target.draft.delayMs,
+                        target.draft.hitCount,
+                        target.draft.lastHitEpochMs,
+                        target.draft.sourceBodySnapshot,
+                        target.draft.responseBodyTruncated,
+                        target.prefillNote,
+                        target.sourceKey,
+                    )
+                is MockRuleEditorTarget.Edit ->
+                    listOf(
+                        "edit",
+                        target.rule.id,
+                        target.rule.method,
+                        target.rule.pathPattern,
+                        target.rule.actionLabel,
+                        target.rule.statusCode,
+                        target.rule.body,
+                        target.rule.headers.toMockRuleHeaderLines(),
+                        target.rule.scope,
+                        target.rule.host,
+                        target.rule.scheme,
+                        target.rule.priority,
+                        target.rule.enabled,
+                        target.rule.delayMs,
+                        target.rule.hitCount,
+                        target.rule.lastHitEpochMs,
+                        target.rule.sourceBodySnapshot,
+                        target.rule.responseBodyTruncated,
+                    )
+            }
+        },
+        restore = { saved ->
+            when (saved[0]) {
+                "new" ->
+                    MockRuleEditorTarget.New(
+                        draft =
+                            InspectorMockRuleUi(
+                                id = saved[1] as String,
+                                method = saved[2] as String?,
+                                pathPattern = saved[3] as String,
+                                actionLabel = saved[4] as String,
+                                statusCode = saved[5] as Int,
+                                body = saved[6] as String,
+                                headers = parseMockRuleHeaderLines(saved[7] as String).headers,
+                                scope = saved[8] as String,
+                                host = saved[9] as String?,
+                                scheme = saved[10] as String?,
+                                priority = saved[11] as Int,
+                                enabled = saved[12] as Boolean,
+                                delayMs = saved[13] as Long?,
+                                hitCount = saved[14] as Long,
+                                lastHitEpochMs = saved[15] as Long?,
+                                sourceBodySnapshot = saved[16] as String?,
+                                responseBodyTruncated = saved[17] as Boolean,
+                            ),
+                        prefillNote = saved[18] as String?,
+                        sourceKey = saved[19] as String,
+                    )
+                "edit" ->
+                    MockRuleEditorTarget.Edit(
+                        InspectorMockRuleUi(
+                            id = saved[1] as String,
+                            method = saved[2] as String?,
+                            pathPattern = saved[3] as String,
+                            actionLabel = saved[4] as String,
+                            statusCode = saved[5] as Int,
+                            body = saved[6] as String,
+                            headers = parseMockRuleHeaderLines(saved[7] as String).headers,
+                            scope = saved[8] as String,
+                            host = saved[9] as String?,
+                            scheme = saved[10] as String?,
+                            priority = saved[11] as Int,
+                            enabled = saved[12] as Boolean,
+                            delayMs = saved[13] as Long?,
+                            hitCount = saved[14] as Long,
+                            lastHitEpochMs = saved[15] as Long?,
+                            sourceBodySnapshot = saved[16] as String?,
+                            responseBodyTruncated = saved[17] as Boolean,
+                        ),
+                    )
+                else -> null
+            }
+        },
+    )
+
 /**
  * Stateful entry point wired into the CONTROL destination. Theme is owned by [DevConsoleWorkspace]
  * and reaches this screen as ambient [DevConsoleTheme.colors] -- [onToggleTheme] is the only theme
@@ -81,8 +190,11 @@ internal fun ControlRoute(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var heroCollapsed by rememberSaveable { mutableStateOf(true) } // starts collapsed
-    var editorTarget by remember { mutableStateOf<MockRuleEditorTarget?>(null) }
+    var editorTarget by rememberSaveable(stateSaver = MockRuleEditorTargetSaver) {
+        mutableStateOf<MockRuleEditorTarget?>(null)
+    }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+    var editingFlag by remember { mutableStateOf<InspectorFeatureFlagUi?>(null) }
 
     LifecycleStartEffect(Unit) {
         viewModel.dispatch(InspectorAction.Refresh)
@@ -111,11 +223,25 @@ internal fun ControlRoute(
             heroCollapsed = heroCollapsed,
             onToggleHero = { heroCollapsed = !heroCollapsed },
             onToggleTheme = onToggleTheme,
-            onToggleMockRule = { id, enabled -> viewModel.dispatch(InspectorAction.SetMockRuleEnabled(id, enabled)) },
-            onNewMockRule = { editorTarget = MockRuleEditorTarget.New() },
-            onEditMockRule = { rule -> editorTarget = editMockRuleTargetOrToast(rule, scope, snackbarHostState) },
+            onToggleMockRule = { id, enabled ->
+                if (state.capabilities.mocks) viewModel.dispatch(InspectorAction.SetMockRuleEnabled(id, enabled))
+            },
+            onNewMockRule = { if (state.capabilities.mocks) editorTarget = MockRuleEditorTarget.New() },
+            onEditMockRule = { rule ->
+                if (state.capabilities.mocks) editorTarget = editMockRuleTargetOrToast(rule, scope, snackbarHostState)
+            },
             onDeleteMockRule = { id -> pendingDeleteId = id },
-            onToggleFlag = { flag -> toggleControlFlag(flag, viewModel, scope, snackbarHostState) },
+            onToggleFlag = { flag ->
+                applyFlagTap(
+                    flag = flag,
+                    featureFlagsEnabled = state.capabilities.featureFlags,
+                    onLocked = {
+                        scope.launch { snackbarHostState.showSnackbar("${flag.key} is locked by the host") }
+                    },
+                    onSetValue = { key, value -> viewModel.dispatch(InspectorAction.SetFeatureFlag(key, value)) },
+                    onEditNonBoolean = { editingFlag = it },
+                )
+            },
             modifier = Modifier.fillMaxSize(),
         )
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp))
@@ -147,6 +273,56 @@ internal fun ControlRoute(
             onDismiss = { pendingDeleteId = null },
         )
     }
+    FeatureFlagEditingDialog(
+        flag = editingFlag,
+        enabled = lifecycleState.isAtLeast(Lifecycle.State.STARTED),
+        onSetValue = { key, value -> viewModel.dispatch(InspectorAction.SetFeatureFlag(key, value)) },
+        onDismiss = { editingFlag = null },
+    )
+}
+
+/**
+ * Routes a feature-flag row tap: a boolean flips in place, any other mutable type opens its editor
+ * (see [FeatureFlagEditingDialog]), and a host-locked flag only reports why it cannot change. Kept
+ * out of [ControlRoute]'s body so that composable stays inside the complexity budget.
+ */
+private fun applyFlagTap(
+    flag: InspectorFeatureFlagUi,
+    featureFlagsEnabled: Boolean,
+    onLocked: () -> Unit,
+    onSetValue: (String, String) -> Unit,
+    onEditNonBoolean: (InspectorFeatureFlagUi) -> Unit,
+) {
+    if (!featureFlagsEnabled) return
+    when {
+        !flag.mutable -> onLocked()
+        flag.type == "BOOLEAN" -> onSetValue(flag.key, if (flag.value == "true") "false" else "true")
+        else -> onEditNonBoolean(flag)
+    }
+}
+
+/**
+ * Routes the flag being edited to the matching dialog: a radio list when the flag names its
+ * [InspectorFeatureFlagUi.allowedValues], a typed field otherwise. Both confirm through the same
+ * [InspectorAction.SetFeatureFlag] path a boolean toggle already uses.
+ */
+@Composable
+private fun FeatureFlagEditingDialog(
+    flag: InspectorFeatureFlagUi?,
+    enabled: Boolean,
+    onSetValue: (String, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    if (flag == null || !enabled) return
+    val confirm: (String) -> Unit = { value ->
+        onSetValue(flag.key, value)
+        onDismiss()
+    }
+    if (flag.allowedValues.isNotEmpty()) {
+        FeatureFlagChoiceDialog(flag = flag, onConfirm = confirm, onDismiss = onDismiss)
+    } else {
+        FeatureFlagTextDialog(flag = flag, onConfirm = confirm, onDismiss = onDismiss)
+    }
 }
 
 /**
@@ -167,26 +343,6 @@ private fun editMockRuleTargetOrToast(
         null
     }
 
-/** Booleans toggle in place; multi-value flags have no on-device editor. */
-private fun toggleControlFlag(
-    flag: InspectorFeatureFlagUi,
-    viewModel: InspectorViewModel,
-    scope: kotlinx.coroutines.CoroutineScope,
-    snackbarHostState: SnackbarHostState,
-) {
-    when {
-        !flag.mutable -> scope.launch { snackbarHostState.showSnackbar("${flag.key} is locked by the host") }
-        flag.type == "BOOLEAN" -> {
-            val next = if (flag.value == "true") "false" else "true"
-            viewModel.dispatch(InspectorAction.SetFeatureFlag(flag.key, next))
-        }
-        else ->
-            scope.launch {
-                snackbarHostState.showSnackbar("${flag.key} has more than two values — edit it on the dashboard")
-            }
-    }
-}
-
 /**
  * Stateless, previewable Control surface with grouped mock rules and feature flags.
  */
@@ -205,7 +361,6 @@ internal fun ControlScreen(
     modifier: Modifier = Modifier,
 ) {
     val colors = DevConsoleTheme.colors
-    val switchColors = controlSwitchColors(colors)
     Column(modifier = modifier.fillMaxSize().background(colors.ground)) {
         InspectorTopArea(
             subLine = "",
@@ -220,37 +375,21 @@ internal fun ControlScreen(
             // at init, the section (header, New-rule affordance and rows) does not exist at all,
             // rather than rendering with a permanently-empty/disabled list.
             if (state.captures(CaptureCategory.MOCKS)) {
-                item(contentType = "mock_rules_header") { MockRulesHeader(onNewMockRule, colors) }
-                if (state.mockRules.isEmpty()) {
-                    item(contentType = "mock_rules_empty") { MockRulesEmptyNote(colors) }
-                } else {
-                    itemsIndexed(
-                        items = state.mockRules,
-                        key = { _, rule -> rule.id },
-                        contentType = { _, _ -> "mock_rule" },
-                    ) { index, rule ->
-                        Column(Modifier.groupedPanelItem(GroupPosition.of(index, state.mockRules.size))) {
-                            MockRuleRow(rule, onToggleMockRule, onEditMockRule, onDeleteMockRule, colors, switchColors)
-                        }
-                    }
-                }
-                item(contentType = "mock_rules_spacer") { Spacer(Modifier.height(8.dp)) }
+                mockRulesItems(state, onNewMockRule, onToggleMockRule, onEditMockRule, onDeleteMockRule)
             }
             // Flags belong to the STATE category; `state.featureFlags` is already emptied by the
             // data source when STATE is off, but the explicit gate keeps this defensive against a
             // directly-navigated route the way DATA's sections are (see InspectorDataScreen).
-            if (state.captures(CaptureCategory.STATE) && state.featureFlags.isNotEmpty()) {
-                item(contentType = "feature_flags_header") { GroupLabel("Feature flags") }
-                itemsIndexed(
-                    items = state.featureFlags,
-                    key = { _, flag -> flag.key },
-                    contentType = { _, _ -> "feature_flag" },
-                ) { index, flag ->
-                    Column(Modifier.groupedPanelItem(GroupPosition.of(index, state.featureFlags.size))) {
-                        FlagRow(flag, colors, switchColors) { onToggleFlag(flag) }
-                    }
+            if (shouldShowFeatureFlags(state)) {
+                featureFlagItems(state, onToggleFlag)
+            }
+            if (isControlEmpty(state)) {
+                item(contentType = "control_empty") {
+                    InspectorEmptyState(
+                        EmptySpot.Control,
+                        controlEmptyMessage(),
+                    )
                 }
-                item(contentType = "feature_flags_spacer") { Spacer(Modifier.height(8.dp)) }
             }
             // Remote Config used to render here, beside flags. It moved to the Observe surface's
             // Config tab (see RemoteConfigTabContent): it is read-only, so nothing on it was ever
@@ -260,18 +399,105 @@ internal fun ControlScreen(
     }
 }
 
+private fun LazyListScope.mockRulesItems(
+    state: InspectorState,
+    onNewMockRule: () -> Unit,
+    onToggleMockRule: (String, Boolean) -> Unit,
+    onEditMockRule: (InspectorMockRuleUi) -> Unit,
+    onDeleteMockRule: (String) -> Unit,
+) {
+    item(contentType = "mock_rules_header") {
+        MockRulesHeader(onNewMockRule, DevConsoleTheme.colors, enabled = state.capabilities.mocks)
+    }
+    if (!state.capabilities.mocks) {
+        item(contentType = "mock_rules_disabled") {
+            Text(
+                "Mock editing is disabled by the host.",
+                color = DevConsoleTheme.colors.muted,
+                modifier = Modifier.padding(16.dp),
+            )
+        }
+    } else if (state.mockRules.isEmpty()) {
+        item(contentType = "mock_rules_empty") { MockRulesEmptyNote(DevConsoleTheme.colors) }
+    } else {
+        itemsIndexed(
+            state.mockRules,
+            key = { _, rule -> rule.id },
+            contentType = { _, _ -> "mock_rule" },
+        ) { index, rule ->
+            val colors = DevConsoleTheme.colors
+            Column(Modifier.groupedPanelItem(GroupPosition.of(index, state.mockRules.size))) {
+                MockRuleRow(
+                    rule,
+                    onToggleMockRule,
+                    onEditMockRule,
+                    onDeleteMockRule,
+                    colors,
+                    controlSwitchColors(colors),
+                    true,
+                )
+            }
+        }
+    }
+    item(contentType = "mock_rules_spacer") { Spacer(Modifier.height(8.dp)) }
+}
+
+private fun LazyListScope.featureFlagItems(
+    state: InspectorState,
+    onToggleFlag: (InspectorFeatureFlagUi) -> Unit,
+) {
+    item(contentType = "feature_flags_header") { GroupLabel("Feature flags") }
+    if (!state.capabilities.featureFlags) {
+        item(contentType = "feature_flags_disabled") {
+            Text(
+                "Feature flag editing is disabled by the host.",
+                color = DevConsoleTheme.colors.muted,
+                modifier = Modifier.padding(16.dp),
+            )
+        }
+    }
+    if (state.capabilities.featureFlags) {
+        itemsIndexed(
+            state.featureFlags,
+            key = { _, flag -> flag.key },
+            contentType = { _, _ -> "feature_flag" },
+        ) { index, flag ->
+            val colors = DevConsoleTheme.colors
+            Column(Modifier.groupedPanelItem(GroupPosition.of(index, state.featureFlags.size))) {
+                FlagRow(flag, colors, controlSwitchColors(colors), enabled = true) { onToggleFlag(flag) }
+            }
+        }
+    }
+    item(contentType = "feature_flags_spacer") { Spacer(Modifier.height(8.dp)) }
+}
+
+private fun isControlEmpty(state: InspectorState): Boolean =
+    state.mockRules.isEmpty() &&
+        state.featureFlags.isEmpty() &&
+        (!state.captures(CaptureCategory.MOCKS) || !state.capabilities.mocks) &&
+        (!state.captures(CaptureCategory.STATE) || !state.capabilities.featureFlags)
+
+private fun shouldShowFeatureFlags(state: InspectorState): Boolean =
+    state.captures(CaptureCategory.STATE) &&
+        (state.featureFlags.isNotEmpty() || !state.capabilities.featureFlags)
+
+private fun controlEmptyMessage(): String =
+    "No mock rules or feature flags are available. Enable MOCKS and STATE capture categories and " +
+        "editing capabilities in the host app."
+
 /** "Mock rules" group label plus the New rule affordance. */
 @Composable
 private fun MockRulesHeader(
     onNewRule: () -> Unit,
     colors: DevConsoleColors,
+    enabled: Boolean,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         GroupLabel("Mock rules", modifier = Modifier.weight(1f))
-        IconButton(onClick = onNewRule, modifier = Modifier.padding(end = 12.dp)) {
+        IconButton(onClick = onNewRule, enabled = enabled, modifier = Modifier.padding(end = 12.dp)) {
             DevConsoleIcon(R.drawable.devconsole_ic_composer, "New rule", Modifier, colors.muted, 22.dp)
         }
     }
@@ -295,41 +521,14 @@ private fun MockRuleRow(
     onDelete: (String) -> Unit,
     colors: DevConsoleColors,
     switchColors: SwitchColors,
+    enabled: Boolean,
 ) {
-    val subtitleText =
-        remember(rule) {
-            val match =
-                buildString {
-                    append("returns ")
-                    append(rule.statusCode)
-                    // "Static response (200)" only repeats the status already printed above.
-                    if (rule.actionLabel.isNotBlank() && !rule.actionLabel.startsWith("Static response")) {
-                        append(" · ${rule.actionLabel}")
-                    }
-                    if (rule.hitCount > 0) {
-                        append(" · ${rule.hitCount} hit${if (rule.hitCount == 1L) "" else "s"}")
-                        rule.lastHitEpochMs?.let { append(" · ${formatRelativeHitTime(it)}") }
-                    }
-                }
-            buildAnnotatedString {
-                append("returns ")
-                withStyle(
-                    SpanStyle(
-                        color =
-                            when (rule.statusCode) {
-                                in 500..599 -> colors.error
-                                in 400..499 -> colors.warn
-                                else -> colors.muted
-                            },
-                    ),
-                ) { append(rule.statusCode.toString()) }
-                append(match.substringAfter("returns ${rule.statusCode}"))
-            }
-        }
+    val subtitleText = remember(rule) { mockRuleSubtitle(rule, colors) }
     Row(
         Modifier
             .fillMaxWidth()
             .combinedClickable(
+                enabled = enabled,
                 onClick = { onEdit(rule) },
                 onLongClick = { onDelete(rule.id) },
                 onLongClickLabel = "Delete mock rule",
@@ -368,6 +567,7 @@ private fun MockRuleRow(
             checked = rule.enabled,
             onCheckedChange = { checked -> onToggle(rule.id, checked) },
             colors = switchColors,
+            enabled = enabled,
             modifier =
                 Modifier.semantics {
                     contentDescription = "${if (rule.enabled) "Disable" else "Enable"} mock rule ${rule.id}"
@@ -442,20 +642,24 @@ private fun FlagRow(
     flag: InspectorFeatureFlagUi,
     colors: DevConsoleColors,
     switchColors: SwitchColors,
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
     val isBool = flag.type == "BOOLEAN"
     val isOn = flag.value == "true"
+    val subtitle =
+        listOfNotNull(
+            if (!isBool) flag.value else null,
+            if (flag.isOverridden) "overridden" else null,
+            flag.description.takeIf { it.isNotBlank() },
+            if (!flag.mutable) "locked" else null,
+        ).joinToString(" · ")
     TonalListRow(
         leadText = "",
         leadColor = colors.muted,
         leadContainerColor = colors.panel,
         title = flag.key,
-        subtitle =
-            listOfNotNull(
-                if (!isBool) flag.value else null,
-                if (flag.isOverridden) "overridden" else null,
-            ).joinToString(" · "),
+        subtitle = subtitle,
         trailValue = "",
         trailContent = {
             if (isBool) {
@@ -463,12 +667,14 @@ private fun FlagRow(
                     checked = isOn,
                     onCheckedChange = { onClick() },
                     colors = switchColors,
+                    enabled = enabled && flag.mutable && isBool,
                     modifier = Modifier.semantics { contentDescription = "Toggle feature flag ${flag.key}" },
                 )
             }
         },
         mergeDescendants = false,
-        onClick = onClick,
+        // Both shapes are editable: a boolean toggles in place, everything else opens its editor.
+        onClick = { if (enabled && flag.mutable) onClick() },
     )
 }
 
@@ -540,3 +746,61 @@ private fun ControlScreenPreview() {
         )
     }
 }
+
+/** `800` -> `800 ms`, `1200` -> `1.2 s`, `3000` -> `3 s`. */
+internal fun formatMockDelay(delayMs: Long): String =
+    when {
+        delayMs < 1_000 -> "$delayMs ms"
+        delayMs % 1_000 == 0L -> "${delayMs / 1_000} s"
+        else -> "${delayMs / 1_000}.${(delayMs % 1_000).toString().padStart(3, '0').trimEnd('0')} s"
+    }
+
+/**
+ * "if debug=1", "if debug=1 +2" or "if body matches" -- why a rule that shares a path with another
+ * only sometimes applies. `null` when the rule matches on method and path alone.
+ */
+internal fun mockRuleConditionHint(rule: InspectorMockRuleUi): String? {
+    val conditions =
+        rule.queryPredicates.map { (key, value) -> "$key=$value" } +
+            rule.headerPredicates.map { (key, value) -> "$key: $value" } +
+            listOfNotNull(rule.bodyPredicate?.takeIf(String::isNotBlank)?.let { "body matches" })
+    val first = conditions.firstOrNull() ?: return null
+    return "if $first" + if (conditions.size > 1) " +${conditions.size - 1}" else ""
+}
+
+/**
+ * "returns 200 after 1.2 s · 3 hits · 2m ago" for a static response; a fault or traffic-shaping rule never
+ * returns its own status, so it leads with its action ("Timeout (3000ms) · 1 hit") instead.
+ */
+private fun mockRuleSubtitle(
+    rule: InspectorMockRuleUi,
+    colors: DevConsoleColors,
+): AnnotatedString =
+    buildAnnotatedString {
+        if (rule.actionType == InspectorMockActionType.STATIC) {
+            append("returns ")
+            val statusColor =
+                when (rule.statusCode) {
+                    in 500..599 -> colors.error
+                    in 400..499 -> colors.warn
+                    else -> colors.muted
+                }
+            withStyle(SpanStyle(color = statusColor)) { append(rule.statusCode.toString()) }
+            // The action label ("Static response (200)", "Delay (1200ms) → Static response (200)") only
+            // repeats what is already printed; the delay is the one extra fact worth a few characters.
+            rule.delayMs?.takeIf { it > 0 }?.let { append(" after ${formatMockDelay(it)}") }
+        } else {
+            append(
+                rule.actionLabel.ifBlank {
+                    rule.actionType.name
+                        .lowercase()
+                        .replace('_', ' ')
+                },
+            )
+        }
+        mockRuleConditionHint(rule)?.let { append(" · $it") }
+        if (rule.hitCount > 0) {
+            append(" · ${rule.hitCount} hit${if (rule.hitCount == 1L) "" else "s"}")
+            rule.lastHitEpochMs?.let { append(" · ${formatRelativeHitTime(it)}") }
+        }
+    }

@@ -1,6 +1,5 @@
 public final class io/devconsole/export/EventExportWriter {
 	public static final field ATTACHMENT_NAME_HASH_CHARS I
-	public static final field ZIP_ENTRY_OVERHEAD_BYTES J
 	public fun <init> ()V
 	public fun <init> (Lio/devconsole/security/RedactionEngine;)V
 	public synthetic fun <init> (Lio/devconsole/security/RedactionEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -54,6 +53,21 @@ public final class io/devconsole/export/EvidenceBundleContent {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/devconsole/export/ExportAttachmentSource {
+	public fun <init> (JLjava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public final fun component1 ()J
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lkotlin/jvm/functions/Function1;
+	public final fun copy (JLjava/lang/String;Lkotlin/jvm/functions/Function1;)Lio/devconsole/export/ExportAttachmentSource;
+	public static synthetic fun copy$default (Lio/devconsole/export/ExportAttachmentSource;JLjava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lio/devconsole/export/ExportAttachmentSource;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getByteCount ()J
+	public final fun getMimeType ()Ljava/lang/String;
+	public final fun getOpen ()Lkotlin/jvm/functions/Function1;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class io/devconsole/export/ExportRequest {
 	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/io/File;J)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/io/File;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -76,6 +90,7 @@ public final class io/devconsole/export/ExportRequest {
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 	public final fun withAnnotations (Ljava/util/Map;)Lio/devconsole/export/ExportRequest;
+	public final fun withAttachmentSources (Ljava/util/Map;)Lio/devconsole/export/ExportRequest;
 	public final fun withAttachments (Ljava/util/Map;)Lio/devconsole/export/ExportRequest;
 	public final fun withEvidenceBundle (Lio/devconsole/export/EvidenceBundleContent;)Lio/devconsole/export/ExportRequest;
 	public final fun withMetadataOnly (Z)Lio/devconsole/export/ExportRequest;

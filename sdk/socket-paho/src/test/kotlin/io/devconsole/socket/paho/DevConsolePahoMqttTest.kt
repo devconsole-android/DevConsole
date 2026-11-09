@@ -12,6 +12,8 @@ import io.devconsole.socket.SocketDirection
 import io.devconsole.socket.SocketPayload
 import io.devconsole.socket.SocketProtocol
 import io.devconsole.socket.SocketRecorder
+import io.devconsole.socket.SocketSendRequest
+import io.devconsole.socket.SocketSendResult
 import org.eclipse.paho.client.mqttv3.DisconnectedBufferOptions
 import org.eclipse.paho.client.mqttv3.IMqttActionListener
 import org.eclipse.paho.client.mqttv3.IMqttAsyncClient
@@ -132,9 +134,78 @@ class DevConsolePahoMqttTest {
         assertTrue(connection.messages.isEmpty())
     }
 
+    @Test
+    fun `registry send publishes through the publisher and records exactly one sent frame`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store)
+        val client = FakeMqttAsyncClient()
+        val publisher = DevConsolePahoMqtt.install(client, recorder)
+
+        assertTrue(recorder.senders.canSend(publisher.connectionId))
+        assertEquals(SocketProtocol.MQTT, recorder.senders.protocol(publisher.connectionId))
+
+        val result =
+            recorder.senders.send(
+                publisher.connectionId,
+                SocketSendRequest("hello", topic = "devconsole/demo/hello", qos = 1, retained = true),
+            )
+
+        assertEquals(SocketSendResult.Sent, result)
+        val stored = store.messages(publisher.connectionId).single()
+        assertEquals(SocketDirection.SENT, stored.direction)
+        assertEquals("devconsole/demo/hello", MqttFrameMetadata.topic(stored.contentType))
+        assertEquals(1, MqttFrameMetadata.qos(stored.contentType))
+        assertEquals(true, MqttFrameMetadata.retained(stored.contentType))
+    }
+
+    @Test
+    fun `a send while disconnected is NotConnected and a broker failure is Rejected`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store)
+        val client = FakeMqttAsyncClient()
+        val publisher = DevConsolePahoMqtt.install(client, recorder)
+        val request = SocketSendRequest("hello", topic = "devconsole/demo/hello")
+
+        client.connected = false
+        assertEquals(SocketSendResult.NotConnected, recorder.senders.send(publisher.connectionId, request))
+
+        client.connected = true
+        client.publishFailure = IllegalStateException("broker refused")
+        val rejected = recorder.senders.send(publisher.connectionId, request)
+        assertEquals(SocketSendResult.Rejected("broker refused"), rejected)
+
+        assertTrue(store.messages(publisher.connectionId).isEmpty())
+    }
+
+    @Test
+    fun `connectionLost keeps the sender registered while disconnect removes it`() {
+        val store = InMemorySocketStore()
+        val recorder = SocketRecorder(RedactionEngine(RedactionPolicy.recommended()), store)
+        val client = FakeMqttAsyncClient()
+        val publisher = DevConsolePahoMqtt.install(client, recorder)
+        val callback = requireNotNull(client.callback)
+
+        client.connected = false
+        callback.connectionLost(IllegalStateException("connection dropped"))
+
+        assertTrue(recorder.senders.canSend(publisher.connectionId))
+        val sendResult =
+            recorder.senders.send(
+                publisher.connectionId,
+                SocketSendRequest("hello", topic = "devconsole/demo/hello"),
+            )
+        assertEquals(SocketSendResult.NotConnected, sendResult)
+
+        publisher.disconnect()
+
+        assertFalse(recorder.senders.canSend(publisher.connectionId))
+    }
+
     private class FakeMqttAsyncClient : IMqttAsyncClient {
         var callback: MqttCallbackExtended? = null
         var lastToken: IMqttDeliveryToken? = null
+        var connected = true
+        var publishFailure: RuntimeException? = null
 
         override fun setCallback(callback: MqttCallback) {
             this.callback = callback as MqttCallbackExtended
@@ -144,7 +215,7 @@ class DevConsolePahoMqttTest {
 
         override fun getClientId(): String = "fake-client"
 
-        override fun isConnected(): Boolean = true
+        override fun isConnected(): Boolean = connected
 
         override fun connect(): IMqttToken = FakeToken()
 
@@ -190,7 +261,10 @@ class DevConsolePahoMqttTest {
             payload: ByteArray,
             qos: Int,
             retained: Boolean,
-        ): IMqttDeliveryToken = FakeDeliveryToken().also { lastToken = it }
+        ): IMqttDeliveryToken {
+            publishFailure?.let { throw it }
+            return FakeDeliveryToken().also { lastToken = it }
+        }
 
         override fun publish(
             topic: String,

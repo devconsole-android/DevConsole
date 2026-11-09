@@ -2,6 +2,8 @@
  * @author Shakib
  * @since 04/08/26
  */
+@file:Suppress("TooManyFunctions")
+
 package io.devconsole.ui.compose
 
 import androidx.compose.ui.graphics.Color
@@ -158,9 +160,9 @@ private fun netGeneralEntries(
         if (transaction.isMocked) {
             val ruleId = transaction.mockRuleId ?: "unknown"
             val diffSuffix = mockDiffNoticeSuffix(mockDiff).orEmpty()
-            add(InspectorKeyValue("source", "mock rule $ruleId$diffSuffix", colors.warn))
+            add(InspectorKeyValue("Source", "mock rule $ruleId$diffSuffix", colors.warn))
         }
-        transaction.error?.let { add(InspectorKeyValue("error", it, colors.error)) }
+        transaction.error?.let { add(InspectorKeyValue("Error", it, colors.error)) }
     }
 
 /** The request payload + response body sections, in that order -- see [textPreviewSection]. */
@@ -206,6 +208,146 @@ private fun netBodySections(
     )
 }
 
+private fun netDecodedJwtSections(
+    jwts: List<DecodedJwt>,
+    colors: DevConsoleColors,
+    copyText: (String) -> Unit,
+): List<InspectorDetailSectionSpec> =
+    buildList {
+        jwts.forEachIndexed { index, jwt ->
+            val tab =
+                if (jwt.source.equals("Authorization", ignoreCase = true)) {
+                    InspectorDetailTab.REQUEST
+                } else {
+                    InspectorDetailTab.RESPONSE
+                }
+            val prefix = if (jwts.size > 1) "Decoded · JWT (${jwt.source})" else "Decoded · JWT"
+            if (jwt.timestamps.isNotEmpty()) {
+                val claimEntries =
+                    jwt.timestamps.map { claim ->
+                        val color = if (claim.isExpired) colors.error else colors.signal
+                        InspectorKeyValue(claim.claim, "${claim.humanTime} (${claim.relativeStatus})", color)
+                    }
+                add(
+                    InspectorDetailSectionSpec(
+                        key = "decoded-jwt-claims-$index",
+                        label = "$prefix claims",
+                        body = InspectorDetailSectionBody.KeyValues(claimEntries),
+                        copyDescription = "Copy decoded JWT claims",
+                        onCopy = keyValuesCopyAction(claimEntries, copyText),
+                        tab = tab,
+                    ),
+                )
+            }
+            val headerLines = jwt.headerJson.lines().map { it.toRedactionAwareCodeLine(colors) }
+            add(
+                InspectorDetailSectionSpec(
+                    key = "decoded-jwt-header-$index",
+                    label = "$prefix header",
+                    body = InspectorDetailSectionBody.Code(headerLines),
+                    copyDescription = "Copy decoded JWT header",
+                    onCopy = { copyText(jwt.headerJson) },
+                    tab = tab,
+                ),
+            )
+            val payloadLines = jwt.payloadJson.lines().map { it.toRedactionAwareCodeLine(colors) }
+            add(
+                InspectorDetailSectionSpec(
+                    key = "decoded-jwt-payload-$index",
+                    label = "$prefix payload",
+                    body = InspectorDetailSectionBody.Code(payloadLines),
+                    copyDescription = "Copy decoded JWT payload",
+                    onCopy = { copyText(jwt.payloadJson) },
+                    tab = tab,
+                ),
+            )
+        }
+    }
+
+private fun netDecodedFormSection(
+    formFields: List<DecodedFormField>?,
+    colors: DevConsoleColors,
+    copyText: (String) -> Unit,
+): InspectorDetailSectionSpec? {
+    val fields = formFields?.takeIf { it.isNotEmpty() } ?: return null
+    val entries =
+        fields.map { field ->
+            InspectorKeyValue(
+                key = field.key,
+                value = field.value,
+                valueColor = if (field.value.looksRedacted()) colors.warn else null,
+            )
+        }
+    return InspectorDetailSectionSpec(
+        key = "decoded-form",
+        label = "Decoded · Form",
+        body = InspectorDetailSectionBody.KeyValues(entries),
+        copyDescription = "Copy decoded form fields",
+        onCopy = keyValuesCopyAction(entries, copyText),
+        tab = InspectorDetailTab.REQUEST,
+    )
+}
+
+private fun netDecodedGraphQlSections(
+    graphQl: DecodedGraphQlRequest?,
+    colors: DevConsoleColors,
+    copyText: (String) -> Unit,
+): List<InspectorDetailSectionSpec> {
+    if (graphQl == null) return emptyList()
+    val metaEntries =
+        buildList {
+            add(InspectorKeyValue("type", graphQl.operationType))
+            graphQl.operationName?.let { add(InspectorKeyValue("operationName", it)) }
+        }
+    val queryLines = graphQl.query.lines().map { it.toRedactionAwareCodeLine(colors) }
+    return buildList {
+        add(
+            InspectorDetailSectionSpec(
+                key = "decoded-graphql",
+                label = "Decoded · GraphQL",
+                body = InspectorDetailSectionBody.KeyValues(metaEntries),
+                copyDescription = "Copy GraphQL operation info",
+                onCopy = keyValuesCopyAction(metaEntries, copyText),
+                tab = InspectorDetailTab.REQUEST,
+            ),
+        )
+        add(
+            InspectorDetailSectionSpec(
+                key = "decoded-graphql-query",
+                label = "Decoded · GraphQL query",
+                body = InspectorDetailSectionBody.Code(queryLines),
+                copyDescription = "Copy GraphQL query",
+                onCopy = { copyText(graphQl.query) },
+                tab = InspectorDetailTab.REQUEST,
+            ),
+        )
+        graphQl.variablesJson?.let { variablesJson ->
+            val variableLines = variablesJson.lines().map { it.toRedactionAwareCodeLine(colors) }
+            add(
+                InspectorDetailSectionSpec(
+                    key = "decoded-graphql-variables",
+                    label = "Decoded · GraphQL variables",
+                    body = InspectorDetailSectionBody.Code(variableLines),
+                    copyDescription = "Copy GraphQL variables",
+                    onCopy = { copyText(variablesJson) },
+                    tab = InspectorDetailTab.REQUEST,
+                ),
+            )
+        }
+    }
+}
+
+private fun netDecodedSections(
+    decoded: DecodedTransactionContent,
+    colors: DevConsoleColors,
+    copyText: (String) -> Unit,
+): List<InspectorDetailSectionSpec> =
+    buildList {
+        addAll(netDecodedJwtSections(decoded.jwts, colors, copyText))
+        netDecodedFormSection(decoded.formFields, colors, copyText)?.let(::add)
+        addAll(netDecodedGraphQlSections(decoded.graphQl, colors, copyText))
+    }
+
 private fun netSections(
     transaction: InspectorTransactionUi,
     colors: DevConsoleColors,
@@ -213,49 +355,123 @@ private fun netSections(
     copyText: (String) -> Unit,
     mockDiff: JsonMockDiffResult?,
 ): List<InspectorDetailSectionSpec> {
+    val decoded = decodeTransactionStructuredContent(transaction)
     val generalEntries = netGeneralEntries(transaction, colors, statusColor, mockDiff)
     val (requestSection, responseSection) = netBodySections(transaction, colors, copyText, mockDiff)
     val requestHeadersBody = headerRowsBody(transaction.requestHeaders, colors)
     val responseHeadersBody = headerRowsBody(transaction.responseHeaders, colors)
-    return listOf(
-        responseSection,
-        InspectorDetailSectionSpec(
-            InspectorExchangeSection.SECONDARY_HEADERS.key,
-            InspectorExchangeSection.SECONDARY_HEADERS.networkLabel,
-            responseHeadersBody,
-            copyDescription = "Copy response headers",
-            onCopy = keyValuesCopyAction(responseHeadersBody.entries, copyText),
-            tab = InspectorDetailTab.RESPONSE,
-        ),
-        requestSection,
-        InspectorDetailSectionSpec(
-            InspectorExchangeSection.PRIMARY_HEADERS.key,
-            InspectorExchangeSection.PRIMARY_HEADERS.networkLabel,
-            requestHeadersBody,
-            copyDescription = "Copy request headers",
-            onCopy = keyValuesCopyAction(requestHeadersBody.entries, copyText),
-            tab = InspectorDetailTab.REQUEST,
-        ),
-        InspectorDetailSectionSpec(
-            "general",
-            "General",
-            InspectorDetailSectionBody.KeyValues(generalEntries),
-            copyDescription = "Copy general info",
-            onCopy = { copyText(generalEntries.toCopyText()) },
-        ),
-        netRedactionsSection(transaction, colors, copyText),
-        netTimingSection(transaction, colors, copyText),
+    val decodedSections = netDecodedSections(decoded, colors, copyText)
+    val responseDecoded = decodedSections.filter { it.tab == InspectorDetailTab.RESPONSE }
+    val requestDecoded = decodedSections.filter { it.tab == InspectorDetailTab.REQUEST }
+    return buildList {
+        add(responseSection)
+        addAll(responseDecoded)
+        add(
+            InspectorDetailSectionSpec(
+                InspectorExchangeSection.SECONDARY_HEADERS.key,
+                InspectorExchangeSection.SECONDARY_HEADERS.networkLabel,
+                responseHeadersBody,
+                copyDescription = "Copy response headers",
+                onCopy = keyValuesCopyAction(responseHeadersBody.entries, copyText),
+                tab = InspectorDetailTab.RESPONSE,
+            ),
+        )
+        add(requestSection)
+        addAll(requestDecoded)
+        add(
+            InspectorDetailSectionSpec(
+                InspectorExchangeSection.PRIMARY_HEADERS.key,
+                InspectorExchangeSection.PRIMARY_HEADERS.networkLabel,
+                requestHeadersBody,
+                copyDescription = "Copy request headers",
+                onCopy = keyValuesCopyAction(requestHeadersBody.entries, copyText),
+                tab = InspectorDetailTab.REQUEST,
+            ),
+        )
+        add(
+            InspectorDetailSectionSpec(
+                "general",
+                "General",
+                InspectorDetailSectionBody.KeyValues(generalEntries),
+                copyDescription = "Copy general info",
+                onCopy = { copyText(generalEntries.toCopyText()) },
+            ),
+        )
+        add(netRedactionsSection(transaction, colors, copyText))
+        add(netTimingSection(transaction, colors, copyText))
+    }
+}
+
+/**
+ * The detail's resend affordances. Non-null only for a live capture: a retained past run cannot be
+ * replayed (its host allow-list and capability state belong to a process that is no longer running).
+ * [disabledReason] explains why both actions are demoted instead of silently vanishing.
+ */
+internal data class NetResendActions(
+    val enabled: Boolean,
+    val disabledReason: String?,
+    val onResend: () -> Unit,
+    val onEditResend: () -> Unit,
+)
+
+/**
+ * Builds [NetResendActions] from a capture's body state: a binary or truncated request body has no
+ * faithful text to send, and request execution off means the composer would reject the dispatch the
+ * ViewModel already gates. Either reason demotes both actions rather than offering a dead tap.
+ */
+internal fun netResendActions(
+    transaction: InspectorTransactionUi,
+    requestExecutionEnabled: Boolean,
+    onResend: () -> Unit,
+    onEditResend: () -> Unit,
+): NetResendActions {
+    val bodyUsable = transaction.requestBodyKind != InspectorBodyKind.BINARY && !transaction.requestBodyTruncated
+    val disabledReason =
+        when {
+            !bodyUsable -> "Request body not captured as text"
+            !requestExecutionEnabled -> "Request execution is off"
+            else -> null
+        }
+    return NetResendActions(
+        enabled = disabledReason == null,
+        disabledReason = disabledReason,
+        onResend = onResend,
+        onEditResend = onEditResend,
     )
 }
 
-/** Mock/unmock and cURL retain their callbacks in the detail action panel. */
+/** Mock/unmock, resend and cURL retain their callbacks in the detail action panel. */
 private fun netFooterActions(
     transaction: InspectorTransactionUi,
     colors: DevConsoleColors,
     onMockAction: (() -> Unit)?,
     copyText: (String) -> Unit,
+    resendActions: NetResendActions?,
 ): List<InspectorFooterAction> =
     buildList {
+        if (resendActions != null) {
+            add(
+                InspectorFooterAction(
+                    label = "Resend",
+                    onClick = resendActions.onResend,
+                    weight = 1f,
+                    enabled = resendActions.enabled,
+                    supportingText = resendActions.disabledReason,
+                    containerColor = colors.surface3,
+                    contentColor = colors.ink,
+                ),
+            )
+            add(
+                InspectorFooterAction(
+                    label = "Edit & resend",
+                    onClick = resendActions.onEditResend,
+                    weight = 1f,
+                    enabled = resendActions.enabled,
+                    containerColor = colors.surface3,
+                    contentColor = colors.ink,
+                ),
+            )
+        }
         if (onMockAction != null) {
             add(
                 InspectorFooterAction(
@@ -303,6 +519,7 @@ internal fun netDetailContent(
     onMockThisResponse: () -> Unit,
     onUnmockThisResponse: (String) -> Unit,
     mockDiff: JsonMockDiffResult? = null,
+    resendActions: NetResendActions? = null,
 ): ObserveDetailContent {
     // Prefilling a *new* mock rule from a response that's already mocked is pointless, so a mocked
     // transaction gets an "Unmock" action (disables the serving rule) instead -- unless its rule id
@@ -332,6 +549,8 @@ internal fun netDetailContent(
                 }
             if (redactedCount > 0) add("$redactedCount header fields masked on device")
         }
+    val sections = netSections(transaction, colors, statusColor, copyText, mockDiff)
+    val decodedKeys = sections.mapNotNullTo(mutableSetOf()) { spec -> spec.key.takeIf { it.startsWith("decoded-") } }
     return ObserveDetailContent(
         header =
             InspectorObserveDetailHeaderSpec(
@@ -346,12 +565,13 @@ internal fun netDetailContent(
                 actions = netHeaderActions(transaction, colors, shareText, isFlagged, onToggleFlag),
                 notices = notices,
             ),
-        sections = netSections(transaction, colors, statusColor, copyText, mockDiff),
+        sections = sections,
         // Both bodies stay expanded when moving between Response and Request.
         initiallyOpenSectionKeys =
             InspectorExchangeSection.keysOf(InspectorExchangeSection.defaultSearchScope) +
-                setOf("general", "timing"),
-        footerActions = netFooterActions(transaction, colors, onMockAction, copyText),
+                setOf("general", "timing") +
+                decodedKeys,
+        footerActions = netFooterActions(transaction, colors, onMockAction, copyText, resendActions),
         searchOptions = NetworkDetailSearchOptions,
     )
 }

@@ -48,18 +48,17 @@ private fun logSections(
         ),
         InspectorDetailSectionSpec(
             InspectorExchangeSection.PRIMARY_BODY.key,
-            "Context",
+            if (log.detail.looksLikeStackTrace()) "Stack trace" else "Context",
             contextBody,
             copyDescription = "Copy context",
             onCopy = contextCopy,
         ),
-        InspectorDetailSectionSpec(
-            InspectorExchangeSection.SECONDARY_HEADERS.key,
-            "Related transaction",
-            InspectorDetailSectionBody.Empty("This event is not linked to a transaction."),
-        ),
     )
 }
+
+/** A recorded throwable renders as `Type: message` followed by `at frame` lines. */
+internal fun String?.looksLikeStackTrace(): Boolean =
+    this != null && lineSequence().drop(1).any { it.trimStart().startsWith("at ") }
 
 private fun logFooterActions(
     colors: DevConsoleColors,
@@ -131,9 +130,10 @@ internal fun logDetailContent(
                     ),
             ),
         sections = logSections(log, colors, leadColor, copyText),
-        // No body section exists for a log event -- keep General (the first section) open so the
-        // screen doesn't land all-collapsed.
-        initiallyOpenSectionKeys = setOf("general"),
+        // General is always open; the context (usually a stack trace on WARN/ERROR) opens too when
+        // there is one, since it is the part an operator came here to read.
+        initiallyOpenSectionKeys =
+            setOfNotNull("general", InspectorExchangeSection.PRIMARY_BODY.key.takeIf { log.detail != null }),
         footerActions = logFooterActions(colors, isBookmarked, onToggleBookmark, copyPayload, copyText),
     )
 }

@@ -45,6 +45,30 @@ class AndroidPreferencesInspectorTest {
     }
 
     @Test
+    fun `devconsole's own preference files are never listed or writable`() {
+        listOf("io.devconsole.mock_rules", "devconsole.ui").forEach { name ->
+            application
+                .getSharedPreferences(name, Context.MODE_PRIVATE)
+                .edit()
+                .putString("k", "v")
+                .commit()
+        }
+        application
+            .getSharedPreferences("host_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putString("k", "v")
+            .commit()
+
+        val names = inspector.files().map { it.name }
+
+        assertTrue("host_prefs" in names)
+        assertFalse("io.devconsole.mock_rules" in names)
+        assertFalse("devconsole.ui" in names)
+        assertFalse(inspector.put("io.devconsole.mock_rules", "rules", "[]", "STRING"))
+        assertFalse(inspector.remove("devconsole.ui", "k"))
+    }
+
+    @Test
     fun `string values are redacted while primitives are shown verbatim`() {
         application
             .getSharedPreferences("secret_prefs", Context.MODE_PRIVATE)
@@ -61,6 +85,29 @@ class AndroidPreferencesInspectorTest {
         val countEntry = file.entries.first { it.key == "count" }
         assertEquals("3", countEntry.value)
         assertFalse(countEntry.redacted)
+    }
+
+    @Test
+    fun `sensitive key variants are redacted consistently`() {
+        application
+            .getSharedPreferences("variant_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putString("auth_token", "auth-secret")
+            .putString("apiKey", "api-secret")
+            .putString("private.key", "private-secret")
+            .commit()
+
+        val entries =
+            inspector
+                .files()
+                .first { it.name == "variant_prefs" }
+                .entries
+                .associateBy { it.key }
+
+        listOf("auth_token", "apiKey", "private.key").forEach { key ->
+            assertEquals("<redacted>", entries.getValue(key).value)
+            assertTrue(entries.getValue(key).redacted)
+        }
     }
 
     @Test

@@ -3,6 +3,10 @@ package io.devconsole.mocks
 import com.google.re2j.Pattern
 import java.util.concurrent.atomic.AtomicBoolean
 
+private const val HEADER_VALUE_MIN_CODE = 32
+private const val HEADER_VALUE_MAX_CODE = 126
+private const val HEADER_NAME_MIN_CODE = 33
+
 data class MockRequest(
     val method: String,
     val scheme: String,
@@ -59,11 +63,69 @@ sealed interface MockAction {
         val body: String,
     ) : MockAction
 
+    data class Sequence(
+        val steps: List<MockAction>,
+        val loop: Boolean = false,
+    ) : MockAction {
+        init {
+            require(steps.isNotEmpty()) { "Sequence steps must not be empty" }
+            require(steps.size <= MAX_SEQUENCE_STEPS) { "Sequence may contain at most $MAX_SEQUENCE_STEPS steps" }
+            require(steps.none { it is Sequence }) { "Sequence steps must not contain another Sequence" }
+        }
+    }
+
+    data class MapRemote(
+        val scheme: String? = null,
+        val host: String? = null,
+        val port: Int? = null,
+        val path: String? = null,
+    ) : MockAction {
+        init {
+            require(scheme != null || host != null || port != null || path != null) {
+                "MapRemote must specify at least one of scheme, host, port, or path"
+            }
+            require(scheme == null || scheme in ALLOWED_SCHEMES) {
+                "MapRemote scheme must be http or https"
+            }
+            require(port == null || port in MIN_PORT..MAX_PORT) {
+                "MapRemote port must be between $MIN_PORT and $MAX_PORT"
+            }
+            require(host == null || (host.isNotBlank() && '/' !in host)) {
+                "MapRemote host must not be blank or contain '/'"
+            }
+            require(path == null || path.startsWith('/')) {
+                "MapRemote path must start with '/'"
+            }
+        }
+    }
+
+    data class Throttle(
+        val bytesPerSecond: Long,
+        val latencyMs: Long = 0,
+        val next: MockAction = Passthrough,
+    ) : MockAction {
+        init {
+            require(bytesPerSecond in MIN_THROTTLE_BPS..MAX_THROTTLE_BPS) {
+                "Throttle bytesPerSecond must be between $MIN_THROTTLE_BPS and $MAX_THROTTLE_BPS"
+            }
+            require(latencyMs in 0..MAX_DELAY_MS) {
+                "Throttle latencyMs must be between 0 and $MAX_DELAY_MS ms"
+            }
+            require(next !is Throttle) { "Throttle next must not be another Throttle" }
+        }
+    }
+
     data object Passthrough : MockAction
 
     private companion object {
         const val MAX_DELAY_MS = 30_000L
         const val DEFAULT_TIMEOUT_MS = 1_000L
+        private const val MAX_SEQUENCE_STEPS = 20
+        private const val MIN_PORT = 1
+        private const val MAX_PORT = 65_535
+        private const val MIN_THROTTLE_BPS = 1L
+        private const val MAX_THROTTLE_BPS = 104_857_600L
+        private val ALLOWED_SCHEMES = setOf("http", "https")
     }
 }
 
@@ -172,17 +234,32 @@ class MockEngine(
     private val rules = initialRules.toMutableList()
     private val compiledRules = initialRules.associate { it.id to it.compile() }.toMutableMap()
     private val stats = mutableMapOf<String, MockRuleStats>()
+    private val sequenceCounters = mutableMapOf<String, Int>()
     private val enabled = AtomicBoolean(enabled)
 
     @Volatile
     private var outcomeSink: MockOutcomeSink = MockOutcomeSink {}
     private var persistenceBinding: PersistenceBinding? = null
+    private val persistenceLock = Any()
+    private val mutationLock = Any()
 
     init {
         require(maxBodyPredicateBytes >= 0) { "maxBodyPredicateBytes must not be negative" }
     }
 
     fun isEnabled(): Boolean = enabled.get()
+
+    /**
+     * The most request-body bytes worth handing to [decide], or `null` when no body is needed.
+     *
+     * A body is only needed when body matching is on and at least one enabled rule has a body
+     * predicate. Adapters use this to skip copying request bodies on every call.
+     */
+    @Synchronized
+    fun requestBodyLimitBytes(): Int? =
+        maxBodyPredicateBytes.takeIf {
+            bodyMatchingEnabled && enabled.get() && rules.any { it.persistence.enabled && it.bodyPredicate != null }
+        }
 
     fun setEnabled(value: Boolean) {
         enabled.set(value)
@@ -243,13 +320,22 @@ class MockEngine(
         store.save(rules.toDurableRules(currentAppVersion, installationId))
     }
 
-    @Synchronized fun clearSessionRules() {
-        val removedIds = rules.filter { it.scope == MockScope.SESSION }.map(MockRule::id).toSet()
-        rules.removeAll { it.id in removedIds }
-        compiledRules.keys.removeAll(removedIds)
-        // Same contract as remove(): a rule recreated under a cleared id must start at 0 hits —
-        // an inherited count from the previous session would be a fabricated number.
-        stats.keys.removeAll(removedIds)
+    fun clearSessionRules() {
+        synchronized(mutationLock) {
+            val (ids, updated) =
+                synchronized(this) {
+                    val ids = rules.filter { it.scope == MockScope.SESSION }.map(MockRule::id).toSet()
+                    ids to rules.filterNot { it.id in ids }
+                }
+            persistSnapshot(updated)
+            synchronized(this) {
+                rules.removeAll { it.id in ids }
+                compiledRules.keys.removeAll(ids)
+                stats.keys.removeAll(ids)
+                sequenceCounters.keys.removeAll(ids)
+            }
+            // Removed rules also lose their hit stats, so recreating an id starts at zero.
+        }
     }
 
     @Synchronized fun rules(): List<MockRule> = rules.toList()
@@ -260,15 +346,26 @@ class MockEngine(
     /** Every rule's hit stats, keyed by rule id -- unmatched rules are simply absent, not zero-filled. */
     @Synchronized fun statsSnapshot(): Map<String, MockRuleStats> = stats.toMap()
 
-    @Synchronized fun upsert(rule: MockRule) {
+    fun upsert(rule: MockRule) {
+        validateActionHeaders(rule.action)
         val compiled = rule.compile()
-        val persistedRule = persistenceBinding?.prepare(rule) ?: rule
-        val index = rules.indexOfFirst { it.id == persistedRule.id }
-        val updated = rules.toMutableList()
-        if (index >= 0) updated[index] = persistedRule else updated += persistedRule
-        persistenceBinding?.save(updated)
-        if (index >= 0) rules[index] = persistedRule else rules += persistedRule
-        compiledRules[persistedRule.id] = compiled
+        synchronized(mutationLock) {
+            val (persistedRule, updated) =
+                synchronized(this) {
+                    val persistedRule = persistenceBinding?.prepare(rule) ?: rule
+                    val updated = rules.toMutableList()
+                    val index = updated.indexOfFirst { it.id == persistedRule.id }
+                    if (index >= 0) updated[index] = persistedRule else updated += persistedRule
+                    persistedRule to updated
+                }
+            persistSnapshot(updated)
+            synchronized(this) {
+                rules.clear()
+                rules.addAll(updated)
+                compiledRules[persistedRule.id] = compiled
+                sequenceCounters.remove(persistedRule.id)
+            }
+        }
     }
 
     /**
@@ -276,24 +373,41 @@ class MockEngine(
      * like [upsert]. Matching already honors [MockRule.persistence]'s `enabled` flag in [decide],
      * so this is the only mutation a rule-level toggle needs. Returns false when [id] is unknown.
      */
-    @Synchronized
     fun setEnabled(
         id: String,
         enabled: Boolean,
     ): Boolean {
-        val rule = rules.firstOrNull { it.id == id } ?: return false
-        upsert(rule.withPersistence(rule.persistence.copy(enabled = enabled)))
-        return true
+        return synchronized(mutationLock) {
+            val rule = synchronized(this) { rules.firstOrNull { it.id == id } } ?: return@synchronized false
+            upsert(rule.withPersistence(rule.persistence.copy(enabled = enabled)))
+            true
+        }
     }
 
-    @Synchronized
     fun remove(id: String): Boolean {
-        if (rules.none { it.id == id }) return false
-        val updated = rules.filterNot { it.id == id }
-        persistenceBinding?.save(updated)
-        compiledRules.remove(id)
-        stats.remove(id)
-        return rules.removeAll { it.id == id }
+        return synchronized(mutationLock) {
+            val updated: List<MockRule>? =
+                synchronized(this) {
+                    if (rules.none { it.id == id }) null else rules.filterNot { it.id == id }
+                }
+            if (updated == null) return@synchronized false
+            persistSnapshot(updated)
+            synchronized(this) {
+                compiledRules.keys.removeAll { it !in updated.map(MockRule::id) }
+                stats.keys.removeAll { it == id }
+                sequenceCounters.remove(id)
+                rules.clear()
+                rules.addAll(updated)
+            }
+            true
+        }
+    }
+
+    /** Mutations serialize here while persistence runs outside the engine monitor. */
+    private fun persistSnapshot(snapshot: List<MockRule>) {
+        synchronized(persistenceLock) {
+            persistenceBinding?.save(snapshot)
+        }
     }
 
     @Synchronized
@@ -336,7 +450,12 @@ class MockEngine(
                     ).firstOrNull()
                     ?.value
                     ?.first ?: return passthrough(MockPassthroughReason.NO_MATCH)
-            when (val resolution = rule.action.resolve(request)) {
+            val selectedAction =
+                when (val action = rule.action) {
+                    is MockAction.Sequence -> nextSequenceStep(rule.id, action)
+                    else -> action
+                }
+            when (val resolution = selectedAction.resolve(request)) {
                 is ActionResolution.Resolved -> {
                     emit(MockOutcome.Matched(rule.id, resolution.action.javaClass.simpleName))
                     recordHit(rule.id)
@@ -383,13 +502,36 @@ class MockEngine(
             queryPredicates.size * 10 +
             headerPredicates.size * 10
 
+    @Synchronized
+    private fun nextSequenceStep(
+        ruleId: String,
+        sequence: MockAction.Sequence,
+    ): MockAction {
+        val index = sequenceCounters[ruleId] ?: 0
+        sequenceCounters[ruleId] = index + 1
+        val steps = sequence.steps
+        return when {
+            index < steps.size -> steps[index]
+            sequence.loop -> steps[index % steps.size]
+            else -> steps.last()
+        }
+    }
+
     private fun MockAction.resolve(request: MockRequest): ActionResolution =
         when (this) {
             is MockAction.TemplateResponse ->
-                render(template, request)
-                    ?.let { ActionResolution.Resolved(MockAction.StaticResponse(statusCode, it, headers)) }
-                    ?: ActionResolution.Invalid("Template contains an unknown or unresolved placeholder")
+                when (val rendered = render(template, request)) {
+                    is RenderedTemplate.Text ->
+                        ActionResolution.Resolved(MockAction.StaticResponse(statusCode, rendered.value, headers))
+                    is RenderedTemplate.UnknownPlaceholder ->
+                        ActionResolution.Invalid("Unknown template placeholder ${rendered.placeholder}")
+                }
             is MockAction.Delay ->
+                when (val nested = next.resolve(request)) {
+                    is ActionResolution.Resolved -> ActionResolution.Resolved(copy(next = nested.action))
+                    is ActionResolution.Invalid -> nested
+                }
+            is MockAction.Throttle ->
                 when (val nested = next.resolve(request)) {
                     is ActionResolution.Resolved -> ActionResolution.Resolved(copy(next = nested.action))
                     is ActionResolution.Invalid -> nested
@@ -415,39 +557,66 @@ class MockEngine(
         stats[ruleId] = previous.copy(hitCount = previous.hitCount + 1, lastHitEpochMs = System.currentTimeMillis())
     }
 
+    /**
+     * Fills `{{method}}`, `{{scheme}}`, `{{host}}`, `{{path}}`, `{{body}}`, `{{query.name}}` and
+     * `{{header.name}}`. A known placeholder whose value the request simply lacks (no such header,
+     * query parameter or body) renders as empty text -- e.g. OkHttp adds `User-Agent` only after
+     * application interceptors run, and that must not silently turn the whole rule off. Only an
+     * unknown placeholder (a typo) fails the rule, and the error names it.
+     *
+     * [Regex.replace] is single-pass, so a request value that itself contains `{{...}}` is inserted
+     * verbatim and never re-expanded.
+     */
     private fun render(
         template: String,
         request: MockRequest,
-    ): String? {
-        var invalid = false
+    ): RenderedTemplate {
+        var unknown: String? = null
         val rendered =
             PLACEHOLDER.replace(template) { match ->
-                val namespace = match.groupValues[1]
-                val key = match.groupValues[2].takeIf(String::isNotEmpty)
                 val value =
-                    when (namespace) {
-                        "method" -> request.method.takeIf { key == null }
-                        "scheme" -> request.scheme.takeIf { key == null }
-                        "host" -> request.host.takeIf { key == null }
-                        "path" -> request.path.takeIf { key == null }
-                        "body" -> request.body.takeIf { key == null }
-                        "query" -> key?.let(request.query::get)
-                        "header" ->
-                            key?.let { name ->
-                                request.headers.entries
-                                    .firstOrNull { it.key.equals(name, true) }
-                                    ?.value
-                            }
-                        else -> null
-                    }
-                if (value == null) {
-                    invalid = true
-                    match.value
-                } else {
-                    value
-                }
+                    placeholderValue(match.groupValues[1], match.groupValues[2].takeIf(String::isNotEmpty), request)
+                if (value == null && unknown == null) unknown = match.value
+                value ?: match.value
             }
-        return rendered.takeUnless { invalid || PLACEHOLDER.containsMatchIn(it) }
+        return unknown?.let(RenderedTemplate::UnknownPlaceholder) ?: RenderedTemplate.Text(rendered)
+    }
+
+    /** `null` only for a placeholder that is not one of the documented forms. */
+    private fun placeholderValue(
+        namespace: String,
+        key: String?,
+        request: MockRequest,
+    ): String? =
+        if (key == null) {
+            when (namespace) {
+                "method" -> request.method
+                "scheme" -> request.scheme
+                "host" -> request.host
+                "path" -> request.path
+                "body" -> request.body.orEmpty()
+                else -> null
+            }
+        } else {
+            when (namespace) {
+                "query" -> request.query[key].orEmpty()
+                "header" ->
+                    request.headers.entries
+                        .firstOrNull { it.key.equals(key, true) }
+                        ?.value
+                        .orEmpty()
+                else -> null
+            }
+        }
+
+    private sealed interface RenderedTemplate {
+        data class Text(
+            val value: String,
+        ) : RenderedTemplate
+
+        data class UnknownPlaceholder(
+            val placeholder: String,
+        ) : RenderedTemplate
     }
 
     private companion object {
@@ -471,6 +640,37 @@ class MockEngine(
             body = bodyPredicate?.let(Pattern::compile),
         )
     }
+
+    private fun validateActionHeaders(action: MockAction) {
+        val headers =
+            when (action) {
+                is MockAction.StaticResponse -> action.headers
+                is MockAction.TemplateResponse -> action.headers
+                else -> emptyMap()
+            }
+        action.nestedActions().forEach(::validateActionHeaders)
+        headers.forEach { (name, value) ->
+            require(
+                name.isNotEmpty() &&
+                    name.all {
+                        it.code in HEADER_NAME_MIN_CODE..HEADER_VALUE_MAX_CODE && it !in "()<>@,;:\\\"/[]?={} \t"
+                    },
+            ) {
+                "Invalid mock response header name: $name"
+            }
+            require(value.all { it == '\t' || it.code in HEADER_VALUE_MIN_CODE..HEADER_VALUE_MAX_CODE }) {
+                "Invalid mock response header value for $name"
+            }
+        }
+    }
+
+    private fun MockAction.nestedActions(): List<MockAction> =
+        when (this) {
+            is MockAction.Delay -> listOf(next)
+            is MockAction.Throttle -> listOf(next)
+            is MockAction.Sequence -> steps
+            else -> emptyList()
+        }
 
     private data class CompiledRule(
         val path: Pattern,

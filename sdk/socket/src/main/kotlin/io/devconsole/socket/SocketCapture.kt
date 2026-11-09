@@ -466,6 +466,12 @@ class SocketRecorder(
     private val store: SocketStore,
     private val enabled: Boolean = true,
     private val clock: () -> Long = System::currentTimeMillis,
+    /**
+     * Shared with every copy this recorder produces. Adapters register one sender per live
+     * connection on the copy they happen to hold, so the copies must resolve the same registry --
+     * a per-copy instance would make the dashboard's id look unsendable after any `with*` call.
+     */
+    val senders: SocketSenderRegistry = SocketSenderRegistry(),
 ) {
     private var binaryPreviewPolicy: BinaryPreviewPolicy = BinaryPreviewPolicy.NONE
     private var sessionIdProvider: (() -> String?)? = null
@@ -485,7 +491,8 @@ class SocketRecorder(
         enabled: Boolean,
         clock: () -> Long,
         binaryPreviewPolicy: BinaryPreviewPolicy,
-    ) : this(redaction, store, enabled, clock) {
+        senders: SocketSenderRegistry = SocketSenderRegistry(),
+    ) : this(redaction, store, enabled, clock, senders) {
         this.binaryPreviewPolicy = binaryPreviewPolicy
     }
 
@@ -502,7 +509,7 @@ class SocketRecorder(
      * MQTT adapter without either mutating the other's protocol.
      */
     fun withProtocol(protocol: SocketProtocol): SocketRecorder =
-        SocketRecorder(redaction, store, enabled, clock).also {
+        SocketRecorder(redaction, store, enabled, clock, senders).also {
             it.binaryPreviewPolicy = binaryPreviewPolicy
             it.sessionIdProvider = sessionIdProvider
             it.capturedSessionId = capturedSessionId
@@ -515,7 +522,7 @@ class SocketRecorder(
 
     /** Freezes the current app-run for delayed listener callbacks. */
     fun bindToCurrentSession(): SocketRecorder =
-        SocketRecorder(redaction, store, enabled, clock).also {
+        SocketRecorder(redaction, store, enabled, clock, senders).also {
             it.binaryPreviewPolicy = binaryPreviewPolicy
             it.sessionIdProvider = sessionIdProvider
             val provider = sessionIdProvider

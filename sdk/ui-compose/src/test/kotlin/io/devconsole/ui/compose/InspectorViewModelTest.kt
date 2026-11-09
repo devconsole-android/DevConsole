@@ -17,6 +17,19 @@ import org.junit.Test
 @Suppress("LargeClass") // Exhaustive per-action MVI coverage; mirrors FullInspectorDataSourceTest's justification.
 class InspectorViewModelTest {
     @Test
+    fun `snapshot exception leaves view model in unavailable state`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source =
+                RecordingInspectorDataSource(InspectorSnapshot(available = true)).apply {
+                    snapshotFailure = IllegalStateException("failed")
+                }
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+            assertFalse(viewModel.state.value.available)
+        }
+
+    @Test
     fun `initial load populates state from snapshot`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
@@ -1147,6 +1160,61 @@ class InspectorViewModelTest {
         }
 
     @Test
+    fun `a past run's traffic replaces the live traffic and survives a live refresh`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val session = sampleSession()
+            val source =
+                RecordingInspectorDataSource(
+                    InspectorSnapshot(
+                        available = true,
+                        sessions = listOf(session),
+                        transactions = listOf(sampleTransaction("live-tx")),
+                    ),
+                )
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+            // Default capturesForSession reads the snapshot; point it at the past run's traffic.
+            source.snapshotToReturn = source.snapshotToReturn.copy(transactions = listOf(sampleTransaction("past-tx")))
+
+            viewModel.dispatch(InspectorAction.SelectSession(session.id))
+            dispatcher.scheduler.advanceUntilIdle()
+            source.snapshotToReturn = source.snapshotToReturn.copy(transactions = listOf(sampleTransaction("live-2")))
+            viewModel.dispatch(InspectorAction.Refresh)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf("past-tx"),
+                viewModel.state.value.transactions
+                    .map { it.id },
+            )
+
+            viewModel.dispatch(InspectorAction.SelectSession(null))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf("live-2"),
+                viewModel.state.value.transactions
+                    .map { it.id },
+            )
+        }
+
+    @Test
+    fun `selecting the current run goes back to live instead of freezing it`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val current = sampleSession().copy(isCurrent = true)
+            val source = RecordingInspectorDataSource(InspectorSnapshot(available = true, sessions = listOf(current)))
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.SelectSession(current.id))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertNull(viewModel.state.value.selectedSessionId)
+        }
+
+    @Test
     fun `capturing a screenshot records the result and refreshes on success`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
@@ -1629,6 +1697,174 @@ class InspectorViewModelTest {
 
             assertEquals(ObserveTab.TRAFFIC, viewModel.state.value.observeTab)
         }
+
+    @Test
+    fun `selecting a traffic status class re-reads the snapshot with that filter`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = RecordingInspectorDataSource(InspectorSnapshot(available = true))
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.SelectTrafficStatusClass(TrafficStatusClass.CLIENT_ERROR))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(TrafficStatusClass.CLIENT_ERROR, source.lastTrafficQuery?.statusClass)
+            assertEquals(TrafficStatusClass.CLIENT_ERROR, viewModel.state.value.trafficStatusClass)
+        }
+
+    @Test
+    fun `selecting a traffic host passes it in the traffic query and keeps the status class`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = RecordingInspectorDataSource(InspectorSnapshot(available = true))
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.SelectTrafficStatusClass(TrafficStatusClass.SERVER_ERROR))
+            dispatcher.scheduler.advanceUntilIdle()
+            viewModel.dispatch(InspectorAction.SelectTrafficHost("api.example.test"))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals("api.example.test", source.lastTrafficQuery?.host)
+            assertEquals(TrafficStatusClass.SERVER_ERROR, source.lastTrafficQuery?.statusClass)
+            assertEquals("api.example.test", viewModel.state.value.trafficHost)
+        }
+
+    @Test
+    fun `clearing the traffic host reads every host again`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = RecordingInspectorDataSource(InspectorSnapshot(available = true))
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.SelectTrafficHost("api.example.test"))
+            dispatcher.scheduler.advanceUntilIdle()
+            viewModel.dispatch(InspectorAction.SelectTrafficHost(null))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertNull(source.lastTrafficQuery?.host)
+            assertNull(viewModel.state.value.trafficHost)
+        }
+
+    @Test
+    fun `resending a capture executes its request through the composer`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val transaction =
+                sampleTransaction().copy(
+                    method = "POST",
+                    url = "https://api.example.test/orders",
+                    requestHeaders = mapOf("Content-Type" to "application/json"),
+                    requestPreview = "{\"id\":1}",
+                    requestBodyKind = InspectorBodyKind.TEXT,
+                )
+            val source =
+                RecordingInspectorDataSource(
+                    InspectorSnapshot(
+                        available = true,
+                        transactions = listOf(transaction),
+                        capabilities = InspectorEditingUi(requestExecution = true),
+                    ),
+                )
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.ExecuteComposer(transaction.toComposerRequest()))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(1, source.executeCallCount)
+            val executed = source.lastExecuteRequest
+            assertEquals("POST", executed?.method)
+            assertEquals("https://api.example.test/orders", executed?.url)
+            assertEquals(mapOf("Content-Type" to "application/json"), executed?.headers)
+            assertEquals("{\"id\":1}", executed?.body)
+        }
+
+    @Test
+    fun `the snapshot exposes a write protocol only for connections the source can send on`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val snapshot = InspectorSnapshot(available = true, sockets = listOf(sampleSocket()))
+            val source = RecordingInspectorDataSource(snapshot)
+            source.socketSendProtocolToReturn = "mqtt"
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(mapOf("socket-1" to "mqtt"), viewModel.state.value.socketSendProtocols)
+        }
+
+    @Test
+    fun `a connection the source cannot write to has no send protocol in state`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val snapshot = InspectorSnapshot(available = true, sockets = listOf(sampleSocket()))
+            val source = RecordingInspectorDataSource(snapshot)
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertTrue(
+                viewModel.state.value.socketSendProtocols
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun `the snapshot reports whether remote config overrides are editable`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = RecordingInspectorDataSource(InspectorSnapshot(available = true))
+            source.supportsRemoteConfigOverridesToReturn = true
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.remoteConfigOverridesEditable)
+        }
+
+    @Test
+    fun `sending a socket frame calls through and stores the result`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = RecordingInspectorDataSource(InspectorSnapshot(available = true))
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.SendSocketFrame("socket-1", "{\"ping\":true}", "orders", 1, true))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(1, source.sendSocketFrameCallCount)
+            assertEquals("socket-1", source.lastSocketSendConnectionId)
+            assertEquals("{\"ping\":true}", source.lastSocketSendText)
+            assertEquals("orders", source.lastSocketSendTopic)
+            assertEquals(1, source.lastSocketSendQos)
+            assertEquals(true, source.lastSocketSendRetained)
+            assertEquals(source.sendSocketFrameResult, viewModel.state.value.lastCommandResult)
+        }
+
+    @Test
+    fun `remote config override actions call through and store the result`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val source = RecordingInspectorDataSource(InspectorSnapshot(available = true))
+            val viewModel = InspectorViewModel(dataSource = source, dispatcher = dispatcher)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.dispatch(InspectorAction.SetRemoteConfigOverride("firebase", "checkout_v2", "on"))
+            dispatcher.scheduler.advanceUntilIdle()
+            assertEquals(1, source.setRemoteConfigOverrideCallCount)
+            assertEquals(Triple("firebase", "checkout_v2", "on"), source.lastRemoteConfigOverride)
+
+            viewModel.dispatch(InspectorAction.ClearRemoteConfigOverride("firebase", "checkout_v2"))
+            dispatcher.scheduler.advanceUntilIdle()
+            assertEquals(1, source.clearRemoteConfigOverrideCallCount)
+            assertEquals("firebase" to "checkout_v2", source.lastClearedRemoteConfigOverride)
+
+            viewModel.dispatch(InspectorAction.ClearAllRemoteConfigOverrides)
+            dispatcher.scheduler.advanceUntilIdle()
+            assertEquals(1, source.clearAllRemoteConfigOverridesCallCount)
+            assertEquals(source.clearAllRemoteConfigOverridesResult, viewModel.state.value.lastCommandResult)
+        }
 }
 
 private fun sampleTransaction(id: String = "tx-1") =
@@ -1742,6 +1978,9 @@ private open class RecordingInspectorDataSource(
     initialSnapshot: InspectorSnapshot = InspectorSnapshot(),
 ) : InspectorDataSource {
     var snapshotToReturn: InspectorSnapshot = initialSnapshot
+    var snapshotFailure: Throwable? = null
+    var lastTrafficQuery: InspectorTrafficQuery? = null
+        private set
     var executeResult: InspectorCommandResult = InspectorCommandResult.Success(summary = "OK")
     var setMocksResult: InspectorCommandResult = InspectorCommandResult.Success(summary = "Mocks updated")
     var upsertMockRuleResult: InspectorCommandResult = InspectorCommandResult.Success(summary = "Mock rule saved")
@@ -1766,6 +2005,15 @@ private open class RecordingInspectorDataSource(
     var exportSessionZipResult: InspectorCommandResult = InspectorCommandResult.Success(summary = "Saved to zip")
     var revokePrincipalResult: InspectorCommandResult = InspectorCommandResult.Success(summary = "Browser revoked")
     var captureScreenshotResult: ScreenshotResult = ScreenshotResult.Failed("not configured")
+    var socketSendProtocolToReturn: String? = null
+    var sendSocketFrameResult: InspectorCommandResult = InspectorCommandResult.Success(summary = "Frame sent")
+    var supportsRemoteConfigOverridesToReturn = false
+    var setRemoteConfigOverrideResult: InspectorCommandResult =
+        InspectorCommandResult.Success(summary = "Override set")
+    var clearRemoteConfigOverrideResult: InspectorCommandResult =
+        InspectorCommandResult.Success(summary = "Override cleared")
+    var clearAllRemoteConfigOverridesResult: InspectorCommandResult =
+        InspectorCommandResult.Success(summary = "Overrides cleared")
 
     /** Stands in for the durable EvidenceStore's own read -- what "something else" (e.g. the dashboard) wrote. */
     var flaggedTransactionIdsToReturn: Set<String> = emptySet()
@@ -1860,8 +2108,35 @@ private open class RecordingInspectorDataSource(
         private set
     var flaggedCrashIdsCallSessionIds = mutableListOf<String?>()
         private set
+    var sendSocketFrameCallCount = 0
+        private set
+    var lastSocketSendConnectionId: String? = null
+        private set
+    var lastSocketSendText: String? = null
+        private set
+    var lastSocketSendTopic: String? = null
+        private set
+    var lastSocketSendQos: Int? = null
+        private set
+    var lastSocketSendRetained: Boolean? = null
+        private set
+    var setRemoteConfigOverrideCallCount = 0
+        private set
+    var lastRemoteConfigOverride: Triple<String, String, String>? = null
+        private set
+    var clearRemoteConfigOverrideCallCount = 0
+        private set
+    var lastClearedRemoteConfigOverride: Pair<String, String>? = null
+        private set
+    var clearAllRemoteConfigOverridesCallCount = 0
+        private set
 
-    override fun snapshot(): InspectorSnapshot = snapshotToReturn
+    override fun snapshot(): InspectorSnapshot = snapshotFailure?.let { throw it } ?: snapshotToReturn
+
+    override fun snapshot(trafficQuery: InspectorTrafficQuery): InspectorSnapshot {
+        lastTrafficQuery = trafficQuery
+        return snapshot()
+    }
 
     override fun setServerRunning(running: Boolean): InspectorCommandResult {
         setServerRunningCallCount++
@@ -2063,6 +2338,50 @@ private open class RecordingInspectorDataSource(
     override suspend fun captureScreenshot(): ScreenshotResult {
         captureScreenshotCallCount++
         return captureScreenshotResult
+    }
+
+    override fun socketSendProtocol(connectionId: String): String? = socketSendProtocolToReturn
+
+    override fun sendSocketFrame(
+        connectionId: String,
+        text: String,
+        topic: String?,
+        qos: Int,
+        retained: Boolean,
+    ): InspectorCommandResult {
+        sendSocketFrameCallCount++
+        lastSocketSendConnectionId = connectionId
+        lastSocketSendText = text
+        lastSocketSendTopic = topic
+        lastSocketSendQos = qos
+        lastSocketSendRetained = retained
+        return sendSocketFrameResult
+    }
+
+    override fun supportsRemoteConfigOverrides(): Boolean = supportsRemoteConfigOverridesToReturn
+
+    override fun setRemoteConfigOverride(
+        providerId: String,
+        key: String,
+        value: String,
+    ): InspectorCommandResult {
+        setRemoteConfigOverrideCallCount++
+        lastRemoteConfigOverride = Triple(providerId, key, value)
+        return setRemoteConfigOverrideResult
+    }
+
+    override fun clearRemoteConfigOverride(
+        providerId: String,
+        key: String,
+    ): InspectorCommandResult {
+        clearRemoteConfigOverrideCallCount++
+        lastClearedRemoteConfigOverride = providerId to key
+        return clearRemoteConfigOverrideResult
+    }
+
+    override fun clearAllRemoteConfigOverrides(): InspectorCommandResult {
+        clearAllRemoteConfigOverridesCallCount++
+        return clearAllRemoteConfigOverridesResult
     }
 }
 

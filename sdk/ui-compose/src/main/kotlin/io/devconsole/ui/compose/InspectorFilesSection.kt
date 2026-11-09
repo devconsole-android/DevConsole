@@ -13,9 +13,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,6 +31,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.devconsole.api.CaptureCategory
+
+private const val FILE_LIST_INITIAL_LIMIT = 200
 
 /**
  * Grouped callbacks for the read-only-by-default app file browser. Delete and share are both
@@ -46,6 +53,7 @@ internal fun FilesSection(
     canEdit: Boolean,
     actions: FileBrowserActions,
 ) {
+    var pendingDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
     // Defensive: files belong to the INSPECTION category. Hiding the DATA destination entirely
     // (DevConsoleWorkspace.workspaceNavItems) is the primary gate, but this section stays inert on
     // its own too, in case something ever reaches it by a route other than that nav item.
@@ -59,14 +67,47 @@ internal fun FilesSection(
                     selected = state.fileListing?.root,
                     onOpenRoot = actions.onOpenPath,
                 )
-                state.fileListing?.let { listing ->
-                    FileListingCard(listing = listing, canEdit = canEdit, actions = actions)
-                }
                 state.filePreview?.let { preview ->
-                    FilePreviewCard(preview = preview, onClose = actions.onClosePreview)
+                    FilePreviewCard(preview = preview, name = state.filePreviewName, onClose = actions.onClosePreview)
+                }
+                state.fileListing?.let { listing ->
+                    FileListingCard(listing = listing, canEdit = canEdit, actions = actions) { root, path ->
+                        pendingDelete = root to path
+                    }
                 }
             }
         }
+    }
+    pendingDelete?.let { (root, path) ->
+        val name = path.substringAfterLast('/')
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete file?") },
+            text = { Text("\"$name\" will be permanently deleted from $root. This can't be undone.") },
+            confirmButton = {
+                Text(
+                    "DELETE",
+                    color = DevConsoleTheme.colors.error,
+                    modifier =
+                        Modifier
+                            .clickable {
+                                actions.onDelete(root, path)
+                                pendingDelete = null
+                            }.padding(12.dp),
+                )
+            },
+            dismissButton = {
+                Text(
+                    "CANCEL",
+                    color = DevConsoleTheme.colors.muted,
+                    modifier =
+                        Modifier
+                            .clickable {
+                                pendingDelete = null
+                            }.padding(12.dp),
+                )
+            },
+        )
     }
 }
 
@@ -105,6 +146,7 @@ private fun FileListingCard(
     listing: InspectorFileListingUi,
     canEdit: Boolean,
     actions: FileBrowserActions,
+    onDelete: (String, String) -> Unit,
 ) {
     GroupedPanel {
         val here = if (listing.relativePath.isEmpty()) listing.root else "${listing.root}/${listing.relativePath}"
@@ -130,9 +172,18 @@ private fun FileListingCard(
                 modifier = Modifier.padding(16.dp),
             )
         } else {
-            listing.entries.forEach { entry ->
+            listing.entries.take(FILE_LIST_INITIAL_LIMIT).forEach { entry ->
                 GroupedPanelDivider()
-                FileEntryRow(root = listing.root, entry = entry, canEdit = canEdit, actions = actions)
+                FileEntryRow(root = listing.root, entry = entry, canEdit = canEdit, actions = actions) {
+                    onDelete(listing.root, entry.relativePath)
+                }
+            }
+            if (listing.entries.size > FILE_LIST_INITIAL_LIMIT) {
+                Text(
+                    "Showing first $FILE_LIST_INITIAL_LIMIT of ${listing.entries.size} entries.",
+                    color = DevConsoleTheme.colors.muted,
+                    modifier = Modifier.padding(16.dp),
+                )
             }
         }
     }
@@ -149,6 +200,7 @@ private fun FileEntryRow(
     entry: InspectorFileEntryUi,
     canEdit: Boolean,
     actions: FileBrowserActions,
+    onDelete: () -> Unit,
 ) {
     val colors = DevConsoleTheme.colors
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -168,7 +220,7 @@ private fun FileEntryRow(
                 }
             },
         )
-        if (canEdit && !entry.isDirectory) FileEntryActions(root, entry, actions)
+        if (canEdit && !entry.isDirectory) FileEntryActions(root, entry, actions, onDelete)
     }
 }
 
@@ -177,10 +229,12 @@ private fun FileEntryActions(
     root: String,
     entry: InspectorFileEntryUi,
     actions: FileBrowserActions,
+    onDelete: () -> Unit,
 ) {
-    Row(modifier = Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // 6dp + each label's own 10dp padding lines the labels up with the row title's 16dp inset.
+    Row(modifier = Modifier.padding(start = 6.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FileEntryActionText("SHARE", "Share file ${entry.name}") { actions.onShare(root, entry.relativePath) }
-        FileEntryActionText("DEL", "Delete file ${entry.name}") { actions.onDelete(root, entry.relativePath) }
+        FileEntryActionText("DELETE", "Delete file ${entry.name}", onDelete)
     }
 }
 
@@ -233,6 +287,7 @@ private fun FileRow(
 @Composable
 private fun FilePreviewCard(
     preview: InspectorFilePreviewUi,
+    name: String?,
     onClose: () -> Unit,
 ) {
     val colors = DevConsoleTheme.colors
@@ -243,7 +298,7 @@ private fun FilePreviewCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Preview", color = colors.ink)
+                Text(name?.let { "Preview · $it" } ?: "Preview", color = colors.ink)
                 Text(
                     text = "CLOSE",
                     color = colors.muted,

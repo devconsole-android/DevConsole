@@ -6,6 +6,7 @@
 
 package io.devconsole.ui.compose
 
+import android.content.ActivityNotFoundException
 import android.content.res.Configuration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -31,7 +33,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchColors
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -96,6 +101,10 @@ private const val SERVER_STATE_PERMISSION_REQUIRED = "PermissionRequired"
 
 /** How often [MoreRoute] re-reads the snapshot while visible -- see the poll's own doc. */
 private const val MORE_SCREEN_REFRESH_INTERVAL_MS = 5_000L
+
+/** The Capture group's "Pause capture" subtitle -- says what pausing actually excludes. */
+private const val CAPTURE_PAUSE_SUBTITLE =
+    "New requests, sockets, logs and push stay out of the timeline while paused"
 
 /** Stateful entry point wired into the MORE destination. Theme is owned by [DevConsoleWorkspace]. */
 @Composable
@@ -189,6 +198,10 @@ internal fun MoreRoute(
 @Suppress("LongParameterList") // One real interaction per field; see doc above.
 internal data class MoreActions(
     val onSetServerRunning: (Boolean) -> Unit,
+    /** The Capture group's "Pause capture" switch; takes the desired next state. */
+    val onSetCapturePaused: (Boolean) -> Unit,
+    /** The Capture group's destructive purge action, dispatched only after confirmation. */
+    val onPurgeCapturedData: () -> Unit,
     val onCopyUrl: (String) -> Unit,
     val onCopyCode: (String) -> Unit,
     val onShowQr: (String) -> Unit,
@@ -197,7 +210,8 @@ internal data class MoreActions(
     val onExportSessionZip: () -> Unit,
     val onCaptureScreenshot: () -> Unit,
     val onRevoke: (String) -> Unit,
-    val onSelectSession: (String) -> Unit,
+    val onSelectSession: (String?) -> Unit,
+    val onShowMessage: (String) -> Unit = {},
     val onSetLocationPingStream: (String, Boolean) -> Unit = { _, _ -> },
 )
 
@@ -213,6 +227,8 @@ private fun rememberMoreActions(
     return remember(viewModel, clipboard) {
         MoreActions(
             onSetServerRunning = { running -> viewModel.dispatch(InspectorAction.SetServerRunning(running)) },
+            onSetCapturePaused = { paused -> viewModel.dispatch(InspectorAction.SetCapturePaused(paused)) },
+            onPurgeCapturedData = { viewModel.dispatch(InspectorAction.PurgeCapturedData) },
             onCopyUrl = { url ->
                 clipboard.setText(AnnotatedString(url))
                 currentShowMessage("$url copied")
@@ -228,6 +244,7 @@ private fun rememberMoreActions(
             onCaptureScreenshot = { viewModel.dispatch(InspectorAction.CaptureScreenshot) },
             onRevoke = { id -> viewModel.dispatch(InspectorAction.RevokePrincipal(id)) },
             onSelectSession = { id -> viewModel.dispatch(InspectorAction.SelectSession(id)) },
+            onShowMessage = { message -> currentShowMessage(message) },
             onSetLocationPingStream = { name, enabled ->
                 viewModel.dispatch(InspectorAction.SetLocationPingStreamEnabled(name, enabled))
             },
@@ -281,6 +298,10 @@ internal fun MoreScreen(
 ) {
     val colors = DevConsoleTheme.colors
     val running = state.health?.state == SERVER_STATE_RUNNING
+    // Plain state, matching Observe's clear-captures confirmation: losing an open dialog on a
+    // rotation is harmless, and this one is a destructive action worth re-confirming.
+    var purgeConfirmationVisible by remember { mutableStateOf(false) }
+    val showPurgeConfirmation = { purgeConfirmationVisible = true }
     Column(modifier = modifier.fillMaxSize().background(colors.ground)) {
         InspectorTopArea(
             subLine = "",
@@ -325,6 +346,20 @@ internal fun MoreScreen(
             item(key = "more_export_runs", contentType = "export_row") {
                 RetainedRunsRow(state, actions, colors)
             }
+            if (state.captureControlSupported) {
+                item(key = "more_capture_title", contentType = "panel_title") {
+                    MorePanelTitle("Capture")
+                }
+                item(key = "more_capture_pause", contentType = "capture_row") {
+                    CapturePauseRow(state.capturePaused, actions)
+                }
+                item(key = "more_capture_div_1", contentType = "divider") {
+                    GroupedPanelDivider()
+                }
+                item(key = "more_capture_purge", contentType = "capture_row") {
+                    PurgeCapturedDataRow(colors, onShowConfirmation = showPurgeConfirmation)
+                }
+            }
             if (state.locationPingStreams.isNotEmpty()) {
                 item(key = "more_location_pings_title", contentType = "panel_title") {
                     MorePanelTitle("Location pings")
@@ -360,7 +395,95 @@ internal fun MoreScreen(
             }
         }
     }
+    if (purgeConfirmationVisible) {
+        PurgeCapturedConfirmDialog(
+            onConfirm = {
+                purgeConfirmationVisible = false
+                actions.onPurgeCapturedData()
+            },
+            onDismiss = { purgeConfirmationVisible = false },
+        )
+    }
 }
+
+/**
+ * The More screen's "Pause capture" switch. The whole row is one toggleable switch node, so the row
+ * and the switch can never disagree, and the title is set like the neighbouring panel rows rather
+ * than in the monospace of data-key rows. The subtitle wraps: it is the only place that says what
+ * pausing excludes.
+ */
+@Composable
+private fun CapturePauseRow(
+    paused: Boolean,
+    actions: MoreActions,
+) {
+    val colors = DevConsoleTheme.colors
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .toggleable(value = paused, role = Role.Switch, onValueChange = actions.onSetCapturePaused)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Pause capture", color = colors.ink, fontSize = 16.sp)
+            Text(
+                CAPTURE_PAUSE_SUBTITLE,
+                color = colors.muted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        Switch(checked = paused, onCheckedChange = null, colors = captureSwitchColors(colors))
+    }
+}
+
+/** Destructive row: asks through [PurgeCapturedConfirmDialog] before dispatching anything. */
+@Composable
+private fun PurgeCapturedDataRow(
+    colors: DevConsoleColors,
+    onShowConfirmation: () -> Unit,
+) {
+    MorePanelRow(
+        title = "Purge captured data",
+        description = "Removes this run's captured traffic and old unpinned runs",
+        meta = "Keeps pinned",
+        titleColor = colors.error,
+        onClick = onShowConfirmation,
+    )
+}
+
+@Composable
+private fun PurgeCapturedConfirmDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = DevConsoleTheme.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Purge captured data?") },
+        text = { Text("Removes this run's captured traffic and old unpinned runs. Pinned runs are kept.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Purge", color = colors.error) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = colors.ink) }
+        },
+    )
+}
+
+@Composable
+private fun captureSwitchColors(colors: DevConsoleColors): SwitchColors =
+    SwitchDefaults.colors(
+        checkedTrackColor = colors.signal,
+        checkedThumbColor = colors.signalInk,
+        uncheckedTrackColor = colors.surface3,
+        uncheckedThumbColor = colors.muted,
+        uncheckedBorderColor = colors.borderStrong,
+    )
 
 @Composable
 private fun MorePanelTitle(title: String) {
@@ -381,6 +504,8 @@ private fun MorePanelRow(
     description: String = "",
     onClick: (() -> Unit)? = null,
     metaContent: (@Composable () -> Unit)? = null,
+    /** Override for destructive rows (e.g. "Purge captured data"), which paint their label in error. */
+    titleColor: Color? = null,
 ) {
     val colors = DevConsoleTheme.colors
     Row(
@@ -395,7 +520,7 @@ private fun MorePanelRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(title, modifier = Modifier.weight(1f), color = colors.ink, fontSize = 16.sp)
+        Text(title, modifier = Modifier.weight(1f), color = titleColor ?: colors.ink, fontSize = 16.sp)
         if (metaContent != null) {
             metaContent()
         } else if (meta.isNotBlank()) {
@@ -461,7 +586,18 @@ private fun BrowserDashboardPanel(
                                     ),
                                     InspectorUrlAction(
                                         "Open URL",
-                                        { uriHandler.openUri(url) },
+                                        {
+                                            runCatching { uriHandler.openUri(url) }
+                                                .onFailure { failure ->
+                                                    if (failure is ActivityNotFoundException ||
+                                                        failure is SecurityException
+                                                    ) {
+                                                        actions.onShowMessage("No app can open this URL")
+                                                    } else {
+                                                        actions.onShowMessage("Unable to open this URL")
+                                                    }
+                                                }
+                                        },
                                         colors.panel,
                                         colors.muted,
                                         icon = {
@@ -633,12 +769,20 @@ private fun ExportHarRow(
         if (selection.isEmpty()) {
             EXPORT_ALL_SUBTITLE
         } else {
-            "Redacted · ${selection.size} selected transaction(s)"
+            "Redacted · ${countLabel(selection.size, "selected transaction")}"
         }
     MorePanelRow(
         title = "HAR",
         description = subtitle,
-        meta = if (selection.isEmpty()) "${state.transactions.size} txns" else "${selection.size} selected",
+        meta =
+            if (selection.isEmpty()) {
+                countLabel(
+                    state.transactions.size,
+                    "request",
+                )
+            } else {
+                "${selection.size} selected"
+            },
         onClick = actions.onExportHar,
     )
 }
@@ -654,12 +798,20 @@ private fun ExportPostmanRow(
         if (selection.isEmpty()) {
             EXPORT_ALL_SUBTITLE
         } else {
-            "Redacted · ${selection.size} selected transaction(s)"
+            "Redacted · ${countLabel(selection.size, "selected transaction")}"
         }
     MorePanelRow(
         title = "Postman collection",
         description = subtitle,
-        meta = if (selection.isEmpty()) "${state.transactions.size} txns" else "${selection.size} selected",
+        meta =
+            if (selection.isEmpty()) {
+                countLabel(
+                    state.transactions.size,
+                    "request",
+                )
+            } else {
+                "${selection.size} selected"
+            },
         onClick = actions.onExportPostman,
     )
 }
@@ -741,7 +893,31 @@ private fun RetainedRunsRow(
     )
     if (expanded) {
         Column(modifier = Modifier.padding(bottom = 8.dp)) {
-            state.sessions.forEach { session ->
+            GroupedPanelDivider()
+            TonalListRow(
+                leadText = "",
+                leadColor = colors.muted,
+                leadContainerColor = colors.panel,
+                title = "Current run (live)",
+                subtitle = "Live capture session",
+                trailValue = "",
+                trailValueColor = colors.muted,
+                trailContent =
+                    if (state.selectedSessionId == null) {
+                        {
+                            InspectorGlyphIcon(
+                                InspectorGlyph.Check,
+                                "Selected",
+                                tint = colors.ink,
+                                size = 18.dp,
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                onClick = { actions.onSelectSession(null) },
+            )
+            state.sessions.filterNot(InspectorSessionUi::isCurrent).forEach { session ->
                 GroupedPanelDivider()
                 TonalListRow(
                     leadText = "",
@@ -878,6 +1054,7 @@ private fun moreScreenPreviewState() =
     InspectorState(
         available = true,
         serverControlSupported = true,
+        captureControlSupported = true,
         sessions =
             listOf(
                 InspectorSessionUi(
@@ -910,6 +1087,8 @@ private fun moreScreenPreviewState() =
 private fun moreScreenPreviewActions() =
     MoreActions(
         onSetServerRunning = {},
+        onSetCapturePaused = {},
+        onPurgeCapturedData = {},
         onCopyUrl = {},
         onCopyCode = {},
         onShowQr = {},

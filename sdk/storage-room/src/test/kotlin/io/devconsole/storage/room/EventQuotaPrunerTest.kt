@@ -11,7 +11,11 @@ import org.junit.Test
 
 private class FakeEventDao : EventDao {
     val events = linkedMapOf<String, EventEntity>()
-    val requestedDeleteLimits = mutableListOf<Int>()
+    var orderedScans = 0
+    var finalCountScans = 0
+    var finalByteScans = 0
+    val bookmarked = mutableSetOf<String>()
+    val attached = mutableSetOf<String>()
 
     override fun insertAll(events: List<EventEntity>) {
         events.forEach { this.events[it.id] = it }
@@ -25,7 +29,10 @@ private class FakeEventDao : EventDao {
             .forEach { this.events.remove(it.id) }
     }
 
-    override fun eventCount(): Long = events.size.toLong()
+    override fun eventCount(): Long {
+        finalCountScans++
+        return events.size.toLong()
+    }
 
     override fun deleteOlderThan(cutoffEpochMs: Long): Int {
         val expired = events.values.filter { it.wallTimeMs < cutoffEpochMs }.map { it.id }
@@ -33,22 +40,30 @@ private class FakeEventDao : EventDao {
         return expired.size
     }
 
-    override fun estimatedStoredBytes(): Long =
-        events.values.sumOf {
-            96L + it.summary.encodeToByteArray().size + (it.payloadJson?.encodeToByteArray()?.size ?: 0)
-        }
+    override fun estimatedStoredBytes(): Long {
+        finalByteScans++
+        return events.values.sumOf { it.toStoredEvent().estimatedStorageBytes() }
+    }
+
+    override fun quotaCandidates(): List<EventPruneCandidate> {
+        orderedScans++
+        return events.values
+            .filter { it.id !in bookmarked }
+            .sortedWith(
+                compareBy<EventEntity> { it.severity }.thenBy { it.wallTimeMs }.thenBy { it.sequence }.thenBy { it.id },
+            ).map { it.pruneCandidate() }
+    }
 
     override fun recentEvents(limit: Int): List<EventEntity> =
         events.values
             .sortedWith(compareBy<EventEntity> { it.monoTimeNs }.thenBy { it.sequence }.thenBy { it.id })
             .takeLast(limit)
 
-    override fun oldestLowSeverityFirst(limit: Int): List<String> =
+    override fun activeSessionTrimCandidates(sessionId: String): List<EventPruneCandidate> =
         events.values
-            .sortedWith(compareBy({ it.severity }, { it.wallTimeMs }))
-            .take(limit)
-            .map { it.id }
-            .also { requestedDeleteLimits += limit }
+            .filter { it.sessionId == sessionId && it.id !in bookmarked && it.id !in attached }
+            .sortedWith(compareBy({ it.severity }, { it.wallTimeMs }, { it.sequence }, { it.id }))
+            .map { it.pruneCandidate() }
 
     override fun recentEventsForSession(
         sessionId: String,
@@ -90,16 +105,6 @@ private class FakeEventDao : EventDao {
             ).take(limit)
             .sortedWith(compareBy<EventEntity> { it.wallTimeMs }.thenBy { it.sequence }.thenBy { it.id })
 
-    override fun oldestUnbookmarkedLowSeverityFirstForSession(
-        sessionId: String,
-        limit: Int,
-    ): List<String> =
-        events.values
-            .filter { it.sessionId == sessionId }
-            .sortedWith(compareBy({ it.severity }, { it.wallTimeMs }))
-            .take(limit)
-            .map { it.id }
-
     override fun deleteByIds(ids: List<String>) {
         ids.forEach { events.remove(it) }
     }
@@ -112,6 +117,12 @@ private class FakeEventDao : EventDao {
 
     override fun sessionIdsForIds(ids: List<String>): List<String> = ids.mapNotNull { events[it]?.sessionId }.distinct()
 }
+
+private fun EventEntity.pruneCandidate(): EventPruneCandidate =
+    EventPruneCandidate().also {
+        it.id = id
+        it.bytes = toStoredEvent().estimatedStorageBytes()
+    }
 
 private fun event(
     id: String,
@@ -251,8 +262,29 @@ class EventQuotaPrunerTest {
             assertEquals(1, result.expiredCount)
             assertEquals(1, result.quotaCount)
             assertEquals(setOf("new-error"), dao.events.keys)
-            assertTrue(dao.requestedDeleteLimits.all { it <= 256 })
             assertTrue(result.remainingBytes <= 150)
+        }
+
+    @Test
+    fun `byte-only overage trims all required rows in one ordered scan`() =
+        runBlocking {
+            val dao = FakeEventDao()
+            dao.insertAll(listOf(event("one", 0, 1), event("two", 0, 2), event("three", 0, 3)))
+            dao.attached += "one"
+            val initialBytes = dao.estimatedStoredBytes()
+
+            val result =
+                EventQuotaPruner(dao).pruneTo(
+                    10,
+                    initialBytes - event("one", 0, 1).toStoredEvent().estimatedStorageBytes(),
+                    Long.MIN_VALUE,
+                )
+
+            assertEquals(1, result.quotaCount)
+            assertEquals(setOf("two", "three"), dao.events.keys)
+            assertEquals(1, dao.orderedScans)
+            assertEquals(1, dao.finalCountScans)
+            assertEquals(2, dao.finalByteScans) // one setup estimate and one prune estimate
         }
 
     @Test
@@ -307,5 +339,20 @@ class EventQuotaPrunerTest {
             EventQuotaPruner(dao) { prunedSessions += it }.pruneTo(maxEvents = 50_000)
 
             assertTrue(prunedSessions.isEmpty())
+        }
+
+    @Test
+    fun `quota pruning skips bookmarked events and deletes eligible rows in one scan`() =
+        runBlocking {
+            val dao = FakeEventDao()
+            dao.insertAll(listOf(event("protected", 0, 0), event("drop-1", 0, 1), event("drop-2", 0, 2)))
+            dao.bookmarked += "protected"
+
+            EventQuotaPruner(dao).pruneTo(maxEvents = 1)
+
+            assertEquals(setOf("protected"), dao.events.keys)
+            assertEquals(1, dao.orderedScans)
+            assertEquals(1, dao.finalCountScans)
+            assertEquals(1, dao.finalByteScans)
         }
 }

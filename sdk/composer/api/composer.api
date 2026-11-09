@@ -122,7 +122,6 @@ public final class io/devconsole/composer/ComposerQueryParameter {
 public final class io/devconsole/composer/ComposerRequest {
 	public static final field CONTROL_CHARACTER_LIMIT I
 	public static final field DEFAULT_TIMEOUT_MS I
-	public static final field HEX_RADIX I
 	public static final field UNICODE_ESCAPE_PADDING C
 	public static final field UNICODE_ESCAPE_WIDTH I
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Ljava/util/List;Lio/devconsole/composer/ComposerBodyType;Ljava/util/Map;Ljava/util/List;Lio/devconsole/composer/ComposerBinaryBody;IZLjava/util/List;)V

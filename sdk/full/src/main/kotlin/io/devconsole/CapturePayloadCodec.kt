@@ -84,6 +84,7 @@ internal object CapturePayloadCodec {
                     "url" to str(connection?.url),
                     "openedAtEpochMs" to num(connection?.openedAtEpochMs),
                     "reconnectAttempt" to num(connection?.reconnectAttempt),
+                    "protocol" to str(connection?.protocol?.wireName),
                 ),
             )
         }

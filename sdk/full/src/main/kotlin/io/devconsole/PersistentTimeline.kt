@@ -99,8 +99,11 @@ internal class PersistentTimeline(
     }
 
     override fun append(event: StoredEvent) {
-        if (!delegate.contains(event.id)) {
-            (delegate as? TimelineAppender)?.append(event)
+        val appender = delegate as? TimelineAppender
+        if (delegate is InMemoryTimeline) {
+            appender?.append(event)
+        } else if (!delegate.contains(event.id)) {
+            appender?.append(event)
         }
         val writerToUse =
             synchronized(persistenceLock) {

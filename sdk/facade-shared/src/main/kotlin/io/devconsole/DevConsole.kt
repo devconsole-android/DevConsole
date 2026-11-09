@@ -9,7 +9,9 @@ import io.devconsole.api.DevConsoleConfig
 import io.devconsole.api.DevConsoleState
 import io.devconsole.api.InitResult
 import io.devconsole.api.InspectorOpenResult
+import io.devconsole.api.PurgeResult
 import io.devconsole.api.ScreenshotResult
+import io.devconsole.api.SessionExportResult
 import io.devconsole.api.StartRequest
 import io.devconsole.api.StartResult
 import io.devconsole.api.StopReason
@@ -199,6 +201,17 @@ object DevConsole {
     fun registerRemoteConfigProvider(provider: RemoteConfigProvider): Boolean =
         this.provider.registerRemoteConfigProvider(provider)
 
+    /**
+     * The local override a developer applied in DevConsole for [key], or null. Read it before your
+     * own provider: `DevConsole.remoteConfigOverride("k") ?: remoteConfig.getString("k")`.
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun remoteConfigOverride(
+        key: String,
+        providerId: String? = null,
+    ): String? = this.provider.remoteConfigOverride(key, providerId)
+
     /** Address of the running server, or null when it is not running. Survives activity recreation. */
     @JvmStatic
     fun endpoint(): BrowserEndpoint? = provider.endpoint()
@@ -237,6 +250,26 @@ object DevConsole {
      */
     @JvmStatic
     fun featureFlagStringValue(key: String): String = provider.featureFlagStringValue(key)
+
+    /**
+     * Pauses or resumes live capture of network transactions, socket connections, push events, and
+     * log lines. Returns `false` when the runtime is disabled or not initialized, and `true` when
+     * the state was applied.
+     */
+    @JvmStatic
+    fun setCapturePaused(paused: Boolean): Boolean = provider.setCapturePaused(paused)
+
+    /** Whether live capture is currently paused. */
+    @JvmStatic
+    fun isCapturePaused(): Boolean = provider.isCapturePaused()
+
+    /** Clears captured in-memory data and deletes finished retained runs; the live run and pinned runs are kept. */
+    @JvmStatic
+    suspend fun purgeCapturedData(): PurgeResult = provider.purgeCapturedData()
+
+    /** Exports the current session bundle as a ZIP file. */
+    @JvmStatic
+    suspend fun exportSession(): SessionExportResult = provider.exportSession()
 
     @JvmStatic
     fun recordLocationPing(

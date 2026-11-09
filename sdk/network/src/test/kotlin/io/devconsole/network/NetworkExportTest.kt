@@ -9,6 +9,22 @@ import org.junit.Test
 
 class NetworkExportTest {
     @Test
+    fun `HAR preserves request body previews beyond 64 KiB`() {
+        val marker = "TAIL_MARKER"
+        val body = "x".repeat(100 * 1024) + marker
+        val capture =
+            NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(
+                NetworkRequestInput("POST", "https://example.test/upload", body = body.encodeToByteArray()),
+                NetworkResponseInput(statusCode = 200),
+            )
+
+        val har = NetworkExport.toHarTransactions(listOf(NetworkTransaction("large", 1, 2, capture)))
+
+        assertTrue(har.contains(marker))
+        har.assertIsValidJson()
+    }
+
+    @Test
     fun `curl and har use only redacted capture fields`() {
         val capture =
             NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended())).capture(

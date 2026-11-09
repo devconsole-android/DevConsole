@@ -122,13 +122,20 @@ class FullFacadeTest {
         runTest {
             val provider = PlatformFacadeProvider()
             provider.initialize(ApplicationProvider.getApplicationContext(), DevConsoleConfig.default())
-            val request = StartRequest(BindingMode.LOOPBACK, 8890..8893)
+            // An OS-assigned free port, not a fixed range: with the configuration cache Gradle runs the
+            // debug and release unit-test JVMs side by side, and a shared fixed range let one variant
+            // grab the port during the other's restart window. A one-port range also makes "reclaims"
+            // strict -- the restart cannot quietly fall forward to a neighbour.
+            val port = java.net.ServerSocket(0).use { it.localPort }
+            val request = StartRequest(BindingMode.LOOPBACK, port..port)
 
-            val first = provider.startBrowser(request) as StartResult.Started
-            val second = provider.startBrowser(request) as StartResult.Started
+            val first = provider.startBrowser(request)
+            assertTrue("first start: $first", first is StartResult.Started)
+            val second = provider.startBrowser(request)
+            assertTrue("restart: $second", second is StartResult.Started)
 
-            assertTrue(first.endpoint.port in request.portRange)
-            assertEquals(first.endpoint.port, second.endpoint.port)
+            assertEquals(port, (first as StartResult.Started).endpoint.port)
+            assertEquals(port, (second as StartResult.Started).endpoint.port)
             assertEquals(DevConsoleState.Running, provider.state().value)
             provider.stop(StopReason.UserRequested)
         }

@@ -193,7 +193,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         val result = runner("verifyDevConsoleProtectedArtifacts").buildAndFail()
 
-        assertTrue(result.output.contains("Protected variants contain the full DevConsole runtime"))
+        assertTrue(result.output.contains("Protected variants contain DevConsole runtime components"))
         assertTrue(result.output.contains("release -> :stub-full"))
     }
 
@@ -210,7 +210,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
     fun `protected variant depending on a configured full-runtime path fails verification`() {
         writeFixture(
             devConsoleBlock = """
-                protectedVariantPatterns.set(listOf("release"))
+                protectedVariantPatterns.set(listOf("(?i).*release"))
                 protectedDependencyPaths.set(setOf(":stub-full"))
             """.trimIndent(),
             extraBuildScript = """dependencies { add("releaseImplementation", project(":stub-full")) }""",
@@ -219,8 +219,44 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         val result = runner("verifyDevConsoleProtectedArtifacts").buildAndFail()
 
-        assertTrue(result.output.contains("Protected variants contain the full DevConsole runtime"))
+        assertTrue(result.output.contains("Protected variants contain DevConsole runtime components"))
         assertTrue(result.output.contains("release -> :stub-full"))
+    }
+
+    @Test
+    fun `protected external Ktor and UI coordinates are rejected`() {
+        writeFixture(
+            devConsoleBlock = "autoWireDependencies.set(false)",
+            extraBuildScript = """
+                dependencies {
+                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole-network-ktor:1.3.1")
+                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole-ui-compose:1.3.1")
+                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole-ui-views:1.3.1")
+                }
+            """.trimIndent(),
+        )
+
+        val result = runner("verifyReleaseDevConsoleProtectedArtifacts").buildAndFail()
+
+        assertTrue(result.output, result.output.contains("devconsole-network-ktor"))
+        assertTrue(result.output, result.output.contains("devconsole-ui-compose"))
+        assertTrue(result.output, result.output.contains("devconsole-ui-views"))
+        assertTrue(result.output, result.output.contains("Use debugImplementation for DevConsole UI add-ons"))
+    }
+
+    @Test
+    fun `unmatched enabled names and protected patterns warn after variant discovery`() {
+        writeFixture(
+            devConsoleBlock = """
+                enabledVariants.set(setOf("deubg"))
+                protectedVariantPatterns.set(listOf("(?i).*neverMatches"))
+            """.trimIndent(),
+        )
+
+        val result = runner("devConsoleVariantReport").build()
+
+        assertTrue(result.output, result.output.contains("enabledVariants entry 'deubg' matched no Android variant"))
+        assertTrue(result.output, result.output.contains("protectedVariantPatterns entry '(?i).*neverMatches' matched no Android variant"))
     }
 
     @Test
@@ -276,6 +312,35 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         assertTrue(result.output, result.output.contains("release"))
         assertTrue(result.output, result.output.contains("DEVCONSOLE_ENABLED_NETWORK_OKHTTP_V1"))
+    }
+
+    @Test
+    fun `packaged scan includes Ktor Paho and UI signatures`() {
+        val signatures = listOf(
+            "DEVCONSOLE_ENABLED_NETWORK_KTOR_V1",
+            "DEVCONSOLE_ENABLED_SOCKET_PAHO_V1",
+            "DEVCONSOLE_ENABLED_UI_COMPOSE_V1",
+            "DEVCONSOLE_ENABLED_UI_VIEWS_V1",
+        )
+        signatures.forEachIndexed { index, signature ->
+            writeFixture(
+                devConsoleBlock = "autoWireDependencies.set(false)",
+                androidPlugin = "com.android.application",
+                applicationIdLine = "applicationId = \"io.devconsole.fixture\"\nversionCode = 1",
+            )
+            writeZip("build/marker$index.apk", "classes.dex" to signature.encodeToByteArray())
+            val script = File(projectDir.root, "build.gradle.kts")
+            script.appendText("\n" + """
+                tasks.register<io.devconsole.gradle.VerifyDevConsolePackagedArtifactTask>("scanMarker$index") {
+                    variantName.set("release")
+                    failOnUnsafeVariant.set(true)
+                    packagedArtifacts.from(file("build/marker$index.apk"))
+                    jsonReport.set(file("build/reports/scan$index.json"))
+                }
+            """.trimIndent())
+            val result = runner("scanMarker$index").buildAndFail()
+            assertTrue(result.output, result.output.contains(signature))
+        }
     }
 
     @Test
@@ -592,7 +657,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         val result = runner("verifyDevConsoleProtectedArtifacts").buildAndFail()
 
-        assertTrue(result.output.contains("Protected variants contain the full DevConsole runtime"))
+        assertTrue(result.output.contains("Protected variants contain DevConsole runtime components"))
         assertTrue(result.output.contains("staging -> :stub-full"))
     }
 
@@ -934,7 +999,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         // The pre-JitPack group must keep failing a protected variant: hosts that have not migrated
         // their coordinates still depend on this check to keep the full runtime out of release.
-        assertTrue(result.output, result.output.contains("Protected variants contain the full DevConsole runtime"))
+        assertTrue(result.output, result.output.contains("Protected variants contain DevConsole runtime components"))
         // The declared-dependency entry carries no version and no "(resolved)" suffix -- asserting it
         // specifically keeps the transitive-regex path from satisfying this test on its own.
         assertTrue(
@@ -959,7 +1024,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         val result = runner("verifyDevConsoleProtectedArtifacts").buildAndFail()
 
-        assertTrue(result.output, result.output.contains("Protected variants contain the full DevConsole runtime"))
+        assertTrue(result.output, result.output.contains("Protected variants contain DevConsole runtime components"))
         assertTrue(
             result.output,
             Regex("release -> com\\.github\\.devconsole-android\\.DevConsole:devconsole(,|\\s*$)", RegexOption.MULTILINE)

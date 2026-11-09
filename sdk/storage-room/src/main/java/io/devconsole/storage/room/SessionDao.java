@@ -19,11 +19,14 @@ public interface SessionDao {
     @Query("SELECT * FROM sessions ORDER BY started_at_ms DESC, id DESC")
     List<SessionEntity> sessions();
 
-    @Query("SELECT * FROM sessions WHERE status IN ('COMPLETED', 'CRASHED') AND COALESCE(ended_at_ms, started_at_ms) < :cutoffEpochMs ORDER BY COALESCE(ended_at_ms, started_at_ms) ASC, id ASC")
+    @Query("SELECT * FROM sessions WHERE status IN ('COMPLETED', 'CRASHED') AND pinned = 0 AND COALESCE(ended_at_ms, started_at_ms) < :cutoffEpochMs ORDER BY COALESCE(ended_at_ms, started_at_ms) ASC, id ASC")
     List<SessionEntity> expiredCompleted(long cutoffEpochMs);
 
-    @Query("SELECT * FROM sessions WHERE status IN ('COMPLETED', 'CRASHED') ORDER BY COALESCE(ended_at_ms, started_at_ms) ASC, id ASC")
+    @Query("SELECT * FROM sessions WHERE status IN ('COMPLETED', 'CRASHED') AND pinned = 0 ORDER BY COALESCE(ended_at_ms, started_at_ms) ASC, id ASC")
     List<SessionEntity> completedOldestFirst();
+
+    @Query("UPDATE sessions SET pinned = :pinned WHERE id = :sessionId AND status IN ('COMPLETED', 'CRASHED')")
+    int setPinned(String sessionId, boolean pinned);
 
     @Query("SELECT * FROM sessions WHERE status = 'DELETING' ORDER BY COALESCE(ended_at_ms, started_at_ms) ASC, id ASC")
     List<SessionEntity> deletingSessions();

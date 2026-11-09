@@ -7,6 +7,7 @@ package io.devconsole
 import android.content.Context
 import io.devconsole.export.DEFAULT_EXPORT_LIMIT_BYTES
 import io.devconsole.export.EventExportWriter
+import io.devconsole.export.ExportAttachmentSource
 import io.devconsole.export.ExportRequest
 import io.devconsole.export.ExportResult
 import io.devconsole.network.ExportSelection
@@ -73,6 +74,7 @@ sealed interface ExportOutcome {
 internal data class SessionExportSources(
     val annotationsSupplier: () -> TimelineAnnotations = { InMemoryTimelineAnnotations() },
     val attachmentReader: suspend (String) -> ByteArray? = { null },
+    val attachmentMetadataReader: suspend (String) -> io.devconsole.storage.api.StoredAttachment? = { null },
 )
 
 internal class AndroidInspectorExporter(
@@ -139,7 +141,7 @@ internal class AndroidInspectorExporter(
                     EventExportWriter(exportRedaction ?: RedactionEngine(RedactionPolicy.default())).writeAsync(
                         ExportRequest(sessionId = sessionId, events = events, destination = timelinePart)
                             .withAnnotations(events.associate { it.id to annotations.get(it.id) })
-                            .withAttachments(collectAttachments(events)),
+                            .withAttachmentSources(attachmentSources(events)),
                     )
                 }
             when (timelineResult) {
@@ -199,20 +201,32 @@ internal class AndroidInspectorExporter(
      * effort, skipping (never failing the whole export over) an id the reader can't produce bytes
      * for.
      */
-    private suspend fun collectAttachments(events: List<StoredEvent>): Map<String, ByteArray> =
+    private suspend fun attachmentSources(events: List<StoredEvent>): Map<String, ExportAttachmentSource> =
         buildMap {
-            events
-                .mapNotNull(StoredEvent::attachmentId)
-                .distinct()
-                .forEach { attachmentId ->
-                    try {
-                        sessionExportSources.attachmentReader(attachmentId)?.let { put(attachmentId, it) }
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
-                        // A missing/corrupt attachment degrades this export, not the host app.
-                    }
+            events.mapNotNull(StoredEvent::attachmentId).distinct().forEach { attachmentId ->
+                try {
+                    val metadata = sessionExportSources.attachmentMetadataReader(attachmentId)
+                    val source =
+                        if (metadata != null) {
+                            ExportAttachmentSource(metadata.storedLength, metadata.mimeType) {
+                                sessionExportSources.attachmentReader(attachmentId)?.inputStream()
+                            }
+                        } else {
+                            // No metadata reader (or no row): fall back to one bounded read for the size.
+                            sessionExportSources.attachmentReader(attachmentId)?.let { bytes ->
+                                ExportAttachmentSource(
+                                    bytes.size.toLong(),
+                                    "application/octet-stream",
+                                ) { bytes.inputStream() }
+                            }
+                        }
+                    source?.let { put(attachmentId, it) }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // A missing/corrupt attachment degrades this export, not the host app.
                 }
+            }
         }
 
     /**

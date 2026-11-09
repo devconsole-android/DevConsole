@@ -26,6 +26,13 @@ import io.devconsole.network.NetworkTransaction
 import io.devconsole.push.InMemoryPushStore
 import io.devconsole.push.PushEvent
 import io.devconsole.push.PushLifecycle
+import io.devconsole.remoteconfig.RemoteConfigEntry
+import io.devconsole.remoteconfig.RemoteConfigFetchInfo
+import io.devconsole.remoteconfig.RemoteConfigFetchStatus
+import io.devconsole.remoteconfig.RemoteConfigProvider
+import io.devconsole.remoteconfig.RemoteConfigRegistry
+import io.devconsole.remoteconfig.RemoteConfigSnapshot
+import io.devconsole.remoteconfig.RemoteConfigSource
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
 import io.devconsole.server.api.DatabaseExecResult
@@ -68,9 +75,12 @@ import io.devconsole.ui.compose.InspectorBrowserUi
 import io.devconsole.ui.compose.InspectorCommandResult
 import io.devconsole.ui.compose.InspectorComposerRequest
 import io.devconsole.ui.compose.InspectorHealthUi
+import io.devconsole.ui.compose.InspectorMockActionType
+import io.devconsole.ui.compose.InspectorMockRuleUi
 import io.devconsole.ui.compose.InspectorRetentionUi
 import io.devconsole.ui.compose.InspectorSessionUi
 import io.devconsole.ui.compose.InspectorSqlResultUi
+import io.devconsole.ui.compose.InspectorTrafficQuery
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -143,6 +153,42 @@ class FullInspectorDataSourceTest {
                     .captureRules(false)
                     .build(),
             )
+
+    @Suppress("LongParameterList") // A flat mirror of InspectorMockRuleUi's action/predicate fields.
+    private fun mockRuleUi(
+        id: String,
+        actionType: InspectorMockActionType = InspectorMockActionType.STATIC,
+        statusCode: Int = 200,
+        body: String = "",
+        failureMessage: String? = null,
+        timeoutMs: Long? = null,
+        throttleBytesPerSecond: Long? = null,
+        throttleLatencyMs: Long? = null,
+        remoteScheme: String? = null,
+        remoteHost: String? = null,
+        remotePort: Int? = null,
+        remotePath: String? = null,
+        queryPredicates: Map<String, String> = emptyMap(),
+        headerPredicates: Map<String, String> = emptyMap(),
+        bodyPredicate: String? = null,
+    ): InspectorMockRuleUi =
+        InspectorMockRuleUi(
+            id = id,
+            actionType = actionType,
+            statusCode = statusCode,
+            body = body,
+            failureMessage = failureMessage,
+            timeoutMs = timeoutMs,
+            throttleBytesPerSecond = throttleBytesPerSecond,
+            throttleLatencyMs = throttleLatencyMs,
+            remoteScheme = remoteScheme,
+            remoteHost = remoteHost,
+            remotePort = remotePort,
+            remotePath = remotePath,
+            queryPredicates = queryPredicates,
+            headerPredicates = headerPredicates,
+            bodyPredicate = bodyPredicate,
+        )
 
     private class FakeFileInspector(
         private val rootsData: List<String> = listOf("files"),
@@ -517,6 +563,30 @@ class FullInspectorDataSourceTest {
         assertTrue(result is InspectorCommandResult.Success)
         assertTrue(source.snapshot().transactions.isEmpty())
         assertNull(store.find("tx-1"))
+    }
+
+    @Test
+    fun `snapshot traffic query narrows captures to the requested host`() {
+        val store = networkStore()
+        recordTransaction(
+            store,
+            "tx-api",
+            startedAtEpochMs = 0,
+            completedAtEpochMs = 5,
+            url = "https://api.example.test/orders",
+        )
+        recordTransaction(
+            store,
+            "tx-other",
+            startedAtEpochMs = 10,
+            completedAtEpochMs = 15,
+            url = "https://other.example.test/orders",
+        )
+        val source = FullInspectorDataSource(store, MockEngine(emptyList()), configSupplier = { null })
+
+        val filtered = source.snapshot(InspectorTrafficQuery(host = "api.example.test"))
+
+        assertEquals(listOf("tx-api"), filtered.transactions.map { it.id })
     }
 
     /**
@@ -934,6 +1004,141 @@ class FullInspectorDataSourceTest {
                 delayMs = 99_999,
             )
         val result = source.upsertMockRule(badRule)
+
+        assertTrue(result is InspectorCommandResult.Invalid)
+        assertTrue(mockEngine.rules().isEmpty())
+    }
+
+    @Suppress("LongMethod") // One row per editable action type; splitting would duplicate the fixture.
+    @Test
+    fun `upsertMockRule builds every editable action type and mockRules round-trips it`() {
+        val mockEngine = MockEngine(emptyList())
+        val source = FullInspectorDataSource(networkStore(), mockEngine, configSupplier = { configWith(mocks = true) })
+
+        val results =
+            listOf(
+                source.upsertMockRule(mockRuleUi("static", statusCode = 201, body = "{}")),
+                source.upsertMockRule(
+                    mockRuleUi("status", InspectorMockActionType.STATUS_OVERRIDE, statusCode = 503),
+                ),
+                source.upsertMockRule(
+                    mockRuleUi("body", InspectorMockActionType.BODY_REPLACEMENT, body = """{"x":1}"""),
+                ),
+                source.upsertMockRule(
+                    mockRuleUi("connect", InspectorMockActionType.CONNECTION_FAILURE, failureMessage = "offline"),
+                ),
+                source.upsertMockRule(
+                    mockRuleUi("timeout", InspectorMockActionType.TIMEOUT, timeoutMs = 2_500),
+                ),
+                source.upsertMockRule(
+                    mockRuleUi(
+                        "throttle",
+                        InspectorMockActionType.THROTTLE,
+                        throttleBytesPerSecond = 65_536,
+                        throttleLatencyMs = 120,
+                    ),
+                ),
+                source.upsertMockRule(
+                    mockRuleUi(
+                        "remote",
+                        InspectorMockActionType.MAP_REMOTE,
+                        remoteScheme = "https",
+                        remoteHost = "staging.test",
+                        remotePort = 8443,
+                        remotePath = "/v2",
+                    ),
+                ),
+            )
+        results.forEach { assertTrue(it is InspectorCommandResult.Success) }
+
+        val actions = mockEngine.rules().associate { it.id to it.action }
+        assertTrue(actions.getValue("static") is MockAction.StaticResponse)
+        assertEquals(503, (actions.getValue("status") as MockAction.StatusOverride).statusCode)
+        assertEquals("""{"x":1}""", (actions.getValue("body") as MockAction.BodyReplacement).body)
+        assertEquals("offline", (actions.getValue("connect") as MockAction.ConnectionFailure).message)
+        assertEquals(2_500L, (actions.getValue("timeout") as MockAction.Timeout).durationMs)
+        val throttle = actions.getValue("throttle") as MockAction.Throttle
+        assertEquals(65_536L, throttle.bytesPerSecond)
+        assertEquals(120L, throttle.latencyMs)
+        assertTrue(throttle.next == MockAction.Passthrough)
+        val remote = actions.getValue("remote") as MockAction.MapRemote
+        assertEquals("https", remote.scheme)
+        assertEquals("staging.test", remote.host)
+        assertEquals(8443, remote.port)
+        assertEquals("/v2", remote.path)
+
+        val ui = source.mockRules().associateBy { it.id }
+        assertEquals(InspectorMockActionType.STATUS_OVERRIDE, ui.getValue("status").actionType)
+        assertEquals(503, ui.getValue("status").statusCode)
+        assertEquals(InspectorMockActionType.BODY_REPLACEMENT, ui.getValue("body").actionType)
+        assertEquals("""{"x":1}""", ui.getValue("body").body)
+        assertEquals(InspectorMockActionType.CONNECTION_FAILURE, ui.getValue("connect").actionType)
+        assertEquals("offline", ui.getValue("connect").failureMessage)
+        assertEquals(InspectorMockActionType.TIMEOUT, ui.getValue("timeout").actionType)
+        assertEquals(2_500L, ui.getValue("timeout").timeoutMs)
+        assertEquals(InspectorMockActionType.THROTTLE, ui.getValue("throttle").actionType)
+        assertEquals(65_536L, ui.getValue("throttle").throttleBytesPerSecond)
+        assertEquals(120L, ui.getValue("throttle").throttleLatencyMs)
+        assertEquals(InspectorMockActionType.MAP_REMOTE, ui.getValue("remote").actionType)
+        assertEquals("https", ui.getValue("remote").remoteScheme)
+        assertEquals("staging.test", ui.getValue("remote").remoteHost)
+        assertEquals(8443, ui.getValue("remote").remotePort)
+        assertEquals("/v2", ui.getValue("remote").remotePath)
+    }
+
+    @Test
+    fun `upsertMockRule carries query, header and body predicates into the engine rule`() {
+        val mockEngine = MockEngine(emptyList())
+        val source = FullInspectorDataSource(networkStore(), mockEngine, configSupplier = { configWith(mocks = true) })
+
+        source.upsertMockRule(
+            mockRuleUi(
+                "predicated",
+                queryPredicates = mapOf("page" to "2"),
+                headerPredicates = mapOf("Accept" to "application/json"),
+                bodyPredicate = ".*paid.*",
+            ),
+        )
+
+        val engineRule = mockEngine.rules().single()
+        assertEquals(mapOf("page" to "2"), engineRule.queryPredicates)
+        assertEquals(mapOf("Accept" to "application/json"), engineRule.headerPredicates)
+        assertEquals(".*paid.*", engineRule.bodyPredicate)
+
+        val ui = source.mockRules().single()
+        assertEquals(mapOf("page" to "2"), ui.queryPredicates)
+        assertEquals(mapOf("Accept" to "application/json"), ui.headerPredicates)
+        assertEquals(".*paid.*", ui.bodyPredicate)
+    }
+
+    @Test
+    fun `upsertMockRule refuses an other action and leaves the stored sequence rule untouched`() {
+        val sequenceAction =
+            MockAction.Sequence(
+                listOf(MockAction.StaticResponse(200, "first"), MockAction.StaticResponse(500, "second")),
+            )
+        val mockEngine = MockEngine(listOf(MockRule(id = "seq", priority = 0, action = sequenceAction)))
+        val source = FullInspectorDataSource(networkStore(), mockEngine, configSupplier = { configWith(mocks = true) })
+
+        val result =
+            source.upsertMockRule(
+                mockRuleUi("seq", InspectorMockActionType.OTHER, body = "clobbered"),
+            )
+
+        assertTrue(result is InspectorCommandResult.Invalid)
+        assertEquals(sequenceAction, mockEngine.rules().single().action)
+        assertEquals(InspectorMockActionType.OTHER, source.mockRules().single().actionType)
+    }
+
+    @Test
+    fun `upsertMockRule rejects an out-of-range throttle rate`() {
+        val mockEngine = MockEngine(emptyList())
+        val source = FullInspectorDataSource(networkStore(), mockEngine, configSupplier = { configWith(mocks = true) })
+
+        val result =
+            source.upsertMockRule(
+                mockRuleUi("throttle", InspectorMockActionType.THROTTLE, throttleBytesPerSecond = 0),
+            )
 
         assertTrue(result is InspectorCommandResult.Invalid)
         assertTrue(mockEngine.rules().isEmpty())
@@ -1628,6 +1833,25 @@ class FullInspectorDataSourceTest {
     }
 
     @Test
+    fun `snapshot converts a state provider exception to an error entry`() {
+        val registry = StateRegistry()
+        registry.register(stateProvider("broken") { error("host provider failed") })
+        val source =
+            FullInspectorDataSource(
+                networkStore(),
+                MockEngine(emptyList()),
+                configSupplier = { null },
+                stateRegistry = registry,
+            )
+
+        val provider = source.snapshot().stateProviders.single()
+
+        assertEquals("broken", provider.id)
+        assertEquals("error", provider.entries.single().key)
+        assertEquals("host provider failed", provider.entries.single().value)
+    }
+
+    @Test
     fun `snapshot yields empty state providers when no registry is supplied`() {
         val source =
             FullInspectorDataSource(
@@ -1637,6 +1861,107 @@ class FullInspectorDataSourceTest {
             )
 
         assertTrue(source.snapshot().stateProviders.isEmpty())
+    }
+
+    private fun fixedRemoteConfigProvider(): RemoteConfigProvider =
+        object : RemoteConfigProvider {
+            override val id = "firebase"
+
+            override fun snapshot(): RemoteConfigSnapshot =
+                RemoteConfigSnapshot(
+                    providerId = id,
+                    entries = listOf(RemoteConfigEntry("flag", "false", RemoteConfigSource.REMOTE)),
+                    fetchInfo =
+                        RemoteConfigFetchInfo(
+                            lastFetchEpochMs = 1_000,
+                            status = RemoteConfigFetchStatus.SUCCESS,
+                            minimumFetchIntervalSeconds = 60,
+                        ),
+                )
+        }
+
+    private fun remoteConfigSource(editable: Boolean = true): FullInspectorDataSource =
+        FullInspectorDataSource(
+            networkStore(),
+            MockEngine(emptyList()),
+            configSupplier = { configWith(featureFlags = true) },
+            remoteConfigRegistry = RemoteConfigRegistry().apply { register(fixedRemoteConfigProvider()) },
+            remoteConfigOverridesEditable = { editable },
+        )
+
+    @Test
+    fun `setRemoteConfigOverride applies locally and clear restores the provider value`() {
+        val source = remoteConfigSource()
+        assertTrue(source.supportsRemoteConfigOverrides())
+
+        assertTrue(source.setRemoteConfigOverride("firebase", "flag", "true") is InspectorCommandResult.Success)
+
+        val overridden =
+            source
+                .snapshot()
+                .remoteConfig
+                .single()
+                .entries
+                .single()
+        assertEquals("true", overridden.value)
+        assertEquals("override", overridden.source)
+        assertEquals("false", overridden.providerValue)
+        assertEquals("remote", overridden.providerSource)
+
+        assertTrue(source.clearRemoteConfigOverride("firebase", "flag") is InspectorCommandResult.Success)
+
+        val restored =
+            source
+                .snapshot()
+                .remoteConfig
+                .single()
+                .entries
+                .single()
+        assertEquals("false", restored.value)
+        assertNull(restored.providerValue)
+        assertNull(restored.providerSource)
+    }
+
+    @Test
+    fun `clearAllRemoteConfigOverrides removes every override`() {
+        val source = remoteConfigSource()
+        source.setRemoteConfigOverride("firebase", "flag", "true")
+        source.setRemoteConfigOverride("firebase", "extra", "1")
+
+        assertTrue(source.clearAllRemoteConfigOverrides() is InspectorCommandResult.Success)
+        assertTrue(
+            source
+                .snapshot()
+                .remoteConfig
+                .single()
+                .entries
+                .none { it.overridden },
+        )
+    }
+
+    @Test
+    fun `setRemoteConfigOverride reports Invalid rather than throwing for a blank key`() {
+        val source = remoteConfigSource()
+
+        val result = source.setRemoteConfigOverride("firebase", " ", "value")
+
+        assertTrue(result is InspectorCommandResult.Invalid)
+    }
+
+    @Test
+    fun `remote config override mutations are Unavailable when editing is not allowed`() {
+        val source = remoteConfigSource(editable = false)
+
+        assertFalse(source.supportsRemoteConfigOverrides())
+        assertEquals(
+            InspectorCommandResult.Unavailable,
+            source.setRemoteConfigOverride("firebase", "flag", "true"),
+        )
+        assertEquals(
+            InspectorCommandResult.Unavailable,
+            source.clearRemoteConfigOverride("firebase", "flag"),
+        )
+        assertEquals(InspectorCommandResult.Unavailable, source.clearAllRemoteConfigOverrides())
     }
 
     @Test

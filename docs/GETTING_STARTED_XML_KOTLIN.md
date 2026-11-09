@@ -31,7 +31,7 @@ dependencies {
 
 devConsole {
     enabledVariants.set(setOf("debug"))
-    protectedVariantPatterns.set(listOf("release"))
+    protectedVariantPatterns.set(listOf("(?i).*release"))
 }
 ```
 
@@ -42,10 +42,9 @@ form is used here because it also matches the plugin's version on the Gradle Plu
 There is no BOM. `devconsole` (the debug runtime) and `devconsole-noop` are the only two coordinates
 a normal integration names; everything else is `devconsole-<module>`.
 
-**`devconsole-ui-views` must be `debugImplementation`, never plain `implementation`.** It has no
-release no-op counterpart, so a plain `implementation` dependency ships the launcher panel into your
-release build with no build-time warning. The Gradle plugin's variant protection does not cover this
-module today; it is your responsibility to scope it to `debugImplementation` yourself.
+**`devconsole-ui-views` should be `debugImplementation`, never plain `implementation`.** It has no
+release no-op counterpart. The Gradle plugin now treats it as a protected coordinate and marker: a
+protected variant that includes it fails with a message directing you to use `debugImplementation`.
 
 3. Add `INTERNET` to your own app's manifest. The full debug runtime auto-merges
    `ACCESS_LOCAL_NETWORK`, `NEARBY_WIFI_DEVICES`, `ACCESS_NETWORK_STATE`, and the default

@@ -31,7 +31,7 @@ data class InspectorTransactionUi(
     val host: String,
     val path: String,
     val statusCode: Int?,
-    val durationMs: Long?,
+    val durationMs: Long? = null,
     /** Wall-clock start of the capture, epoch ms; 0 when the adapter predates this field. */
     val startedAtEpochMs: Long = 0,
     val requestHeaders: Map<String, String> = emptyMap(),
@@ -48,6 +48,8 @@ data class InspectorTransactionUi(
      */
     val requestBodyKind: InspectorBodyKind = InspectorBodyKind.ABSENT,
     val requestBodyTruncated: Boolean = false,
+    /** True when the response preview was shortened by the capture byte limit. */
+    val responseBodyTruncated: Boolean = false,
     /** Per-phase network timing, when the underlying transport captured it; see [InspectorTimingPhasesUi]. */
     val timingPhases: InspectorTimingPhasesUi = InspectorTimingPhasesUi(),
     /** True when a mock rule answered this request instead of the real network -- from the `mocked` capture tag. */
@@ -176,6 +178,8 @@ data class InspectorTrafficQuery(
     val search: String = "",
     val method: String? = null,
     val statusClass: TrafficStatusClass = TrafficStatusClass.ALL,
+    /** Exact host to show, or null for every host. */
+    val host: String? = null,
 )
 
 data class InspectorMockRuleUi(
@@ -205,7 +209,49 @@ data class InspectorMockRuleUi(
      * the create/edit form passes it through untouched rather than binding it to a field.
      */
     val sourceBodySnapshot: String? = null,
+    /** True when a capture-derived source response preview was truncated at capture time. */
+    val responseBodyTruncated: Boolean = false,
+    /**
+     * Which `MockAction` shape this rule carries. [InspectorMockActionType.OTHER] is the read-only
+     * bucket for shapes the on-device form cannot express losslessly (sequence/template/passthrough,
+     * or a delayed non-static action) -- [isEditableOnDevice] refuses those.
+     */
+    val actionType: InspectorMockActionType = InspectorMockActionType.STATIC,
+    /** [InspectorMockActionType.TIMEOUT]: how long the mocked request hangs, in ms. */
+    val timeoutMs: Long? = null,
+    /** [InspectorMockActionType.CONNECTION_FAILURE]: optional custom failure message. */
+    val failureMessage: String? = null,
+    /** [InspectorMockActionType.THROTTLE]: throughput cap in bytes per second. */
+    val throttleBytesPerSecond: Long? = null,
+    /** [InspectorMockActionType.THROTTLE]: added latency in ms. */
+    val throttleLatencyMs: Long? = null,
+    /** [InspectorMockActionType.MAP_REMOTE]: replacement scheme; null leaves it unchanged. */
+    val remoteScheme: String? = null,
+    /** [InspectorMockActionType.MAP_REMOTE]: replacement host; null leaves it unchanged. */
+    val remoteHost: String? = null,
+    /** [InspectorMockActionType.MAP_REMOTE]: replacement path; null leaves it unchanged. */
+    val remotePath: String? = null,
+    /** [InspectorMockActionType.MAP_REMOTE]: replacement port; null leaves it unchanged. */
+    val remotePort: Int? = null,
+    /** Request query parameters a request must carry for the rule to match. */
+    val queryPredicates: Map<String, String> = emptyMap(),
+    /** Request headers a request must carry for the rule to match. */
+    val headerPredicates: Map<String, String> = emptyMap(),
+    /** Request body regex the rule only matches when body matching is enabled; null means any. */
+    val bodyPredicate: String? = null,
 )
+
+/** The on-device editable mock actions; [OTHER] covers shapes the form refuses to rewrite. */
+enum class InspectorMockActionType {
+    STATIC,
+    STATUS_OVERRIDE,
+    BODY_REPLACEMENT,
+    CONNECTION_FAILURE,
+    TIMEOUT,
+    THROTTLE,
+    MAP_REMOTE,
+    OTHER,
+}
 
 data class InspectorSocketFrameUi(
     val direction: String,
@@ -397,6 +443,10 @@ data class InspectorSessionUi(
     val status: String = "UNKNOWN",
     val recordCount: Long = 0,
     val estimatedBytes: Long = 0,
+    /** True for the run this process is capturing right now; it is browsed live, never as a past run. */
+    val isCurrent: Boolean = false,
+    /** Kept by retention until unpinned. */
+    val pinned: Boolean = false,
 )
 
 /** Mirrors [io.devconsole.server.api.SdkHealthSnapshot]'s counter types (all `Long`, plus `state`). */
@@ -458,7 +508,13 @@ data class InspectorRemoteConfigEntryUi(
     val source: String,
     val redacted: Boolean = false,
     val truncated: Boolean = false,
-)
+    /** The provider's own (redacted) value while a local override replaces it; null otherwise. */
+    val providerValue: String? = null,
+    /** Wire name of the source [providerValue] came from; null when no override is active. */
+    val providerSource: String? = null,
+) {
+    val overridden: Boolean get() = providerSource != null
+}
 
 /** One Remote Config provider and its fetch state, as shown on the Observe surface's Config tab. */
 data class InspectorRemoteConfigUi(
@@ -470,6 +526,13 @@ data class InspectorRemoteConfigUi(
     val minimumFetchIntervalSeconds: Long? = null,
     /** Non-null when the provider could not be read at all; shown instead of an empty table. */
     val unavailableReason: String? = null,
+)
+
+/** One run's traffic captures, as returned by [InspectorDataSource.capturesForSession]. */
+data class InspectorSessionCaptures(
+    val transactions: List<InspectorTransactionUi> = emptyList(),
+    val sockets: List<InspectorSocketUi> = emptyList(),
+    val pushEvents: List<InspectorPushUi> = emptyList(),
 )
 
 data class InspectorSnapshot(
@@ -578,6 +641,22 @@ interface InspectorDataSource {
      */
     suspend fun crashesForSession(sessionId: String?): List<InspectorCrashUi> = snapshot().crashes
 
+    /** Pins or unpins a finished run against retention. Unavailable without durable storage. */
+    suspend fun setSessionPinned(
+        sessionId: String,
+        pinned: Boolean,
+    ): InspectorCommandResult = InspectorCommandResult.Unavailable
+
+    /** Deletes a finished run and its captures. Unavailable without durable storage. */
+    suspend fun deleteSession(sessionId: String): InspectorCommandResult = InspectorCommandResult.Unavailable
+
+    /**
+     * Network, socket and push captures for a past run (null means the live run), shown by the
+     * Observe tabs while a retained run is selected. Defaults to the live snapshot's lists.
+     */
+    suspend fun capturesForSession(sessionId: String?): InspectorSessionCaptures =
+        snapshot().let { InspectorSessionCaptures(it.transactions, it.sockets, it.pushEvents) }
+
     /**
      * Evidence-tray flag state for captured network transactions, durable via `EvidenceStore` --
      * the same store the dashboard's evidence tray reads and writes, so a flag made on this device
@@ -617,6 +696,47 @@ interface InspectorDataSource {
         id: String,
         sessionId: String? = null,
     ): InspectorCommandResult = InspectorCommandResult.Unavailable
+
+    /**
+     * The wire protocol this adapter can write a frame on for [connectionId] -- "websocket" or
+     * "mqtt" -- or null when the connection cannot be written to (closed, unknown, or no adapter
+     * registered). Defaults to null so every existing adapter and fake keeps compiling; the send
+     * composer is hidden while this is null.
+     */
+    fun socketSendProtocol(connectionId: String): String? = null
+
+    /**
+     * Sends [text] as one frame over the live connection [connectionId]; [topic], [qos] and
+     * [retained] describe an MQTT publish and are ignored by a WebSocket sender. Success means the
+     * transport accepted the frame, so the composer clears only on success. Defaults to
+     * [InspectorCommandResult.Unavailable] like this interface's other optional commands.
+     */
+    fun sendSocketFrame(
+        connectionId: String,
+        text: String,
+        topic: String? = null,
+        qos: Int = 0,
+        retained: Boolean = false,
+    ): InspectorCommandResult = InspectorCommandResult.Unavailable
+
+    /** True when this adapter can apply local Remote Config overrides; gates the in-app editor. */
+    fun supportsRemoteConfigOverrides(): Boolean = false
+
+    /** Overrides [key] on [providerId] with [value] locally; the provider's own value is kept. */
+    fun setRemoteConfigOverride(
+        providerId: String,
+        key: String,
+        value: String,
+    ): InspectorCommandResult = InspectorCommandResult.Unavailable
+
+    /** Removes the local override for [key] on [providerId], restoring the provider's value. */
+    fun clearRemoteConfigOverride(
+        providerId: String,
+        key: String,
+    ): InspectorCommandResult = InspectorCommandResult.Unavailable
+
+    /** Removes every local Remote Config override. */
+    fun clearAllRemoteConfigOverrides(): InspectorCommandResult = InspectorCommandResult.Unavailable
 
     fun execute(request: InspectorComposerRequest): InspectorCommandResult
 
@@ -721,6 +841,33 @@ interface InspectorDataSource {
      * defaults.
      */
     fun clearTransactions(): InspectorCommandResult = InspectorCommandResult.Unavailable
+
+    /**
+     * Whether this adapter can pause/resume live capture and purge captured data at all -- the More
+     * screen's Capture group is hidden when false, matching [supportsServerControl]'s convention.
+     * Defaults to false so every existing adapter and fake keeps compiling and behaving unchanged.
+     */
+    fun supportsCaptureControl(): Boolean = false
+
+    /**
+     * Whether live capture is currently paused. Defaults to false ("capturing") for adapters that
+     * never pause, so callers can read this unconditionally.
+     */
+    fun isCapturePaused(): Boolean = false
+
+    /**
+     * Pauses or resumes live capture of requests, sockets, logs and push events, backing the More
+     * screen's "Pause capture" switch. Defaults to [InspectorCommandResult.Unavailable] like the
+     * other optional commands on this interface.
+     */
+    fun setCapturePaused(paused: Boolean): InspectorCommandResult = InspectorCommandResult.Unavailable
+
+    /**
+     * Removes this run's captured traffic and deletes old unpinned runs, backing the More screen's
+     * destructive "Purge captured data" action. The [InspectorCommandResult.Success] summary
+     * reports exactly what was removed. Defaults to [InspectorCommandResult.Unavailable].
+     */
+    suspend fun purgeCapturedData(): InspectorCommandResult = InspectorCommandResult.Unavailable
 
     /**
      * Exports captured network traffic as a HAR file, sharing the result via the same

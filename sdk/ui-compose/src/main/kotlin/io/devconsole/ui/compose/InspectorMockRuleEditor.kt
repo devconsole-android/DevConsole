@@ -35,6 +35,9 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -152,10 +155,7 @@ private fun MockRuleEditorTarget.formSourceKey(): String =
     }
 
 /**
- * Bundle-friendly [Saver] for a nullable [MockRuleEditorTarget.New] so the sheet's *open/closed*
- * state (not just its individual field values, which already use [rememberSaveable]) survives a
- * configuration change such as rotation. Every [InspectorMockRuleUi] field is a primitive or
- * a [Map] of strings, so the map is flattened via the same header-line format the form fields use.
+ * Bundle-friendly [Saver] for a nullable new-rule target, preserving draft metadata and open state.
  */
 internal val MockRuleEditorNewSaver: Saver<MockRuleEditorTarget.New?, Any> =
     listSaver(
@@ -178,9 +178,22 @@ internal val MockRuleEditorNewSaver: Saver<MockRuleEditorTarget.New?, Any> =
                 draft?.delayMs,
                 draft?.hitCount,
                 draft?.lastHitEpochMs,
+                draft?.sourceBodySnapshot,
+                draft?.responseBodyTruncated,
                 target?.prefillNote,
                 target?.sourceKey,
-                draft?.sourceBodySnapshot,
+                draft?.actionType?.ordinal,
+                draft?.timeoutMs,
+                draft?.failureMessage,
+                draft?.throttleBytesPerSecond,
+                draft?.throttleLatencyMs,
+                draft?.remoteScheme,
+                draft?.remoteHost,
+                draft?.remotePath,
+                draft?.remotePort,
+                draft?.queryPredicates?.toMockRulePredicateLines(),
+                draft?.headerPredicates?.toMockRulePredicateLines(),
+                draft?.bodyPredicate,
             )
         },
         restore = { saved ->
@@ -203,10 +216,29 @@ internal val MockRuleEditorNewSaver: Saver<MockRuleEditorTarget.New?, Any> =
                         delayMs = saved[13] as Long?,
                         hitCount = saved[14] as Long,
                         lastHitEpochMs = saved[15] as Long?,
-                        sourceBodySnapshot = saved[18] as String?,
+                        sourceBodySnapshot = saved[16] as String?,
+                        responseBodyTruncated = saved[17] as Boolean,
+                        actionType =
+                            InspectorMockActionType.entries[
+                                (saved.getOrNull(20) as? Int ?: InspectorMockActionType.STATIC.ordinal)
+                                    .coerceIn(0, InspectorMockActionType.entries.lastIndex),
+                            ],
+                        timeoutMs = saved.getOrNull(21) as Long?,
+                        failureMessage = saved.getOrNull(22) as String?,
+                        throttleBytesPerSecond = saved.getOrNull(23) as Long?,
+                        throttleLatencyMs = saved.getOrNull(24) as Long?,
+                        remoteScheme = saved.getOrNull(25) as String?,
+                        remoteHost = saved.getOrNull(26) as String?,
+                        remotePath = saved.getOrNull(27) as String?,
+                        remotePort = saved.getOrNull(28) as Int?,
+                        queryPredicates =
+                            parseMockRulePredicateLines(saved.getOrNull(29) as? String ?: "").predicates,
+                        headerPredicates =
+                            parseMockRulePredicateLines(saved.getOrNull(30) as? String ?: "").predicates,
+                        bodyPredicate = saved.getOrNull(31) as String?,
                     ),
-                prefillNote = saved[16] as String?,
-                sourceKey = saved[17] as String,
+                prefillNote = saved[18] as String?,
+                sourceKey = saved[19] as String,
             )
         },
     )
@@ -215,11 +247,35 @@ internal val MOCK_RULE_METHODS = listOf("ALL", "GET", "POST", "PUT", "PATCH", "D
 
 /** Everything the sheet's Save button needs validated, recomputed via [remember] as the fields change. */
 private data class MockRuleFormErrors(
-    val id: String?,
-    val status: String?,
-    val delay: String?,
+    val id: String? = null,
+    val status: String? = null,
+    val delay: String? = null,
+    val timeout: String? = null,
+    val throttleRate: String? = null,
+    val throttleLatency: String? = null,
+    val remote: String? = null,
+    val remoteScheme: String? = null,
+    val remoteHost: String? = null,
+    val remotePath: String? = null,
+    val remotePort: String? = null,
 ) {
-    val isValid: Boolean get() = id == null && status == null && delay == null
+    val allErrors: List<String>
+        get() =
+            listOfNotNull(
+                id,
+                status,
+                delay,
+                timeout,
+                throttleRate,
+                throttleLatency,
+                remote,
+                remoteScheme,
+                remoteHost,
+                remotePath,
+                remotePort,
+            )
+
+    val isValid: Boolean get() = allErrors.isEmpty()
 }
 
 /**
@@ -238,16 +294,13 @@ internal fun MockRuleEditorScreen(
     modifier: Modifier = Modifier,
     onDelete: (() -> Unit)? = null,
 ) {
-    val initial =
-        when (target) {
-            is MockRuleEditorTarget.Edit -> target.rule
-            is MockRuleEditorTarget.New -> target.draft
-        }
+    val initial = target.initialRule()
     val isNew = target is MockRuleEditorTarget.New
     val colors = DevConsoleTheme.colors
     val form = rememberMockRuleFormFields(initial, target.formSourceKey())
     val errors = rememberMockRuleFormErrors(form)
     var showErrors by remember { mutableStateOf(false) }
+    var acknowledgedTruncatedBody by rememberSaveable(target.formSourceKey()) { mutableStateOf(false) }
     var advancedExpanded by rememberSaveable { mutableStateOf(false) }
     // Collapsed when the rule already carries headers -- a capture prefill dumps 20+ lines here and
     // pushed status/body off-screen. A blank rule opens expanded: nothing to hide, and the field is
@@ -287,31 +340,33 @@ internal fun MockRuleEditorScreen(
                         // Save is never a silent no-op: the delay field lives inside the collapsed
                         // Advanced expander, so a delay-only error would otherwise be invisible at
                         // the point of interaction (the footer is pinned while content scrolls).
-                        if (showErrors && !errors.isValid) {
-                            MockRuleSaveErrorSummary(errors, colors)
-                        }
-                        MockRuleEditorFooter(
+                        MockRuleEditorFooterContent(
+                            errors = errors,
+                            showErrors = showErrors,
                             colors = colors,
                             onCancel = onCancel,
                             onSaveClick = {
                                 showErrors = true
                                 if (errors.delay != null) advancedExpanded = true
-                                if (errors.isValid) onSave(form.toMockRule(initial))
+                                val bodyCleared = !isTruncatedCapture(target) || acknowledgedTruncatedBody
+                                if (errors.isValid && bodyCleared) onSave(form.toMockRule(initial))
                             },
                         )
                     }
                 }
             },
     ) {
-        MockRuleEditorPrimaryFields(form, colors, isNew, errors, showErrors)
-        MockRuleEditorBodyFields(
+        MockRuleEditorFormContent(
             form = form,
+            target = target,
             colors = colors,
+            isNew = isNew,
+            errors = errors,
             showErrors = showErrors,
-            delayError = errors.delay,
             advancedExpanded = advancedExpanded,
             onAdvancedExpandedChange = { advancedExpanded = it },
-            prefillNote = (target as? MockRuleEditorTarget.New)?.prefillNote,
+            acknowledgedTruncatedBody = acknowledgedTruncatedBody,
+            onAcknowledgeTruncatedBody = { acknowledgedTruncatedBody = it },
             bodyState = bodyState,
             headersExpanded = headersExpanded,
             onHeadersExpandedChange = { headersExpanded = it },
@@ -353,25 +408,151 @@ internal fun MockRuleEditorScreen(
 }
 
 @Composable
-private fun rememberMockRuleFormErrors(form: MockRuleFormFields): MockRuleFormErrors =
-    remember(form.id.value, form.statusText.value, form.delayText.value) {
+private fun MockRuleEditorFooterContent(
+    errors: MockRuleFormErrors,
+    showErrors: Boolean,
+    colors: DevConsoleColors,
+    onCancel: () -> Unit,
+    onSaveClick: () -> Unit,
+) {
+    // Errors stay hidden until the first Save: a fresh form (blank id, a just-picked action) is
+    // incomplete, not wrong, and greeting it in red reads as a failure the user didn't cause.
+    if (showErrors && !errors.isValid) MockRuleSaveErrorSummary(errors, colors)
+    MockRuleEditorFooter(colors, onCancel, onSaveClick)
+}
+
+@Composable
+private fun MockRuleEditorFormContent(
+    form: MockRuleFormFields,
+    target: MockRuleEditorTarget,
+    colors: DevConsoleColors,
+    isNew: Boolean,
+    errors: MockRuleFormErrors,
+    showErrors: Boolean,
+    advancedExpanded: Boolean,
+    onAdvancedExpandedChange: (Boolean) -> Unit,
+    acknowledgedTruncatedBody: Boolean,
+    onAcknowledgeTruncatedBody: (Boolean) -> Unit,
+    bodyState: MockRuleBodyEditorState,
+    headersExpanded: Boolean,
+    onHeadersExpandedChange: (Boolean) -> Unit,
+) {
+    MockRuleEditorPrimaryFields(form, colors, isNew, errors, showErrors)
+    MockRuleEditorActionFields(form, colors, errors, showErrors)
+    MockRuleEditorBodyFields(
+        form = form,
+        colors = colors,
+        showErrors = showErrors,
+        delayError = errors.delay,
+        advancedExpanded = advancedExpanded,
+        onAdvancedExpandedChange = onAdvancedExpandedChange,
+        prefillNote = (target as? MockRuleEditorTarget.New)?.prefillNote,
+        truncationWarning =
+            if (isTruncatedCapture(target)) {
+                "Captured response was truncated. Review or edit the body, then confirm below before saving."
+            } else {
+                null
+            },
+        acknowledgedTruncatedBody = acknowledgedTruncatedBody,
+        onAcknowledgeTruncatedBody = onAcknowledgeTruncatedBody,
+        bodyState = bodyState,
+        headersExpanded = headersExpanded,
+        onHeadersExpandedChange = onHeadersExpandedChange,
+    )
+}
+
+private fun MockRuleEditorTarget.initialRule(): InspectorMockRuleUi =
+    when (this) {
+        is MockRuleEditorTarget.Edit -> rule
+        is MockRuleEditorTarget.New -> draft
+    }
+
+@Composable
+private fun rememberMockRuleFormErrors(form: MockRuleFormFields): MockRuleFormErrors {
+    val type = form.actionType.value
+    return remember(
+        type,
+        form.id.value,
+        form.statusText.value,
+        form.delayText.value,
+        form.timeoutText.value,
+        form.throttleKbpsText.value,
+        form.throttleLatencyText.value,
+        form.remoteSchemeText.value,
+        form.remoteHostText.value,
+        form.remotePortText.value,
+        form.remotePathText.value,
+    ) {
         MockRuleFormErrors(
             id = mockRuleIdError(form.id.value.trim()),
             status =
-                mockRuleStatusError(
-                    form.statusText.value
-                        .trim()
-                        .toIntOrNull(),
-                ),
+                if (type.usesStatusCode) {
+                    mockRuleStatusError(
+                        form.statusText.value
+                            .trim()
+                            .toIntOrNull(),
+                    )
+                } else {
+                    null
+                },
             delay =
-                mockRuleDelayError(
-                    form.delayText.value.trim(),
-                    form.delayText.value
-                        .trim()
-                        .toLongOrNull(),
-                ),
+                if (type == InspectorMockActionType.STATIC) {
+                    mockRuleDelayError(
+                        form.delayText.value.trim(),
+                        form.delayText.value
+                            .trim()
+                            .toLongOrNull(),
+                    )
+                } else {
+                    null
+                },
+            timeout = if (type == InspectorMockActionType.TIMEOUT) form.timeoutError() else null,
+            throttleRate = if (type == InspectorMockActionType.THROTTLE) form.throttleRateError() else null,
+            throttleLatency = if (type == InspectorMockActionType.THROTTLE) form.throttleLatencyError() else null,
+            remote = if (type == InspectorMockActionType.MAP_REMOTE) form.mapRemoteError() else null,
+            remoteScheme = if (type == InspectorMockActionType.MAP_REMOTE) form.remoteSchemeError() else null,
+            remoteHost = if (type == InspectorMockActionType.MAP_REMOTE) form.remoteHostError() else null,
+            remotePath = if (type == InspectorMockActionType.MAP_REMOTE) form.remotePathError() else null,
+            remotePort = if (type == InspectorMockActionType.MAP_REMOTE) form.remotePortError() else null,
         )
     }
+}
+
+private val InspectorMockActionType.usesStatusCode: Boolean
+    get() = this == InspectorMockActionType.STATIC || this == InspectorMockActionType.STATUS_OVERRIDE
+
+private fun MockRuleFormFields.timeoutError(): String? =
+    mockRuleTimeoutError(timeoutText.value.trim(), timeoutText.value.trim().toLongOrNull())
+
+private fun MockRuleFormFields.throttleRateError(): String? {
+    val bytesPerSecond =
+        throttleKbpsText.value
+            .trim()
+            .toLongOrNull()
+            ?.times(MOCK_RULE_BYTES_PER_KB)
+    return mockRuleThrottleRateError(throttleKbpsText.value.trim(), bytesPerSecond)
+}
+
+private fun MockRuleFormFields.throttleLatencyError(): String? =
+    mockRuleThrottleLatencyError(throttleLatencyText.value.trim(), throttleLatencyText.value.trim().toLongOrNull())
+
+private fun MockRuleFormFields.mapRemoteError(): String? =
+    mockRuleMapRemoteError(
+        hasAnyField =
+            remoteSchemeText.value.isNotBlank() ||
+                remoteHostText.value.isNotBlank() ||
+                remotePortText.value.isNotBlank() ||
+                remotePathText.value.isNotBlank(),
+    )
+
+private fun MockRuleFormFields.remoteSchemeError(): String? = mockRuleRemoteSchemeError(remoteSchemeText.value.trim())
+
+private fun MockRuleFormFields.remoteHostError(): String? = mockRuleRemoteHostError(remoteHostText.value.trim())
+
+private fun MockRuleFormFields.remotePathError(): String? = mockRuleRemotePathError(remotePathText.value.trim())
+
+private fun MockRuleFormFields.remotePortError(): String? =
+    mockRuleRemotePortError(remotePortText.value.trim(), remotePortText.value.trim().toIntOrNull())
 
 @Composable
 private fun MockRuleEditorFooter(
@@ -389,7 +570,11 @@ private fun MockRuleEditorFooter(
                 contentColor = colors.ink,
                 outlined = true,
             ),
-            InspectorFooterAction(label = "Save rule", onClick = onSaveClick, weight = 2f),
+            InspectorFooterAction(
+                label = "Save rule",
+                onClick = onSaveClick,
+                weight = 2f,
+            ),
         ),
     )
 }
@@ -400,7 +585,7 @@ private fun MockRuleSaveErrorSummary(
     errors: MockRuleFormErrors,
     colors: DevConsoleColors,
 ) {
-    val count = listOfNotNull(errors.id, errors.status, errors.delay).size
+    val count = errors.allErrors.size
     Text(
         "Fix $count field${if (count == 1) "" else "s"} before saving",
         color = colors.error,
@@ -440,17 +625,169 @@ private fun MockRuleEditorPrimaryFields(
         modifier = Modifier.padding(bottom = 16.dp).horizontalScroll(rememberScrollState()),
     )
     MockRuleTextField("Path regex", form.pathPattern.value, { form.pathPattern.value = it }, colors, placeholder = ".*")
+    MockRuleActionPicker(
+        selected = form.actionType.value,
+        onSelect = form::selectActionType,
+        colors = colors,
+    )
+    if (form.actionType.value.usesStatusCode) {
+        MockRuleTextField(
+            "Status",
+            form.statusText.value,
+            { form.statusText.value = it.filter(Char::isDigit) },
+            colors,
+            placeholder = "200",
+            errorText = if (showErrors) errors.status else null,
+        )
+    }
+}
+
+/** The "Action" dropdown: the seven shapes the on-device sheet can build losslessly. */
+@Composable
+private fun MockRuleActionPicker(
+    selected: InspectorMockActionType,
+    onSelect: (InspectorMockActionType) -> Unit,
+    colors: DevConsoleColors,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    MockRuleFieldLabel("Action", colors)
+    Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.dp, colors.line, RoundedCornerShape(12.dp))
+                    .background(colors.panel)
+                    .clickable(role = Role.Button) { expanded = true }
+                    .padding(horizontal = 16.dp)
+                    .semantics { contentDescription = "Action, ${selected.label()}" },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                selected.label(),
+                color = colors.ink,
+                fontSize = 14.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.weight(1f),
+            )
+            Text("▾", color = colors.muted, fontSize = 14.sp)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            MOCK_RULE_ACTION_TYPES.forEach { type ->
+                DropdownMenuItem(
+                    text = { Text(type.label()) },
+                    onClick = {
+                        expanded = false
+                        onSelect(type)
+                    },
+                    modifier = Modifier.semantics { contentDescription = "Action ${type.label()}" },
+                )
+            }
+        }
+    }
+}
+
+/** The fields that only exist for one action type; STATIC's fields live in the main body section. */
+@Composable
+private fun MockRuleEditorActionFields(
+    form: MockRuleFormFields,
+    colors: DevConsoleColors,
+    errors: MockRuleFormErrors,
+    showErrors: Boolean,
+) {
+    when (form.actionType.value) {
+        InspectorMockActionType.CONNECTION_FAILURE ->
+            MockRuleTextField(
+                "Failure message (optional)",
+                form.failureMessageText.value,
+                { form.failureMessageText.value = it },
+                colors,
+                placeholder = "DevConsole simulated connection failure",
+            )
+        InspectorMockActionType.TIMEOUT ->
+            MockRuleTextField(
+                "Timeout (ms)",
+                form.timeoutText.value,
+                { form.timeoutText.value = it.filter(Char::isDigit) },
+                colors,
+                placeholder = "1000",
+                errorText = if (showErrors) errors.timeout else null,
+            )
+        InspectorMockActionType.THROTTLE -> {
+            MockRuleTextField(
+                "Rate (KB/s)",
+                form.throttleKbpsText.value,
+                { form.throttleKbpsText.value = it.filter(Char::isDigit) },
+                colors,
+                placeholder = "64",
+                errorText = if (showErrors) errors.throttleRate else null,
+            )
+            MockRuleTextField(
+                "Latency (ms)",
+                form.throttleLatencyText.value,
+                { form.throttleLatencyText.value = it.filter(Char::isDigit) },
+                colors,
+                placeholder = "0",
+                errorText = if (showErrors) errors.throttleLatency else null,
+            )
+        }
+        InspectorMockActionType.MAP_REMOTE -> MockRuleMapRemoteFields(form, colors, errors, showErrors)
+        else -> Unit
+    }
+}
+
+@Composable
+private fun MockRuleMapRemoteFields(
+    form: MockRuleFormFields,
+    colors: DevConsoleColors,
+    errors: MockRuleFormErrors,
+    showErrors: Boolean,
+) {
+    if (showErrors && errors.remote != null) {
+        Text(
+            errors.remote,
+            color = colors.error,
+            fontSize = 11.5.sp,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    }
     MockRuleTextField(
-        "Status",
-        form.statusText.value,
-        { form.statusText.value = it.filter(Char::isDigit) },
+        "Scheme",
+        form.remoteSchemeText.value,
+        { form.remoteSchemeText.value = it },
         colors,
-        placeholder = "200",
-        errorText = if (showErrors) errors.status else null,
+        placeholder = "https",
+        errorText = if (showErrors) errors.remoteScheme else null,
+    )
+    MockRuleTextField(
+        "Host",
+        form.remoteHostText.value,
+        { form.remoteHostText.value = it },
+        colors,
+        placeholder = "staging.example.test",
+        errorText = if (showErrors) errors.remoteHost else null,
+    )
+    MockRuleTextField(
+        "Port",
+        form.remotePortText.value,
+        { form.remotePortText.value = it.filter(Char::isDigit) },
+        colors,
+        placeholder = "443",
+        errorText = if (showErrors) errors.remotePort else null,
+    )
+    MockRuleTextField(
+        "Path",
+        form.remotePathText.value,
+        { form.remotePathText.value = it },
+        colors,
+        placeholder = "/v2/orders",
+        errorText = if (showErrors) errors.remotePath else null,
     )
 }
 
-@Suppress("LongParameterList") // One real input per field group this scaffold's content slot renders.
+@Suppress("LongParameterList", "LongMethod") // One real input per field group this scaffold renders.
 @Composable
 private fun MockRuleEditorBodyFields(
     form: MockRuleFormFields,
@@ -460,25 +797,58 @@ private fun MockRuleEditorBodyFields(
     advancedExpanded: Boolean,
     onAdvancedExpandedChange: (Boolean) -> Unit,
     prefillNote: String?,
+    truncationWarning: String?,
+    acknowledgedTruncatedBody: Boolean,
+    onAcknowledgeTruncatedBody: (Boolean) -> Unit,
     headersExpanded: Boolean,
     onHeadersExpandedChange: (Boolean) -> Unit,
     bodyState: MockRuleBodyEditorState,
 ) {
-    MockRuleHeadersSection(
-        form = form,
-        colors = colors,
-        expanded = headersExpanded,
-        onToggle = { onHeadersExpandedChange(!headersExpanded) },
-    )
-    MockRuleBodyField(
-        value = form.bodyText.value,
-        onValueChange = { form.bodyText.value = it },
-        colors = colors,
-        state = bodyState,
-    )
+    when (form.actionType.value) {
+        InspectorMockActionType.STATIC -> {
+            MockRuleHeadersSection(
+                form = form,
+                colors = colors,
+                expanded = headersExpanded,
+                onToggle = { onHeadersExpandedChange(!headersExpanded) },
+            )
+            MockRuleBodyField(
+                value = form.bodyText.value,
+                onValueChange = { form.bodyText.value = it },
+                colors = colors,
+                state = bodyState,
+            )
+        }
+        InspectorMockActionType.BODY_REPLACEMENT ->
+            MockRuleBodyField(
+                value = form.bodyText.value,
+                onValueChange = { form.bodyText.value = it },
+                colors = colors,
+                state = bodyState,
+            )
+        else -> Unit
+    }
     if (prefillNote != null) {
         WarnNote(prefillNote, modifier = Modifier.padding(bottom = 16.dp))
     }
+    if (truncationWarning != null) {
+        WarnNote(truncationWarning, modifier = Modifier.padding(bottom = 8.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+                Modifier
+                    .clickable {
+                        onAcknowledgeTruncatedBody(!acknowledgedTruncatedBody)
+                    }.padding(bottom = 16.dp),
+        ) {
+            Checkbox(
+                checked = acknowledgedTruncatedBody,
+                onCheckedChange = onAcknowledgeTruncatedBody,
+            )
+            Text("I reviewed the captured body", color = colors.ink)
+        }
+    }
+    MockRuleMatchConditionsSection(form = form, colors = colors)
     CollapsibleSection(
         label = "Advanced options",
         expanded = advancedExpanded,
@@ -486,6 +856,96 @@ private fun MockRuleEditorBodyFields(
         modifier = Modifier.padding(bottom = 12.dp),
     ) {
         MockRuleAdvancedFields(form, colors, showErrors, delayError)
+    }
+}
+
+/**
+ * Request-matching predicates: query params and headers as `key=value` lines plus a body regex.
+ * Lines without `=` are counted and shown as a non-blocking hint, matching the headers section.
+ */
+@Composable
+private fun MockRuleMatchConditionsSection(
+    form: MockRuleFormFields,
+    colors: DevConsoleColors,
+) {
+    val query = remember(form.queryPredicatesText.value) { parseMockRulePredicateLines(form.queryPredicatesText.value) }
+    val headers =
+        remember(form.headerPredicatesText.value) { parseMockRulePredicateLines(form.headerPredicatesText.value) }
+    var expanded by rememberSaveable { mutableStateOf(query.skippedLines + headers.skippedLines > 0) }
+    val skipped = query.skippedLines + headers.skippedLines
+    CollapsibleSection(
+        label = "Match conditions",
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+        meta =
+            if (skipped == 0) {
+                (
+                    query.predicates.size + headers.predicates.size +
+                        if (form.bodyPredicateText.value.isBlank()) 0 else 1
+                ).let { count ->
+                    when (count) {
+                        0 -> "Any request"
+                        1 -> "1 condition"
+                        else -> "$count conditions"
+                    }
+                }
+            } else {
+                "${query.predicates.size + headers.predicates.size} \u00b7 $skipped ignored"
+            },
+        metaColor = if (skipped > 0) colors.warn else colors.muted,
+        modifier = Modifier.padding(bottom = 12.dp),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            MockRuleMultilineField(
+                label = "Query predicates (key=value)",
+                value = form.queryPredicatesText.value,
+                onValueChange = { form.queryPredicatesText.value = it },
+                colors = colors,
+                placeholder = "page=1",
+            )
+            MockRuleMultilineField(
+                label = "Header predicates (key=value)",
+                value = form.headerPredicatesText.value,
+                onValueChange = { form.headerPredicatesText.value = it },
+                colors = colors,
+                placeholder = "Accept=application/json",
+            )
+            MockRuleTextField(
+                "Body regex (whole body, up to 8 KB)",
+                form.bodyPredicateText.value,
+                { form.bodyPredicateText.value = it },
+                colors,
+                placeholder = ".*\"paid\".*",
+            )
+        }
+    }
+}
+
+@Composable
+private fun MockRuleMultilineField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    colors: DevConsoleColors,
+    placeholder: String,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        MockRuleFieldLabel(label, colors)
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 72.dp)
+                    .onFocusChanged { focused = it.hasFocus }
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.dp, if (focused) colors.signal else colors.line, RoundedCornerShape(12.dp))
+                    .background(colors.panel)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .semantics(mergeDescendants = true) { contentDescription = label },
+        ) {
+            InspectorMultilineTextField(value, onValueChange, placeholder, colors.ink, colors.text3)
+        }
     }
 }
 
@@ -512,14 +972,16 @@ private fun MockRuleAdvancedFields(
         )
         MockRuleTextField("Scheme", form.scheme.value, { form.scheme.value = it }, colors, placeholder = "https")
         MockRuleTextField("Host", form.host.value, { form.host.value = it }, colors, placeholder = "api.example.test")
-        MockRuleTextField(
-            "Delay (ms)",
-            form.delayText.value,
-            { form.delayText.value = it.filter(Char::isDigit) },
-            colors,
-            placeholder = "0",
-            errorText = if (showErrors) delayError else null,
-        )
+        if (form.actionType.value == InspectorMockActionType.STATIC) {
+            MockRuleTextField(
+                "Delay (ms)",
+                form.delayText.value,
+                { form.delayText.value = it.filter(Char::isDigit) },
+                colors,
+                placeholder = "0",
+                errorText = if (showErrors) delayError else null,
+            )
+        }
     }
 }
 
@@ -1147,7 +1609,44 @@ private class MockRuleFormFields(
     val scheme: MutableState<String>,
     val host: MutableState<String>,
     val delayText: MutableState<String>,
+    val actionType: MutableState<InspectorMockActionType>,
+    val timeoutText: MutableState<String>,
+    val failureMessageText: MutableState<String>,
+    val throttleKbpsText: MutableState<String>,
+    val throttleLatencyText: MutableState<String>,
+    val remoteSchemeText: MutableState<String>,
+    val remoteHostText: MutableState<String>,
+    val remotePortText: MutableState<String>,
+    val remotePathText: MutableState<String>,
+    val queryPredicatesText: MutableState<String>,
+    val headerPredicatesText: MutableState<String>,
+    val bodyPredicateText: MutableState<String>,
 )
+
+/**
+ * Switches the rule's action and seeds that action's required fields when they are still empty, so
+ * picking "Timeout" or "Throttle" yields a rule that saves as-is instead of a blank, failing field.
+ * Anything the user already typed is kept.
+ */
+private fun MockRuleFormFields.selectActionType(type: InspectorMockActionType) {
+    actionType.value = type
+    when (type) {
+        InspectorMockActionType.TIMEOUT -> timeoutText.fillIfBlank(MOCK_RULE_DEFAULT_TIMEOUT_MS)
+        InspectorMockActionType.THROTTLE -> {
+            throttleKbpsText.fillIfBlank(MOCK_RULE_DEFAULT_THROTTLE_KBPS)
+            throttleLatencyText.fillIfBlank("0")
+        }
+        InspectorMockActionType.STATIC, InspectorMockActionType.STATUS_OVERRIDE -> statusText.fillIfBlank("200")
+        else -> Unit
+    }
+}
+
+private fun MutableState<String>.fillIfBlank(default: String) {
+    if (value.isBlank()) value = default
+}
+
+private const val MOCK_RULE_DEFAULT_TIMEOUT_MS = "1000"
+private const val MOCK_RULE_DEFAULT_THROTTLE_KBPS = "64"
 
 /** Appends [value] to [base] only when it isn't already there -- never drops or reorders [base]. */
 internal fun chipsIncluding(
@@ -1189,12 +1688,44 @@ private fun rememberMockRuleFormFields(
                         .orEmpty(),
                 )
             },
+        actionType =
+            rememberSaveable(sourceKey) {
+                mutableStateOf(
+                    initial.actionType.takeUnless { it == InspectorMockActionType.OTHER }
+                        ?: InspectorMockActionType.STATIC,
+                )
+            },
+        timeoutText = rememberSaveable(sourceKey) { mutableStateOf(initial.timeoutMs?.toString().orEmpty()) },
+        failureMessageText = rememberSaveable(sourceKey) { mutableStateOf(initial.failureMessage.orEmpty()) },
+        throttleKbpsText =
+            rememberSaveable(sourceKey) {
+                // Rounded up, not truncated: a rule stored at 1000 B/s must not open showing "0"
+                // KB/s and block Save until the user retypes a value that was already valid.
+                mutableStateOf(
+                    initial.throttleBytesPerSecond
+                        ?.let { (it + MOCK_RULE_BYTES_PER_KB - 1) / MOCK_RULE_BYTES_PER_KB }
+                        ?.toString()
+                        .orEmpty(),
+                )
+            },
+        throttleLatencyText =
+            rememberSaveable(sourceKey) { mutableStateOf(initial.throttleLatencyMs?.toString().orEmpty()) },
+        remoteSchemeText = rememberSaveable(sourceKey) { mutableStateOf(initial.remoteScheme.orEmpty()) },
+        remoteHostText = rememberSaveable(sourceKey) { mutableStateOf(initial.remoteHost.orEmpty()) },
+        remotePortText = rememberSaveable(sourceKey) { mutableStateOf(initial.remotePort?.toString().orEmpty()) },
+        remotePathText = rememberSaveable(sourceKey) { mutableStateOf(initial.remotePath.orEmpty()) },
+        queryPredicatesText =
+            rememberSaveable(sourceKey) { mutableStateOf(initial.queryPredicates.toMockRulePredicateLines()) },
+        headerPredicatesText =
+            rememberSaveable(sourceKey) { mutableStateOf(initial.headerPredicates.toMockRulePredicateLines()) },
+        bodyPredicateText = rememberSaveable(sourceKey) { mutableStateOf(initial.bodyPredicate.orEmpty()) },
     )
 }
 
 /** [initial]'s id-independent fields (actionLabel, enabled, hitCount, lastHitEpochMs) pass through untouched. */
-private fun MockRuleFormFields.toMockRule(initial: InspectorMockRuleUi): InspectorMockRuleUi =
-    InspectorMockRuleUi(
+private fun MockRuleFormFields.toMockRule(initial: InspectorMockRuleUi): InspectorMockRuleUi {
+    val type = actionType.value
+    return InspectorMockRuleUi(
         id = id.value.trim(),
         method = method.value.takeIf { it != "ALL" },
         pathPattern = pathPattern.value.trim().ifBlank { ".*" },
@@ -1204,18 +1735,53 @@ private fun MockRuleFormFields.toMockRule(initial: InspectorMockRuleUi): Inspect
         priority = priorityText.value.trim().toIntOrNull() ?: 0,
         scope = scope.value,
         statusCode = statusText.value.trim().toIntOrNull() ?: initial.statusCode,
-        body = bodyText.value,
+        // The editor shows JSON pretty-printed; an untouched body is saved byte-for-byte as it was.
+        body = bodyText.value.takeUnless { it == prettyOrRaw(initial.body) } ?: initial.body,
         enabled = initial.enabled,
         headers = parseMockRuleHeaderLines(headersText.value).headers,
         delayMs =
             delayText.value
                 .trim()
                 .toLongOrNull()
-                ?.takeIf { it > 0 },
+                ?.takeIf { it > 0 && type == InspectorMockActionType.STATIC },
         hitCount = initial.hitCount,
         lastHitEpochMs = initial.lastHitEpochMs,
         sourceBodySnapshot = initial.sourceBodySnapshot,
+        actionType = type,
+        timeoutMs =
+            timeoutText.value
+                .trim()
+                .toLongOrNull()
+                .takeIf { type == InspectorMockActionType.TIMEOUT },
+        failureMessage =
+            failureMessageText.value
+                .trim()
+                .takeIf { type == InspectorMockActionType.CONNECTION_FAILURE && it.isNotBlank() },
+        throttleBytesPerSecond =
+            throttleKbpsText.value
+                .trim()
+                .toLongOrNull()
+                ?.times(MOCK_RULE_BYTES_PER_KB)
+                .takeIf { type == InspectorMockActionType.THROTTLE },
+        throttleLatencyMs =
+            (throttleLatencyText.value.trim().toLongOrNull() ?: 0L)
+                .takeIf { type == InspectorMockActionType.THROTTLE },
+        remoteScheme =
+            remoteSchemeText.value.trim().takeIf { type == InspectorMockActionType.MAP_REMOTE && it.isNotBlank() },
+        remoteHost =
+            remoteHostText.value.trim().takeIf { type == InspectorMockActionType.MAP_REMOTE && it.isNotBlank() },
+        remotePath =
+            remotePathText.value.trim().takeIf { type == InspectorMockActionType.MAP_REMOTE && it.isNotBlank() },
+        remotePort =
+            remotePortText.value
+                .trim()
+                .toIntOrNull()
+                .takeIf { type == InspectorMockActionType.MAP_REMOTE },
+        queryPredicates = parseMockRulePredicateLines(queryPredicatesText.value).predicates,
+        headerPredicates = parseMockRulePredicateLines(headerPredicatesText.value).predicates,
+        bodyPredicate = bodyPredicateText.value.trim().takeIf { it.isNotBlank() },
     )
+}
 
 /**
  * Header names describing the *original transport framing* of the captured response -- never valid
@@ -1233,11 +1799,14 @@ private val BINARY_PREVIEW_PLACEHOLDER = Regex("""\[binary, \d+ bytes]""")
 private const val CAPTURE_PREFILL_BINARY_NOTE =
     "The captured response body is binary and can't be prefilled here — enter one manually."
 
+private fun isTruncatedCapture(target: MockRuleEditorTarget): Boolean =
+    (target as? MockRuleEditorTarget.New)?.draft?.responseBodyTruncated == true
+
 /**
  * Prefills a brand-new rule from a captured transaction -- the net detail's "Mock this response"
  * action. [existingIds] lets [suggestMockRuleId] avoid suggesting an id that already names a rule.
  * [InspectorTransactionUi.responsePreview] is a *redacted, possibly-truncated* capture preview, not
- * the real payload -- the prefilled body is editable, so that needs no on-screen caveat. A binary
+ * the real payload. Truncated bodies require explicit review before saving. A binary
  * response's literal `"[binary, N bytes]"` placeholder, though, is never usable as a body, so it
  * prefills empty and carries a [MockRuleEditorTarget.New.prefillNote] saying to enter one by hand.
  */
@@ -1256,6 +1825,7 @@ internal fun mockRuleDraftFromTransaction(
             statusCode = transaction.statusCode ?: 200,
             body = if (isBinary) "" else preview,
             sourceBodySnapshot = if (isBinary) null else preview,
+            responseBodyTruncated = transaction.responseBodyTruncated,
             headers =
                 transaction.responseHeaders.filterKeys { name ->
                     name.lowercase(Locale.US) !in MOCK_DRAFT_STRIPPED_HEADERS

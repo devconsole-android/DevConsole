@@ -200,6 +200,8 @@ data class StoredSession(
     val deviceOsVersion: String? = null,
     val recordCount: Long = 0,
     val estimatedBytes: Long = 0,
+    /** Retention never deletes a pinned run; only an explicit delete or unpin does. */
+    val pinned: Boolean = false,
 )
 
 /** Durable app-run lifecycle and history source. */
@@ -219,6 +221,15 @@ interface SessionStore {
     suspend fun sessions(): List<StoredSession>
 
     suspend fun session(sessionId: String): StoredSession?
+
+    /** Deletes a completed or crashed run with all its captures; false for the active run or an unknown id. */
+    suspend fun delete(sessionId: String): Boolean = false
+
+    /** Pins or unpins a completed or crashed run; false when the run cannot be pinned. */
+    suspend fun setPinned(
+        sessionId: String,
+        pinned: Boolean,
+    ): Boolean = false
 }
 
 /** Limits applied to retained app-run sessions by a persistence implementation. */

@@ -22,6 +22,7 @@ import io.devconsole.export.DEFAULT_EXPORT_LIMIT_BYTES
 import io.devconsole.export.EventExportWriter
 import io.devconsole.export.EvidenceBundleAttachment
 import io.devconsole.export.EvidenceBundleContent
+import io.devconsole.export.ExportAttachmentSource
 import io.devconsole.export.ExportRequest
 import io.devconsole.export.ExportResult
 import io.devconsole.export.ExportScope
@@ -30,7 +31,6 @@ import io.devconsole.locationping.LocationPingPoint
 import io.devconsole.locationping.LocationPingStore
 import io.devconsole.locationping.LocationPingTrack
 import io.devconsole.locationping.LocationPingTrackDetail
-import io.devconsole.mocks.MockAction
 import io.devconsole.mocks.MockEngine
 import io.devconsole.mocks.MockRule
 import io.devconsole.mocks.MockRuleStats
@@ -60,6 +60,7 @@ import io.devconsole.push.PushInput
 import io.devconsole.push.PushSimulator
 import io.devconsole.push.PushStore
 import io.devconsole.remoteconfig.RemoteConfigEntry
+import io.devconsole.remoteconfig.RemoteConfigOverrideStore
 import io.devconsole.remoteconfig.RemoteConfigSnapshot
 import io.devconsole.security.RedactionEngine
 import io.devconsole.security.RedactionPolicy
@@ -98,7 +99,10 @@ import io.devconsole.socket.SocketMessage
 import io.devconsole.socket.SocketMessageQuery
 import io.devconsole.socket.SocketPayload
 import io.devconsole.socket.SocketProtocol
+import io.devconsole.socket.SocketSendResult
+import io.devconsole.socket.SocketSenderRegistry
 import io.devconsole.socket.SocketStore
+import io.devconsole.state.FeatureFlagType
 import io.devconsole.state.SessionFeatureFlags
 import io.devconsole.state.StateMutationResult
 import io.devconsole.state.StateMutator
@@ -134,16 +138,17 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.application.install
+import io.ktor.server.application.serverConfig
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
+import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.ContentTransformationException
 import io.ktor.server.plugins.UnsupportedMediaTypeException
 import io.ktor.server.plugins.origin
 import io.ktor.server.request.httpMethod
-import io.ktor.server.request.receiveParameters
-import io.ktor.server.request.receiveText
+import io.ktor.server.request.receiveChannel
 import io.ktor.server.request.uri
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondOutputStream
@@ -158,20 +163,25 @@ import io.ktor.server.websocket.pingPeriod
 import io.ktor.server.websocket.timeout
 import io.ktor.server.websocket.webSocket
 import io.ktor.util.decodeBase64Bytes
+import io.ktor.utils.io.readRemaining
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.io.readByteArray
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.Inet4Address
 import java.net.InetSocketAddress
@@ -231,6 +241,9 @@ class DevConsoleModuleConfig {
      * while this is false.
      */
     var featureFlagsEditable: Boolean = true
+
+    /** Store backing Remote Config overrides; null leaves override routes reporting unavailable. */
+    var remoteConfigOverrides: RemoteConfigOverrideStore? = null
     var stateRegistry: StateRegistry = StateRegistry()
     var stateMutationsEnabled: Boolean = true
 
@@ -240,6 +253,21 @@ class DevConsoleModuleConfig {
      * so redacting at this route would protect only the browser.
      */
     var remoteConfigSnapshots: () -> List<RemoteConfigSnapshot> = { emptyList() }
+
+    /**
+     * Host-side capture pause/resume and purge, backing `/api/v1/capture`. Null (the default) makes
+     * those routes report the control as unavailable instead of toggling a buffer this module cannot
+     * reach; `:sdk:full` wires its `PlatformFacadeProvider` in at engine construction.
+     */
+    var captureControl: CaptureControl? = null
+
+    /**
+     * Writes one host-originated frame onto a live WebSocket/MQTT connection, backing
+     * `POST /api/v1/websockets/connections/{id}/send`. Null (the default) makes that route answer
+     * `SEND_UNSUPPORTED` instead of pretending a connection it cannot reach is writable; `:sdk:full`
+     * wires the same registry its socket adapters register into.
+     */
+    var socketSenders: SocketSenderRegistry? = null
 
     var locationPings: () -> LocationPingStore? = { null }
 
@@ -280,6 +308,13 @@ class DevConsoleModuleConfig {
     var retainedCaptures: RetainedCaptureQuery? = null
 
     /**
+     * Read-only transaction store rebuilt from a completed run's persisted captures, so the network
+     * list, detail, cURL and HAR/Postman routes can serve `?sessionId=<past run>`. Null (the
+     * default, or an unknown session) answers `SESSION_NOT_FOUND`.
+     */
+    var retainedNetworkTransactions: suspend (sessionId: String) -> NetworkTransactionStore? = { null }
+
+    /**
      * Durable QA evidence tray. Null (the default) makes every `/api/v1/evidence` route answer
      * `EVIDENCE_UNAVAILABLE`.
      */
@@ -299,6 +334,12 @@ class DevConsoleModuleConfig {
      * previous-run-crashed banner's data source. Defaults to an empty history.
      */
     var sessionsProvider: suspend () -> List<StoredSession> = { emptyList() }
+
+    /** Deletes a finished run and its captures (`DELETE /api/v1/runs/{id}`); false refuses it. */
+    var deleteRun: suspend (sessionId: String) -> Boolean = { false }
+
+    /** Pins or unpins a finished run against retention (`POST /api/v1/runs/{id}/pin`). */
+    var pinRun: suspend (sessionId: String, pinned: Boolean) -> Boolean = { _, _ -> false }
 
     /**
      * Delegates to `DevConsoleFacadeProvider.captureScreenshot()`. Defaults to always reporting the
@@ -350,8 +391,11 @@ fun Application.devConsoleModule(
     val captureRulesEditable = config.captureRulesEditable
     val featureFlags = config.featureFlags
     val featureFlagsEditable = config.featureFlagsEditable
+    val remoteConfigOverrides = config.remoteConfigOverrides
     val stateRegistry = config.stateRegistry
     val remoteConfigSnapshots = config.remoteConfigSnapshots
+    val captureControl = config.captureControl
+    val socketSenders = config.socketSenders
     val stateMutationsEnabled = config.stateMutationsEnabled
     val preferencesInspector = config.preferencesInspector
     val preferencesEditable = config.preferencesEditable
@@ -369,10 +413,13 @@ fun Application.devConsoleModule(
     val attachmentReader = config.attachmentReader
     val attachmentMetadataReader = config.attachmentMetadataReader
     val retainedCaptures = config.retainedCaptures
+    val retainedNetworkTransactions = config.retainedNetworkTransactions
     val evidenceStore = config.evidenceStore
     val currentSessionId = config.currentSessionId
     val sessionSnapshotProvider = config.sessionSnapshotProvider
     val sessionsProvider = config.sessionsProvider
+    val deleteRun = config.deleteRun
+    val pinRun = config.pinRun
     val screenshotCapture = config.screenshotCapture
     val locationPings = config.locationPings
     val metadata = config.metadata
@@ -583,6 +630,12 @@ fun Application.devConsoleModule(
             call.respondClientError(HttpStatusCode.BadRequest, "VALIDATION_FAILED", malformed)
         } catch (badRequest: BadRequestException) {
             call.respondClientError(HttpStatusCode.BadRequest, "VALIDATION_FAILED", badRequest)
+        } catch (_: RequestBodyTooLargeException) {
+            call.respondText(
+                "{\"code\":\"PAYLOAD_TOO_LARGE\"}",
+                status = HttpStatusCode.PayloadTooLarge,
+                contentType = io.ktor.http.ContentType.Application.Json,
+            )
         } catch (throwable: Throwable) {
             call.application.environment.log.error(
                 "Unhandled exception handling ${call.request.httpMethod.value} ${call.request.uri}",
@@ -614,6 +667,25 @@ fun Application.devConsoleModule(
             contentType = io.ktor.http.ContentType.Application.Json,
         )
     }
+
+    /**
+     * The live store unless `sessionId` names a past run, in which case that run's retained store.
+     * Responds `SESSION_NOT_FOUND` and returns null when the past run cannot be served.
+     */
+    suspend fun io.ktor.server.application.ApplicationCall.networkStoreForRequestedSession(): NetworkTransactionStore? {
+        val requested = request.queryParameters["sessionId"]?.takeIf(String::isNotBlank)
+        val store =
+            if (requested == null || requested == currentSessionId()) {
+                networkTransactions
+            } else {
+                runCatching { retainedNetworkTransactions(requested) }.getOrNull()
+            }
+        if (store == null) {
+            respondText("{\"code\":\"SESSION_NOT_FOUND\"}", status = HttpStatusCode.NotFound)
+        }
+        return store
+    }
+
     routing {
         get("/") {
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
@@ -718,7 +790,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"RATE_LIMITED\"}", status = HttpStatusCode.TooManyRequests)
                 return@post
             }
-            val parameters = call.receiveParameters()
+            val parameters = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
             val code = parameters["code"].orEmpty()
             if (code.isBlank()) {
                 call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
@@ -874,9 +946,39 @@ fun Application.devConsoleModule(
                 sessionsProvider()
                     .sortedWith(compareByDescending<StoredSession> { it.startedAtMs }.thenByDescending { it.id })
             call.respondText(
-                "{\"data\":[${runs.joinToString(",") { it.json() }}]}",
+                "{\"data\":[${runs.joinToString(",") { it.json(current = it.id == currentSessionId()) }}]}",
                 contentType = io.ktor.http.ContentType.Application.Json,
             )
+        }
+        // Same gate as the network clear route: bearer session plus Origin+CSRF, audited both ways.
+        delete("/api/v1/runs/{id}") {
+            val runId = call.parameters["id"].orEmpty()
+            val session =
+                call.captureControlSession(sessionAuthority, commandAuditLog, "runs.delete", runId)
+                    ?: return@delete
+            val deleted = runId != currentSessionId() && runCatching { deleteRun(runId) }.getOrDefault(false)
+            if (!deleted) {
+                commandAuditLog.recordControlFailure(session.id, "runs.delete", runId)
+                call.respondText("{\"code\":\"RUN_NOT_DELETABLE\"}", status = HttpStatusCode.Conflict)
+                return@delete
+            }
+            commandAuditLog.recordControlSuccess(session.id, "runs.delete", runId)
+            call.respondText("{\"status\":\"deleted\"}", contentType = io.ktor.http.ContentType.Application.Json)
+        }
+        post("/api/v1/runs/{id}/pin") {
+            val runId = call.parameters["id"].orEmpty()
+            val session =
+                call.captureControlSession(sessionAuthority, commandAuditLog, "runs.pin", runId)
+                    ?: return@post
+            val pinned = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)["pinned"] != "false"
+            val changed = runCatching { pinRun(runId, pinned) }.getOrDefault(false)
+            if (!changed) {
+                commandAuditLog.recordControlFailure(session.id, "runs.pin", runId)
+                call.respondText("{\"code\":\"RUN_NOT_PINNABLE\"}", status = HttpStatusCode.Conflict)
+                return@post
+            }
+            commandAuditLog.recordControlSuccess(session.id, "runs.pin", runId)
+            call.respondText("{\"pinned\":$pinned}", contentType = io.ktor.http.ContentType.Application.Json)
         }
         get("/api/v1/report") {
             val session =
@@ -932,7 +1034,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
             }
-            val receivedParameters = call.receiveParameters()
+            val receivedParameters = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
             if ((receivedParameters["scope"] ?: "").uppercase() == "EVIDENCE") {
                 val maxBytes = receivedParameters.resolveMaxBytes()
                 if (maxBytes == null) {
@@ -999,13 +1101,22 @@ fun Application.devConsoleModule(
                 return@post
             }
             val prepared =
-                prepareExport(receivedParameters, timeline, retainedCaptures, attachmentReader)
+                prepareExport(
+                    receivedParameters,
+                    timeline,
+                    retainedCaptures,
+                    ExportSources(attachmentReader, attachmentMetadataReader, currentSessionId),
+                )
             if (prepared == null) {
                 commandAuditLog.recordExport(session.id, CommandAuditResult.REJECTED, "validation")
                 call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
                 return@post
             }
             pruneStaleExports(exportDirectory)
+            val annotationSnapshots =
+                withContext(Dispatchers.IO) {
+                    prepared.scopedEvents.associate { it.id to annotations.get(it.id) }
+                }
             val request =
                 ExportRequest(
                     sessionId = prepared.exportSessionId,
@@ -1014,8 +1125,8 @@ fun Application.devConsoleModule(
                     maxBytes = prepared.maxBytes,
                 ).withScope(prepared.scope)
                     .withMetadataOnly(prepared.metadataOnly)
-                    .withAnnotations(prepared.scopedEvents.associate { it.id to annotations.get(it.id) })
-                    .withAttachments(prepared.attachments)
+                    .withAnnotations(annotationSnapshots)
+                    .withAttachmentSources(prepared.attachments)
             val writer = EventExportWriter(redaction)
             when (val result = writer.writeAsync(request)) {
                 is ExportResult.Success -> {
@@ -1114,11 +1225,20 @@ fun Application.devConsoleModule(
                 return@get
             }
             val prepared =
-                prepareExport(call.request.queryParameters, timeline, retainedCaptures, attachmentReader)
+                prepareExport(
+                    call.request.queryParameters,
+                    timeline,
+                    retainedCaptures,
+                    ExportSources(attachmentReader, attachmentMetadataReader, currentSessionId),
+                )
             if (prepared == null) {
                 call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
                 return@get
             }
+            val annotationSnapshots =
+                withContext(Dispatchers.IO) {
+                    prepared.scopedEvents.associate { it.id to annotations.get(it.id) }
+                }
             val request =
                 ExportRequest(
                     sessionId = prepared.exportSessionId,
@@ -1127,8 +1247,8 @@ fun Application.devConsoleModule(
                     maxBytes = prepared.maxBytes,
                 ).withScope(prepared.scope)
                     .withMetadataOnly(prepared.metadataOnly)
-                    .withAnnotations(prepared.scopedEvents.associate { it.id to annotations.get(it.id) })
-                    .withAttachments(prepared.attachments)
+                    .withAnnotations(annotationSnapshots)
+                    .withAttachmentSources(prepared.attachments)
             val estimatedBytes = EventExportWriter(redaction).estimateBytes(request)
             call.respondText(
                 "{\"estimatedBytes\":$estimatedBytes}",
@@ -1270,8 +1390,10 @@ fun Application.devConsoleModule(
                     call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
                     return@get
                 }
-            call.respondNetworkTransactionPage(networkTransactions.page(query))
+            val store = call.networkStoreForRequestedSession() ?: return@get
+            call.respondNetworkTransactionPage(store.page(query))
         }
+        networkEndpointStatsRoutes(sessionAuthority, ::categoryEnabled) { it.networkStoreForRequestedSession() }
         /**
          * Discards every captured transaction -- the dashboard's "Clear" action beside the HAR and
          * Postman exports, and the counterpart of the in-app inspector's own clear.
@@ -1344,8 +1466,7 @@ fun Application.devConsoleModule(
                 return@put
             }
             val enabled =
-                call
-                    .receiveText()
+                (call.receiveTextWithin(MAX_DEFAULT_REQUEST_BODY_BYTES) ?: return@put)
                     .trim()
                     .trim('"')
                     .toBooleanStrictOrNull()
@@ -1499,8 +1620,7 @@ fun Application.devConsoleModule(
                 return@post
             }
             val enabled =
-                call
-                    .receiveText()
+                (call.receiveTextWithin(MAX_DEFAULT_REQUEST_BODY_BYTES) ?: return@post)
                     .trim()
                     .trim('"')
                     .toBooleanStrictOrNull()
@@ -1566,22 +1686,40 @@ fun Application.devConsoleModule(
                 call.respondCategoryDisabled("mocks")
                 return@post
             }
-            val parameters = call.receiveParameters()
+            val parameters = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
             val id = parameters["id"].orEmpty()
             val priority = parameters["priority"]?.toIntOrNull()
-            val status = parameters["status"]?.toIntOrNull()
             val scope =
                 parameters["scope"]?.let { runCatching { MockScope.valueOf(it) }.getOrNull() } ?: MockScope.SESSION
-            val delayMs = parameters["delayMs"]?.toLongOrNull()
             val headers = runCatching { parameters["headers"].parseMockRuleHeaders() }.getOrNull()
-            val basicFieldsValid = id.matches(MOCK_RULE_ID) && priority != null && status in 100..599
-            val delayValid = delayMs == null || delayMs in 0..MOCK_RULE_MAX_DELAY_MS
-            if (!basicFieldsValid || !delayValid || headers == null) {
+            val existingRule = mockEngine.rules().firstOrNull { it.id == id }
+            val rawQueryPredicates = parameters.getAll("queryPredicate")
+            val rawHeaderPredicates = parameters.getAll("headerPredicate")
+            val queryPredicates = runCatching { parseMockPredicates(rawQueryPredicates) }.getOrNull()
+            val headerPredicates = runCatching { parseMockPredicates(rawHeaderPredicates) }.getOrNull()
+            val requestedEnabled = parameters["enabled"]?.toBooleanStrictOrNull()
+            val predicatesValid =
+                (rawQueryPredicates == null || queryPredicates != null) &&
+                    (rawHeaderPredicates == null || headerPredicates != null)
+            val enabledValid = parameters["enabled"] == null || requestedEnabled != null
+            val action = runCatching { parseMockAction(parameters, headers.orEmpty()) }.getOrNull()
+            val idValid = id.matches(MOCK_RULE_ID)
+            if (!idValid || priority == null) {
                 commandAuditLog.recordControlFailure(session.id, "mock.rule.upsert", id.ifBlank { "rule" })
                 call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
                 return@post
             }
-            val staticResponse = MockAction.StaticResponse(status!!, parameters["body"].orEmpty(), headers)
+            if (headers == null || !predicatesValid || !enabledValid) {
+                commandAuditLog.recordControlFailure(session.id, "mock.rule.upsert", id.ifBlank { "rule" })
+                call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
+                return@post
+            }
+            if (action == null) {
+                commandAuditLog.recordControlFailure(session.id, "mock.rule.upsert", id.ifBlank { "rule" })
+                call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
+                return@post
+            }
+            val statusCode = action.statusCodeOrNull
             val rule =
                 MockRule(
                     id = id,
@@ -1590,8 +1728,11 @@ fun Application.devConsoleModule(
                     scheme = parameters["scheme"]?.lowercase()?.takeIf { it.isNotBlank() },
                     host = parameters["host"]?.takeIf { it.isNotBlank() },
                     path = parameters["path"]?.takeIf { it.isNotBlank() } ?: ".*",
+                    queryPredicates = queryPredicates ?: existingRule?.queryPredicates.orEmpty(),
+                    headerPredicates = headerPredicates ?: existingRule?.headerPredicates.orEmpty(),
+                    bodyPredicate = parameters["bodyPredicate"] ?: existingRule?.bodyPredicate,
                     scope = scope,
-                    action = if (delayMs != null) MockAction.Delay(delayMs, staticResponse) else staticResponse,
+                    action = action,
                     // Set only by the mock-from-transaction flows; hand-authored rules never send this
                     // field, and it is never written to disk (MockEngine strips it before persisting).
                     // The dashboard omits this param when editing a rule whose snapshot was reported
@@ -1604,7 +1745,13 @@ fun Application.devConsoleModule(
                     // defaults to null.
                     sourceBodySnapshot =
                         parameters["sourceBodySnapshot"]?.takeIf { it.isNotBlank() }
-                            ?: mockEngine.rules().firstOrNull { it.id == id }?.sourceBodySnapshot,
+                            ?: existingRule?.sourceBodySnapshot,
+                ).withPersistence(
+                    existingRule?.persistence?.let { persistence ->
+                        persistence.copy(enabled = requestedEnabled ?: persistence.enabled)
+                    } ?: io.devconsole.mocks.MockRulePersistence(
+                        enabled = requestedEnabled ?: true,
+                    ),
                 )
             runCatching { mockEngine.upsert(rule) }.onFailure {
                 commandAuditLog.recordControlFailure(session.id, "mock.rule.upsert", id)
@@ -1617,11 +1764,11 @@ fun Application.devConsoleModule(
                 id,
                 mapOf(
                     "scope" to scope.name,
-                    "status" to status.toString(),
+                    "status" to (statusCode?.toString() ?: "-"),
                 ),
             )
             call.respondText(
-                "{\"id\":\"${id.escapeJson()}\",\"statusCode\":$status}",
+                "{\"id\":\"${id.escapeJson()}\",\"statusCode\":${statusCode ?: "null"}}",
                 contentType = io.ktor.http.ContentType.Application.Json,
                 status = HttpStatusCode.Created,
             )
@@ -1642,8 +1789,7 @@ fun Application.devConsoleModule(
                 return@post
             }
             val enabled =
-                call
-                    .receiveText()
+                (call.receiveTextWithin(MAX_DEFAULT_REQUEST_BODY_BYTES) ?: return@post)
                     .trim()
                     .trim('"')
                     .toBooleanStrictOrNull()
@@ -1725,7 +1871,189 @@ fun Application.devConsoleModule(
                 return@get
             }
             val providers = remoteConfigSnapshots().joinToString(",") { it.json() }
-            call.respondText("{\"data\":[$providers]}", contentType = io.ktor.http.ContentType.Application.Json)
+            val overridesEditable = remoteConfigOverrides != null && featureFlagsEditable
+            call.respondText(
+                "{\"data\":[$providers],\"overridesEditable\":$overridesEditable}",
+                contentType = io.ktor.http.ContentType.Application.Json,
+            )
+        }
+        delete("/api/v1/remote-config/overrides") {
+            val session = sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization])
+            if (session == null) {
+                call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
+                return@delete
+            }
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.clearAllOverrides", "remoteConfig")
+                call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
+                return@delete
+            }
+            if (!categoryEnabled("state")) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.clearAllOverrides", "remoteConfig")
+                call.respondCategoryDisabled("state")
+                return@delete
+            }
+            if (!featureFlagsEditable) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.clearAllOverrides", "remoteConfig")
+                call.respondText(
+                    "{\"code\":\"REMOTE_CONFIG_OVERRIDES_DISABLED\"}",
+                    status = HttpStatusCode.Forbidden,
+                )
+                return@delete
+            }
+            val store = remoteConfigOverrides
+            if (store == null) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.clearAllOverrides", "remoteConfig")
+                call.respondText(
+                    "{\"code\":\"REMOTE_CONFIG_OVERRIDES_UNAVAILABLE\"}",
+                    status = HttpStatusCode.ServiceUnavailable,
+                )
+                return@delete
+            }
+            store.clearAll()
+            commandAuditLog.record(
+                CommandAuditEvent(
+                    timestampEpochMs = System.currentTimeMillis(),
+                    browserSessionId = session.id,
+                    commandType = "remoteConfig.clearAllOverrides",
+                    target = "remoteConfig",
+                    result = CommandAuditResult.SUCCESS,
+                ),
+            )
+            call.respondText("{\"status\":\"cleared\"}", contentType = io.ktor.http.ContentType.Application.Json)
+        }
+        put("/api/v1/remote-config/{provider}/overrides/{key}") {
+            val session = sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization])
+            val provider = call.parameters["provider"].orEmpty()
+            val key = call.parameters["key"].orEmpty()
+            val target = "$provider/$key"
+            if (session == null) {
+                call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
+                return@put
+            }
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.override", target)
+                call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
+                return@put
+            }
+            if (!categoryEnabled("state")) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.override", target)
+                call.respondCategoryDisabled("state")
+                return@put
+            }
+            if (!featureFlagsEditable) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.override", target)
+                call.respondText(
+                    "{\"code\":\"REMOTE_CONFIG_OVERRIDES_DISABLED\"}",
+                    status = HttpStatusCode.Forbidden,
+                )
+                return@put
+            }
+            val store = remoteConfigOverrides
+            if (store == null) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.override", target)
+                call.respondText(
+                    "{\"code\":\"REMOTE_CONFIG_OVERRIDES_UNAVAILABLE\"}",
+                    status = HttpStatusCode.ServiceUnavailable,
+                )
+                return@put
+            }
+            val knownProviders = remoteConfigSnapshots().map { it.providerId }
+            if (provider !in knownProviders) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.override", target)
+                call.respondText(
+                    "{\"code\":\"REMOTE_CONFIG_PROVIDER_NOT_FOUND\"}",
+                    status = HttpStatusCode.NotFound,
+                )
+                return@put
+            }
+            val rawValue = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)["value"]
+            if (rawValue == null) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.override", target)
+                call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
+                return@put
+            }
+            val replaced = store.overrides()[provider]?.containsKey(key) == true
+            val setSuccess = runCatching { store.setOverride(provider, key, rawValue) }.isSuccess
+            if (!setSuccess) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.override", target)
+                call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
+                return@put
+            }
+            // Values are never audited: config keys are snake_case, which header-shaped redaction
+            // lists miss, so a secret override would land in the log. Size and replace-vs-new suffice.
+            commandAuditLog.record(
+                CommandAuditEvent(
+                    timestampEpochMs = System.currentTimeMillis(),
+                    browserSessionId = session.id,
+                    commandType = "remoteConfig.override",
+                    target = target,
+                    result = CommandAuditResult.SUCCESS,
+                    parameters =
+                        mapOf(
+                            "valueLength" to rawValue.length.toString(),
+                            "replaced" to replaced.toString(),
+                        ),
+                ),
+            )
+            call.respondText("{\"status\":\"updated\"}", contentType = io.ktor.http.ContentType.Application.Json)
+        }
+        delete("/api/v1/remote-config/{provider}/overrides/{key}") {
+            val session = sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization])
+            val provider = call.parameters["provider"].orEmpty()
+            val key = call.parameters["key"].orEmpty()
+            val target = "$provider/$key"
+            if (session == null) {
+                call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
+                return@delete
+            }
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.clearOverride", target)
+                call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
+                return@delete
+            }
+            if (!categoryEnabled("state")) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.clearOverride", target)
+                call.respondCategoryDisabled("state")
+                return@delete
+            }
+            if (!featureFlagsEditable) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.clearOverride", target)
+                call.respondText(
+                    "{\"code\":\"REMOTE_CONFIG_OVERRIDES_DISABLED\"}",
+                    status = HttpStatusCode.Forbidden,
+                )
+                return@delete
+            }
+            val store = remoteConfigOverrides
+            if (store == null) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.clearOverride", target)
+                call.respondText(
+                    "{\"code\":\"REMOTE_CONFIG_OVERRIDES_UNAVAILABLE\"}",
+                    status = HttpStatusCode.ServiceUnavailable,
+                )
+                return@delete
+            }
+            val knownProviders = remoteConfigSnapshots().map { it.providerId }
+            if (provider !in knownProviders) {
+                commandAuditLog.recordControlFailure(session.id, "remoteConfig.clearOverride", target)
+                call.respondText(
+                    "{\"code\":\"REMOTE_CONFIG_PROVIDER_NOT_FOUND\"}",
+                    status = HttpStatusCode.NotFound,
+                )
+                return@delete
+            }
+            store.clearOverride(provider, key)
+            commandAuditLog.record(
+                CommandAuditEvent(
+                    timestampEpochMs = System.currentTimeMillis(),
+                    browserSessionId = session.id,
+                    commandType = "remoteConfig.clearOverride",
+                    target = target,
+                    result = CommandAuditResult.SUCCESS,
+                ),
+            )
+            call.respondText("{\"status\":\"cleared\"}", contentType = io.ktor.http.ContentType.Application.Json)
         }
         post("/api/v1/flags/{key}") {
             val session = sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization])
@@ -1754,7 +2082,7 @@ fun Application.devConsoleModule(
             }
             // Accepts a bare value, so "true" still works and "staging" now does too. Quotes are
             // tolerated because a browser posting JSON is the common case.
-            val value = call.receiveText().trim().trim('"')
+            val value = (call.receiveTextWithin(MAX_DEFAULT_REQUEST_BODY_BYTES) ?: return@post).trim().trim('"')
             val previousValue = featureFlags.value(key)
             val changed = runCatching { featureFlags.override(key, value) }.isSuccess
             if (!changed) {
@@ -1783,6 +2111,122 @@ fun Application.devConsoleModule(
             )
             timeline.appendFlagOverride(session.id, key, redactedBefore, redactedAfter)
             call.respondText("{\"status\":\"updated\"}", contentType = io.ktor.http.ContentType.Application.Json)
+        }
+        get("/api/v1/capture") {
+            if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) ==
+                null
+            ) {
+                call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
+                return@get
+            }
+            val control = captureControl
+            call.respondText(
+                "{\"paused\":${control?.isPaused() ?: false},\"available\":${control != null}}",
+                contentType = io.ktor.http.ContentType.Application.Json,
+            )
+        }
+        post("/api/v1/capture/paused") {
+            val session = sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization])
+            if (session == null) {
+                call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
+                return@post
+            }
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
+                commandAuditLog.recordControlFailure(session.id, "capture.pause", "capture")
+                call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
+                return@post
+            }
+            val control = captureControl
+            if (control == null) {
+                commandAuditLog.recordControlFailure(session.id, "capture.pause", "capture")
+                call.respondText(
+                    "{\"code\":\"CAPTURE_CONTROL_UNAVAILABLE\"}",
+                    status = HttpStatusCode.ServiceUnavailable,
+                )
+                return@post
+            }
+            // Accepts plain or quoted booleans, since a browser posting JSON is the common case.
+            val requested =
+                (call.receiveTextWithin(MAX_DEFAULT_REQUEST_BODY_BYTES) ?: return@post).trim().trim('"')
+            val paused =
+                when (requested) {
+                    "true" -> true
+                    "false" -> false
+                    else -> null
+                }
+            if (paused == null) {
+                commandAuditLog.recordControlFailure(session.id, "capture.pause", "capture")
+                call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
+                return@post
+            }
+            val commandType = if (paused) "capture.pause" else "capture.resume"
+            if (!control.setPaused(paused)) {
+                commandAuditLog.recordControlFailure(session.id, commandType, "capture")
+                call.respondText(
+                    "{\"code\":\"CAPTURE_CONTROL_UNAVAILABLE\"}",
+                    status = HttpStatusCode.ServiceUnavailable,
+                )
+                return@post
+            }
+            commandAuditLog.record(
+                CommandAuditEvent(
+                    timestampEpochMs = System.currentTimeMillis(),
+                    browserSessionId = session.id,
+                    commandType = commandType,
+                    target = "capture",
+                    result = CommandAuditResult.SUCCESS,
+                    parameters = mapOf("paused" to paused.toString()),
+                ),
+            )
+            call.respondText(
+                "{\"paused\":${control.isPaused()}}",
+                contentType = io.ktor.http.ContentType.Application.Json,
+            )
+        }
+        post("/api/v1/capture/purge") {
+            val session = sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization])
+            if (session == null) {
+                call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
+                return@post
+            }
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
+                commandAuditLog.recordControlFailure(session.id, "capture.purge", "capture")
+                call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
+                return@post
+            }
+            val control = captureControl
+            if (control == null) {
+                commandAuditLog.recordControlFailure(session.id, "capture.purge", "capture")
+                call.respondText(
+                    "{\"code\":\"CAPTURE_CONTROL_UNAVAILABLE\"}",
+                    status = HttpStatusCode.ServiceUnavailable,
+                )
+                return@post
+            }
+            val summary = control.purge()
+            commandAuditLog.record(
+                CommandAuditEvent(
+                    timestampEpochMs = System.currentTimeMillis(),
+                    browserSessionId = session.id,
+                    commandType = "capture.purge",
+                    target = "capture",
+                    result = CommandAuditResult.SUCCESS,
+                    parameters =
+                        mapOf(
+                            "networkTransactions" to summary.networkTransactions.toString(),
+                            "socketConnections" to summary.socketConnections.toString(),
+                            "pushEvents" to summary.pushEvents.toString(),
+                            "retainedRunsDeleted" to summary.retainedRunsDeleted.toString(),
+                        ),
+                ),
+            )
+            call.respondText(
+                "{\"networkTransactions\":${summary.networkTransactions}," +
+                    "\"socketConnections\":${summary.socketConnections}," +
+                    "\"pushEvents\":${summary.pushEvents}," +
+                    "\"retainedRunsDeleted\":${summary.retainedRunsDeleted}}",
+                contentType = io.ktor.http.ContentType.Application.Json,
+            )
         }
         get("/api/v1/capture-rules") {
             if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) ==
@@ -1816,7 +2260,7 @@ fun Application.devConsoleModule(
                 call.respondCategoryDisabled("mocks")
                 return@post
             }
-            val parameters = call.receiveParameters()
+            val parameters = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
             val id = parameters["id"].orEmpty()
             val rule =
                 runCatching {
@@ -1861,8 +2305,7 @@ fun Application.devConsoleModule(
                 return@post
             }
             val enabled =
-                call
-                    .receiveText()
+                (call.receiveTextWithin(MAX_DEFAULT_REQUEST_BODY_BYTES) ?: return@post)
                     .trim()
                     .trim('"')
                     .toBooleanStrictOrNull()
@@ -1919,7 +2362,10 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"EVIDENCE_UNAVAILABLE\"}", status = HttpStatusCode.ServiceUnavailable)
                 return@get
             }
-            val sessionId = currentSessionId()
+            // Read-only `?sessionId=` reaches a previous run's tray, kept in Room across restarts;
+            // every mutation route below stays scoped to the current run.
+            val sessionId =
+                call.request.queryParameters["sessionId"]?.takeIf(String::isNotBlank) ?: currentSessionId()
             val items = store.items(sessionId)
             val report = store.report(sessionId)
             // Bounded independently of the store's own quota (see MAX_EVIDENCE_ITEMS_PER_RESPONSE):
@@ -1959,7 +2405,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"EVIDENCE_UNAVAILABLE\"}", status = HttpStatusCode.ServiceUnavailable)
                 return@post
             }
-            val parameters = call.receiveParameters()
+            val parameters = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
             val kind =
                 parameters["kind"]?.let { raw -> runCatching { EvidenceKind.valueOf(raw.uppercase()) }.getOrNull() }
             val subjectId = parameters["id"].orEmpty()
@@ -2081,7 +2527,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"EVIDENCE_UNAVAILABLE\"}", status = HttpStatusCode.ServiceUnavailable)
                 return@put
             }
-            val parameters = call.receiveParameters()
+            val parameters = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
             val severityRaw = parameters["severity"]
             val severity =
                 if (severityRaw == null) {
@@ -2201,7 +2647,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"UNAVAILABLE\"}", status = HttpStatusCode.ServiceUnavailable)
                 return@post
             }
-            val parameters = call.receiveParameters()
+            val parameters = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
             val key = parameters["key"].orEmpty()
             val value = parameters["value"].orEmpty()
             val type = parameters["type"].orEmpty()
@@ -2350,7 +2796,7 @@ fun Application.devConsoleModule(
                 return@post
             }
             val inspector = databaseInspector
-            val sql = call.receiveParameters()["sql"].orEmpty()
+            val sql = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)["sql"].orEmpty()
             if (inspector == null || sql.isBlank() || sql.length > MAX_SQL_INPUT_BYTES) {
                 commandAuditLog.recordControlFailure(session.id, "database.sql.execute", database)
                 call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
@@ -2509,7 +2955,7 @@ fun Application.devConsoleModule(
                 call.respondCategoryDisabled("inspection")
                 return@put
             }
-            val parameters = call.receiveParameters()
+            val parameters = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
             val relativePath = parameters["path"].orEmpty()
             val content = parameters["content"].orEmpty()
             val inspector = fileInspector
@@ -2542,7 +2988,7 @@ fun Application.devConsoleModule(
                 call.respondCategoryDisabled("inspection")
                 return@post
             }
-            val parameters = call.receiveParameters()
+            val parameters = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
             val relativePath = parameters["path"].orEmpty()
             val newRelativePath = parameters["newPath"].orEmpty()
             val inspector = fileInspector
@@ -2575,7 +3021,7 @@ fun Application.devConsoleModule(
                 call.respondCategoryDisabled("inspection")
                 return@post
             }
-            val parameters = call.receiveParameters()
+            val parameters = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
             val relativePath = parameters["path"].orEmpty()
             val content = parameters["content"].orEmpty()
             val inspector = fileInspector
@@ -2699,22 +3145,17 @@ fun Application.devConsoleModule(
                     commandType = "composer.execute",
                     target = "request",
                 ) ?: return@post
-            val parameters = call.receiveParameters()
+            val parameters = call.receiveParametersWithin(MAX_COMPOSER_BODY_BYTES)
             val request = parameters.toComposerRequestOrNull()
             val method = request?.method.orEmpty()
             val url = request?.url.orEmpty()
-            if (request == null || method !in COMPOSER_METHODS || !url.isHttpUrl()) {
+            if (request == null || method !in COMPOSER_METHODS) {
                 commandAuditLog.recordControlFailure(
                     session.id,
                     "composer.execute",
                     url.hostOrEmpty().ifBlank { "request" },
                 )
                 call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
-                return@post
-            }
-            if (!composerHosts.permitsHostOf(url)) {
-                commandAuditLog.recordControlFailure(session.id, "composer.execute", url.hostOrEmpty())
-                call.respondText("{\"code\":\"COMPOSER_HOST_REJECTED\"}", status = HttpStatusCode.Forbidden)
                 return@post
             }
             val executor = parameters["executor"].orEmpty().ifBlank { COMPOSER_EXECUTOR_DEVICE }
@@ -2737,6 +3178,16 @@ fun Application.devConsoleModule(
                     call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
                     return@post
                 }
+            if (!resolvedRequest.url.isHttpUrl()) {
+                commandAuditLog.recordControlFailure(session.id, "composer.execute", "request")
+                call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
+                return@post
+            }
+            if (!composerHosts.permitsHostOf(resolvedRequest.url)) {
+                commandAuditLog.recordControlFailure(session.id, "composer.execute", resolvedRequest.url.hostOrEmpty())
+                call.respondText("{\"code\":\"COMPOSER_HOST_REJECTED\"}", status = HttpStatusCode.Forbidden)
+                return@post
+            }
             val execution =
                 try {
                     val selectedExecutor =
@@ -2899,7 +3350,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"COMPOSER_HOSTS_READ_ONLY\"}", status = HttpStatusCode.Forbidden)
                 return@post
             }
-            val requested = call.receiveParameters()["host"].orEmpty()
+            val requested = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)["host"].orEmpty()
             when (val result = composerHosts.add(requested)) {
                 is ComposerHostAllowlist.AddResult.Added -> {
                     commandAuditLog.recordControlSuccess(session.id, "composer.host.add", result.host)
@@ -3046,7 +3497,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
             }
-            val command = call.receiveText()
+            val command = call.receiveTextWithin(MAX_DEFAULT_REQUEST_BODY_BYTES) ?: return@post
             val request = ComposerCurlImporter.import(command).getOrNull()
             if (request == null) {
                 commandAuditLog.recordControlFailure(session.id, "composer.import", "curl")
@@ -3078,7 +3529,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
                 return@post
             }
-            val parameters = call.receiveParameters()
+            val parameters = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
             val request = ComposerCurlImporter.import(parameters["curl"].orEmpty()).getOrNull()
             val name = parameters["name"].orEmpty()
             if (request == null || name.isBlank()) {
@@ -3186,7 +3637,7 @@ fun Application.devConsoleModule(
                 call.respondText("{\"code\":\"PUSH_SIMULATION_UNAVAILABLE\"}", status = HttpStatusCode.Conflict)
                 return@post
             }
-            val parameters = call.receiveParameters()
+            val parameters = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
             val data =
                 parameters.names().filter { it.startsWith("data.") }.associate { name ->
                     name.removePrefix("data.") to
@@ -3291,16 +3742,7 @@ fun Application.devConsoleModule(
                 call.respondCategoryDisabled("state")
                 return@post
             }
-            val input = call.receiveText()
-            if (input.length > MAX_STATE_MUTATION_INPUT_BYTES) {
-                commandAuditLog.recordControlFailure(
-                    session.id,
-                    "state.mutation",
-                    "${call.parameters["id"]}.${call.parameters["command"]}",
-                )
-                call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
-                return@post
-            }
+            val input = call.receiveTextWithin(MAX_STATE_MUTATION_INPUT_BYTES) ?: return@post
             val providerId = call.parameters["id"].orEmpty()
             val commandId = call.parameters["command"].orEmpty()
             when (val result = stateRegistry.mutate(providerId, commandId, input)) {
@@ -3335,7 +3777,7 @@ fun Application.devConsoleModule(
                 socketStore
                     .connections()
                     .filter { protocolFilter == null || it.protocol == protocolFilter }
-                    .joinToString(",") { it.summaryJson() }
+                    .joinToString(",") { it.summaryJson(socketSenders) }
             call.respondText(
                 "{\"schemaVersion\":1,\"data\":[$connections]}",
                 contentType = io.ktor.http.ContentType.Application.Json,
@@ -3356,9 +3798,87 @@ fun Application.devConsoleModule(
                 return@get
             }
             call.respondText(
-                "{\"schemaVersion\":1,\"data\":${connection.detailJson()}}",
+                "{\"schemaVersion\":1,\"data\":${connection.detailJson(socketSenders)}}",
                 contentType = io.ktor.http.ContentType.Application.Json,
             )
+        }
+        // Sends one host-originated frame over a live connection. Gated like every other command
+        // route: bearer session, origin/CSRF, the socket/mqtt capture categories, and the same
+        // request-execution capability Composer and Network resend share -- a browser may not make
+        // the device write on a socket it can otherwise only observe when the host disabled that.
+        post("/api/v1/websockets/connections/{id}/send") {
+            val session = sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization])
+            val connectionId = call.parameters["id"].orEmpty()
+            val auditTarget = connectionId.ifBlank { "connection" }
+            if (session == null) {
+                call.respondText("{\"code\":\"AUTH_REQUIRED\"}", status = HttpStatusCode.Unauthorized)
+                return@post
+            }
+            if (!call.isOriginAndCsrfAuthorized(sessionAuthority)) {
+                commandAuditLog.recordControlFailure(session.id, SOCKET_SEND_COMMAND, auditTarget)
+                call.respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
+                return@post
+            }
+            if (!categoryEnabled("socket") && !categoryEnabled("mqtt")) {
+                commandAuditLog.recordControlFailure(session.id, SOCKET_SEND_COMMAND, auditTarget)
+                call.respondCategoryDisabled("socket")
+                return@post
+            }
+            if (!composerEnabled) {
+                commandAuditLog.recordControlFailure(session.id, SOCKET_SEND_COMMAND, auditTarget)
+                call.respondText("{\"code\":\"SOCKET_SEND_DISABLED\"}", status = HttpStatusCode.Forbidden)
+                return@post
+            }
+            val senders = socketSenders
+            if (senders == null) {
+                commandAuditLog.recordControlFailure(session.id, SOCKET_SEND_COMMAND, auditTarget)
+                call.respondText("{\"code\":\"SEND_UNSUPPORTED\"}", status = HttpStatusCode.ServiceUnavailable)
+                return@post
+            }
+            // Form-encoded like the other command routes: text, and for MQTT topic/qos/retained.
+            val form = call.receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES)
+            val request = form.toSocketSendRequest()
+            if (request == null) {
+                commandAuditLog.recordControlFailure(session.id, SOCKET_SEND_COMMAND, auditTarget)
+                call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
+                return@post
+            }
+            val text = request.text
+            when (val result = senders.send(connectionId, request)) {
+                SocketSendResult.Sent -> {
+                    // Only the frame's size and topic are audited; the frame text itself never is.
+                    commandAuditLog.record(
+                        CommandAuditEvent(
+                            timestampEpochMs = System.currentTimeMillis(),
+                            browserSessionId = session.id,
+                            commandType = SOCKET_SEND_COMMAND,
+                            target = auditTarget,
+                            result = CommandAuditResult.SUCCESS,
+                            parameters =
+                                mapOf(
+                                    "bytes" to text.encodeToByteArray().size.toString(),
+                                    "topic" to request.topic.orEmpty(),
+                                ),
+                        ),
+                    )
+                    call.respondText("{\"status\":\"sent\"}", contentType = io.ktor.http.ContentType.Application.Json)
+                }
+                SocketSendResult.NotConnected -> {
+                    commandAuditLog.recordControlFailure(session.id, SOCKET_SEND_COMMAND, auditTarget)
+                    call.respondText("{\"code\":\"NOT_CONNECTED\"}", status = HttpStatusCode.Conflict)
+                }
+                is SocketSendResult.Rejected -> {
+                    commandAuditLog.recordControlFailure(session.id, SOCKET_SEND_COMMAND, auditTarget)
+                    call.respondText(
+                        "{\"code\":\"SEND_REJECTED\",\"message\":\"${result.reason.escapeJson()}\"}",
+                        status = HttpStatusCode.BadRequest,
+                    )
+                }
+                SocketSendResult.Unsupported -> {
+                    commandAuditLog.recordControlFailure(session.id, SOCKET_SEND_COMMAND, auditTarget)
+                    call.respondText("{\"code\":\"SEND_UNSUPPORTED\"}", status = HttpStatusCode.ServiceUnavailable)
+                }
+            }
         }
         get("/api/v1/websockets/messages") {
             if (sessionAuthority.bearerSession(call.request.headers[HttpHeaders.Authorization]) == null) {
@@ -3396,7 +3916,8 @@ fun Application.devConsoleModule(
                 call.respondCategoryDisabled("network")
                 return@get
             }
-            val transaction = networkTransactions.find(call.parameters["id"].orEmpty())
+            val store = call.networkStoreForRequestedSession() ?: return@get
+            val transaction = store.find(call.parameters["id"].orEmpty())
             if (transaction == null) {
                 call.respondText("{\"code\":\"NOT_FOUND\"}", status = HttpStatusCode.NotFound)
                 return@get
@@ -3484,7 +4005,8 @@ fun Application.devConsoleModule(
                 call.respondCategoryDisabled("network")
                 return@get
             }
-            val transaction = networkTransactions.find(call.parameters["id"].orEmpty())
+            val store = call.networkStoreForRequestedSession() ?: return@get
+            val transaction = store.find(call.parameters["id"].orEmpty())
             if (transaction == null) {
                 call.respondText("{\"code\":\"NOT_FOUND\"}", status = HttpStatusCode.NotFound)
                 return@get
@@ -3554,10 +4076,9 @@ fun Application.devConsoleModule(
                 }
             val execution =
                 try {
-                    composerExecutor.execute(
-                        request,
-                        composerHosts::permitsHostOf,
-                    )
+                    withContext(Dispatchers.IO) {
+                        composerExecutor.execute(request, composerHosts::permitsHostOf)
+                    }
                 } catch (rejected: io.devconsole.composer.ComposerDestinationRejectedException) {
                     recordComposerCapture(
                         request = resolvedRequest,
@@ -3631,7 +4152,8 @@ fun Application.devConsoleModule(
                 call.respondCategoryDisabled("network")
                 return@get
             }
-            val resolution = call.resolveNetworkExportTransactions(networkTransactions) ?: return@get
+            val store = call.networkStoreForRequestedSession() ?: return@get
+            val resolution = call.resolveNetworkExportTransactions(store) ?: return@get
             call.applyExportTruncationHeaders(resolution)
             call.respondText(
                 NetworkExport.toHarTransactions(resolution.transactions, redaction),
@@ -3649,7 +4171,8 @@ fun Application.devConsoleModule(
                 call.respondCategoryDisabled("network")
                 return@get
             }
-            val resolution = call.resolveNetworkExportTransactions(networkTransactions) ?: return@get
+            val store = call.networkStoreForRequestedSession() ?: return@get
+            val resolution = call.resolveNetworkExportTransactions(store) ?: return@get
             call.applyExportTruncationHeaders(resolution)
             call.respondText(
                 NetworkExport.toPostman(resolution.transactions, redaction),
@@ -3667,8 +4190,9 @@ fun Application.devConsoleModule(
         // POST is what a same-origin-restricted browser would otherwise auto-CSRF.
         post("/api/v1/network/har") {
             val resolution =
-                call.authorizeNetworkExportPost(networkTransactions, sessionAuthority, commandAuditLog)
-                    ?: return@post
+                call.authorizeNetworkExportPost(sessionAuthority, commandAuditLog) {
+                    networkStoreForRequestedSession()
+                } ?: return@post
             if (!categoryEnabled("network")) {
                 call.respondCategoryDisabled("network")
                 return@post
@@ -3681,8 +4205,9 @@ fun Application.devConsoleModule(
         }
         post("/api/v1/network/postman") {
             val resolution =
-                call.authorizeNetworkExportPost(networkTransactions, sessionAuthority, commandAuditLog)
-                    ?: return@post
+                call.authorizeNetworkExportPost(sessionAuthority, commandAuditLog) {
+                    networkStoreForRequestedSession()
+                } ?: return@post
             if (!categoryEnabled("network")) {
                 call.respondCategoryDisabled("network")
                 return@post
@@ -3729,7 +4254,7 @@ fun Application.devConsoleModule(
                 )
                 return@put
             }
-            val note = call.receiveText()
+            val note = call.receiveTextWithin(MAX_STATE_MUTATION_INPUT_BYTES) ?: return@put
             val stored = runCatching { annotations.setNote(id, note) }.isSuccess
             if (!stored) {
                 call.respondText("{\"code\":\"VALIDATION_FAILED\"}", status = HttpStatusCode.BadRequest)
@@ -3799,15 +4324,28 @@ fun Application.devConsoleModule(
                 close(CloseReason(CloseReason.Codes.CANNOT_ACCEPT.code, "HELLO_REQUIRED"))
                 return@webSocket
             }
+            // Subscribe BEFORE the welcome: the hub has no replay, so an event published between the
+            // welcome and a later subscription was lost for good (and its sequence was already
+            // covered by currentSequence, so the client never backfilled it). Frames are held until
+            // the welcome is out, which keeps the welcome first; the hub buffers meanwhile.
+            val subscribed = CompletableDeferred<Unit>()
+            val welcomeSent = CompletableDeferred<Unit>()
+            val streamJob =
+                launch {
+                    streamHub.events
+                        .onSubscription { subscribed.complete(Unit) }
+                        .collect { event ->
+                            welcomeSent.await()
+                            send(Frame.Text(event.toStreamMessage()))
+                        }
+                }
+            subscribed.await()
             send(
                 Frame.Text(
                     "{\"type\":\"server.welcome\",\"protocolVersion\":1,\"currentSequence\":${streamHub.currentSequence},\"heartbeatSeconds\":20}",
                 ),
             )
-            val streamJob =
-                launch {
-                    streamHub.events.collect { event -> send(Frame.Text(event.toStreamMessage())) }
-                }
+            welcomeSent.complete(Unit)
             try {
                 while (isActive) {
                     delay(STREAM_AUTH_RECHECK_MS)
@@ -3847,6 +4385,11 @@ class KtorLocalServerEngine(
     private val stateRegistry: StateRegistry = StateRegistry(),
     /** Already-redacted Remote Config snapshots; see [DevConsoleModuleConfig.remoteConfigSnapshots]. */
     private val remoteConfigSnapshots: () -> List<RemoteConfigSnapshot> = { emptyList() },
+    /** Host-side capture pause/resume and purge; see [DevConsoleModuleConfig.captureControl]. */
+    private val captureControl: CaptureControl? = null,
+    /** Host-side socket senders; see [DevConsoleModuleConfig.socketSenders]. */
+    private val socketSenders: SocketSenderRegistry? = null,
+    private val remoteConfigOverrides: RemoteConfigOverrideStore? = null,
     featureFlags: SessionFeatureFlags = SessionFeatureFlags(emptyList()),
     featureFlagsEditable: Boolean = true,
     private val mockEngine: MockEngine = MockEngine(emptyList()),
@@ -3924,6 +4467,33 @@ class KtorLocalServerEngine(
     fun withRetainedCaptures(query: RetainedCaptureQuery): KtorLocalServerEngine =
         apply {
             retainedCaptures = query
+        }
+
+    @Volatile
+    private var retainedNetworkTransactions: suspend (sessionId: String) -> NetworkTransactionStore? = { null }
+
+    @Volatile
+    private var deleteRun: suspend (sessionId: String) -> Boolean = { false }
+
+    @Volatile
+    private var pinRun: suspend (sessionId: String, pinned: Boolean) -> Boolean = { _, _ -> false }
+
+    /** Backs `DELETE /api/v1/runs/{id}` and `POST /api/v1/runs/{id}/pin`. */
+    fun withRunControls(
+        delete: suspend (sessionId: String) -> Boolean,
+        pin: suspend (sessionId: String, pinned: Boolean) -> Boolean,
+    ): KtorLocalServerEngine =
+        apply {
+            deleteRun = delete
+            pinRun = pin
+        }
+
+    /** Serves `?sessionId=<past run>` on the network list, detail, cURL and HAR/Postman routes. */
+    fun withRetainedNetworkTransactions(
+        provider: suspend (sessionId: String) -> NetworkTransactionStore?,
+    ): KtorLocalServerEngine =
+        apply {
+            retainedNetworkTransactions = provider
         }
 
     @Volatile
@@ -4055,61 +4625,81 @@ class KtorLocalServerEngine(
                 val security = browserSecurity
                 val candidate =
                     runCatching {
-                        serverScope
-                            .embeddedServer(
-                                CIO,
-                                host = endpoint.host,
-                                port = endpoint.port,
-                                parentCoroutineContext = asyncBindFailureHandler,
-                            ) {
-                                devConsoleModule(sessionAuthority, sessionCodeAuthority) {
-                                    allowedHosts = setOf("localhost", endpoint.host)
-                                    browserSecurity = security
-                                    this.networkTransactions = this@KtorLocalServerEngine.networkTransactions
-                                    this.socketStore = this@KtorLocalServerEngine.socketStore
-                                    this.pushStore = this@KtorLocalServerEngine.pushStore
-                                    this.stateRegistry = this@KtorLocalServerEngine.stateRegistry
-                                    this.remoteConfigSnapshots = this@KtorLocalServerEngine.remoteConfigSnapshots
-                                    this.featureFlags = configuration.featureFlags
-                                    this.featureFlagsEditable = configuration.featureFlagsEditable
-                                    this.mockEngine = this@KtorLocalServerEngine.mockEngine
-                                    this.mocksEditable = configuration.mocksEditable
-                                    this.captureRules = this@KtorLocalServerEngine.captureRules
-                                    this.captureRulesEditable = configuration.captureRulesEditable
-                                    this.preferencesInspector = this@KtorLocalServerEngine.preferencesInspector
-                                    this.preferencesEditable = configuration.preferencesEditable
-                                    this.databaseInspector = this@KtorLocalServerEngine.databaseInspector
-                                    this.databaseEditable = configuration.databaseEditable
-                                    this.fileInspector = this@KtorLocalServerEngine.fileInspector
-                                    this.filesEditable = configuration.filesEditable
-                                    this.timeline = this@KtorLocalServerEngine.timeline
-                                    this.metadata = this@KtorLocalServerEngine.metadata()
-                                    this.sdkHealth = this@KtorLocalServerEngine.sdkHealth
-                                    this.streamHub = this@KtorLocalServerEngine.streamHub
-                                    this.annotations = this@KtorLocalServerEngine.annotations
-                                    this.stateMutationsEnabled = configuration.stateMutationsEnabled
-                                    this.composerEnabled = configuration.composerEnabled
-                                    this.composerAllowedHosts = configuration.composerAllowedHosts
-                                    this.composerHostsEditable = configuration.composerHostsEditable
-                                    this.sharedComposerHosts = composerHosts
-                                    this.composerExecutor = this@KtorLocalServerEngine.composerExecutor
-                                    this.composerCollections = this@KtorLocalServerEngine.composerCollections
-                                    this.pushSimulator = this@KtorLocalServerEngine.pushSimulator
-                                    this.commandAuditLog = this@KtorLocalServerEngine.commandAuditLog
-                                    this.redactionPolicy = configuration.redactionPolicy
-                                    this.networkProtection = this@KtorLocalServerEngine.networkProtection
-                                    this.attachmentReader = this@KtorLocalServerEngine.attachmentReader
-                                    this.attachmentMetadataReader = this@KtorLocalServerEngine.attachmentMetadataReader
-                                    this.retainedCaptures = this@KtorLocalServerEngine.retainedCaptures
-                                    this.evidenceStore = this@KtorLocalServerEngine.evidenceStore
-                                    this.currentSessionId = this@KtorLocalServerEngine.currentSessionId
-                                    this.sessionSnapshotProvider = this@KtorLocalServerEngine.sessionSnapshotProvider
-                                    this.sessionsProvider = this@KtorLocalServerEngine.sessionsProvider
-                                    this.screenshotCapture = this@KtorLocalServerEngine.screenshotCapture
-                                    this.locationPings = this@KtorLocalServerEngine.locationPings
-                                    boundEndpoint = { currentEndpoint }
+                        embeddedServer(
+                            CIO,
+                            serverConfig {
+                                // Same parent the CoroutineScope overload builds; that overload has no
+                                // engine `configure`, which reuseAddress below needs.
+                                parentCoroutineContext = serverScope.coroutineContext + asyncBindFailureHandler
+                                module {
+                                    devConsoleModule(sessionAuthority, sessionCodeAuthority) {
+                                        allowedHosts = setOf("localhost", endpoint.host)
+                                        browserSecurity = security
+                                        this.networkTransactions = this@KtorLocalServerEngine.networkTransactions
+                                        this.socketStore = this@KtorLocalServerEngine.socketStore
+                                        this.pushStore = this@KtorLocalServerEngine.pushStore
+                                        this.stateRegistry = this@KtorLocalServerEngine.stateRegistry
+                                        this.remoteConfigSnapshots = this@KtorLocalServerEngine.remoteConfigSnapshots
+                                        this.captureControl = this@KtorLocalServerEngine.captureControl
+                                        this.socketSenders = this@KtorLocalServerEngine.socketSenders
+                                        this.remoteConfigOverrides = this@KtorLocalServerEngine.remoteConfigOverrides
+                                        this.featureFlags = configuration.featureFlags
+                                        this.featureFlagsEditable = configuration.featureFlagsEditable
+                                        this.mockEngine = this@KtorLocalServerEngine.mockEngine
+                                        this.mocksEditable = configuration.mocksEditable
+                                        this.captureRules = this@KtorLocalServerEngine.captureRules
+                                        this.captureRulesEditable = configuration.captureRulesEditable
+                                        this.preferencesInspector = this@KtorLocalServerEngine.preferencesInspector
+                                        this.preferencesEditable = configuration.preferencesEditable
+                                        this.databaseInspector = this@KtorLocalServerEngine.databaseInspector
+                                        this.databaseEditable = configuration.databaseEditable
+                                        this.fileInspector = this@KtorLocalServerEngine.fileInspector
+                                        this.filesEditable = configuration.filesEditable
+                                        this.timeline = this@KtorLocalServerEngine.timeline
+                                        this.metadata = this@KtorLocalServerEngine.metadata()
+                                        this.sdkHealth = this@KtorLocalServerEngine.sdkHealth
+                                        this.streamHub = this@KtorLocalServerEngine.streamHub
+                                        this.annotations = this@KtorLocalServerEngine.annotations
+                                        this.stateMutationsEnabled = configuration.stateMutationsEnabled
+                                        this.composerEnabled = configuration.composerEnabled
+                                        this.composerAllowedHosts = configuration.composerAllowedHosts
+                                        this.composerHostsEditable = configuration.composerHostsEditable
+                                        this.sharedComposerHosts = composerHosts
+                                        this.composerExecutor = this@KtorLocalServerEngine.composerExecutor
+                                        this.composerCollections = this@KtorLocalServerEngine.composerCollections
+                                        this.pushSimulator = this@KtorLocalServerEngine.pushSimulator
+                                        this.commandAuditLog = this@KtorLocalServerEngine.commandAuditLog
+                                        this.redactionPolicy = configuration.redactionPolicy
+                                        this.networkProtection = this@KtorLocalServerEngine.networkProtection
+                                        this.attachmentReader = this@KtorLocalServerEngine.attachmentReader
+                                        this.attachmentMetadataReader =
+                                            this@KtorLocalServerEngine.attachmentMetadataReader
+                                        this.retainedCaptures = this@KtorLocalServerEngine.retainedCaptures
+                                        this.retainedNetworkTransactions =
+                                            this@KtorLocalServerEngine.retainedNetworkTransactions
+                                        this.evidenceStore = this@KtorLocalServerEngine.evidenceStore
+                                        this.currentSessionId = this@KtorLocalServerEngine.currentSessionId
+                                        this.sessionSnapshotProvider =
+                                            this@KtorLocalServerEngine.sessionSnapshotProvider
+                                        this.sessionsProvider = this@KtorLocalServerEngine.sessionsProvider
+                                        this.deleteRun = this@KtorLocalServerEngine.deleteRun
+                                        this.pinRun = this@KtorLocalServerEngine.pinRun
+                                        this.screenshotCapture = this@KtorLocalServerEngine.screenshotCapture
+                                        this.locationPings = this@KtorLocalServerEngine.locationPings
+                                        boundEndpoint = { currentEndpoint }
+                                    }
                                 }
-                            }.start(wait = false)
+                            },
+                        ) {
+                            connector {
+                                this.host = endpoint.host
+                                this.port = endpoint.port
+                            }
+                            // Lets a restarted app rebind its usual port while the previous process's
+                            // dashboard connections linger in TIME_WAIT, instead of drifting to the next
+                            // port and stranding every open tab. A live listener still blocks the bind.
+                            reuseAddress = true
+                        }.start(wait = false)
                     }.getOrNull() ?: return@forEach
 
                 if (!isServerBound(endpoint.host, endpoint.port)) {
@@ -4195,7 +4785,6 @@ private const val DEFAULT_RELATED_EVENT_WINDOW_MS = 1_000L
 private const val MAX_RELATED_EVENT_WINDOW_MS = 60_000L
 private val COMPOSER_METHODS = setOf("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
 private val MOCK_RULE_ID = Regex("[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}")
-private const val MOCK_RULE_MAX_DELAY_MS = 30_000L
 private const val MAX_MOCK_RULE_HEADERS = 50
 
 /**
@@ -4221,6 +4810,9 @@ private fun String?.parseMockRuleHeaders(): Map<String, String> =
         .also { require(it.size <= MAX_MOCK_RULE_HEADERS) }
         .associate { it.splitComposerPair(':') }
         .onEach { (name, value) -> require(validMockHeader(name, value)) }
+
+private fun parseMockPredicates(values: List<String>?): Map<String, String>? =
+    values?.map { it.splitComposerPair('=') }?.toMap()
 
 private fun io.ktor.server.application.ApplicationCall.setStreamSessionCookie(token: String) {
     response.headers.append(
@@ -4304,13 +4896,34 @@ private val asyncBindFailureHandler = CoroutineExceptionHandler { _, _ -> }
 private fun isPortAvailable(
     host: String,
     port: Int,
+): Boolean = isPortBindable(host, port) && !acceptsConnections(host, port)
+
+/**
+ * Binds with SO_REUSEADDR, like the engine itself, so the previous process's TIME_WAIT leftovers do
+ * not count as "in use". That alone is not enough: BSD lets a specific-address bind sit beside a
+ * wildcard listener, hence the connect probe in [isPortAvailable].
+ */
+private fun isPortBindable(
+    host: String,
+    port: Int,
 ): Boolean =
     runCatching {
         ServerSocket().use { socket ->
-            socket.reuseAddress = false
+            socket.reuseAddress = true
             socket.bind(InetSocketAddress(host, port))
         }
     }.isSuccess
+
+/** True when something is already accepting connections on [host]:[port]. */
+private fun acceptsConnections(
+    host: String,
+    port: Int,
+): Boolean =
+    runCatching {
+        Socket().use { socket -> socket.connect(InetSocketAddress(host, port), PORT_PROBE_CONNECT_TIMEOUT_MS) }
+    }.isSuccess
+
+private const val PORT_PROBE_CONNECT_TIMEOUT_MS = 200
 
 /** Verifies that the asynchronous CIO engine bound successfully by probing the target port. */
 private fun isServerBound(
@@ -4400,7 +5013,13 @@ private data class ExportPreparation(
     val maxBytes: Long,
     val exportSessionId: String,
     val scopedEvents: List<StoredEvent>,
-    val attachments: Map<String, ByteArray>,
+    val attachments: Map<String, ExportAttachmentSource>,
+)
+
+private data class ExportSources(
+    val attachmentReader: suspend (String) -> ByteArray?,
+    val attachmentMetadataReader: suspend (String) -> StoredAttachment?,
+    val currentSessionId: () -> String,
 )
 
 /** Shared by [prepareExport] and the `scope=EVIDENCE` branch of both export routes. */
@@ -4423,7 +5042,7 @@ private suspend fun prepareExport(
     parameters: Parameters,
     timeline: Timeline,
     retainedCaptures: RetainedCaptureQuery?,
-    attachmentReader: suspend (String) -> ByteArray?,
+    sources: ExportSources,
 ): ExportPreparation? {
     val scope =
         runCatching {
@@ -4467,7 +5086,12 @@ private suspend fun prepareExport(
             .distinctBy(StoredEvent::id)
             .sortedWith(compareBy(StoredEvent::wallTimeMs).thenBy(StoredEvent::sequence))
             .toList()
-    val exportSessionId = requestedSessionId ?: events.lastOrNull()?.sessionId ?: "current"
+    // Explicitly picked events name their own run; whole-session/time-range exports use the active
+    // run, never "whichever session the newest event happens to belong to" (Composer events).
+    val exportSessionId =
+        requestedSessionId
+            ?: (scope as? ExportScope.EventIds)?.let { picked -> events.firstOrNull { it.id in picked.ids }?.sessionId }
+            ?: sources.currentSessionId()
     val scopedEvents =
         when (scope) {
             ExportScope.WholeSession -> events
@@ -4481,13 +5105,20 @@ private suspend fun prepareExport(
         if (metadataOnly) {
             emptyMap()
         } else {
-            buildMap {
+            buildMap<String, ExportAttachmentSource> {
                 scopedEvents
                     .mapNotNull(StoredEvent::attachmentId)
                     .distinct()
                     .forEach { attachmentId ->
                         try {
-                            attachmentReader(attachmentId)?.let { put(attachmentId, it) }
+                            sources.attachmentMetadataReader(attachmentId)?.let { metadata ->
+                                put(
+                                    attachmentId,
+                                    ExportAttachmentSource(metadata.storedLength, metadata.mimeType) {
+                                        attachmentId.readSafely(sources.attachmentReader)?.let(::ByteArrayInputStream)
+                                    },
+                                )
+                            }
                         } catch (cancelled: kotlinx.coroutines.CancellationException) {
                             throw cancelled
                         } catch (_: Exception) {
@@ -4590,6 +5221,37 @@ private fun String.commandAuditIdentity(method: String): Pair<String, String>? =
 
 private const val MAX_SESSION_CODE_TTL_MS = 24L * 60 * 60 * 1000
 private const val MAX_STATE_MUTATION_INPUT_BYTES = 64 * 1024
+private const val MAX_DEFAULT_REQUEST_BODY_BYTES = 1024 * 1024
+private const val SOCKET_SEND_COMMAND = "socket.send"
+
+private class RequestBodyTooLargeException : RuntimeException()
+
+/** Reads at most [maxBytes] plus one sentinel byte, so an untrusted body is never fully buffered. */
+private suspend fun io.ktor.server.application.ApplicationCall.receiveTextWithin(maxBytes: Int): String? {
+    val declaredLength = request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+    if (declaredLength != null && declaredLength > maxBytes) throw RequestBodyTooLargeException()
+    val packet = receiveChannel().readRemaining(maxBytes.toLong() + 1)
+    val bytes = packet.readByteArray()
+    if (bytes.size > maxBytes) throw RequestBodyTooLargeException()
+    return bytes.decodeToString()
+}
+
+private suspend fun io.ktor.server.application.ApplicationCall.receiveParametersWithin(maxBytes: Int): Parameters {
+    // Same contract as receiveParameters(): a non-form body is the caller's mistake (400), not a 500.
+    val contentType =
+        request.headers[HttpHeaders.ContentType]?.let {
+            runCatching {
+                ContentType.parse(
+                    it,
+                )
+            }.getOrNull()
+        }
+    if (contentType != null && !contentType.match(ContentType.Application.FormUrlEncoded)) {
+        throw BadRequestException("Expected an application/x-www-form-urlencoded body")
+    }
+    return parseQueryString(receiveTextWithin(maxBytes) ?: throw RequestBodyTooLargeException())
+}
+
 private const val MAX_SQL_INPUT_BYTES = 8 * 1024
 private const val MAX_EXPORT_EVENTS = 50_000
 private const val MAX_EXPORT_SESSION_ID_LENGTH = 256
@@ -4617,7 +5279,7 @@ private const val MAX_TIMELINE_SCAN_PAGES = 200
 // an unbounded response at 120 req/min (see readQueryLimiter).
 private val MAX_EVIDENCE_ITEMS_PER_RESPONSE = EvidenceStore.MAX_ITEMS_PER_SESSION
 
-private fun SessionAuthority.bearerSession(authorization: String?) =
+internal fun SessionAuthority.bearerSession(authorization: String?) =
     if (!isBrowserAuthenticationRequired()) {
         openAccessSession()
     } else {
@@ -4989,9 +5651,13 @@ private fun RemoteConfigSnapshot.json(): String {
         "\"entries\":[$rows]}"
 }
 
-private fun RemoteConfigEntry.json(): String =
-    "{\"key\":\"${key.escapeJson()}\",\"value\":\"${value.escapeJson()}\"," +
-        "\"source\":\"${source.wireName}\",\"redacted\":$redacted,\"truncated\":$truncated}"
+private fun RemoteConfigEntry.json(): String {
+    val providerValueJson = providerValue?.let { "\"${it.escapeJson()}\"" } ?: "null"
+    val providerSourceJson = providerSource?.wireName?.let { "\"${it.escapeJson()}\"" } ?: "null"
+    return "{\"key\":\"${key.escapeJson()}\",\"value\":\"${value.escapeJson()}\"," +
+        "\"source\":\"${source.wireName}\",\"redacted\":$redacted,\"truncated\":$truncated," +
+        "\"providerValue\":$providerValueJson,\"providerSource\":$providerSourceJson}"
+}
 
 /**
  * Rule ids, hosts, and paths are user-supplied, so every string field is escaped. [stats] comes
@@ -5000,8 +5666,7 @@ private fun RemoteConfigEntry.json(): String =
  * status/body/headers plus its own `delayMs`, so the edit dialog can round-trip a delayed rule too.
  */
 private fun MockRule.json(stats: MockRuleStats): String {
-    val delay = action as? MockAction.Delay
-    val staticResponse = (delay?.next ?: action) as? MockAction.StaticResponse
+    val staticResponse = action.previewStatic
     val (body, bodyTruncated) = staticResponse?.body.orEmpty().truncateForMockRuleJson()
     val headers =
         staticResponse?.headers.orEmpty().entries.joinToString(",") { (name, value) ->
@@ -5009,24 +5674,36 @@ private fun MockRule.json(stats: MockRuleStats): String {
         }
     val (sourceSnapshot, sourceSnapshotTruncated) =
         sourceBodySnapshot?.truncateForMockRuleJson() ?: (null to false)
+    val queryPredicatesJson =
+        queryPredicates.entries.joinToString(",") { (key, value) ->
+            "\"${key.escapeJson()}\":\"${value.escapeJson()}\""
+        }
+    val headerPredicatesJson =
+        headerPredicates.entries.joinToString(",") { (key, value) ->
+            "\"${key.escapeJson()}\":\"${value.escapeJson()}\""
+        }
     return "{\"id\":\"${id.escapeJson()}\",\"priority\":$priority," +
-        "\"method\":${method?.let { "\"${it.escapeJson()}\"" } ?: "null"}," +
-        "\"scheme\":${scheme?.let { "\"${it.escapeJson()}\"" } ?: "null"}," +
-        "\"host\":${host?.let { "\"${it.escapeJson()}\"" } ?: "null"}," +
+        "\"method\":${method.orNullJson()}," +
+        "\"scheme\":${scheme.orNullJson()}," +
+        "\"host\":${host.orNullJson()}," +
         "\"path\":\"${path.escapeJson()}\",\"scope\":\"${scope.name}\"," +
         "\"action\":\"${action::class.simpleName}\"," +
-        "\"statusCode\":${staticResponse?.statusCode ?: "null"}," +
+        "\"statusCode\":${action.previewStatusCodeJson}," +
         "\"body\":\"${body.escapeJson()}\",\"bodyTruncated\":$bodyTruncated," +
         "\"headers\":{$headers}," +
-        "\"delayMs\":${delay?.durationMs ?: "null"}," +
+        "\"delayMs\":${action.previewDelayMsJson}," +
         "\"hitCount\":${stats.hitCount},\"lastHitEpochMs\":${stats.lastHitEpochMs ?: "null"}," +
         "\"enabled\":${persistence.enabled}," +
-        "\"sourceBodySnapshot\":${sourceSnapshot?.let { "\"${it.escapeJson()}\"" } ?: "null"}," +
+        "\"queryPredicates\":{$queryPredicatesJson}," +
+        "\"headerPredicates\":{$headerPredicatesJson}," +
+        "\"bodyPredicate\":${bodyPredicate.orNullJson()}," +
+        "\"actionDetail\":${action.actionDetailJson()}," +
+        "\"sourceBodySnapshot\":${sourceSnapshot.orNullJson()}," +
         "\"sourceBodySnapshotTruncated\":$sourceSnapshotTruncated}"
 }
 
 /** Caps a mock rule's serialized response body rather than omitting it outright when oversized. */
-private fun String.truncateForMockRuleJson(maxBytes: Int = MOCK_RULE_BODY_JSON_CAP_BYTES): Pair<String, Boolean> {
+internal fun String.truncateForMockRuleJson(maxBytes: Int = MOCK_RULE_BODY_JSON_CAP_BYTES): Pair<String, Boolean> {
     val bytes = toByteArray(Charsets.UTF_8)
     if (bytes.size <= maxBytes) return this to false
     val decoder =
@@ -5037,7 +5714,7 @@ private fun String.truncateForMockRuleJson(maxBytes: Int = MOCK_RULE_BODY_JSON_C
     return decoder.decode(java.nio.ByteBuffer.wrap(bytes, 0, maxBytes)).toString() to true
 }
 
-private const val MOCK_RULE_BODY_JSON_CAP_BYTES = 64 * 1024
+internal const val MOCK_RULE_BODY_JSON_CAP_BYTES = 64 * 1024
 
 private fun pruneStaleExports(
     directory: File,
@@ -5113,7 +5790,7 @@ private fun LocationPingOutcome.wireName(): String =
 private const val HTTP_STATUS_CLASS_SIZE = 100
 private const val HTTP_SUCCESS_CLASS = 2
 
-private fun String.escapeJson(): String =
+internal fun String.escapeJson(): String =
     buildString(length + 16) {
         for (char in this@escapeJson) {
             when (char) {
@@ -5208,7 +5885,12 @@ private fun sessionIntegrityJson(
     val stateMutations = auditLog.events().count { it.commandType.startsWith("state.") }
     val pristine = activeMocks.isEmpty() && flagOverrides.isEmpty() && stateMutations == 0
     val mocksJson = activeMocks.joinToString(",") { "\"${it.escapeJson()}\"" }
-    val flagsJson = flagOverrides.entries.joinToString(",") { (key, value) -> "\"${key.escapeJson()}\":$value" }
+    val flagsJson =
+        flagOverrides.entries.joinToString(",") { (key, value) ->
+            val isBooleanFlag = featureFlags.flags().any { it.key == key && it.type == FeatureFlagType.BOOLEAN }
+            val booleanValue = if (isBooleanFlag) value.toBooleanStrictOrNull()?.toString() else null
+            "\"${key.escapeJson()}\":" + (booleanValue ?: "\"${value.escapeJson()}\"")
+        }
     return "{\"pristine\":$pristine,\"activeMockRuleIds\":[$mocksJson]," +
         "\"featureFlagOverrides\":{$flagsJson},\"stateMutationCount\":$stateMutations}"
 }
@@ -5645,9 +6327,9 @@ private fun io.ktor.server.application.ApplicationCall.applyExportTruncationHead
  */
 @Suppress("ReturnCount") // One early-exit per gate stage (auth, CSRF) reads clearest.
 private suspend fun io.ktor.server.application.ApplicationCall.authorizeNetworkExportPost(
-    networkTransactions: NetworkTransactionStore,
     sessionAuthority: SessionAuthority,
     commandAuditLog: CommandAuditLog,
+    networkTransactions: suspend io.ktor.server.application.ApplicationCall.() -> NetworkTransactionStore?,
 ): NetworkExportResolution? {
     val session = sessionAuthority.bearerSession(request.headers[HttpHeaders.Authorization])
     if (session == null) {
@@ -5660,8 +6342,10 @@ private suspend fun io.ktor.server.application.ApplicationCall.authorizeNetworkE
         respondText("{\"code\":\"CSRF_INVALID\"}", status = HttpStatusCode.Forbidden)
         return null
     }
-    val ids = receiveParameters().getAll("id").orEmpty()
-    return resolveNetworkExportTransactions(networkTransactions, bodyIds = ids)
+    // Resolved only after auth+CSRF so an unauthenticated caller cannot probe which past runs exist.
+    val store = networkTransactions() ?: return null
+    val ids = receiveParametersWithin(MAX_DEFAULT_REQUEST_BODY_BYTES).getAll("id").orEmpty()
+    return resolveNetworkExportTransactions(store, bodyIds = ids)
 }
 
 /** Answers a malformed request with the JSON envelope at a 4xx. Debug-logged: rejections are routine. */
@@ -5723,6 +6407,9 @@ private fun io.ktor.server.application.ApplicationCall.networkTransactionQuery(
                 if (separator <= 0 || separator == encoded.lastIndex) return null
                 encoded.substring(0, separator) to encoded.substring(separator + 1)
             }.toMap()
+    val rawBody = request.queryParameters["body"]
+    if (rawBody != null && rawBody.length > NetworkTransactionQuery.MAX_BODY_QUERY_LENGTH) return null
+    val bodyQuery = rawBody?.takeIf(String::isNotBlank)
     return NetworkTransactionQuery(
         limit = limit,
         cursor = request.queryParameters["cursor"],
@@ -5738,6 +6425,7 @@ private fun io.ktor.server.application.ApplicationCall.networkTransactionQuery(
                 .orEmpty(),
         statuses = statuses.filterNotNull().toSet(),
         correlationId = request.queryParameters["correlationId"],
+        bodyQuery = bodyQuery,
     ).withFilters(
         NetworkTransactionFilters(
             fromEpochMs = fromEpochMs,
@@ -5849,7 +6537,8 @@ private fun NetworkTransaction.summaryJson(): String {
         "\"host\":\"${capture.request.url.host.escapeJson()}\"," +
         "\"path\":\"${capture.request.url.path.escapeJson()}\"," +
         "\"query\":\"${capture.request.url.queryString.escapeJson()}\"," +
-        "\"status\":${capture.response?.statusCode ?: "null"}," +
+        // Adapters record "no response" as status 0; the dashboard shows a null status as failed/ERR.
+        "\"status\":${capture.response?.statusCode?.takeIf { it > 0 } ?: "null"}," +
         "\"contentType\":\"$contentType\"," +
         "\"error\":$error,\"tags\":$tags,\"correlationId\":$correlationId}"
 }
@@ -5949,7 +6638,8 @@ private fun Map<String, String>.jsonObject(): String =
 
 private fun PushEvent.json(): String =
     buildString {
-        append("{\"provider\":\"").append(provider.escapeJson()).append("\"")
+        append("{\"id\":\"").append(stableEvidenceId().escapeJson()).append("\"")
+        append(",\"provider\":\"").append(provider.escapeJson()).append("\"")
         append(",\"messageId\":").append(messageId?.let { "\"${it.escapeJson()}\"" } ?: "null")
         append(",\"source\":").append(source?.let { "\"${it.escapeJson()}\"" } ?: "null")
         append(",\"sentAtEpochMs\":").append(sentAtEpochMs ?: "null")
@@ -5973,16 +6663,24 @@ private fun PushEvent.json(): String =
         append('}')
     }
 
-private fun SocketConnection.summaryJson(): String {
+/**
+ * [socketSenders] decides the two write-capability fields: a connection with no registered sender
+ * reports `canSend:false` and `sendProtocol:null`, so the dashboard never offers a composer that
+ * would only fail on submit.
+ */
+private fun SocketConnection.summaryJson(socketSenders: SocketSenderRegistry? = null): String {
     val errorJson = error?.let { "\"${it.escapeJson()}\"" } ?: "null"
+    val canSend = socketSenders?.canSend(id) == true
+    val sendProtocol = socketSenders?.protocol(id)?.wireName?.let { "\"${it.escapeJson()}\"" } ?: "null"
     return "{\"id\":\"${id.escapeJson()}\",\"url\":\"${url.escapeJson()}\",\"state\":\"${state.name}\"," +
         "\"openedAtEpochMs\":$openedAtEpochMs,\"closedAtEpochMs\":${closedAtEpochMs ?: "null"}," +
         "\"sentCount\":$sentCount,\"receivedCount\":$receivedCount,\"error\":$errorJson," +
-        "\"protocol\":\"${protocol.wireName.escapeJson()}\"}"
+        "\"protocol\":\"${protocol.wireName.escapeJson()}\"," +
+        "\"canSend\":$canSend,\"sendProtocol\":$sendProtocol}"
 }
 
-private fun SocketConnection.detailJson(): String =
-    summaryJson().dropLast(1) +
+private fun SocketConnection.detailJson(socketSenders: SocketSenderRegistry? = null): String =
+    summaryJson(socketSenders).dropLast(1) +
         ",\"reconnectAttempt\":$reconnectAttempt," +
         "\"lifecycle\":[${lifecycleEvents.joinToString(",") { it.json() }}]," +
         "\"messages\":[${messages.joinToString(",") { it.json() }}]}"
@@ -6131,10 +6829,7 @@ private fun materializeEvidenceSubject(
                 )
             }
         EvidenceKind.PUSH ->
-            // Mirrors dashboard.js's own convention (socketFlagId's push sibling): PushEvent has no
-            // durable id of its own, so the subject is the event's position in pushStore.events() --
-            // the same ordering GET /api/v1/push/events already returns.
-            subjectId.toIntOrNull()?.let(pushStore.events()::getOrNull)?.let { push ->
+            pushStore.events().firstOrNull { it.stableEvidenceId() == subjectId }?.let { push ->
                 MaterializedEvidenceSubject("${push.provider} · ${push.lifecycle.name}", push.json(), null)
             }
     }
@@ -6157,6 +6852,9 @@ private fun Timeline.findEvent(id: String): StoredEvent? {
     }
     return null
 }
+
+private fun PushEvent.stableEvidenceId(): String =
+    "$provider:$receivedAtEpochMs:${messageId.orEmpty()}:${source.orEmpty()}"
 
 /**
  * Resolves dashboard.js's `socketFlagId` convention (`connectionId@timestampEpochMs`) back to the
@@ -6439,7 +7137,7 @@ private suspend fun String.readSafely(attachmentReader: suspend (String) -> Byte
     }
 
 /** GET /api/v1/runs row: enough for the previous-run-crashed banner and a future Session & Security view. */
-private fun StoredSession.json(): String =
+private fun StoredSession.json(current: Boolean = false): String =
     "{\"id\":\"${id.escapeJson()}\",\"status\":\"${status.name}\"," +
         "\"startedAtEpochMs\":$startedAtMs,\"endedAtEpochMs\":${endedAtMs ?: "null"}," +
         "\"applicationId\":${applicationId?.let { "\"${it.escapeJson()}\"" } ?: "null"}," +
@@ -6449,7 +7147,8 @@ private fun StoredSession.json(): String =
         "\"deviceModel\":${deviceModel?.let { "\"${it.escapeJson()}\"" } ?: "null"}," +
         "\"deviceApiLevel\":${deviceApiLevel ?: "null"}," +
         "\"deviceOsVersion\":${deviceOsVersion?.let { "\"${it.escapeJson()}\"" } ?: "null"}," +
-        "\"recordCount\":$recordCount,\"estimatedBytes\":$estimatedBytes}"
+        "\"recordCount\":$recordCount,\"estimatedBytes\":$estimatedBytes,\"pinned\":$pinned," +
+        "\"current\":$current}"
 
 private fun evidenceSessionJson(
     metadata: ServerMetadata,

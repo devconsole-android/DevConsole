@@ -102,4 +102,21 @@ class InspectorNetworkSnippetsTest {
         val headers = parse(snippet).field("responseHeaders") as JsonValue.Obj
         assertEquals(JsonValue.Str("""W/"53-hfEnume"""), headers.entries.single().second)
     }
+
+    @Test
+    fun `a resend drops headers whose captured value was redacted instead of sending the marker`() {
+        val request =
+            InspectorTransactionUi(
+                id = "tx-3",
+                method = "GET",
+                host = "api.example.test",
+                path = "/me",
+                statusCode = 401,
+                durationMs = 12,
+                url = "https://api.example.test/me",
+                requestHeaders = mapOf("Authorization" to "<redacted>", "Accept" to "application/json"),
+            ).toComposerRequest()
+
+        assertEquals(mapOf("Accept" to "application/json"), request.headers)
+    }
 }

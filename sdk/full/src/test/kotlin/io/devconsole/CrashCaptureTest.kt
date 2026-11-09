@@ -23,6 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.system.measureTimeMillis
 
@@ -102,6 +103,63 @@ class CrashCaptureTest {
             "expected the password to be redacted: ${appended.single().payloadJson}",
             "topsecret123" !in appended.single().payloadJson.orEmpty(),
         )
+    }
+
+    @Test
+    fun `the exception summary is redacted`() {
+        val capture = capture()
+        val original = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, _ -> }
+        try {
+            capture.install()
+            Thread.getDefaultUncaughtExceptionHandler()!!.uncaughtException(
+                Thread.currentThread(),
+                IllegalStateException("Failed https://api.test/login?password=topsecret123"),
+            )
+            assertFalse("topsecret123" in appended.single().summary)
+        } finally {
+            capture.disable()
+            Thread.setDefaultUncaughtExceptionHandler(original)
+        }
+    }
+
+    @Test
+    fun `pending crash file round trips through import`() {
+        val file = Files.createTempDirectory("devconsole-crash").resolve("pending-crash.json").toFile()
+        val pending =
+            CrashCapture(
+                sessionId = { "session" },
+                redaction = RedactionEngine(RedactionPolicy.recommended()),
+                appender = { null },
+                store = { null },
+                sessionStore = { null },
+                pendingCrashFile = { file },
+            )
+        val original = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, _ -> }
+        try {
+            pending.install()
+            Thread.getDefaultUncaughtExceptionHandler()!!.uncaughtException(
+                Thread.currentThread(),
+                IllegalStateException("Failed https://api.test/login?password=topsecret123"),
+            )
+            assertTrue(file.isFile)
+            val importer =
+                CrashCapture(
+                    sessionId = "next",
+                    redaction = RedactionEngine(RedactionPolicy.recommended()),
+                    appender = { appender },
+                    store = { store },
+                )
+            importer.importPendingCrash(file, "next")
+            assertFalse(file.exists())
+            assertEquals("next", persisted.single().sessionId)
+            assertFalse("topsecret123" in persisted.single().summary)
+        } finally {
+            pending.disable()
+            Thread.setDefaultUncaughtExceptionHandler(original)
+            file.parentFile?.deleteRecursively()
+        }
     }
 
     @Test

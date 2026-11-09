@@ -41,15 +41,35 @@ enum class RemoteConfigSource(
  * [value] is a `String` because Remote Config is string-typed at the source -- reading a key as a
  * long or a boolean is an interpretation the *reader* applies, so storing a parsed type here would
  * record information the server never sent.
+ *
+ * When a local override is active, [value] and [source] describe the override while [providerValue]
+ * and [providerSource] retain what the provider itself resolved. Keeping both is what lets a
+ * surface show "overridden: remote `false`" instead of presenting the override as if the server
+ * had published it -- the difference is exactly what a developer debugging config needs to see.
  */
 data class RemoteConfigEntry(
     val key: String,
     val value: String,
     val source: RemoteConfigSource,
-    /** True when [value] was withheld by redaction, so a surface can badge it rather than show it. */
+    /**
+     * True when the provider's value was withheld by redaction, so a surface can badge it rather
+     * than show it. With an override active it describes [providerValue], not the override itself.
+     */
     val redacted: Boolean = false,
-    /** True when [value] was cut to [RemoteConfigRegistry.MAX_VALUE_LENGTH]. */
+    /**
+     * True when the provider's value was cut to [RemoteConfigRegistry.MAX_VALUE_LENGTH]. With an
+     * override active it describes [providerValue], not the override itself, which is never cut.
+     */
     val truncated: Boolean = false,
+    /**
+     * The provider's own value when an override replaced it, already capped to
+     * [RemoteConfigRegistry.MAX_VALUE_LENGTH]; null when no override is active. It is kept even
+     * though it is not served, so clearing the override visibly restores something rather than
+     * appearing to invent a value.
+     */
+    val providerValue: String? = null,
+    /** The source the provider resolved [providerValue] from; null when no override is active. */
+    val providerSource: RemoteConfigSource? = null,
 )
 
 /** Outcome of the provider's most recent fetch attempt. */

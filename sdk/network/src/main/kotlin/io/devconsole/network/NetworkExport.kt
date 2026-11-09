@@ -233,7 +233,15 @@ object NetworkExport {
         append(",\"send\":").append(timings.sendMs ?: -1)
         append(",\"wait\":").append(timings.waitMs ?: -1)
         append(",\"receive\":").append(timings.receiveMs ?: -1)
-        append("}}")
+        append('}')
+        val truncatedBodies =
+            listOfNotNull(requestBody as? BodyPreview.Text, responseBody as? BodyPreview.Text)
+                .count(BodyPreview.Text::truncated)
+        if (truncatedBodies > 0) {
+            val comment = "$truncatedBodies captured body preview(s) were truncated at capture"
+            append(",\"comment\":").append(comment.jsonQuoted())
+        }
+        append('}')
     }
 
     /** Best-known response-body byte size: the host-declared length, else the captured length. */

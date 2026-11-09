@@ -10,6 +10,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LocalContentColor
@@ -24,6 +25,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -196,53 +198,74 @@ private fun WorkspaceContent(
         }
     }
     val destinationContent: @Composable (Modifier) -> Unit = { contentModifier ->
-        Box(modifier = contentModifier) {
-            for (destination in visibleDestinations.filter { it == selected || it.name in visited }) {
-                key(destination) {
-                    DestinationHost(active = destination == selected) {
-                        stateHolder.SaveableStateProvider(destination.name) {
-                            when (destination) {
-                                InspectorDestination.OBSERVE ->
-                                    ObserveRoute(
-                                        onToggleTheme = onToggleTheme,
-                                        onDetailOverlayOpen = { open -> overlays[destination] = open },
-                                    )
-                                InspectorDestination.CONTROL ->
-                                    ControlRoute(
-                                        onToggleTheme = onToggleTheme,
-                                        onDetailOverlayOpen = { open -> overlays[destination] = open },
-                                    )
-                                InspectorDestination.DATA -> DataRoute(onToggleTheme = onToggleTheme)
-                                InspectorDestination.MORE -> MoreRoute(onToggleTheme = onToggleTheme)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        WorkspaceDestinations(
+            destinations = visibleDestinations.filter { it == selected || it.name in visited },
+            selected = selected,
+            stateHolder = stateHolder,
+            onToggleTheme = onToggleTheme,
+            onDetailOverlayOpen = { destination, open -> overlays[destination] = open },
+            modifier = contentModifier,
+        )
     }
-    if (navigationLayout == InspectorNavigationLayout.Bar) {
-        Scaffold(
-            modifier = modifier,
-            containerColor = DevConsoleTheme.colors.ground,
-            bottomBar = {
-                if (!detailOverlayOpen) {
-                    InspectorNavigationBar(
-                        items = rememberWorkspaceNavItems(selected, visibleDestinations, onDestinationSelected),
-                    )
-                }
-            },
-        ) { padding ->
-            destinationContent(Modifier.fillMaxSize().padding(padding))
-        }
-    } else {
-        Row(modifier = modifier) {
-            if (!detailOverlayOpen) {
+    // One tree for both layouts, with destinationContent always at the same call site: rememberSaveable
+    // keys state by composition position, so branching Scaffold-vs-Row around it meant a rotation
+    // (bar <-> rail) restored nothing -- an open detail or editor silently closed on every turn.
+    val showBar = navigationLayout == InspectorNavigationLayout.Bar && !detailOverlayOpen
+    val showRail = navigationLayout != InspectorNavigationLayout.Bar && !detailOverlayOpen
+    Scaffold(
+        modifier = modifier,
+        containerColor = DevConsoleTheme.colors.ground,
+        bottomBar = {
+            if (showBar) {
+                InspectorNavigationBar(
+                    items = rememberWorkspaceNavItems(selected, visibleDestinations, onDestinationSelected),
+                )
+            }
+        },
+    ) { padding ->
+        Row(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (showRail) {
                 InspectorNavigationRail(
                     items = rememberWorkspaceNavItems(selected, visibleDestinations, onDestinationSelected),
                 )
             }
-            destinationContent(Modifier.weight(1f))
+            destinationContent(Modifier.weight(1f).fillMaxHeight())
+        }
+    }
+}
+
+/** Every composed destination, stacked; only [selected] is placed (see [DestinationHost]). */
+@Composable
+private fun WorkspaceDestinations(
+    destinations: List<InspectorDestination>,
+    selected: InspectorDestination,
+    stateHolder: SaveableStateHolder,
+    onToggleTheme: () -> Unit,
+    onDetailOverlayOpen: (InspectorDestination, Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        for (destination in destinations) {
+            key(destination) {
+                DestinationHost(active = destination == selected) {
+                    stateHolder.SaveableStateProvider(destination.name) {
+                        when (destination) {
+                            InspectorDestination.OBSERVE ->
+                                ObserveRoute(
+                                    onToggleTheme = onToggleTheme,
+                                    onDetailOverlayOpen = { open -> onDetailOverlayOpen(destination, open) },
+                                )
+                            InspectorDestination.CONTROL ->
+                                ControlRoute(
+                                    onToggleTheme = onToggleTheme,
+                                    onDetailOverlayOpen = { open -> onDetailOverlayOpen(destination, open) },
+                                )
+                            InspectorDestination.DATA -> DataRoute(onToggleTheme = onToggleTheme)
+                            InspectorDestination.MORE -> MoreRoute(onToggleTheme = onToggleTheme)
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -180,9 +180,39 @@ internal class AndroidMockRuleStore(
                 JSONObject()
                     .put("type", "body_replacement")
                     .put("body", body)
+            is MockAction.Sequence, is MockAction.MapRemote, is MockAction.Throttle -> toCompositeJson(depth)
             MockAction.Passthrough -> JSONObject().put("type", "passthrough")
         }
     }
+
+    /** Actions that wrap or redirect real traffic rather than answer it; split out to keep [toJson] readable. */
+    private fun MockAction.toCompositeJson(depth: Int): JSONObject =
+        when (this) {
+            is MockAction.Sequence ->
+                JSONObject()
+                    .put("type", "sequence")
+                    .put("loop", loop)
+                    .put(
+                        "steps",
+                        JSONArray().apply {
+                            steps.forEach { put(it.toJson(depth + 1)) }
+                        },
+                    )
+            is MockAction.MapRemote ->
+                JSONObject()
+                    .put("type", "map_remote")
+                    .putNullable("scheme", scheme)
+                    .putNullable("host", host)
+                    .put("port", port ?: JSONObject.NULL)
+                    .putNullable("path", path)
+            is MockAction.Throttle ->
+                JSONObject()
+                    .put("type", "throttle")
+                    .put("bytesPerSecond", bytesPerSecond)
+                    .put("latencyMs", latencyMs)
+                    .put("next", next.toJson(depth + 1))
+            else -> error("${javaClass.simpleName} is not a composite mock action")
+        }
 
     private fun JSONObject.toMockAction(depth: Int = 0): MockAction {
         require(depth <= MAX_ACTION_DEPTH) { "Persisted mock action nesting is too deep" }
@@ -204,6 +234,29 @@ internal class AndroidMockRuleStore(
             "timeout" -> MockAction.Timeout(getLong("durationMs"))
             "status_override" -> MockAction.StatusOverride(getInt("statusCode"))
             "body_replacement" -> MockAction.BodyReplacement(getString("body"))
+            "sequence" -> {
+                val stepsArray = getJSONArray("steps")
+                MockAction.Sequence(
+                    steps =
+                        List(stepsArray.length()) { index ->
+                            stepsArray.getJSONObject(index).toMockAction(depth + 1)
+                        },
+                    loop = getBoolean("loop"),
+                )
+            }
+            "map_remote" ->
+                MockAction.MapRemote(
+                    scheme = nullableString("scheme"),
+                    host = nullableString("host"),
+                    port = if (isNull("port")) null else getInt("port"),
+                    path = nullableString("path"),
+                )
+            "throttle" ->
+                MockAction.Throttle(
+                    bytesPerSecond = getLong("bytesPerSecond"),
+                    latencyMs = getLong("latencyMs"),
+                    next = getJSONObject("next").toMockAction(depth + 1),
+                )
             "passthrough" -> MockAction.Passthrough
             else -> error("Unknown persisted mock action")
         }

@@ -221,6 +221,94 @@ class InMemoryNetworkTransactionStoreTest {
         assertEquals(listOf("after-clear"), store.page(NetworkTransactionQuery(limit = 10)).transactions.map { it.id })
     }
 
+    @Suppress("LongMethod") // Three fixtures plus paging and scope assertions read best as one scenario.
+    @Test
+    fun `bodyQuery matches request and response text case-insensitively and ignores binary`() {
+        val store = InMemoryNetworkTransactionStore(NetworkCursorCodec("network-cursor-key".encodeToByteArray()))
+        val factory = NetworkCaptureFactory(RedactionEngine(RedactionPolicy.default()))
+
+        store.record(
+            NetworkTransaction(
+                id = "req-match",
+                startedAtEpochMs = 100,
+                completedAtEpochMs = 110,
+                capture =
+                    factory.capture(
+                        NetworkRequestInput(
+                            "POST",
+                            "https://api.test/orders",
+                            body = "{\"item\":\"MatchNeedle-Req\"}".encodeToByteArray(),
+                            contentType = "application/json",
+                        ),
+                        NetworkResponseInput(200),
+                    ),
+            ),
+        )
+        store.record(
+            NetworkTransaction(
+                id = "res-match",
+                startedAtEpochMs = 200,
+                completedAtEpochMs = 210,
+                capture =
+                    factory.capture(
+                        NetworkRequestInput("GET", "https://api.test/orders/1"),
+                        NetworkResponseInput(
+                            200,
+                            body = "{\"status\":\"MATCHNEEDLE-RES\"}".encodeToByteArray(),
+                            contentType = "application/json",
+                        ),
+                    ),
+            ),
+        )
+        store.record(
+            NetworkTransaction(
+                id = "binary-ignored",
+                startedAtEpochMs = 300,
+                completedAtEpochMs = 310,
+                capture =
+                    factory.capture(
+                        NetworkRequestInput(
+                            "POST",
+                            "https://api.test/upload",
+                            body = "matchneedle-binary".encodeToByteArray(),
+                            contentType = "application/octet-stream",
+                        ),
+                        NetworkResponseInput(
+                            200,
+                            body = "matchneedle-binary".encodeToByteArray(),
+                            contentType = "image/png",
+                        ),
+                    ),
+            ),
+        )
+
+        val matched = store.page(NetworkTransactionQuery(limit = 10, bodyQuery = "matchneedle"))
+        assertEquals(listOf("res-match", "req-match"), matched.transactions.map { it.id })
+
+        val pagedFirst = store.page(NetworkTransactionQuery(limit = 1, bodyQuery = "matchneedle"))
+        assertEquals(listOf("res-match"), pagedFirst.transactions.map { it.id })
+        assertTrue(pagedFirst.hasMore)
+
+        val pagedSecond =
+            store.page(
+                NetworkTransactionQuery(limit = 1, cursor = pagedFirst.nextCursor, bodyQuery = "matchneedle"),
+            )
+        assertEquals(listOf("req-match"), pagedSecond.transactions.map { it.id })
+        assertNull(pagedSecond.nextCursor)
+
+        val wrongScope =
+            store.page(
+                NetworkTransactionQuery(limit = 1, cursor = pagedFirst.nextCursor, bodyQuery = "different"),
+            )
+        assertTrue(wrongScope.invalidCursor)
+
+        val blankMatchesAll = store.page(NetworkTransactionQuery(limit = 10, bodyQuery = "   "))
+        assertEquals(3, blankMatchesAll.transactions.size)
+
+        val tooLongRejected = store.page(NetworkTransactionQuery(limit = 10, bodyQuery = "a".repeat(257)))
+        assertTrue(tooLongRejected.invalidCursor)
+    }
+
     private fun transaction(
         id: String,
         startedAt: Long,
