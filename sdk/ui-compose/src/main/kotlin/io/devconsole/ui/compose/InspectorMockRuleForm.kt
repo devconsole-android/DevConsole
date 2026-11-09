@@ -83,6 +83,29 @@ internal val MOCK_RULE_ACTION_TYPES =
         InspectorMockActionType.MAP_REMOTE,
     )
 
+@Suppress("MagicNumber")
+internal val MOCK_RULE_STATUS_PRESETS = listOf(200, 201, 400, 401, 404, 500)
+
+internal fun mockRuleMatchesEverything(
+    method: String,
+    path: String,
+): Boolean = method == "ALL" && (path.isBlank() || path.trim() == ".*")
+
+internal fun mockRulePathPatternForLiteral(path: String): String =
+    if (path.any { it in "\\.[]{}()*+?^$|" }) Regex.escape(path) else path
+
+internal fun InspectorMockActionType.plainLabel(): String =
+    when (this) {
+        InspectorMockActionType.STATIC -> "Return a response"
+        InspectorMockActionType.STATUS_OVERRIDE -> "Change status only"
+        InspectorMockActionType.BODY_REPLACEMENT -> "Change body only"
+        InspectorMockActionType.CONNECTION_FAILURE -> "Fail the connection"
+        InspectorMockActionType.TIMEOUT -> "Time out"
+        InspectorMockActionType.THROTTLE -> "Slow it down"
+        InspectorMockActionType.MAP_REMOTE -> "Use another server"
+        InspectorMockActionType.OTHER -> "Other (read-only)"
+    }
+
 internal fun InspectorMockActionType.label(): String =
     when (this) {
         InspectorMockActionType.STATIC -> "Static response"

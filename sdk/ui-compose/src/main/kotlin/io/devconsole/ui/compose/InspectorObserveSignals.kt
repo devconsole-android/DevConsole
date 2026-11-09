@@ -13,6 +13,7 @@ package io.devconsole.ui.compose
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,11 +27,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.devconsole.api.CaptureCategory
 import java.util.Locale
 
-/** Sockets tab: an error notice and frames in one grouped panel. */
 @Composable
 internal fun SocketsTabContent(
     state: InspectorState,
@@ -42,29 +45,11 @@ internal fun SocketsTabContent(
         ObserveTabEmptyState(state.socketsEmptyStateMessage(), EmptySpot.Sockets)
         return
     }
-    val recentFrames = rememberRecentFrames(state.sockets)
-    // Frames have no id of their own -- key on (socket, timestamp), deduped for the rare case of two
-    // frames landing in the same millisecond on the same socket (see [uniqueKeys]'s own doc for why
-    // this stays stable across new frames arriving, unlike keying on list position).
+    val groups = remember(state.sockets, ui.socketsSearch) { groupSocketConnections(state.sockets, ui.socketsSearch) }
+    val frames = remember(groups) { groups.flatMap { group -> group.frames.map { group.socket to it } } }
     val frameKeys =
-        remember(recentFrames) {
-            uniqueKeys(recentFrames) { (socket, frame) -> "${socket.id}@${frame.timestampEpochMs}" }
-        }
-    val searchedIndices =
-        remember(recentFrames, ui.socketsSearch) {
-            val query = ui.socketsSearch.trim()
-            recentFrames.indices.filter { index ->
-                if (query.isEmpty()) {
-                    true
-                } else {
-                    val (socket, frame) = recentFrames[index]
-                    socket.url.contains(query, ignoreCase = true) ||
-                        frame.preview?.contains(query, ignoreCase = true) == true
-                }
-            }
-        }
-    val arrivalKeys = remember(searchedIndices, frameKeys) { searchedIndices.map { frameKeys[it] } }
-    val arrivals = rememberArrivals(arrivalKeys)
+        remember(frames) { uniqueKeys(frames) { (socket, frame) -> "${socket.id}@${frame.timestampEpochMs}" } }
+    val arrivals = rememberArrivals(frameKeys)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -75,7 +60,7 @@ internal fun SocketsTabContent(
                 InspectorSearchBar(
                     query = ui.socketsSearch,
                     onQueryChange = actions.onSocketsSearchChange,
-                    placeholder = "Search host, path or frames",
+                    placeholder = "Search address or messages",
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -84,18 +69,71 @@ internal fun SocketsTabContent(
             item { SocketsHero(state.sockets, ui, actions, colors) }
             item { Spacer(Modifier.height(12.dp)) }
         }
-        if (searchedIndices.isEmpty()) item { ObserveTabEmptyState("No matching frames.", EmptySpot.Search) }
-        itemsIndexed(searchedIndices, key = { _, index -> frameKeys[index] }) { rowIndex, index ->
-            val (socket, frame) = recentFrames[index]
-            SocketFrameRow(
-                socket = socket,
-                frame = frame,
-                colors = colors,
-                modifier = Modifier.animateItem().groupedPanelItem(GroupPosition.of(rowIndex, searchedIndices.size)),
-                isArrival = frameKeys[index] in arrivals,
-                onClick = { actions.onOpenFrameDetail(socket, frame) },
+        if (groups.isEmpty()) item { ObserveTabEmptyState("No matching messages.", EmptySpot.Search) }
+        var frameOffset = 0
+        groups.forEachIndexed { groupIndex, group ->
+            val socket = group.socket
+            if (groupIndex > 0) item { Spacer(Modifier.height(16.dp)) }
+            item(key = "socket-${socket.id}") { SocketConnectionHeader(socket, colors) }
+            if (group.frames.isEmpty() && ui.socketsSearch.isBlank()) {
+                item {
+                    Text(
+                        "No messages yet",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        color = colors.muted,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+            val offset = frameOffset
+            itemsIndexed(group.frames, key = { index, _ -> frameKeys[offset + index] }) { index, frame ->
+                SocketFrameRow(
+                    socket = socket,
+                    frame = frame,
+                    colors = colors,
+                    modifier = Modifier.animateItem().groupedPanelItem(GroupPosition.of(index, group.frames.size)),
+                    isArrival = frameKeys[offset + index] in arrivals,
+                    onClick = { actions.onOpenFrameDetail(socket, frame) },
+                )
+            }
+            frameOffset += group.frames.size
+        }
+    }
+}
+
+@Composable
+private fun SocketConnectionHeader(
+    socket: InspectorSocketUi,
+    colors: DevConsoleColors,
+) {
+    val label = socketConnectionStateLabel(socket.state, socket.error)
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                socket.url.substringAfter("://"),
+                color = colors.ink,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val protocol = if (socket.protocol == "mqtt") "MQTT" else "WebSocket"
+            Text(
+                "$protocol · ${socket.sentCount} sent · ${socket.receivedCount} received",
+                color = colors.muted,
+                fontSize = 12.sp,
             )
         }
+        val stateColor =
+            when (label) {
+                "Connected" -> colors.signal
+                "Failed" -> colors.error
+                else -> colors.muted
+            }
+        Text(label, color = stateColor, fontSize = 12.sp)
     }
 }
 
@@ -121,10 +159,10 @@ private fun SocketsHero(
     val sub =
         buildString {
             if (loudest != null && loudest.receivedCount > 0) {
-                val path = loudest.url.removePrefix("wss://").removePrefix("ws://")
-                append("$path is the loudest at ${countLabel(loudest.receivedCount, "frame")} received.")
+                val path = loudest.url.substringAfter("://")
+                append("$path is the loudest at ${countLabel(loudest.receivedCount, "message")} received.")
             } else {
-                append("No frames received yet.")
+                append("No messages received yet.")
             }
             if (errorCount > 0) {
                 append(" $errorCount socket${if (errorCount == 1) "" else "s"} in error.")
@@ -152,30 +190,29 @@ private fun SocketFrameRow(
     isArrival: Boolean = false,
 ) {
     val received = frame.direction == "RECEIVED"
-    val protocolBadge = socket.protocolBadge()
-    val path = socket.url.replace(Regex("^wss?://[^/]+"), "").ifEmpty { socket.url }
-    // An MQTT frame's topic is what an operator scanning this list actually wants to see -- the
-    // socket's own URL is just the broker address, identical across every message on the connection.
-    val title = frame.topic ?: path
+    val title =
+        frame.preview?.takeIf { it.isNotEmpty() } ?: when (frame.frameType) {
+            "BINARY" -> "Binary message"
+            "PING" -> "Ping"
+            "PONG" -> "Pong"
+            else -> "Empty message"
+        }
     Column(modifier = modifier.fillMaxWidth()) {
         TonalListRow(
             isArrival = isArrival,
-            leadText = if (received) "RECV" else "SEND",
+            leadText = if (received) "Received" else "Sent",
             leadColor = colors.muted,
             leadContainerColor = Color.Transparent,
             title = title,
-            subtitle = "$protocolBadge · ${frame.frameType} · ${frame.preview.orEmpty().take(34)}",
-            trailValue = socketFrameSizeLabel(frame),
+            subtitle = if (socket.protocol == "mqtt") frame.topic.orEmpty() else "",
+            trailValue = formatCaptureClockTime(frame.timestampEpochMs),
             trailValueColor = colors.ink,
-            trailSubtitle = formatCaptureClockTime(frame.timestampEpochMs),
+            trailSubtitle = socketFrameSizeLabel(frame),
             containerColor = Color.Transparent,
             onClick = onClick,
         )
     }
 }
-
-/** "MQTT" for an MQTT-protocol connection, "WS" otherwise -- shown as a prefix in [SocketFrameRow]'s subtitle. */
-private fun InspectorSocketUi.protocolBadge(): String = if (protocol == "mqtt") "MQTT" else "WS"
 
 /**
  * Sockets-tab empty-state copy: names the one protocol actually enabled when only SOCKET or only

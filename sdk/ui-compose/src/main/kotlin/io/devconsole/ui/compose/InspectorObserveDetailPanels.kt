@@ -188,7 +188,6 @@ internal fun ObserveDetailActionRows(actions: List<InspectorFooterAction>) {
                     Text(
                         action.label,
                         color = if (action.enabled) colors.ink else colors.muted,
-                        fontFamily = FontFamily.Monospace,
                         fontSize = 14.sp,
                     )
                     action.supportingText?.let { Text(it, color = colors.muted, fontSize = 12.sp) }

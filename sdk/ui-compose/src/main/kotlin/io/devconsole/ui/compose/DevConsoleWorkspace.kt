@@ -80,6 +80,7 @@ internal fun DevConsoleWorkspace(
     LaunchedEffect(visibleDestinations, selected) {
         if (selected !in visibleDestinations) onDestinationSelected(visibleDestinations.first())
     }
+    LaunchedEffect(darkTheme) { (context as? DevConsoleActivity)?.matchSystemBarsToTheme(darkTheme) }
     DevConsoleTheme(darkTheme = darkTheme) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             WorkspaceContent(

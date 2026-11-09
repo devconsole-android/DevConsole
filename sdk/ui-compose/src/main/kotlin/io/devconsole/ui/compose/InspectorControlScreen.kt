@@ -26,13 +26,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchColors
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -223,10 +223,18 @@ internal fun ControlRoute(
             heroCollapsed = heroCollapsed,
             onToggleHero = { heroCollapsed = !heroCollapsed },
             onToggleTheme = onToggleTheme,
+            onSelectTestCondition = { next ->
+                testConditionActions(
+                    current = activeTestCondition(state),
+                    next = next,
+                    mocksEnabled = state.mocksEnabled,
+                    existingRuleIds = state.mockRules.map { it.id },
+                ).forEach(viewModel::dispatch)
+            },
             onToggleMockRule = { id, enabled ->
                 if (state.capabilities.mocks) viewModel.dispatch(InspectorAction.SetMockRuleEnabled(id, enabled))
             },
-            onNewMockRule = { if (state.capabilities.mocks) editorTarget = MockRuleEditorTarget.New() },
+            onNewMockRule = { if (state.capabilities.mocks) editorTarget = newMockRuleTarget(state.mockRules) },
             onEditMockRule = { rule ->
                 if (state.capabilities.mocks) editorTarget = editMockRuleTargetOrToast(rule, scope, snackbarHostState)
             },
@@ -353,6 +361,7 @@ internal fun ControlScreen(
     heroCollapsed: Boolean,
     onToggleHero: () -> Unit,
     onToggleTheme: () -> Unit,
+    onSelectTestCondition: (InspectorTestCondition?) -> Unit,
     onToggleMockRule: (String, Boolean) -> Unit,
     onNewMockRule: () -> Unit,
     onEditMockRule: (InspectorMockRuleUi) -> Unit,
@@ -374,6 +383,9 @@ internal fun ControlScreen(
             // Mock rules are the MOCKS category's control surface -- when the host didn't enable it
             // at init, the section (header, New-rule affordance and rows) does not exist at all,
             // rather than rendering with a permanently-empty/disabled list.
+            if (state.captures(CaptureCategory.MOCKS) && state.capabilities.mocks) {
+                item { TestConditionsSection(state, onSelectTestCondition) }
+            }
             if (state.captures(CaptureCategory.MOCKS)) {
                 mockRulesItems(state, onNewMockRule, onToggleMockRule, onEditMockRule, onDeleteMockRule)
             }
@@ -399,6 +411,27 @@ internal fun ControlScreen(
     }
 }
 
+@Composable
+private fun TestConditionsSection(
+    state: InspectorState,
+    onSelect: (InspectorTestCondition?) -> Unit,
+) {
+    val active = activeTestCondition(state)
+    GroupLabel("Test conditions")
+    Text(
+        "Applies to every request until you turn it off or restart the app.",
+        color = DevConsoleTheme.colors.muted,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
+    val chips =
+        listOf(InspectorFilterChip("off", "Off", active == null)) +
+            InspectorTestCondition.entries.map { InspectorFilterChip(it.name, it.label, active == it) }
+    WrappingFilterChipRow(chips) { chip ->
+        onSelect(InspectorTestCondition.entries.firstOrNull { it.name == chip.id })
+    }
+}
+
 private fun LazyListScope.mockRulesItems(
     state: InspectorState,
     onNewMockRule: () -> Unit,
@@ -406,6 +439,7 @@ private fun LazyListScope.mockRulesItems(
     onEditMockRule: (InspectorMockRuleUi) -> Unit,
     onDeleteMockRule: (String) -> Unit,
 ) {
+    val rules = state.mockRules.filterNot { it.id.isTestConditionRuleId() }
     item(contentType = "mock_rules_header") {
         MockRulesHeader(onNewMockRule, DevConsoleTheme.colors, enabled = state.capabilities.mocks)
     }
@@ -417,16 +451,16 @@ private fun LazyListScope.mockRulesItems(
                 modifier = Modifier.padding(16.dp),
             )
         }
-    } else if (state.mockRules.isEmpty()) {
+    } else if (rules.isEmpty()) {
         item(contentType = "mock_rules_empty") { MockRulesEmptyNote(DevConsoleTheme.colors) }
     } else {
         itemsIndexed(
-            state.mockRules,
+            rules,
             key = { _, rule -> rule.id },
             contentType = { _, _ -> "mock_rule" },
         ) { index, rule ->
             val colors = DevConsoleTheme.colors
-            Column(Modifier.groupedPanelItem(GroupPosition.of(index, state.mockRules.size))) {
+            Column(Modifier.groupedPanelItem(GroupPosition.of(index, rules.size))) {
                 MockRuleRow(
                     rule,
                     onToggleMockRule,
@@ -472,7 +506,7 @@ private fun LazyListScope.featureFlagItems(
 }
 
 private fun isControlEmpty(state: InspectorState): Boolean =
-    state.mockRules.isEmpty() &&
+    state.mockRules.none { !it.id.isTestConditionRuleId() } &&
         state.featureFlags.isEmpty() &&
         (!state.captures(CaptureCategory.MOCKS) || !state.capabilities.mocks) &&
         (!state.captures(CaptureCategory.STATE) || !state.capabilities.featureFlags)
@@ -484,6 +518,11 @@ private fun shouldShowFeatureFlags(state: InspectorState): Boolean =
 private fun controlEmptyMessage(): String =
     "No mock rules or feature flags are available. Enable MOCKS and STATE capture categories and " +
         "editing capabilities in the host app."
+
+private fun newMockRuleTarget(rules: List<InspectorMockRuleUi>): MockRuleEditorTarget.New {
+    val id = suggestMockRuleId("any", "rule", rules.mapTo(mutableSetOf()) { it.id })
+    return MockRuleEditorTarget.New(draft = InspectorMockRuleUi(id = id, pathPattern = ""))
+}
 
 /** "Mock rules" group label plus the New rule affordance. */
 @Composable
@@ -497,8 +536,8 @@ private fun MockRulesHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         GroupLabel("Mock rules", modifier = Modifier.weight(1f))
-        IconButton(onClick = onNewRule, enabled = enabled, modifier = Modifier.padding(end = 12.dp)) {
-            DevConsoleIcon(R.drawable.devconsole_ic_composer, "New rule", Modifier, colors.muted, 22.dp)
+        TextButton(onClick = onNewRule, enabled = enabled, modifier = Modifier.padding(end = 12.dp)) {
+            Text("New rule", color = colors.ink, fontSize = 14.sp)
         }
     }
 }
@@ -539,7 +578,7 @@ private fun MockRuleRow(
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    rule.method ?: "ANY",
+                    rule.method ?: "ALL",
                     Modifier.width(64.dp),
                     color = colors.muted,
                     fontFamily = FontFamily.Monospace,
@@ -738,6 +777,7 @@ private fun ControlScreenPreview() {
             heroCollapsed = false,
             onToggleHero = {},
             onToggleTheme = {},
+            onSelectTestCondition = {},
             onToggleMockRule = { _, _ -> },
             onNewMockRule = {},
             onEditMockRule = {},

@@ -8,6 +8,47 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class InspectorMockRuleEditorTest {
+    @Test
+    fun `match everything warning requires all methods and a blank or wildcard path`() {
+        assertTrue(mockRuleMatchesEverything("ALL", ""))
+        assertTrue(mockRuleMatchesEverything("ALL", "  "))
+        assertTrue(mockRuleMatchesEverything("ALL", ".*"))
+        assertFalse(mockRuleMatchesEverything("GET", ".*"))
+        assertFalse(mockRuleMatchesEverything("ALL", "/v1/orders"))
+        assertTrue(mockRuleMatchesEverything("ALL", " .* "))
+    }
+
+    @Test
+    fun `literal paths remain readable and regex characters are escaped`() {
+        assertEquals("/v1/orders", mockRulePathPatternForLiteral("/v1/orders"))
+        val path = "/v1/file.json"
+        val pattern = mockRulePathPatternForLiteral(path)
+        assertEquals(Regex.escape(path), pattern)
+        assertTrue(Regex(pattern).matches(path))
+        assertFalse(Regex(pattern).matches("/v1/fileXjson"))
+        "\\.[]{}()*+?^$|".forEach { character ->
+            assertEquals(Regex.escape("/a${character}b"), mockRulePathPatternForLiteral("/a${character}b"))
+        }
+        assertEquals("/v1/cart", mockRuleDraftFromTransaction(transaction("{}")).draft.pathPattern)
+    }
+
+    @Test
+    fun `all action types have plain labels`() {
+        val labels =
+            mapOf(
+                InspectorMockActionType.STATIC to "Return a response",
+                InspectorMockActionType.STATUS_OVERRIDE to "Change status only",
+                InspectorMockActionType.BODY_REPLACEMENT to "Change body only",
+                InspectorMockActionType.CONNECTION_FAILURE to "Fail the connection",
+                InspectorMockActionType.TIMEOUT to "Time out",
+                InspectorMockActionType.THROTTLE to "Slow it down",
+                InspectorMockActionType.MAP_REMOTE to "Use another server",
+                InspectorMockActionType.OTHER to "Other (read-only)",
+            )
+        assertEquals(InspectorMockActionType.entries.toSet(), labels.keys)
+        labels.forEach { (type, label) -> assertEquals(label, type.plainLabel()) }
+    }
+
     private fun transaction(
         responsePreview: String?,
         responseHeaders: Map<String, String> = emptyMap(),

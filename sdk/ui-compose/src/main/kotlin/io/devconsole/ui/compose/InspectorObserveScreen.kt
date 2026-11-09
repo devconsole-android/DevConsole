@@ -184,6 +184,7 @@ internal data class ObserveActions(
     val onMockFromTransaction: (InspectorTransactionUi) -> Unit,
     /** Disables the mock rule serving an already-mocked transaction. */
     val onUnmockTransaction: (String) -> Unit,
+    val onTurnOffMockRules: (List<String>) -> Unit = {},
     val onSaveMockDraft: (InspectorMockRuleUi) -> Unit,
     val onCancelMockDraft: () -> Unit,
     val onToggleFlag: (String) -> Unit,
@@ -544,6 +545,17 @@ private fun rememberObserveActions(
         // Gating + the success/blocked toast are handled generically by mutateMockRules/
         // lastCommandResult (same path SetMockRuleEnabled already uses from the Control screen).
         onUnmockTransaction = { ruleId -> viewModel.dispatch(InspectorAction.SetMockRuleEnabled(ruleId, false)) },
+        onTurnOffMockRules = { ids ->
+            ids.forEach { id ->
+                val action =
+                    if (id.isTestConditionRuleId()) {
+                        InspectorAction.DeleteMockRule(id)
+                    } else {
+                        InspectorAction.SetMockRuleEnabled(id, false)
+                    }
+                viewModel.dispatch(action)
+            }
+        },
         // Closing on Success is handled by the lastCommandResult effect in ObserveRoute, not here --
         // see the identical reasoning on ControlRoute's onSave.
         onSaveMockDraft = { rule -> viewModel.dispatch(InspectorAction.UpsertMockRule(rule)) },
@@ -1321,6 +1333,7 @@ private fun resolveObserveDetail(
     colors: DevConsoleColors,
     recentFrames: List<Pair<InspectorSocketUi, InspectorSocketFrameUi>>,
     netMockDiff: JsonMockDiffResult?,
+    buildSummary: String,
 ): Pair<Any, ObserveDetailContent>? =
     when (target) {
         is ObserveDetailTarget.Net ->
@@ -1329,6 +1342,7 @@ private fun resolveObserveDetail(
                     netDetailContent(
                         transaction = transaction,
                         colors = colors,
+                        buildSummary = buildSummary,
                         isFlagged = target.transactionId in ui.flaggedTransactionIds,
                         onToggleFlag = { actions.onToggleFlag(target.transactionId) },
                         copyText = actions.copyText,
@@ -1439,6 +1453,7 @@ private fun ObserveDetailOverlay(
     val colors = DevConsoleTheme.colors
     val recentFrames = rememberRecentFrames(state.sockets)
     val netMockDiff = rememberNetMockDiff(target, state)
+    val buildSummary = rememberBuildSummary()
     // Keyed on the resolved capture itself (data-class equality), not the whole snapshot: a live
     // refresh that leaves this capture unchanged must not re-format its bodies.
     val subject = detailSubject(target, state, recentFrames)
@@ -1451,11 +1466,12 @@ private fun ObserveDetailOverlay(
             ui.bookmarkedLogIds,
             colors,
             netMockDiff,
+            buildSummary,
             // Resend availability is derived from these two, not from the capture itself.
             state.selectedSessionId,
             state.capabilities.requestExecution,
         ) {
-            resolveObserveDetail(target, state, ui, actions, colors, recentFrames, netMockDiff)
+            resolveObserveDetail(target, state, ui, actions, colors, recentFrames, netMockDiff, buildSummary)
         }
     if (resolved == null) {
         // The capture aged out of the snapshot while its detail was open. Close explicitly:
@@ -1521,6 +1537,8 @@ private fun ObserveDetailFromContent(
         sections = content.sections,
         initiallyOpenSectionKeys = content.initiallyOpenSectionKeys,
         footerActions = content.footerActions,
+        singlePage = content.singlePage,
+        pinnedActions = content.pinnedActions,
         onBack = onBack,
         searchPlaceholder = content.searchPlaceholder,
         searchOptions = content.searchOptions,

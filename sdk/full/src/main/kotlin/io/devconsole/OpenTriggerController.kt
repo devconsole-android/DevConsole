@@ -13,6 +13,8 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
@@ -25,6 +27,7 @@ import android.widget.ImageView
 import io.devconsole.api.OpenTriggers
 import io.devconsole.api.ShakeIntensity
 import io.devconsole.full.R
+import io.devconsole.network.NetworkTransaction
 import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
@@ -55,6 +58,8 @@ internal class OpenTriggerController(
     private var sensorListening = false
     private val shakeDetector = ShakeDetector(now)
     private var lastOpenAtMs = Long.MIN_VALUE / 2
+    private val failedRequests = FailedRequestCounter()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     /** Last dragged position; kept here rather than on the button so it survives Activity changes. */
     private var buttonX: Float? = null
@@ -74,10 +79,18 @@ internal class OpenTriggerController(
         applyToResumed()
     }
 
+    /** Called from OkHttp's background threads, so the badge refresh is always posted to the main thread. */
+    fun onNetworkTransactionRecorded(transaction: NetworkTransaction) {
+        if (failedRequests.record(transaction)) mainHandler.post { refreshFailedRequestBadge() }
+    }
+
     override fun onActivityResumed(activity: Activity) {
         // The inspector itself never gets triggers: a trigger firing while it is resumed would
         // stack a second inspector instance.
-        if (activity.javaClass.name == INSPECTOR_ACTIVITY_CLASS_NAME) return
+        if (activity.javaClass.name == INSPECTOR_ACTIVITY_CLASS_NAME) {
+            failedRequests.reset()
+            return
+        }
         resumedActivities.removeAll { it.get() === activity || it.get() == null }
         resumedActivities.addLast(WeakReference(activity))
         applyToResumed()
@@ -167,7 +180,7 @@ internal class OpenTriggerController(
                 // Sits on top of the host's own UI, so it stays translucent at rest rather than
                 // hiding whatever it happens to be parked over; touching it returns it to full
                 // opacity, which also makes it obvious what you have hold of while dragging.
-                alpha = BUTTON_IDLE_ALPHA
+                alpha = restingAlpha()
                 // The mark carries its own rounded-square plate, so the button needs no background of
                 // its own -- but an elevation shadow is cast from the view's outline, which defaults to
                 // the full rectangle and would leak out past the artwork's transparent corners.
@@ -180,6 +193,7 @@ internal class OpenTriggerController(
                 // is unrecoverable. Re-clamp on every layout so it always stays reachable.
                 addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ -> clampIntoParent(view) }
             }
+        showFailedRequestCount(button)
         val sizePx = (BUTTON_SIZE_DP * density).toInt()
         val params = FrameLayout.LayoutParams(sizePx, sizePx)
         val rememberedX = buttonX
@@ -203,6 +217,31 @@ internal class OpenTriggerController(
         decor.findViewWithTag<View>(BUTTON_TAG)?.let(decor::removeView)
     }
 
+    private fun refreshFailedRequestBadge() {
+        val decor = currentResumed()?.window?.decorView as? ViewGroup ?: return
+        decor.findViewWithTag<ImageView>(BUTTON_TAG)?.let(::showFailedRequestCount)
+    }
+
+    private fun showFailedRequestCount(button: ImageView) {
+        val count = failedRequests.count
+        val density = button.resources.displayMetrics.density
+        button.overlay.clear()
+        if (count > 0) {
+            // The button may not be laid out yet, so its size comes from the constant, not button.width.
+            val sizePx = (BUTTON_SIZE_DP * density).toInt()
+            button.overlay.add(FailedRequestBadgeDrawable(count, density).apply { setBounds(0, 0, sizePx, sizePx) })
+        }
+        button.contentDescription =
+            when (count) {
+                0 -> BUTTON_CONTENT_DESCRIPTION
+                1 -> "$BUTTON_CONTENT_DESCRIPTION, 1 failed request"
+                else -> "$BUTTON_CONTENT_DESCRIPTION, $count failed requests"
+            }
+        if (!button.isPressed) button.alpha = restingAlpha()
+    }
+
+    private fun restingAlpha(): Float = if (failedRequests.count > 0) BUTTON_ACTIVE_ALPHA else BUTTON_IDLE_ALPHA
+
     /** Movement past the touch slop becomes a drag; anything shorter falls through to the click. */
     private inner class FloatingButtonDragHandler(
         private val touchSlop: Int,
@@ -224,6 +263,7 @@ internal class OpenTriggerController(
                     startX = view.x
                     startY = view.y
                     dragging = false
+                    view.isPressed = true
                     view.alpha = BUTTON_ACTIVE_ALPHA
                     true
                 }
@@ -235,12 +275,14 @@ internal class OpenTriggerController(
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    view.alpha = BUTTON_IDLE_ALPHA
+                    view.isPressed = false
+                    view.alpha = restingAlpha()
                     if (!dragging) view.performClick()
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    view.alpha = BUTTON_IDLE_ALPHA
+                    view.isPressed = false
+                    view.alpha = restingAlpha()
                     true
                 }
                 else -> false

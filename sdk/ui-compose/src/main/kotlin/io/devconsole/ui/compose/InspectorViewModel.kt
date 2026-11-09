@@ -11,6 +11,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -77,6 +78,7 @@ class InspectorViewModel
         private var snapshotJob: Job? = null
         private val snapshotJobLock = Any()
         private val snapshotGeneration = AtomicLong()
+        private val mockMutations = Channel<() -> InspectorCommandResult>(Channel.UNLIMITED)
 
         /**
          * The traffic filter the next read is made with. Owned here rather than in the Compose
@@ -87,6 +89,12 @@ class InspectorViewModel
         private var trafficQuery = InspectorTrafficQuery()
 
         init {
+            viewModelScope.launch(dispatcher) {
+                for (mutation in mockMutations) {
+                    mutation().takeUnless { it.isTestConditionSuccess() }?.let(::showComposerResult)
+                    loadSnapshot()
+                }
+            }
             viewModelScope.launch(dispatcher) {
                 DevConsoleInspectorBridge.serverStateChanges().collect { refreshSnapshot() }
             }
@@ -425,11 +433,7 @@ class InspectorViewModel
         }
 
         private fun setMocksEnabled(enabled: Boolean) {
-            if (!mutableState.value.capabilities.mocks) {
-                showComposerResult(InspectorCommandResult.Disabled(CAPABILITY_MOCKS))
-                return
-            }
-            runCommandThenReload { dataSource.setMocksEnabled(enabled) }
+            mutateMockRules { dataSource.setMocksEnabled(enabled) }
         }
 
         /**
@@ -457,10 +461,7 @@ class InspectorViewModel
                 showComposerResult(InspectorCommandResult.Disabled(CAPABILITY_MOCKS))
                 return
             }
-            viewModelScope.launch(dispatcher) {
-                showComposerResult(mutation())
-                loadSnapshot()
-            }
+            mockMutations.trySend(mutation)
         }
 
         /**

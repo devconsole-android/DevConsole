@@ -200,10 +200,10 @@
           <span class="toolbar-group-label">Level</span>
           <div class="seg" id="timelineSeveritySeg" role="group" aria-label="Filter by severity">
             <button type="button" class="active" data-value="">All</button>
-            <button type="button" data-value="0">DBG</button>
-            <button type="button" data-value="1">INF</button>
-            <button type="button" data-value="2">WRN</button>
-            <button type="button" data-value="3">ERR</button>
+            <button type="button" data-value="0">Debug</button>
+            <button type="button" data-value="1">Info</button>
+            <button type="button" data-value="2">Warning</button>
+            <button type="button" data-value="3">Error</button>
           </div>
         </div>
         <div class="toolbar-group-stack" id="timelineSourceGroup">
@@ -249,11 +249,12 @@
           <span class="toolbar-group-label">Status</span>
           <div class="seg" id="networkStatusSeg" role="group" aria-label="Filter by status class">
             <button type="button" class="active" data-value="">All</button>
+            <button type="button" data-value="failed">Failed</button>
             <button type="button" data-value="2xx">2xx</button>
             <button type="button" data-value="3xx">3xx</button>
             <button type="button" data-value="4xx">4xx</button>
             <button type="button" data-value="5xx">5xx</button>
-            <button type="button" data-value="fail">fail</button>
+            <button type="button" data-value="fail">No response</button>
           </div>
         </div>
         <div class="toolbar-group-stack" id="networkMethodGroup">
@@ -325,11 +326,12 @@
         </div>
       </details>
       <div class="har-banner" id="networkHarBanner" role="status" aria-live="polite" hidden></div>
+      <div id="networkFakeNotice" hidden><span></span><button type="button">Turn off</button></div>
       <div class="split-shell">
         <div class="list-pane" id="networkListPane">
           <div class="list-head network-list-head">
             <button type="button" class="col-check" id="networkSelectAllVisible" role="checkbox" aria-checked="false" title="Select all visible"></button>
-            <span class="col-badge">Method</span><span class="col-main network-col-path"><span id="networkMainColLabel">Path</span><button type="button" id="networkFullEndpoint" aria-pressed="false">Full endpoint</button></span><span class="col-network-metrics">Status<span class="col-network-time"> · time</span></span><span class="col-flag"></span>
+            <span class="col-badge">Method</span><span class="col-main network-col-path"><span id="networkMainColLabel">Path</span></span><span class="col-network-metrics">Status<span class="col-network-time"> · time</span></span><span class="col-flag"></span>
           </div>
           <div class="list-body" id="transactions" aria-label="Transactions"><div class="empty-state empty-connect">
             <svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg>
@@ -357,15 +359,15 @@
       </div>
       <div class="metric-strip" id="socketMetrics"></div>
       <div class="toolbar">
-        <label class="field search-field"><span class="visually-hidden">Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="socketSearch" placeholder="payload text…"></span></label>
+        <label class="field search-field"><span class="visually-hidden">Filter</span><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="search" id="socketSearch" placeholder="Search messages…"></span></label>
         <div class="toolbar-group-stack" id="socketFrameTypeGroup">
-          <span class="toolbar-group-label">Frame type</span>
-          <div class="seg" id="socketFrameTypeSeg" role="group" aria-label="Filter by frame type">
+          <span class="toolbar-group-label">Type</span>
+          <div class="seg" id="socketFrameTypeSeg" role="group" aria-label="Filter by type">
             <button type="button" class="active" data-value="">All</button>
-            <button type="button" data-value="TEXT">TEXT</button>
-            <button type="button" data-value="BINARY">BINARY</button>
-            <button type="button" data-value="PING">PING</button>
-            <button type="button" data-value="PONG">PONG</button>
+            <button type="button" data-value="TEXT">Text</button>
+            <button type="button" data-value="BINARY">Binary</button>
+            <button type="button" data-value="PING">Ping</button>
+            <button type="button" data-value="PONG">Pong</button>
           </div>
         </div>
         <div class="toolbar-group-stack" id="socketDirectionGroup">
@@ -373,7 +375,7 @@
           <div class="seg" id="socketDirectionSeg" role="group" aria-label="Filter by direction">
             <button type="button" class="active" data-value="">All</button>
             <button type="button" data-value="SENT">Sent</button>
-            <button type="button" data-value="RECEIVED">Recv</button>
+            <button type="button" data-value="RECEIVED">Received</button>
           </div>
         </div>
         <div class="toolbar-group-stack" id="socketProtocolGroup">
@@ -396,6 +398,7 @@
         <button type="button" id="socketClearFilters" class="ghost">Clear filters</button>
       </div>
       <div class="applied-filters" id="socketChips" hidden></div>
+      <div id="socketConnections" hidden></div>
       <details class="adv-filters">
         <summary><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-funnel"/></svg>More filters</summary>
         <div class="filter-grid">
@@ -410,7 +413,7 @@
           <div class="list-head" id="socketListHead"></div>
           <div class="list-body" id="sockets" aria-label="Socket connections"><div class="empty-state empty-connect">
             <svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg>
-            <div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">WebSocket connections and frames appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</p>
+            <div class="empty-title">Not connected yet</div><div class="empty-sub">Open DevConsole on the device → More, then open the dashboard URL.</div><details class="fold"><summary><svg class="ic ic-sm fold-chevron" aria-hidden="true"><use href="#dc-chevron"/></svg>How to connect</summary><div class="fold-content"><p class="empty-sub">WebSocket connections and messages appear here once this browser is connected. On the device, open DevConsole → <strong>More</strong> — it shows the dashboard URL, and a code only when SESSION_CODE is enabled.</p>
             <ul class="connect-steps">
               <li>Open mode accepts the bare <code class="inline-code">http://host:port/</code> address. In SESSION_CODE mode, the <code class="inline-code">#code=</code> fragment is the credential.</li>
               <li>Emulator or firewalled device? Forward the port first: <code class="inline-code">adb forward tcp:8080 tcp:8080</code> — 8080 is only the first port tried; the server takes the next free one up to 8099, so confirm the exact address on the device's More screen.</li>
@@ -420,7 +423,7 @@
         </div>
         <div class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize list and detail panes" tabindex="0" title="Drag to resize — drag past the edge to hide a pane. Arrow keys resize (and restore a hidden pane), Home hides the list, End hides the detail, double-click resets"></div>
         <aside class="detail-pane-v2" id="socketMessages">
-          <div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-select"/><use class="spot-accent" href="#dc-spot-select-accent"/></svg><div class="empty-title">No socket message selected</div><div class="empty-sub">Select a connection or apply filters to inspect frames. JSON text frames are formatted; binary previews appear only when the host opted in.</div></div>
+          <div class="empty-state empty-connect"><svg class="spot" aria-hidden="true"><use href="#dc-spot-select"/><use class="spot-accent" href="#dc-spot-select-accent"/></svg><div class="empty-title">No socket message selected</div><div class="empty-sub">Select a connection or apply filters to inspect messages. JSON text messages are formatted; binary previews appear only when the host opted in.</div></div>
         </aside>
       </div>
       <div class="socket-composer" id="socketComposer" hidden></div>
@@ -493,7 +496,7 @@
       <div class="split-shell">
         <div class="list-pane">
           <div class="list-head">
-            <span class="col-badge">Kind</span><span class="col-main">Summary</span><span class="col-duration">Thread</span><span class="col-status">Time</span><span class="col-flag"></span>
+            <span class="col-badge">Kind</span><span class="col-main">Summary</span><span class="col-status">Time</span><span class="col-flag"></span>
           </div>
           <div class="list-body" id="crashesList" aria-label="Crashes"><div class="empty-state empty-connect">
             <svg class="spot" aria-hidden="true"><use href="#dc-spot-connect"/><use class="spot-accent" href="#dc-spot-connect-accent"/></svg>
@@ -657,7 +660,7 @@
           <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-composer"/></svg><h2 class="card-shell-title">Request</h2>
             <div class="card-shell-actions">
               <button type="button" id="composerAllowHost" class="xs" title="Add or remove allowed hosts" hidden><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg>Allow host</button>
-              <button type="button" id="composerAgentsRefresh" class="xs" title="Look for computers running devconsole-agent"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg><span>Refresh Run On</span></button>
+              <button type="button" id="composerAgentsRefresh" class="xs" title="Look for computers running devconsole-agent"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-refresh"/></svg><span>Refresh list</span></button>
             </div>
           </div>
           <div class="card-shell-body">
@@ -674,7 +677,7 @@
 <label class="field"><span>Multipart fields (name=value, one per line)</span><textarea id="composerMultipart" rows="3"></textarea></label>
 <label class="field"><span>Environment variables (name=value, one per line)</span><textarea id="composerVariables" rows="3"></textarea></label>
 <label class="field"><span>Secret variables (memory only)</span><textarea id="composerSecrets" rows="3"></textarea></label></div></div></details>
-          <div class="card-buttons"><button type="button" id="composerRun" class="primary" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-send"/></svg>Execute request</button></div>
+          <div class="card-buttons"><button type="button" id="composerRun" class="primary" disabled title="Sign-in required"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-send"/></svg>Send request</button></div>
           <p class="card-lede mt-10" id="composerAgentHint"></p>
           </div>
         </section>
@@ -715,6 +718,7 @@
       <div class="view-head"><h1 class="view-title">Mocks</h1></div>
       <div class="metric-strip" id="mocksMetrics"></div>
       <div id="mocksGate" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      <section class="card-shell" id="mockConditionsCard" hidden><div class="card-shell-head"><h2 class="card-shell-title">Test conditions</h2></div><div class="card-shell-body"><p class="card-lede">Applies to every request until you turn it off or restart the app.</p><div class="mock-condition-chips" id="mockConditionChips" role="group" aria-label="Test conditions"></div></div></section>
       <div class="cards-grid">
         <section class="card-shell" data-span="2">
           <div class="card-shell-head"><svg class="ic tone-text-signal" aria-hidden="true"><use href="#dc-mocks"/></svg><h2 class="card-shell-title">Rules</h2><span class="card-shell-badge" id="mocksRulesBadge"></span></div>
@@ -800,30 +804,26 @@
 <div class="modal-overlay" id="mockRuleModal" hidden>
   <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="mockRuleModalTitle">
     <div class="modal-header">
-      <span class="modal-title" id="mockRuleModalTitle"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-mocks"/></svg><span id="mockRuleModalTitleText">New mock rule</span></span>
+      <span class="modal-title" id="mockRuleModalTitle"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-mocks"/></svg><span id="mockRuleModalTitleText">New mock</span></span>
       <button type="button" class="modal-close" id="mockRuleModalClose" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
       <div class="filter-grid filter-grid-flush">
-        <label class="field"><span>Rule ID</span><input id="mockRuleId" placeholder="orders-success" maxlength="128" aria-describedby="mockRuleIdHelp"></label>
         <label class="field"><span>Method</span><select id="mockRuleMethod"><option value="">Any</option><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option></select></label>
-        <label class="field"><span>Scheme (optional)</span><input id="mockRuleScheme" placeholder="https"></label>
-        <label class="field"><span>Host (optional)</span><input id="mockRuleHost" placeholder="api.example.test"></label>
-        <label class="field field-full"><span>Path regular expression</span><input id="mockRulePath" placeholder="/orders.*"></label>
-        <label class="field"><span>Action</span><select id="mockRuleActionType">
-          <option value="static">Static response</option>
+        <label class="field field-url"><span>Path</span><input id="mockRulePath" placeholder="/orders" aria-describedby="mockRulePathHelp"><span class="card-field-help" id="mockRulePathHelp"></span></label>
+        <label class="field field-full"><span>When it matches</span><select id="mockRuleActionType">
+          <option value="static">Return a response</option>
+          <option value="status_override">Change status only</option>
+          <option value="body_replacement">Change body only</option>
+          <option value="connection_failure">Fail the connection</option>
+          <option value="timeout">Time out</option>
+          <option value="throttle">Slow it down</option>
+          <option value="map_remote">Use another server</option>
           <option value="template">Template</option>
-          <option value="status_override">Status override</option>
-          <option value="body_replacement">Body replacement</option>
-          <option value="connection_failure">Connection failure</option>
-          <option value="timeout">Timeout</option>
-          <option value="map_remote">Map remote</option>
-          <option value="throttle">Throttle</option>
           <option value="sequence">Sequence</option>
-          <option value="passthrough">Passthrough</option>
+          <option value="passthrough">Let it through</option>
         </select></label>
-        <label class="field" data-mock-fields="static template status_override"><span>Response status</span><input id="mockRuleStatus" type="number" min="100" max="599" value="200"></label>
-        <label class="field" data-mock-fields="static template"><span>Delay ms (optional)</span><input id="mockRuleDelay" type="number" min="0" max="30000" placeholder="0"></label>
+        <div class="field field-full" data-mock-fields="static template status_override"><label class="field"><span>Status</span><input id="mockRuleStatus" type="number" min="100" max="599" value="200"></label><div class="mock-condition-chips" id="mockStatusButtons"><button type="button" class="xs" data-status="200">200</button><button type="button" class="xs" data-status="201">201</button><button type="button" class="xs" data-status="400">400</button><button type="button" class="xs" data-status="401">401</button><button type="button" class="xs" data-status="404">404</button><button type="button" class="xs" data-status="500">500</button></div></div>
         <label class="field" data-mock-fields="connection_failure" hidden><span>Failure message (optional)</span><input id="mockRuleFailureMessage" placeholder="DevConsole simulated connection failure"></label>
         <label class="field" data-mock-fields="timeout" hidden><span>Timeout ms</span><input id="mockRuleTimeoutMs" type="number" min="0" max="30000" value="1000"></label>
         <label class="field" data-mock-fields="map_remote" hidden><span>Remote scheme (optional)</span><input id="mockRuleRemoteScheme" placeholder="https"></label>
@@ -832,12 +832,11 @@
         <label class="field" data-mock-fields="map_remote" hidden><span>Remote path (optional)</span><input id="mockRuleRemotePath" placeholder="/v2"></label>
         <label class="field" data-mock-fields="throttle" hidden><span>Bytes per second</span><input id="mockRuleBytesPerSecond" type="number" min="1" max="104857600" value="50000"></label>
         <label class="field" data-mock-fields="throttle" hidden><span>Latency ms</span><input id="mockRuleThrottleLatency" type="number" min="0" max="30000" value="0"></label>
-        <label class="field field-full" data-mock-fields="static template"><span>Response headers (Name: value, one per line)</span><textarea id="mockRuleHeaders" rows="3"></textarea></label>
         <label class="field field-full" data-mock-fields="static template body_replacement">
           <span>Response body</span>
           <span class="mock-body-editor">
             <span id="mockRuleBodyHighlight" class="mock-body-highlight" aria-hidden="true"></span>
-            <textarea id="mockRuleBody" rows="14" placeholder="{}"></textarea>
+            <textarea id="mockRuleBody" rows="10" placeholder="{}"></textarea>
           </span>
         </label>
         <div class="field-full mock-body-toolbar" data-mock-fields="static template body_replacement">
@@ -860,16 +859,23 @@
             <label class="field-inline mock-step-loop"><input type="checkbox" id="mockRuleSequenceLoop"> Loop steps</label>
           </div>
         </div>
+      </div>
+      <details class="fold" id="mockRuleAdvanced"><summary>Advanced options</summary><div class="filter-grid filter-grid-flush fold-content">
+        <label class="field"><span>Rule name (optional)</span><input id="mockRuleId" placeholder="orders-success" maxlength="128" aria-describedby="mockRuleIdHelp"></label>
+        <label class="field"><span>Host</span><input id="mockRuleHost" placeholder="api.example.test"></label>
+        <label class="field"><span>Scheme</span><input id="mockRuleScheme" placeholder="https"></label>
+        <label class="field" data-mock-fields="static template"><span>Delay ms (optional)</span><input id="mockRuleDelay" type="number" min="0" max="30000" placeholder="0"></label>
+        <label class="field field-full" data-mock-fields="static template"><span>Response headers (Name: value, one per line)</span><textarea id="mockRuleHeaders" rows="3"></textarea></label>
         <label class="field field-full"><span>Query predicates (key=value, one per line)</span><textarea id="mockRuleQueryPredicates" rows="2"></textarea></label>
         <label class="field field-full"><span>Header predicates (key=value, one per line)</span><textarea id="mockRuleHeaderPredicates" rows="2"></textarea></label>
         <label class="field field-full"><span>Body regex (optional, whole request body, up to 8 KB)</span><input id="mockRuleBodyPredicate" placeholder=".*&quot;paid&quot;.*"></label>
         <label class="field"><span>Priority</span><input id="mockRulePriority" type="number" value="0"></label>
         <label class="field"><span>Scope</span><select id="mockRuleScope"><option value="SESSION">Session</option><option value="PERSISTENT_INTERNAL">Persistent (internal)</option></select></label>
-      </div>
-      <p class="card-field-help" id="mockRuleIdHelp">Letters, digits, dot, underscore, and hyphen — cannot be changed once a rule exists.</p>
+        <p class="field-full card-field-help" id="mockRuleIdHelp">Letters, digits, dot, underscore, and hyphen — cannot be changed once a rule exists.</p>
+      </div></details>
       <p class="card-field-help tone-text-error" id="mockRuleFormError" role="alert" hidden></p>
     </div>
-    <div class="modal-footer"><button type="button" id="mockRuleCancel">Cancel</button><button type="button" id="mockRuleSave" class="primary" disabled title="Sign in and enable the mocks capability"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg>Save rule</button></div>
+    <div class="modal-footer"><button type="button" id="mockRuleCancel">Cancel</button><button type="button" id="mockRuleSave" class="primary" disabled title="Sign in and enable the mocks capability"><svg class="ic ic-sm" aria-hidden="true"><use href="#dc-check"/></svg>Save mock</button></div>
   </div>
 </div>
 

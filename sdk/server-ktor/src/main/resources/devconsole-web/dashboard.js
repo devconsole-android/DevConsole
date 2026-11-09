@@ -111,6 +111,7 @@
   // always redacted), so the "redacted on device" lines only show when they are true.
   let redactionOn = null;
   const redactionShown = () => redactionOn !== false;
+  const exportScopeHint = () => 'Choose a scope, then create a ' + (redactionShown() ? 'redacted ' : '') + 'ZIP.';
   // Cache parsed JSON and response metadata; each caller gets an independent response facade.
   async function cachedJson(url, ttlMs) {
     const key = cacheGeneration + ':' + token + ':' + url;
@@ -241,6 +242,8 @@
   let streamRetry = null;
   let streamRetryDelay = 1500;
   let overviewRefreshAt = 0;
+  let networkBuildSummary = '';
+  let networkDeviceSummary = '';
   let overviewRefreshTimer = null;
   let lastSocketFetchAt = 0;
   let lastRenderedSocketMode = '';
@@ -284,10 +287,8 @@
   const networkSelectedIds = new Set();
   let networkShowHost = true;
   let networkPinnedId = '';
-  let networkTab = 'response';
-  let networkFullEndpoint = false;
+  let networkTab = 'body';
   let networkListController = null;
-  try { networkFullEndpoint = localStorage.getItem('devconsole.network.fullEndpoint') === 'true'; } catch { /* storage unavailable */ }
   let networkDetailQuery = '';
   let networkSbsStacked = false;
   // Open state of the detail pane's kebab (⋮) actions menu. Module-level, not DOM state, because
@@ -500,6 +501,7 @@
   }
 
   const SEVERITY_SHORT = ['DBG', 'INF', 'WRN', 'ERR'];
+  const severityLabel = (short) => ({ DBG: 'Debug', INF: 'Info', WRN: 'Warning', ERR: 'Error' }[short] || short);
 
   function renderEmpty(container, iconName, title, sub) {
     container.innerHTML = `<div class="empty-state">${/ selected$/.test(title) ? spot('select') : icon(iconName, 'empty-icon')}<div class="empty-title">${esc(
@@ -566,7 +568,7 @@
    * text is prose (a log summary, a crash reason), which `word-break: break-all` would chop
    * mid-word. Both are opt-in, so those lists keep the single-line row they always had. */
   function rowHtml(opts) {
-    const { id, selected, badgeText, badgeTone, mainText, mainSub, mainRtl, tagText, tagTone, duration, statusText, sTone, flagKind, flagLabel, checkbox, checked, posinset, setsize, stackMetrics, wrapMain, metricsInline, mainPrefix } = opts;
+    const { id, selected, badgeText, badgeTone, mainText, mainSub, mainRtl, tagText, tagTone, duration, statusText, sTone, flagKind, flagLabel, checkbox, checked, posinset, setsize, stackMetrics, wrapMain, metricsInline, mainPrefix, secondaryText } = opts;
     const flagId = opts.flagId ?? id; // selection id and evidence id may differ (socket frames)
     const flagged = flagKind ? isFlagged(flagKind, flagId) : false;
     // aria-posinset/aria-setsize: with the list virtualized, only a window of `role="option"`
@@ -583,6 +585,7 @@
       <span class="row-badge badge-${badgeTone}">${esc(badgeText)}</span>
       <span class="row-main">
         <span class="row-main-text${wrapMain ? ' row-main-wrap' : ''}${mainRtl ? ' text-rtl' : ''}"${mainSub || mainPrefix ? ` title="${esc((mainPrefix || '') + mainText + (mainSub || ''))}"` : ''}>${mainPrefix ? `<span class="row-main-host">${esc(mainPrefix)}</span>` : ''}${esc(mainText)}${mainSub ? `<span class="row-main-sub">${esc(mainSub)}</span>` : ''}</span>
+        ${secondaryText ? `<span class="row-main-host">${esc(secondaryText)}</span>` : ''}
         ${tagText ? `<span class="row-tag tone-text-${tagTone || 'muted'}">${esc(tagText)}</span>` : ''}
       </span>
       ${
@@ -1576,7 +1579,7 @@
   }
   /** Normalize legacy tab names; both UI modes expose the same Network inspector tabs. */
   function normalizeNetworkTabForMode() {
-    if (networkTab === 'compare') networkTab = 'response';
+    if (networkTab === 'compare' || networkTab === 'response' || networkTab === 'request') networkTab = 'body';
     if (networkTab === 'summary') networkTab = 'timing';
   }
   function applyUiMode() {
@@ -1941,6 +1944,28 @@
       default: return rule.action || d.type;
     }
   }
+  function mockActionSummary(rule) {
+    const form = mockActionForm(rule.actionDetail);
+    if (!form) return mockActionLabel(rule);
+    switch (form.type) {
+      case 'static': case 'template': return 'returns ' + form.status + (form.delayMs ? ' after ' + form.delayMs + ' ms' : '');
+      case 'connection_failure': return 'fails the connection';
+      case 'timeout': return 'times out after ' + form.timeoutMs + ' ms';
+      case 'throttle': return 'slows it down';
+      case 'status_override': return 'changes status to ' + form.status;
+      case 'body_replacement': return 'changes the body';
+      case 'map_remote': return 'uses another server';
+      case 'sequence': return 'runs ' + form.steps.length + ' steps';
+      default: return mockActionLabel(rule);
+    }
+  }
+  function syncMockPathHelp() {
+    const path = $('mockRulePath').value.trim();
+    const warn = !path || path === '.*';
+    $('mockRulePathHelp').textContent = warn ? 'This rule matches every request your app makes' : 'Use .* as a wildcard';
+    $('mockRulePathHelp').classList.toggle('tone-text-warn', warn);
+  }
+  let mockLiteralPath = null;
   function setMockDialogError(msg) {
     const el = $('mockRuleFormError');
     el.textContent = msg || '';
@@ -2161,6 +2186,11 @@
     f.scheme.value = rule?.scheme || '';
     f.host.value = rule?.host || '';
     f.path.value = rule?.path || '';
+    mockLiteralPath = null;
+    if (editing && f.path.value.startsWith('^') && f.path.value.endsWith('$')) {
+      const literal = f.path.value.slice(1, -1).replace(/\\(.)/g, '$1');
+      if ('^' + escapeRegExp(literal) + '$' === f.path.value) { f.path.value = literal; mockLiteralPath = literal; }
+    }
     f.actionType.value = rule?.actionType || 'static';
     f.status.value = rule?.status ?? 200;
     f.delay.value = rule?.delayMs ?? '';
@@ -2189,7 +2219,9 @@
     setMockDialogError(mockRuleDraftUnsupported
       ? 'This rule uses ' + (rule?.actionLabel || rule?.action || 'an action') + ' that this editor cannot express — saving here would overwrite it. Delete and recreate it instead.'
       : '');
-    $('mockRuleModalTitleText').textContent = editing ? 'Edit mock rule' : 'New mock rule';
+    $('mockRuleAdvanced').open = editing && Boolean(f.scheme.value || f.host.value || Number(f.delay.value) || f.headers.value || f.queryPredicates.value || f.headerPredicates.value || f.bodyPredicate.value || Number(f.priority.value) || f.scope.value !== 'SESSION');
+    syncMockPathHelp();
+    $('mockRuleModalTitleText').textContent = editing ? 'Edit mock' : 'New mock';
     setMockBodyExpanded(mockBodyExpanded);
     $('mockRuleBodyFind').value = '';
     mockBodyFind = { query: '', ranges: [], index: 0 };
@@ -2199,7 +2231,7 @@
     overlay.hidden = false;
     document.addEventListener('keydown', mockDialogKeydown);
     overlay.addEventListener('click', mockDialogOverlayClick);
-    (editing ? f.method : f.id).focus();
+    f.path.focus();
   }
   function closeMockRuleDialog() {
     const overlay = $('mockRuleModal');
@@ -2401,7 +2433,15 @@
   async function saveMockRuleDialog() {
     if (!canEditMocks() || mockRuleDraftUnsupported) return;
     const f = mockRuleFieldEls();
-    const id = f.id.value.trim();
+    let id = f.id.value.trim();
+    if (!id) {
+      const segment = f.path.value.trim().split('/').filter(Boolean).pop() || 'all';
+      const base = ('mock-' + (f.method.value || 'any') + '-' + segment).toLowerCase().replace(/[^a-z0-9._-]/g, '-').slice(0, 120);
+      const used = new Set(mockRulesCache.map((rule) => rule.id));
+      let n = 1;
+      while (used.has(base + '-' + n)) n++;
+      id = base + '-' + n;
+    }
     const idValid = MOCK_RULE_ID_RE.test(id);
     setFieldError(f.id, !idValid, 'mockRuleIdHelp');
     if (!idValid) {
@@ -2435,7 +2475,7 @@
     } catch (err) { setMockDialogError(err.message); return; }
     setMockDialogError('');
     const params = new URLSearchParams({
-      id, path: f.path.value.trim() || '.*',
+      id, path: mockLiteralPath !== null && f.path.value.trim() === mockLiteralPath && /[\\.\[\]{}()*+?^$|]/.test(mockLiteralPath) ? '^' + escapeRegExp(mockLiteralPath) + '$' : f.path.value.trim() || '.*',
       priority: String(Number(f.priority.value) || 0), scope: f.scope.value || 'SESSION',
     });
     if (f.method.value) params.set('method', f.method.value);
@@ -3160,7 +3200,7 @@
     const q = $('search').value.trim();
     if (q) chips.push({ label: '"' + q + '"', title: 'Clear the search', on: () => { $('search').value = ''; render(); } });
     if (timelineSeverityFilter)
-      chips.push({ label: 'level ' + (SEVERITY_SHORT[Number(timelineSeverityFilter)] || timelineSeverityFilter), title: 'Clear the level filter', on: () => { timelineSeverityFilter = ''; $('timelineSeveritySeg').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === '')); render(); } });
+      chips.push({ label: 'Level: ' + severityLabel(SEVERITY_SHORT[Number(timelineSeverityFilter)] || timelineSeverityFilter), title: 'Clear the level filter', on: () => { timelineSeverityFilter = ''; $('timelineSeveritySeg').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === '')); render(); } });
     if (timelineSourceFilter)
       chips.push({ label: timelineSourceFilter, title: 'Clear the source filter', on: () => { timelineSourceFilter = ''; renderTimelineSourceSeg(); render(); } });
     if (timelineBookmarkedOnly) chips.push({ label: 'bookmarked only', title: 'Show every event again', on: () => { timelineBookmarkedOnly = false; updateBookmarkOnlyButton(); render(); } });
@@ -3220,8 +3260,8 @@
         }
         return rowHtml({
           id: e.id, selected: selectedEventId === e.id,
-          badgeText: lvl, badgeTone: levelTone(lvl),
-          mainText: mainText, tagText: e.pluginId.toUpperCase(), tagTone: 'muted',
+          badgeText: severityLabel(lvl), badgeTone: levelTone(lvl),
+          mainText: humanizeConditionIds(mainText), tagText: e.pluginId.toUpperCase(), tagTone: 'muted',
           duration: e.type, statusText: time(e.wallTimeMs).replace(/:\d\d /, ' ').slice(0, 8), sTone: 'muted',
           flagKind: 'timeline', flagLabel: mainText,
           posinset: i + 1, setsize: total,
@@ -3383,7 +3423,7 @@
     const kvs = markKvHits(
       [
         { k: 'summary', v: event.summary },
-        { k: 'level', v: lvl, tone: levelTone(lvl) },
+        { k: 'level', v: severityLabel(lvl), tone: levelTone(lvl) },
         { k: 'pluginId', v: event.pluginId },
       ]
         .concat(event.correlationId ? [{ k: 'correlationId', v: event.correlationId }] : [])
@@ -3402,7 +3442,7 @@
     // X-DevConsole-Redaction-Applicability header once the image bytes are actually fetched — the
     // single most authoritative source, since it comes from the exact request that reads the row.
     const screenshotAttachmentId = isScreenshotEvent ? eventAttachmentIdsById.get(event.id) : null;
-    const screenshotUnredacted = screenshotAttachmentId && eventRedactionApplicabilityById.get(event.id) === 'NOT_APPLICABLE';
+    const screenshotUnredacted = redactionShown() && screenshotAttachmentId && eventRedactionApplicabilityById.get(event.id) === 'NOT_APPLICABLE';
     const screenshotHtml = isScreenshotEvent
       ? screenshotAttachmentId
         ? `<div class="block-title">Screenshot</div>
@@ -3414,8 +3454,8 @@
     const focusSnap = captureFocus(pane);
     pane.innerHTML = `<div class="detail-head">
         <div class="detail-head-row">
-          <span class="detail-badge badge-${levelTone(lvl)}">${esc(lvl)}</span>
-          <span class="detail-head-title">${esc(event.summary)}</span>
+          <span class="detail-badge badge-${levelTone(lvl)}">${esc(severityLabel(lvl))}</span>
+          <span class="detail-head-title">${esc(humanizeConditionIds(event.summary))}</span>
           <span class="detail-head-status tone-text-muted">${esc(event.pluginId)}</span>
           <button type="button" class="detail-expand${zoom ? ' active' : ''}" data-action="toggle-zoom" aria-pressed="${zoom}" title="${zoom ? 'Restore the split view (f)' : 'Expand this pane to full width (f)'}">${icon(zoom ? 'collapse' : 'expand', 'ic-sm')}</button>
         </div>
@@ -3913,7 +3953,7 @@
     pendingDeepLinkView = null;
     // Prime the mocks/composer capability flags so "Mock this response"/"Resend" aren't dead
     // until Mocks/Composer are visited.
-    loadMockRules();
+    loadMocks();
     loadComposerHostAllowlist();
     refreshHostLine();
     // Prime the evidence cache immediately on connect (not lazily on first Evidence-tray visit)
@@ -4087,7 +4127,7 @@
       lede: eventSample.length ? false : 'No timeline events captured yet.',
       rows: eventSample.map((e) => {
         const lvl = SEVERITY_SHORT[e.severity] || 'INF';
-        return { k: time(e.wallTimeMs).slice(0, 8), v: e.summary, tone: 'muted', tag: lvl, tagTone: levelTone(lvl) };
+        return { k: time(e.wallTimeMs).slice(0, 8), v: e.summary, tone: 'muted', tag: severityLabel(lvl), tagTone: levelTone(lvl) };
       }),
     };
   }
@@ -4209,6 +4249,7 @@
   function selectNetworkRun(id) {
     if (id === networkRunId) return;
     networkRunId = id;
+    renderNetworkFakeNotice();
     networkSelectedIds.clear();
     networkDetailCache.clear();
     selectedTransactionId = '';
@@ -4316,7 +4357,8 @@
       if (networkMethodFilter && t.method !== networkMethodFilter) return false;
       if (networkHostFilter.size && !networkHostFilter.has(t.host)) return false;
       if (networkStatusFilter) {
-        if (networkStatusFilter === 'fail') { if (t.status) return false; }
+        if (networkStatusFilter === 'failed') { if (!failing(t)) return false; }
+        else if (networkStatusFilter === 'fail') { if (t.status) return false; }
         else if (String(t.status || '')[0] !== networkStatusFilter[0]) return false;
       }
       return true;
@@ -4332,21 +4374,23 @@
       if (!excludeDims.includes('method') && networkMethodFilter && t.method !== networkMethodFilter) return false;
       if (!excludeDims.includes('host') && networkHostFilter.size && !networkHostFilter.has(t.host)) return false;
       if (!excludeDims.includes('status') && networkStatusFilter) {
-        if (networkStatusFilter === 'fail') { if (t.status) return false; }
+        if (networkStatusFilter === 'failed') { if (!failing(t)) return false; }
+        else if (networkStatusFilter === 'fail') { if (t.status) return false; }
         else if (String(t.status || '')[0] !== networkStatusFilter[0]) return false;
       }
       return true;
     });
   }
   function updateNetworkFacetCounts() {
-    const statusCounts = { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0, fail: 0 };
+    const statusCounts = { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0, fail: 0, failed: 0 };
     networkFacetBase(['status']).forEach((t) => {
+      if (failing(t)) statusCounts.failed++;
       if (!t.status) statusCounts.fail++;
       else { const key = String(t.status)[0] + 'xx'; if (statusCounts[key] !== undefined) statusCounts[key]++; }
     });
     $('networkStatusSeg').querySelectorAll('button[data-value]').forEach((b) => {
       const v = b.dataset.value;
-      const label = v === '' ? 'All' : v;
+      const label = v === '' ? 'All' : v === 'failed' ? 'Failed' : v === 'fail' ? 'No response' : v;
       const count = statusCounts[v];
       b.innerHTML = esc(label) + (count ? `<span class="seg-count">${count}</span>` : '');
     });
@@ -4575,7 +4619,7 @@
     selectedTransactionDetail = null;
     networkPinnedId = '';
     networkActionsMenuOpen = false;
-    if (networkTab === 'diff' || networkTab === 'related') networkTab = 'response';
+    if (networkTab === 'diff' || networkTab === 'related') networkTab = 'body';
     networkPage = har.entries;
     transactions = [];
     toggleNetworkEndpoints(false);
@@ -4594,7 +4638,7 @@
     transactions = [];
     selectedTransactionId = '';
     selectedTransactionDetail = null;
-    networkTab = networkTab === 'diff' || networkTab === 'related' ? 'response' : networkTab;
+    networkTab = networkTab === 'diff' || networkTab === 'related' ? 'body' : networkTab;
     renderHarBanner();
     applyHarOfflineChrome();
     if (hasSession() || openAccess) {
@@ -4610,7 +4654,7 @@
     renderHarBanner();
     applyHarOfflineChrome();
     $('networkMainColLabel').textContent = 'Path';
-    $('networkFullEndpoint').setAttribute('aria-pressed', String(networkFullEndpoint));
+    renderNetworkFakeNotice();
     // Normalize the selection BEFORE painting, like the other four list views: rows gate tabindex
     // on `selected`, so painting with a stale id would leave zero tabbable rows until
     // showTransaction()'s async re-render -- or forever, if that detail fetch rejects.
@@ -4627,12 +4671,12 @@
           checkbox: !harOffline, checked: !harOffline && networkSelectedIds.has(t.id),
           badgeText: t.method, badgeTone: methodTone(t.method),
           mainText: t.path,
-          mainPrefix: networkFullEndpoint ? t.host : '',
+          secondaryText: [transactionMockLabel(t), t.host].filter(Boolean).join(' · '),
           // The query is what separates two rows on the same endpoint, so it belongs in the row --
           // dimmed and after the path, which stays the part that survives the ellipsis.
           mainSub: t.query ? '?' + t.query : '',
           // Single row-tag slot: a pinned diff baseline always wins over the mocked marker.
-          tagText: networkPinnedId === t.id ? 'PINNED' : (t.tags?.mocked === 'true' || t.mocked === true) ? 'MOCKED' : false,
+          tagText: networkPinnedId === t.id ? 'PINNED' : false,
           tagTone: 'put',
           duration: t.durationMs != null ? t.durationMs + ' ms' : t.error ? 'failed' : '—',
           statusText: t.status != null ? String(t.status) : t.error ? 'ERR' : '—', sTone: t.status != null ? statusTone(t.status) : t.error ? 'error' : 'muted',
@@ -4711,7 +4755,7 @@
    */
   async function selectAllMatchingFilterNetwork() {
     if (!token) return;
-    if (networkStatusFilter === 'fail' || networkFailOnly) {
+    if (networkStatusFilter === 'fail' || networkStatusFilter === 'failed' || networkFailOnly) {
       transactions.forEach((t) => networkSelectedIds.add(t.id));
       renderNetwork();
       toast('Selected ' + transactions.length + ' loaded — "fail" status has no server-side filter equivalent, so this can\'t widen past what\'s already loaded.');
@@ -4783,7 +4827,7 @@
     const chips = [];
     const q = $('networkSearch').value.trim();
     if (q) chips.push({ label: '"' + q + '"', title: 'Clear the search', on: () => { $('networkSearch').value = ''; loadNetwork(); } });
-    if (networkStatusFilter) chips.push({ label: 'status ' + (networkStatusFilter === 'fail' ? 'failed' : networkStatusFilter), title: 'Clear the status filter', on: () => { networkStatusFilter = ''; $('networkStatusSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === '')); applyNetworkFilters(); } });
+    if (networkStatusFilter) chips.push({ label: 'status ' + (networkStatusFilter === 'fail' ? 'no response' : networkStatusFilter), title: 'Clear the status filter', on: () => { networkStatusFilter = ''; $('networkStatusSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === '')); applyNetworkFilters(); } });
     if (networkMethodFilter) chips.push({ label: 'method ' + networkMethodFilter, title: 'Clear the method filter', on: () => { networkMethodFilter = ''; $('networkMethodSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === '')); applyNetworkFilters(); } });
     networkHostFilter.forEach((h) => chips.push({ label: h, title: 'Remove ' + h, on: () => { networkHostFilter.delete(h); applyNetworkFilters(); } }));
     if (networkFailOnly) chips.push({ label: 'failures only', title: 'Show all statuses again', on: () => { networkFailOnly = false; applyNetworkFilters(); } });
@@ -5010,7 +5054,7 @@
     return frameSizeValue(m) + ' chars' + (m.payload?.truncated ? '+' : '');
   }
   function framePreviewText(m) {
-    if (m.frameType === 'PING' || m.frameType === 'PONG') return m.frameType + ' (control frame)';
+    if (m.frameType === 'PING' || m.frameType === 'PONG') return m.frameType + ' (control message)';
     if (m.payload?.kind === 'binary') return m.payload.preview ? m.payload.previewEncoding + ': ' + m.payload.preview : 'Binary preview withheld — host did not opt in.';
     const preview = m.payload?.preview ?? '';
     if (m.textFormat === 'JSON') { try { return JSON.stringify(JSON.parse(preview)); } catch { /* fall through */ } }
@@ -5081,12 +5125,12 @@
   }
 
   let socketOrder = [];
-  const SOCKETS_EMPTY_HTML = listEmptyHtml('sockets', 'No frames match', 'Clear a filter to see the other captured frames.');
+  const SOCKETS_EMPTY_HTML = listEmptyHtml('sockets', 'No messages match', 'Clear a filter to see the other captured messages.');
   function renderSockets() {
     const timelineMode = socketMode === 'timeline';
     $('socketListHead').innerHTML = timelineMode
-      ? '<span class="trace-head-time">Time</span><span class="trace-head-line"></span><span class="trace-head-main">Frame · payload size</span>'
-      : '<span class="col-badge">Dir</span><span class="col-main">Payload preview</span><span class="col-duration">Size</span><span class="col-status">Time</span><span class="col-flag"></span>';
+      ? '<span class="trace-head-time">Time</span><span class="trace-head-line"></span><span class="trace-head-main">Message · size</span>'
+      : '<span class="col-badge"></span><span class="col-main">Message</span><span class="col-duration">Size</span><span class="col-status">Time</span><span class="col-flag"></span>';
     // Normalize the selection before painting (not after) so a stale/dropped selectedIndex never
     // leaves every row tabindex=-1 for a frame — both sub-modes below read socketSelectedIndex.
     if (socketSelectedIndex < 0 || !socketMessages_[socketSelectedIndex]) socketSelectedIndex = socketMessages_.length ? 0 : -1;
@@ -5137,7 +5181,7 @@
           const scopeTag = socketSelectedConnIds.size === 1 || socketConnections.length < 2 ? (m.frameType === 'BINARY' ? 'BIN' : null) : conn ? shortSocketUrl(conn.url) : null;
           return rowHtml({
             id: String(i), selected: socketSelectedIndex === i,
-            badgeText: rec ? 'RECV' : 'SENT', badgeTone: rec ? 'put' : 'signal',
+            badgeText: rec ? 'Received' : 'Sent', badgeTone: rec ? 'put' : 'signal',
             mainText: framePreviewText(m),
             tagText: [protoTag, scopeTag].filter(Boolean).join(' · ') || false,
             tagTone: 'put',
@@ -5160,16 +5204,17 @@
       : socketConnections;
     const socketTotalFrames = socketConnScope.reduce((sum, s) => sum + s.sentCount + s.receivedCount, 0);
     $('socketFootLeft').textContent = timelineMode
-      ? countLabel(socketMessages_.length, 'frame') + ' · oldest first'
-      : socketMessages_.length + ' of ' + countLabel(socketTotalFrames, 'frame');
+      ? countLabel(socketMessages_.length, 'message') + ' · oldest first'
+      : socketMessages_.length + ' of ' + countLabel(socketTotalFrames, 'message');
     $('socketFootRight').textContent = timelineMode
       ? 'bar width ∝ payload size'
       : socketSelectedConnIds.size === 1
-        ? (() => { const s = socketConnections.find((x) => socketSelectedConnIds.has(x.id)); return s ? s.state + ' · ' + s.sentCount + '↑ ' + s.receivedCount + '↓' : ''; })()
+        ? (() => { const s = socketConnections.find((x) => socketSelectedConnIds.has(x.id)); return s ? socketStateLabel(s.state) + ' · ' + s.sentCount + ' sent · ' + s.receivedCount + ' received' : ''; })()
         : socketSelectedConnIds.size ? countLabel(socketSelectedConnIds.size, 'connection') : countLabel(socketConnections.length, 'connection');
     renderSocketMetrics();
     renderSocketChips();
     renderSocketConnDrop();
+    renderSocketConnectionStrip();
     renderSocketDetail();
   }
 
@@ -5182,8 +5227,8 @@
     socketConnections.forEach((s) => { const total = s.sentCount + s.receivedCount; if (!busiest || total > busiest.total) busiest = { total, s }; });
     const cells = [
       metricHtml('Connections', String(socketConnections.length), openCount + ' open' + (errCount ? ' · ' + errCount + ' error' : ''), 'ink'),
-      metricHtml('Frames sent', String(sent), '', 'signal'),
-      metricHtml('Frames recv', String(recv), '', 'put'),
+      metricHtml('Messages sent', String(sent), '', 'signal'),
+      metricHtml('Messages received', String(recv), '', 'put'),
     ];
     if (busiest) cells.push(metricHtml('Busiest', String(busiest.total), shortSocketUrl(busiest.s.url), 'warn'));
     $('socketMetrics').innerHTML = cells.join('');
@@ -5194,7 +5239,7 @@
     const chips = [];
     const q = $('socketSearch').value.trim();
     if (q) chips.push({ label: '"' + q + '"', title: 'Clear the search', on: () => { $('socketSearch').value = ''; loadSocketMessages(); } });
-    if (socketFrameTypeFilter) chips.push({ label: socketFrameTypeFilter, title: 'Clear the frame-type filter', on: () => { socketFrameTypeFilter = ''; $('socketFrameTypeSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === '')); loadSocketMessages(); } });
+    if (socketFrameTypeFilter) chips.push({ label: socketFrameTypeFilter, title: 'Clear the type filter', on: () => { socketFrameTypeFilter = ''; $('socketFrameTypeSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === '')); loadSocketMessages(); } });
     if (socketDirectionFilter) chips.push({ label: socketDirectionFilter.toLowerCase(), title: 'Clear the direction filter', on: () => { socketDirectionFilter = ''; $('socketDirectionSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === '')); loadSocketMessages(); } });
     socketSelectedConnIds.forEach((id) => { const s = socketConnections.find((x) => x.id === id); chips.push({ label: s ? shortSocketUrl(s.url) : id, title: 'Stop showing this connection', on: () => { socketSelectedConnIds.delete(id); loadSocketMessages(); } }); });
     appliedFiltersHtml('socketChips', chips, () => {
@@ -5213,6 +5258,16 @@
     select: (id) => { socketSelectedIndex = Number(id); renderSockets(); },
     flagCurrent: () => { const m = socketMessages_[socketSelectedIndex]; if (m) toggleEvidenceFlag('socket', socketFlagId(socketSelectedIndex, m), m.direction + ' ' + m.frameType); },
   };
+
+  const socketStateLabel = (state) => ({ OPEN: 'Connected', CLOSING: 'Closing', CLOSED: 'Closed', FAILED: 'Failed', CONNECTING: 'Connecting' }[state] || state || '');
+  function renderSocketConnectionStrip() {
+    const strip = $('socketConnections');
+    strip.hidden = !socketConnections.length;
+    strip.innerHTML = socketConnections.map((s) => {
+      const color = s.state === 'OPEN' ? 'var(--signal)' : s.state === 'CLOSING' ? 'var(--warn)' : s.state === 'FAILED' ? 'var(--error)' : 'var(--border-strong)';
+      return `<button type="button" class="socket-conn" data-socket-conn="${esc(s.id)}" aria-pressed="${esc(socketSelectedConnIds.has(s.id))}"><span class="socket-conn-dot" style="background: ${esc(color)}"></span><span class="socket-conn-url">${esc(shortSocketUrl(s.url))}</span><span class="socket-conn-state">${esc(socketStateLabel(s.state))}</span><span class="socket-conn-meta">${esc(s.protocol === 'mqtt' ? 'MQTT' : 'WebSocket')} · ${esc(s.sentCount)} sent · ${esc(s.receivedCount)} received</span></button>`;
+    }).join('');
+  }
 
   function renderSocketConnDrop() {
     // Protocol badge only for MQTT: WebSocket stays the unmarked default (the overwhelmingly
@@ -5264,7 +5319,7 @@
     if (code === 'SOCKET_SEND_DISABLED') return 'Sending is disabled by the host (request execution capability)';
     if (code === 'SEND_UNSUPPORTED') return "This connection's adapter can't send";
     if (code === 'CSRF_INVALID') return 'Security check failed (invalid CSRF token)';
-    return (message || 'Failed to send frame') + (code ? ': ' + code : '');
+    return (message || "Couldn't send the message") + (code ? ': ' + code : '');
   }
 
   async function sendSocketFrame(connId) {
@@ -5299,13 +5354,13 @@
         return;
       }
 
-      toast('Frame sent');
+      toast('Message sent');
       draft.text = '';
       const textEl = $('socketComposerText');
       if (textEl) textEl.value = '';
       loadSocketMessages();
     } catch {
-      toast('Failed to send frame', 'error');
+      toast("Couldn't send the message", 'error');
     } finally {
       syncSocketComposerSendButton(connId);
     }
@@ -5330,7 +5385,7 @@
     const draft = getSocketDraft(conn, m);
     const isMqtt = conn.sendProtocol === 'mqtt';
     return `<div class="socket-composer" data-conn-id="${esc(conn.id)}">
-      <div class="socket-composer-head">${icon('send', 'ic-sm')}<span>Send frame</span></div>
+      <div class="socket-composer-head">${icon('send', 'ic-sm')}<span>Send a message</span></div>
       ${isMqtt ? `<div class="socket-composer-mqtt">
         <label class="field">
           <span>Topic</span>
@@ -5350,8 +5405,8 @@
         </label>
       </div>` : ''}
       <label class="field">
-        <span>Frame text</span>
-        <textarea id="socketComposerText" rows="3" placeholder="Type frame payload…">${esc(draft.text)}</textarea>
+        <span>Message</span>
+        <textarea id="socketComposerText" rows="3" placeholder="Type a message…">${esc(draft.text)}</textarea>
       </label>
       <div class="socket-composer-foot">
         <button type="button" class="btn primary" id="socketComposerSend" ${(!draft.text.trim() || (isMqtt && !draft.topic.trim())) ? 'disabled' : ''}>
@@ -5367,45 +5422,41 @@
   function renderSocketDetail() {
     const pane = $('socketMessages');
     const m = socketMessages_[socketSelectedIndex];
-    if (!m) { renderEmpty(pane, 'sockets', 'No socket message selected', 'Select a connection or apply filters to inspect frames. JSON text frames are formatted; binary previews appear only when the host opted in.'); return; }
+    if (!m) { renderEmpty(pane, 'sockets', 'No socket message selected', 'Select a connection or apply filters to inspect messages. JSON text messages are formatted; binary previews appear only when the host opted in.'); return; }
     const conn = socketConnections.find((s) => s.id === m.connectionId);
     const rec = m.direction === 'RECEIVED';
     const flagged = isFlagged('socket', socketFlagId(socketSelectedIndex, m));
-    // MQTT carries no WebSocket opcode, but does carry topic/qos (decoded server-side from
-    // SocketMessage.contentType — see MqttFrameMetadata) — so the "type" label and the fact list
-    // both branch on protocol rather than assuming every frame is a WebSocket frame.
     const isMqtt = conn?.protocol === 'mqtt' || m.topic != null || m.qos != null;
     const head = detailHeadHtml({
-      badgeText: rec ? 'RECV' : 'SENT', badgeTone: rec ? 'put' : 'signal',
-      title: conn ? conn.url : m.connectionId, statusText: m.frameType, sTone: 'muted',
+      badgeText: rec ? 'Received' : 'Sent', badgeTone: rec ? 'put' : 'signal',
+      title: conn ? conn.url : m.connectionId, statusText: m.frameType.charAt(0) + m.frameType.slice(1).toLowerCase(), sTone: 'muted',
       facts: [
-        { k: 'type', v: isMqtt ? 'MQTT message' : 'WebSocket frame' },
         { k: 'time', v: time(m.timestampEpochMs) },
         { k: 'size', v: frameSizeLabel(m) },
       ]
-        .concat(isMqtt ? [] : [{ k: 'opcode', v: m.frameType === 'TEXT' ? '0x1' : m.frameType === 'BINARY' ? '0x2' : m.frameType === 'PING' ? '0x9' : '0xA' }])
+        .concat(isMqtt ? [{ k: 'type', v: 'MQTT message' }] : [])
         .concat(m.topic != null ? [{ k: 'topic', v: m.topic }] : [])
         .concat(m.qos != null ? [{ k: 'qos', v: String(m.qos) }] : [])
-        .concat(conn ? [{ k: 'socket state', v: conn.state }, { k: 'opened', v: time(conn.openedAtEpochMs) }] : []),
+        .concat(conn ? [{ k: 'Connection', v: socketStateLabel(conn.state) }, { k: 'Connected at', v: time(conn.openedAtEpochMs) }] : []),
       actions: [
-        { id: 'flag', label: flagged ? 'Flagged as evidence' : 'Flag as evidence', icon: 'flag', on: flagged, title: 'Attach this frame to the evidence tray (Enter)' },
-        { id: 'copy-frame', label: 'Copy frame', icon: 'copy' },
-        { id: 'copy-all-frames', label: 'Copy all frames', icon: 'copy' },
+        { id: 'flag', label: flagged ? 'Flagged as evidence' : 'Flag as evidence', icon: 'flag', on: flagged, title: 'Attach this message to the evidence tray (Enter)' },
+        { id: 'copy-frame', label: 'Copy message', icon: 'copy' },
+        { id: 'copy-all-frames', label: 'Copy all messages', icon: 'copy' },
       ],
     });
     const query = socketDetailQuery;
     resetBodyViewers();
     let body;
     let lines = null;
-    if (m.frameType === 'PING' || m.frameType === 'PONG') body = `<span class="detail-group-empty">Control frame — no payload.</span>`;
+    if (m.frameType === 'PING' || m.frameType === 'PONG') body = `<span class="detail-group-empty">Control message — no content.</span>`;
     else if (m.payload?.kind === 'binary') body = `<span class="detail-group-empty">${m.payload.preview ? 'Binary preview (' + esc(m.payload.previewEncoding) + '): ' + esc(m.payload.preview) : 'Binary preview withheld — host did not opt in.'}</span>`;
     else {
       const preview = m.payload?.preview ?? '';
       try { lines = formatJsonLines(JSON.parse(preview), query); } catch { lines = formatJsonLines(preview, query); }
-      body = bodyViewerHtml(preview, null, lines, conn ? conn.url : 'Socket frame payload', true, 'socket:' + socketFlagId(socketSelectedIndex, m));
+      body = bodyViewerHtml(preview, null, lines, conn ? conn.url : 'Socket message', true, 'socket:' + socketFlagId(socketSelectedIndex, m));
     }
-    const findBar = findBarHtml(query, lines ? countPaneHits([{ groups: [{ code: lines }] }]) : 0, 'socketDetailFindInput');
-    if (redactionShown()) body += `<div class="detail-footnote">${icon('lock', 'ic-sm')}<span>Frame payloads are redacted on device.</span></div>`;
+    const findBar = findBarHtml(query, lines ? countPaneHits([{ groups: [{ code: lines }] }]) : 0, 'socketDetailFindInput', 'Find in this message…');
+    if (redactionShown()) body += `<div class="detail-footnote">${icon('lock', 'ic-sm')}<span>Message contents are redacted on device.</span></div>`;
     const composer = socketComposerHtml(conn, m);
     const focusSnap = captureFocus(pane);
     pane.innerHTML = head + findBar + `<div class="detail-body">${body}${composer}</div>`;
@@ -5426,8 +5477,8 @@
       if (!m) return;
       const id = actionBtn.dataset.detailAction;
       if (id === 'flag') { toggleEvidenceFlag('socket', socketFlagId(socketSelectedIndex, m), m.direction + ' ' + m.frameType); renderSocketDetail(); }
-      else if (id === 'copy-frame') copyToClipboard(m.payload?.kind === 'binary' ? '[binary frame]' : (m.payload?.preview ?? ''), 'Frame payload');
-      else if (id === 'copy-all-frames') copyToClipboard(JSON.stringify(socketMessages_, null, 2), 'All frames');
+      else if (id === 'copy-frame') copyToClipboard(m.payload?.kind === 'binary' ? '[binary message]' : (m.payload?.preview ?? ''), 'Message');
+      else if (id === 'copy-all-frames') copyToClipboard(JSON.stringify(socketMessages_, null, 2), 'All messages');
     });
     $('socketMessages').addEventListener('input', (e) => {
       if (e.target.id === 'socketDetailFindInput') { socketDetailQuery = e.target.value; renderSocketDetail(); return; }
@@ -5911,8 +5962,7 @@
         return rowHtml({
           id: e.id, selected: selectedCrashId === e.id,
           badgeText: kind === 'ANR' ? 'ANR' : 'CRASH', badgeTone: 'error',
-          mainText: e.summary, tagText: run ? run.text : false, tagTone: run ? run.tone : 'muted',
-          duration: crashThreadOf(e),
+          mainText: e.summary, secondaryText: [run?.text, crashThreadOf(e)].filter(Boolean).join(' · '),
           statusText: time(e.wallTimeMs), sTone: 'muted',
           flagKind: 'crash', flagLabel: e.summary,
           posinset: n + 1, setsize: total,
@@ -6023,7 +6073,7 @@
       return `<div class="crumb-strip">${crumbs
         .map((c) => {
           const lvl = SEVERITY_SHORT[c.severity] || 'INF';
-          return `<div class="crumb crumb-sev-${levelTone(lvl)}"><div class="crumb-head"><span>${esc(time(c.ts))}</span><span>${esc(c.plugin)}</span></div><div class="crumb-summary">${esc(c.summary)}</div></div>`;
+          return `<div class="crumb crumb-sev-${levelTone(lvl)}"><div class="crumb-head"><span>${esc(time(c.ts))}</span><span>${esc(c.plugin)}</span></div><div class="crumb-summary">${esc(humanizeConditionIds(c.summary))}</div></div>`;
         })
         .join('')}</div>`;
     })();
@@ -7443,7 +7493,7 @@
           <label class="field" id="exportIdsField" hidden><span>Event IDs (comma separated)</span><textarea id="exportIds" rows="2"></textarea></label>
           <label class="field export-metadata"><input id="exportMetadataOnly" type="checkbox"><span>Metadata only</span></label>
         </div>
-        <pre id="exportStatus" aria-live="polite">${esc(hasSession() ? 'Choose a scope, then create a redacted ZIP.' : 'Connect this browser to create a diagnostic export.')}</pre>`,
+        <pre id="exportStatus" aria-live="polite">${esc(hasSession() ? exportScopeHint() : 'Connect this browser to create a diagnostic export.')}</pre>`,
         buttons: [
           { id: 'export-estimate', label: 'Estimate size', icon: 'grid', disabled: !hasSession(), title: 'Check the ZIP size for the current scope before creating it' },
           { id: 'export-create', label: 'Session ZIP', icon: 'download', kind: hasSession() ? 'primary' : 'default', disabled: !hasSession() },
@@ -7509,7 +7559,7 @@
       return;
     }
     const body = await r.json();
-    if (status) status.textContent = 'Estimated export size: ' + formatBytes(body.estimatedBytes) + '. Choose a scope, then create a redacted ZIP.';
+    if (status) status.textContent = 'Estimated export size: ' + formatBytes(body.estimatedBytes) + '. ' + exportScopeHint();
   }
   async function createExport() {
     if (!token) return;
@@ -7576,7 +7626,7 @@
   // here is fabricated per-item (that honesty rule lives in evidenceItemStatus below).
   const evidenceIncludedByKind = {
     network: 'method, url, status, headers, body, timing', timeline: 'summary, level, source, payload (when the plugin emits one)',
-    socket: 'connection, direction, frame type, payload', push: 'provider, lifecycle, data, notification',
+    socket: 'connection, direction, message type, content', push: 'provider, lifecycle, data, notification',
     screenshot: 'width, height, image attachment', crash: 'kind, thread, all-thread dump, breadcrumbs',
   };
   /** Reads whatever the item's own persisted snapshot actually has -- never a live lookup into
@@ -7585,7 +7635,7 @@
     const s = it.snapshot;
     if (!s) return { text: '—', tone: 'muted' };
     if (it.kind === 'network') return { text: s.status ? String(s.status) : s.error || 'no response', tone: statusTone(s.status) };
-    if (it.kind === 'timeline') { const lvl = SEVERITY_SHORT[s.severity] || ''; return { text: lvl || s.type || '—', tone: levelTone(lvl) }; }
+    if (it.kind === 'timeline') { const lvl = SEVERITY_SHORT[s.severity] || ''; return { text: severityLabel(lvl) || s.type || '—', tone: levelTone(lvl) }; }
     if (it.kind === 'socket') return { text: (s.direction || '') + ' ' + (s.frameType || ''), tone: 'muted' };
     if (it.kind === 'push') return { text: s.lifecycle || '—', tone: 'muted' };
     if (it.kind === 'screenshot') return { text: s.widthPx && s.heightPx ? s.widthPx + '×' + s.heightPx : '—', tone: 'put' };
@@ -7604,7 +7654,7 @@
   /** `it.redactionApplicability` is `'APPLIED'`, `'NOT_APPLICABLE'`, or `null`/absent when unknown
    * (the reader was unwired, or the attachment row is gone) -- badge only the confirmed case,
    * exactly per the field's contract: absent means "don't know", not "assume safe". */
-  const isUnredacted = (it) => it.redactionApplicability === 'NOT_APPLICABLE';
+  const isUnredacted = (it) => redactionShown() && it.redactionApplicability === 'NOT_APPLICABLE';
   function evidenceAttachmentsTableHtml(items) {
     const head = ['Kind', 'Subject', 'Result', 'Flagged', 'Included', ''].map((c) => `<th scope="col">${esc(c)}</th>`).join('');
     const body = items
@@ -7893,7 +7943,7 @@
         // row, or a transient store exception all come back as 200 with no header) — absent means
         // "don't know", same rule as the JSON field (see isUnredacted above), so it must never
         // clear a badge the pre-fetch markup already painted from the authoritative JSON value.
-        if (badge && info.redactionApplicability != null) badge.hidden = info.redactionApplicability !== 'NOT_APPLICABLE';
+        if (badge && info.redactionApplicability != null) badge.hidden = !isUnredacted(info);
       });
     });
   }
@@ -8100,7 +8150,7 @@
         {
           icon: 'flag', iconTone: 'muted', title: 'Nothing flagged yet', span: 3,
           lede: 'Flag a request, event or crash from its row or detail header to collect it here.',
-          bodyHtml: foldHtml('How the tray works', '<p class="card-lede">' + esc("Flag a transaction, frame, push event, timeline event or crash with the flag button at the end of its row — or from its detail header — and it lands here with the full redacted detail the server captured at flag time, not just a label. Draft the report while the session is still live; once it ends the proof is gone. A browser refresh keeps everything: flagged items and any typed report text are saved server-side.") + '</p>'),
+          bodyHtml: foldHtml('How the tray works', '<p class="card-lede">' + esc("Flag a transaction, message, push event, timeline event or crash with the flag button at the end of its row — or from its detail header — and it lands here with the full redacted detail the server captured at flag time, not just a label. Draft the report while the session is still live; once it ends the proof is gone. A browser refresh keeps everything: flagged items and any typed report text are saved server-side.") + '</p>'),
           buttons: [
             { id: 'go-network', label: 'Go to Network', icon: 'network', kind: 'primary' },
             { id: 'previous-run-evidence', label: "Previous run's evidence", icon: 'download', disabled: !hasSession(), title: 'The tray is per app run; download what was flagged before the last restart' },
@@ -8167,7 +8217,7 @@
       },
       {
         icon: 'camera', iconTone: 'signal', title: 'Screenshots',
-        lede: 'Screenshots cannot be redacted — pixels carry whatever was on screen, tokens included. Anything the server reports NOT_APPLICABLE is badged UNREDACTED below, in Timeline, and in the export manifest.',
+        lede: 'Screenshots cannot be redacted — pixels carry whatever was on screen, tokens included. With redaction on, anything the server reports NOT_APPLICABLE is badged UNREDACTED below, in Timeline, and in the export manifest.',
         bodyHtml: evidenceThumbsHtml(items),
         buttons: [{ id: 'capture-screenshot', label: 'Capture screenshot', icon: 'camera', disabled: !hasSession(), title: hasSession() ? 'Capture the device\'s foreground screen — off by default; set screenshotPolicy.enabled to allow it' : 'Connect this browser first' }],
       },
@@ -8288,7 +8338,7 @@
     const exportStatus = $('exportStatus');
     if (exportStatus && !exportStatus.dataset.busy) {
       exportStatus.textContent = enabled
-        ? 'Choose a scope, then create a redacted ZIP.'
+        ? exportScopeHint()
         : "Open DevConsole on the device → More → scan the QR or paste the code in Overview to create a diagnostic export.";
     }
     const composerSub = $('composerResult')?.querySelector('.empty-sub');
@@ -8678,20 +8728,20 @@
     const [loaded] = await Promise.all([loadComposerAgents().catch(() => false), waitMs(COMPOSER_REFRESH_MIN_MS)]);
     button.disabled = false;
     button.classList.remove('is-refreshing');
-    label.textContent = 'Refresh Run On';
+    label.textContent = 'Refresh list';
     if (!loaded) {
       toast('Could not look for computers. Check the connection to the device and try again.', 'error');
     } else if (composerAgents.length) {
       toast('Done. Open the "Run on" menu (first field in the Request card) and select where to run.');
       highlightRunOnField();
     } else {
-      toast('No computer found yet. Start devconsole-agent, then press Refresh Run On again.');
+      toast('No computer found yet. Start devconsole-agent, then press Refresh list again.');
     }
   }
 
   const COMPOSER_ERRORS = {
     COMPOSER_DISABLED: ['Composer is turned off in the app', 'Set DevConsoleConfig.composerEnabled = true to send requests.'],
-    AGENT_UNAVAILABLE: ['That computer is not connected', 'Start devconsole-agent again, then press "Refresh Run On".'],
+    AGENT_UNAVAILABLE: ['That computer is not connected', 'Start devconsole-agent again, then press "Refresh list".'],
     AGENT_TIMEOUT: ['The computer did not answer in time', 'It stopped responding while running the request. Check the agent terminal.'],
     VALIDATION_FAILED: ['The request is not valid', 'Check the method, an absolute http(s) URL, and the header and query lines (Name: value).'],
     RATE_LIMITED: ['Too many requests', 'Composer allows 20 executions per minute. Wait a moment and try again.'],
@@ -8740,7 +8790,7 @@
   }
   function showRejectedHostAllowed(host) {
     rejectedComposerHost = '';
-    renderEmpty($('composerResult'), 'check', `${host} is allowed`, 'Press Execute request to run it again.');
+    renderEmpty($('composerResult'), 'check', `${host} is allowed`, 'Press Send request to run it again.');
   }
   function syncRejectedHostPanel() {
     if (rejectedComposerHost && isComposerHostAllowed(rejectedComposerHost)) {
@@ -8910,7 +8960,78 @@
   // ================================================================
   // Mocks
   // ================================================================
+  const TEST_CONDITIONS = [
+    { key: 'slow-network', id: 'devconsole-condition-slow-network', label: 'Slow network', notice: 'Slow network is on. Real requests are delayed.' },
+    { key: 'no-connection', id: 'devconsole-condition-no-connection', label: 'No connection', notice: 'No connection is on. Every request fails.' },
+    { key: 'timeouts', id: 'devconsole-condition-timeouts', label: 'Timeouts', notice: 'Timeouts are on. Every request times out.' },
+    { key: 'server-errors', id: 'devconsole-condition-server-errors', label: 'Server errors', notice: 'Server errors are on. Every request returns 500.' },
+    { key: 'signed-out', id: 'devconsole-condition-signed-out', label: 'Signed out', notice: 'Signed out is on. Every request returns 401.' },
+  ];
+  const testConditionForRuleId = (id) => TEST_CONDITIONS.find((condition) => condition.id === id) || null;
+  const isTestConditionRuleId = (id) => typeof id === 'string' && id.startsWith('devconsole-condition-');
+  function humanizeConditionIds(text) {
+    return String(text || '').replace(/devconsole-condition-[a-z-]+/g, (id) => {
+      const condition = testConditionForRuleId(id);
+      return condition ? 'test condition: ' + condition.label : id;
+    });
+  }
+  function renderTestConditions() {
+    const selected = mocksGloballyEnabled ? mockRulesCache.find((rule) => rule.enabled && testConditionForRuleId(rule.id))?.id || '' : '';
+    $('mockConditionsCard').hidden = !mocksEditable;
+    $('mockConditionChips').innerHTML = [{ id: '', label: 'Off' }, ...TEST_CONDITIONS].map((condition) => `<button type="button" data-condition="${esc(condition.id)}" aria-pressed="${condition.id === selected}"${!canEditMocks() ? ' disabled' : ''}>${esc(condition.label)}</button>`).join('');
+  }
+  async function selectTestCondition(id) {
+    if (!canEditMocks()) return;
+    const selected = mocksGloballyEnabled ? mockRulesCache.find((rule) => rule.enabled && testConditionForRuleId(rule.id))?.id || '' : '';
+    if (id === selected) return;
+    try {
+      for (const rule of mockRulesCache.filter((item) => isTestConditionRuleId(item.id) && item.id !== id)) {
+        const response = await fetch('/api/v1/mocks/rules/' + encodeURIComponent(rule.id), { method: 'DELETE', headers: controlHeaders() });
+        if (!response.ok) throw new Error(response.status);
+      }
+      if (id) {
+        if (!mocksGloballyEnabled) {
+          const response = await fetch('/api/v1/mocks/enabled', { method: 'POST', headers: { ...controlHeaders(), 'Content-Type': 'text/plain' }, body: 'true' });
+          if (!response.ok) throw new Error(response.status);
+        }
+        const condition = testConditionForRuleId(id);
+        const params = new URLSearchParams({ id, path: '.*', scope: 'SESSION', priority: condition.key === 'slow-network' ? '-1000000' : '1000000' });
+        const actions = {
+          'slow-network': { actionType: 'throttle', bytesPerSecond: '50000', latencyMs: '3000' },
+          'no-connection': { actionType: 'connection_failure', failureMessage: 'DevConsole test condition: no connection' },
+          timeouts: { actionType: 'timeout', timeoutMs: '10000' },
+          'server-errors': { actionType: 'static', status: '500', headers: 'Content-Type: application/json', body: '{"error":"DevConsole test condition: server error"}' },
+          'signed-out': { actionType: 'static', status: '401', headers: 'Content-Type: application/json', body: '{"error":"DevConsole test condition: signed out"}' },
+        };
+        Object.entries(actions[condition.key]).forEach(([key, value]) => params.set(key, value));
+        const response = await fetch('/api/v1/mocks/rules', { method: 'POST', headers: { ...controlHeaders(), 'Content-Type': 'application/x-www-form-urlencoded' }, body: params });
+        if (!response.ok) throw new Error(response.status);
+      }
+      await loadMocks();
+    } catch (error) { toast('Could not update test condition: ' + error.message, 'error'); await loadMocks(); }
+  }
+  function transactionMockLabel(t) {
+    if (t.tags?.mockRuleId === 'devconsole-condition-slow-network') return 'slowed';
+    return t.tags?.mocked === 'true' || t.mocked === true ? 'mocked' : null;
+  }
   const canEditMocks = () => hasSession() && mocksEditable;
+  function renderNetworkFakeNotice() {
+    const notice = $('networkFakeNotice');
+    const rules = mockRulesCache.filter((rule) => rule.enabled);
+    const condition = rules.map((rule) => testConditionForRuleId(rule.id)).find(Boolean);
+    const count = rules.filter((rule) => !isTestConditionRuleId(rule.id)).length;
+    notice.hidden = Boolean(harOffline || networkRunId || !mocksGloballyEnabled || !rules.length);
+    if (notice.hidden) return;
+    const mocks = count === 1 ? '1 mock' : count + ' mocks';
+    notice.querySelector('span').textContent = condition && !count ? condition.notice : condition ? condition.label + ' and ' + mocks + " are on. Some responses aren't real." : mocks + (count === 1 ? " is on. Some responses aren't real." : " are on. Some responses aren't real.");
+    notice.querySelector('button').disabled = !canEditMocks();
+  }
+  async function turnOffNetworkMocks() {
+    if (!canEditMocks()) return;
+    const results = await Promise.all(mockRulesCache.filter((rule) => rule.enabled).map((rule) => fetch('/api/v1/mocks/rules/' + encodeURIComponent(rule.id) + (isTestConditionRuleId(rule.id) ? '' : '/enabled'), isTestConditionRuleId(rule.id) ? { method: 'DELETE', headers: controlHeaders() } : { method: 'POST', headers: { ...controlHeaders(), 'Content-Type': 'text/plain' }, body: 'false' })));
+    if (results.some((result) => !result.ok)) toast('Could not turn off all mocks.', 'error');
+    await loadMockRules();
+  }
   // A past run's capture can still be copied as cURL or cloned into Composer, but not re-sent.
   const canResend = () => hasSession() && composerCapabilityEnabled && !networkRunId;
   let mockConflictCount = 0;
@@ -8927,8 +9048,10 @@
       const body = await r.json();
       mocksEditable = body.editable === true;
       updateControlUi();
-      const rules = body.data || [];
-      mockRulesCache = rules;
+      mockRulesCache = body.data || [];
+      const rules = mockRulesCache.filter((rule) => !isTestConditionRuleId(rule.id));
+      renderTestConditions();
+      renderNetworkFakeNotice();
       $('mocksRulesBadge').textContent = '';
       $('mockRuleList').innerHTML = rules.length
         ? cardTogglesHtml(
@@ -8937,12 +9060,12 @@
               // read-only with an inline note instead of being silently rewritten.
               id: rule.id, checked: rule.enabled, disabled: !canEditMocks(), deletable: canEditMocks(),
               editable: isMockRuleEditable(rule),
-              k: rule.id,
-              sub: (rule.method || '*') + ' ' + rule.path + ' → ' + mockActionLabel(rule) + (rule.statusCode != null ? ' ' + rule.statusCode : '') + ' · ' + rule.scope
+              k: (rule.method || 'All') + ' ' + (rule.path || '').replace(/^\^|\$$/g, '').replace(/\\(.)/g, '$1'),
+              sub: mockActionSummary(rule) + (rule.id.startsWith('mock-') ? '' : ' · ' + rule.id)
                 + (rule.hitCount ? ' · ' + rule.hitCount + ' hit' + (rule.hitCount === 1 ? '' : 's') + (rule.lastHitEpochMs ? ' · ' + relativeTime(rule.lastHitEpochMs) : '') : ''),
             })),
           )
-        : '<p class="card-lede">No mock rules are active for this session.</p>';
+        : '<p class="card-lede">No mocks yet. Create one here, or use Mock this response on any request in Network.</p>';
       $('mocksMetrics').innerHTML = metricsStripHtml([
         { label: 'Rules', val: String(rules.length), sub: rules.filter((rule) => rule.enabled).length + ' on', tone: 'ink' },
         { label: 'Conflicts', val: String(mockConflictCount), tone: mockConflictCount ? 'warn' : 'ink' },
@@ -8980,8 +9103,13 @@
     if (!token) return;
     const r = await fetch('/api/v1/mocks/conflicts', { headers: auth() });
     if (!r.ok) return;
-    const conflicts = (await r.json()).data || [];
+    const conflicts = ((await r.json()).data || []).filter((c) => !isTestConditionRuleId(c.first) && !isTestConditionRuleId(c.second));
     mockConflictCount = conflicts.length;
+    const metric = $('mocksMetrics').children[1];
+    if (metric) {
+      const value = metric.querySelector('.metric-value');
+      if (value) { value.textContent = String(mockConflictCount); value.classList.toggle('tone-text-warn', Boolean(mockConflictCount)); value.classList.toggle('tone-text-ink', !mockConflictCount); }
+    }
     $('mockConflicts').innerHTML = conflicts.length
       ? cardRowsHtml(conflicts.map((c) => ({ k: c.first, v: 'may also match ' + c.second, tone: 'warn' })))
       : '<p class="card-lede">No overlapping rules detected.</p>';
@@ -8996,7 +9124,7 @@
     requireLoad(r);
     mocksGloballyEnabled = r.ok ? (await r.json()).enabled === true : true;
     syncMockEngineButton();
-    return await loadMockRules();
+    try { return await loadMockRules(); } finally { renderNetworkFakeNotice(); }
   }
   /** Turning mocking off stays on the ungated `disable-all` route, so a host that publishes mocks
    *  as read-only can still fall back to real traffic; turning it back on goes through the
@@ -9058,7 +9186,7 @@
     if (!hasSession()) return;
     const r = await fetch('/api/v1/mocks/rules', { headers: auth() });
     if (!r.ok) { toast('Export failed: ' + r.status, 'error'); return; }
-    const rules = (await r.json()).data || [];
+    const rules = ((await r.json()).data || []).filter((rule) => !isTestConditionRuleId(rule.id));
     const exportable = rules.filter((rule) => !mockActionHasTruncatedBody(rule.actionDetail));
     const payload = {
       format: 'devconsole-mock-rules', version: 1,
@@ -9087,6 +9215,7 @@
     }
     let created = 0, failed = 0;
     for (const rule of payload.rules) {
+      if (isTestConditionRuleId(rule.id)) continue;
       const form = mockActionForm(rule.action);
       if (!form || typeof rule.id !== 'string' || !MOCK_RULE_ID_RE.test(rule.id)) { failed++; continue; }
       const params = new URLSearchParams({
@@ -9299,8 +9428,8 @@
   /** Shared by every detail pane's find-in-detail bar (Network, WebSockets, Timeline, Push) --
    * `inputId` keeps each pane's input element uniquely addressable since all four panes' markup
    * lives in the DOM at once (only one view is visible, but none are torn down when hidden). */
-  function findBarHtml(query, matchCount, inputId = 'detailFindInput') {
-    return `<div class="detail-find"><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="text" id="${inputId}" placeholder="Find in headers, payload and response…" value="${esc(query)}"></span><span class="detail-find-count tone-text-${query ? (matchCount ? 'signal' : 'warn') : 'muted'}">${
+  function findBarHtml(query, matchCount, inputId = 'detailFindInput', placeholder = 'Find in headers, payload and response…') {
+    return `<div class="detail-find"><span class="search-wrap"><svg class="ic ic-sm search-lead" aria-hidden="true"><use href="#dc-search"/></svg><input type="text" id="${inputId}" placeholder="${esc(placeholder)}" value="${esc(query)}"></span><span class="detail-find-count tone-text-${query ? (matchCount ? 'signal' : 'warn') : 'muted'}">${
       // The placeholder already names the scope; the count only appears once there is a query.
       query ? matchCount + ' match' + (matchCount === 1 ? '' : 'es') : ''
     }</span></div>`;
@@ -9353,18 +9482,15 @@
     pane.insertAdjacentHTML('afterbegin', `<div class="network-empty-head">${networkListToggleHtml()}</div>`);
   }
   function networkDetailHeadHtml({ badgeText, title, actions, tabs, menuOpen, fullUrl, metaLine, offline }) {
-    const primary = ['curl', 'clone', 'flag'];
+    const primary = ['mock', 'unmock', 'resend', 'bugreport', 'flag'];
     const menuActions = actions.filter((a) => !primary.includes(a.id));
     return `<div class="detail-head network-detail-head"><div class="detail-head-row">
       ${networkListToggleHtml()}<span class="network-method">${esc(badgeText)}</span>
       <span class="detail-head-title" title="${esc(fullUrl)}">${esc(title)}</span>
-      <div class="network-head-actions">${offline ? '' : `${primary.map((id) => {
-        const a = actions.find((item) => item.id === id);
-        const label = id === 'curl' ? 'Copy cURL' : id === 'clone' ? 'Open in Composer' : 'Flag as evidence';
-        return `<button type="button" class="network-icon-action${a.on ? ' on' : ''}" data-detail-action="${id}" title="${label}" aria-label="${label}"${id === 'flag' ? ` aria-pressed="${Boolean(a.on)}"` : ''}>${icon(a.icon, 'ic-sm')}</button>`;
-      }).join('')}<button type="button" class="detail-menu-btn" id="detailActionsMenuBtn" data-action="toggle-actions-menu" aria-haspopup="menu" aria-controls="detailActionsMenuPanel" aria-expanded="${Boolean(menuOpen)}" title="Actions" aria-label="Actions">${icon('dots', 'ic-sm')}</button>`}</div>
+      <div class="network-head-actions">${offline ? '' : `<button type="button" class="detail-menu-btn" id="detailActionsMenuBtn" data-action="toggle-actions-menu" aria-haspopup="menu" aria-controls="detailActionsMenuPanel" aria-expanded="${Boolean(menuOpen)}" title="Actions" aria-label="Actions">${icon('dots', 'ic-sm')}</button>`}</div>
       ${menuOpen ? `<div class="detail-menu-panel" id="detailActionsMenuPanel" role="menu" aria-label="Actions">${menuActions.map((a) => `<button type="button" role="menuitem" class="detail-menu-item" data-detail-action="${esc(a.id)}" ${a.disabled ? 'disabled' : ''} title="${esc(a.title || a.label)}">${a.icon ? icon(a.icon, 'ic-sm') : ''}<span>${esc(a.label)}</span></button>`).join('')}</div>` : ''}
       </div><div class="network-meta">${esc(metaLine)}${offline ? ' · offline HAR' : ''}</div>
+      <div class="network-primary-actions">${primary.map((id) => { const a = actions.find((item) => item.id === id); return a ? `<button type="button" data-detail-action="${esc(id)}" ${a.disabled ? 'disabled' : ''} title="${esc(a.title || a.label)}">${esc(a.label)}</button>` : ''; }).join('')}</div>
       <div class="detail-tabs">${tabs.map((t) => `<button type="button" class="detail-tab${t.active ? ' active' : ''}" data-detail-tab="${esc(t.id)}">${esc(t.label)}</button>`).join('')}</div></div>`;
   }
   const NETWORK_STATUS_REASONS = {
@@ -9701,7 +9827,7 @@
       selectedTransactionId = detail ? id : '';
       selectedTransactionDetail = detail;
       if (!detail) { renderNetworkEmpty(); return; }
-      if (networkTab === 'diff' && !networkPinnedId) networkTab = 'response';
+      if (networkTab === 'diff' && !networkPinnedId) networkTab = 'body';
       renderNetwork();
       renderNetworkDetail();
       return;
@@ -9714,7 +9840,7 @@
     if (currentView === 'network' && !location.hash.includes('code=') && DEEP_LINK_TX_RE.test(id)) {
       history.replaceState(null, '', location.pathname + '#view=network&tx=' + encodeURIComponent(id));
     }
-    if (networkTab === 'diff' && !networkPinnedId) networkTab = 'response';
+    if (networkTab === 'diff' && !networkPinnedId) networkTab = 'body';
     renderNetwork();
     renderNetworkDetail();
   }
@@ -10002,22 +10128,24 @@
     const pinId = networkPinnedId;
     const samePin = pinId === selectedTransactionId;
     const hasPin = Boolean(pinId) && !samePin && networkDetailCache.has(pinId);
-    if (networkTab === 'diff' && !pinId) networkTab = 'response';
+    if (networkTab === 'diff' && !pinId) networkTab = 'body';
     const relatedFresh = networkRelatedEventsForId === detail.id;
     // Response opens first; extra tabs exist only while their context is active.
-    const tabs = [{ id: 'response', label: 'Response' }, { id: 'request', label: 'Request' }, { id: 'headers', label: 'Headers' }, { id: 'timing', label: 'Timing' }]
+    const tabs = [{ id: 'body', label: 'Body' }, { id: 'headers', label: 'Headers' }, { id: 'timing', label: 'Timing' }]
       .concat(pinId ? [{ id: 'diff', label: 'Diff' }] : [])
       .concat(networkTab === 'related' ? [{ id: 'related', label: 'Related events' }] : [])
       .map((t) => ({ ...t, active: networkTab === t.id }));
     const flagged = isFlagged('network', detail.id);
     const mockRuleId = detail.tags?.mockRuleId;
-    const isMocked = detail.tags?.mocked === 'true';
+    const mockLabel = transactionMockLabel(detail);
+    const isMocked = Boolean(mockLabel);
+    const condition = testConditionForRuleId(mockRuleId);
     // Once a transaction was itself served by a mock, "Mock this response" (prefill a new rule
     // from it) is moot — swap it for "Unmock" (disable the rule that served it). If the rule id
     // isn't in tags for some reason, there's nothing actionable to wire up, so drop the action
     // entirely rather than show a dead button.
     const mockAction = isMocked
-      ? (mockRuleId ? { id: 'unmock', label: 'Unmock', icon: 'mocks', disabled: !canEditMocks(), title: canEditMocks() ? 'Disable mock rule ' + mockRuleId : 'Sign in and enable the mocks capability' } : null)
+      ? (mockRuleId ? { id: 'unmock', label: condition ? 'Turn off ' + condition.label : 'Unmock', icon: 'mocks', disabled: !canEditMocks(), title: canEditMocks() ? 'Disable mock rule ' + mockRuleId : 'Sign in and enable the mocks capability' } : null)
       : { id: 'mock', label: 'Mock this response', icon: 'mocks', disabled: !canEditMocks(), title: canEditMocks() ? 'Prefill a mock rule from this response' : 'Sign in and enable the mocks capability' };
     // The rule that served this transaction, looked up from the same cache the Mocks view is
     // built from (loaded on connect — see loadMockRules) rather than a fresh fetch: this render
@@ -10044,13 +10172,14 @@
       { id: 'resend', label: 'Resend', icon: 'refresh', disabled: !canResend(), title: canResend() ? 'Re-execute this exact request through the device (same gating as Composer)' : 'Sign in and enable the composer capability' },
       { id: 'clone', label: 'Open in Composer', icon: 'pencil' },
       ...(mockAction ? [mockAction] : []),
+      { id: 'bugreport', label: 'Copy for bug report' },
       { id: 'curl', label: 'cURL', icon: 'copy' },
       { id: 'fetch', label: 'fetch', icon: 'copy', hideInSimple: true },
       { id: 'related', label: 'Related events', icon: 'activity' },
     ];
     const fullUrl = detail.request?.url || detail.host + detail.path + (detail.query ? '?' + detail.query : '');
     const statusLabel = detail.status != null ? detail.status + (NETWORK_STATUS_REASONS[detail.status] ? ' ' + NETWORK_STATUS_REASONS[detail.status] : '') : detail.error ? 'ERR' : '—';
-    const metaLine = [detail.host, statusLabel, detail.durationMs != null ? detail.durationMs + ' ms' : '—', time(detail.startedAtEpochMs)].join(' · ') + (isMocked ? ' · mocked' : '');
+    const metaLine = [detail.host, statusLabel, detail.durationMs != null ? detail.durationMs + ' ms' : '—', time(detail.startedAtEpochMs)].join(' · ') + (mockLabel ? ' · ' + mockLabel : '');
     const head = detailHeadHtml({
       badgeText: detail.method, badgeTone: methodTone(detail.method), title: detail.path + (detail.query ? '?' + detail.query : ''),
       statusText: detail.status != null ? String(detail.status) : detail.error ? 'FAILED' : '—', sTone: statusTone(detail.status),
@@ -10062,20 +10191,24 @@
     });
     let findBar = '';
     let bodyHtml;
-    if (networkTab === 'response' || networkTab === 'request') {
-      const response = networkTab === 'response';
-      const side = response ? detail.response : detail.request;
-      const headers = headerRows(side?.headers);
-      const lines = networkBodyLines(side?.body, networkDetailQuery);
-      const hits = markKvHits(headers, networkDetailQuery).filter((r) => r.hit).length + (lines || []).filter((l) => l.hit).length;
+    if (networkTab === 'body') {
+      const sides = [detail.request, detail.response];
+      const hits = sides.reduce((sum, side) => sum + markKvHits(headerRows(side?.headers), networkDetailQuery).filter((r) => r.hit).length + (networkBodyLines(side?.body, networkDetailQuery) || []).filter((line) => line.hit).length, 0);
       findBar = findBarHtml(networkDetailQuery, hits);
-      // The body viewer's own toolbar carries Tree/Code, Copy and Full screen: one row, no second copy.
-      bodyHtml = `<div class="network-body-code">`;
-      if (response && detail.error) bodyHtml += `<div class="network-body-empty tone-text-error">${esc(detail.error)}</div>`;
-      else if (lines) bodyHtml += bodyViewerHtml(bodyRawText(side?.body), side?.contentType, lines, response ? 'Response body' : 'Request body', true, 'network/' + detail.id + '/' + networkTab, response ? mockDiff : undefined, response ? mockDiffSig : undefined, true);
-      else bodyHtml += `<div class="network-body-empty">${esc(response ? 'No response body.' : detail.method + ' request — no body sent.')}</div>`;
-      bodyHtml += `</div><details class="fold network-headers-fold"><summary>${icon('chevron', 'ic-sm fold-chevron')}${response ? 'Response' : 'Request'} headers · ${headers.length}</summary><div class="fold-content">${kvGridHtml(markKvHits(headers, networkDetailQuery), true)}</div></details>`;
-      bodyHtml += structuredSectionsHtml(detail, response, networkDetailQuery);
+      bodyHtml = '';
+      if (isMocked) {
+        const notice = condition?.key === 'slow-network' ? 'Real response, slowed by the Slow network test condition.' : condition ? "This response isn't real. Test condition: " + condition.label : "This response isn't real. Rule: " + (mockRuleId || '—') + (mockDiffTotal ? ' · ' + mockDiffTotal + (mockDiffTotal === 1 ? ' field differs' : ' fields differ') + ' from original' : '');
+        bodyHtml += `<div class="network-mock-notice">${esc(notice)}</div>`;
+      }
+      sides.forEach((side, index) => {
+        const response = index === 1;
+        const lines = networkBodyLines(side?.body, networkDetailQuery);
+        bodyHtml += `<div class="network-section-label">${response ? 'Response' : 'Request'}</div><div class="network-body-code${response ? '' : ' network-request-body'}">`;
+        if (response && detail.error) bodyHtml += `<div class="network-body-empty tone-text-error">${esc(detail.error)}</div>`;
+        if (lines) bodyHtml += bodyViewerHtml(bodyRawText(side?.body), side?.contentType, lines, response ? 'Response body' : 'Request body', true, 'network/' + detail.id + '/' + (response ? 'response' : 'request'), response ? mockDiff : undefined, response ? mockDiffSig : undefined, true);
+        else bodyHtml += `<div class="network-body-empty">${esc(response ? 'No response body.' : detail.method + ' request — no body sent.')}</div>`;
+        bodyHtml += '</div>' + structuredSectionsHtml(detail, response, networkDetailQuery);
+      });
     } else if (networkTab === 'diff') {
       if (!hasPin) {
         bodyHtml = `<div class="sbs-grid stacked">${sbsPaneHtml({
@@ -10162,11 +10295,7 @@
    * toggle, zoom, find, and the header/pane action buttons — wired once (not per render). */
   function wireNetworkDetailPane() {
     const pane = $('networkDetailPane');
-    $('networkFullEndpoint').addEventListener('click', () => {
-      networkFullEndpoint = !networkFullEndpoint;
-      try { localStorage.setItem('devconsole.network.fullEndpoint', String(networkFullEndpoint)); } catch { /* storage unavailable */ }
-      renderNetwork();
-    });
+    $('networkFakeNotice').addEventListener('click', (e) => { if (e.target.closest('button')) turnOffNetworkMocks(); });
     document.addEventListener('keydown', (e) => {
       if (currentView !== 'network') return;
       if (e.key === 'Escape') { networkListController?.close(); return; }
@@ -10233,6 +10362,7 @@
       else if (id === 'clone') cloneCapturedRequest();
       else if (id === 'mock') mockThisResponse();
       else if (id === 'unmock') unmockNetworkResponse();
+      else if (id === 'bugreport') copyToClipboard(networkBugReport(selectedTransactionDetail), 'Bug report');
       else if (id === 'curl') copyNetworkCurl();
       else if (id === 'fetch') copyNetworkFetch();
       else if (id === 'related') { networkTab = 'related'; renderNetworkDetail(); }
@@ -10310,20 +10440,35 @@
       .map((h) => h.k + ': ' + h.v)
       .join('\n');
     openMockRuleDialog({
-      id, method: d.method, host: d.host, path: '^' + escapeRegExp(d.path) + '$',
+      id, method: d.method, host: d.host, path: /[\\.\[\]{}()*+?^$|]/.test(d.path) ? '^' + escapeRegExp(d.path) + '$' : d.path,
       status: d.status ?? 200, headers, body, sourceBodySnapshot: body || null,
     });
-    toast('Prefilled from the redacted capture preview — review the body before saving.');
+    toast('Prefilled from this response. Review it before saving.');
   }
   /** "Unmock" (network detail actions row): replaces "Mock this response" once the viewed
    * transaction was itself served by a mock rule — disabling that rule is the useful action here,
    * not prefilling a new one from an already-mocked response. Reuses setMockRuleEnabled's POST to
    * .../enabled (same controlHeaders + toast + rule-list refresh) and re-renders this detail pane
    * too, so its state stays in sync with the rules list. */
+  function networkBugReport(detail) {
+    const url = detail.request?.url || 'https://' + detail.host + detail.path + (detail.query ? '?' + detail.query : '');
+    const result = detail.status == null ? ['Failed', detail.error].filter(Boolean) : [detail.status + (NETWORK_STATUS_REASONS[detail.status] ? ' ' + NETWORK_STATUS_REASONS[detail.status] : ''), detail.durationMs != null ? detail.durationMs + ' ms' : null, transactionMockLabel(detail)].filter(Boolean);
+    const lines = [detail.method + ' ' + url, 'Result: ' + result.join(' · ')];
+    if (detail.startedAtEpochMs) lines.push('Time: ' + time(detail.startedAtEpochMs));
+    if (networkBuildSummary) lines.push('Build: ' + networkBuildSummary);
+    if (networkDeviceSummary) lines.push('Device: ' + networkDeviceSummary);
+    const body = (value) => {
+      const text = value?.type === 'binary' ? '[binary, ' + value.length + ' bytes]' : bodyRawText(value);
+      if (!text || !text.trim()) return '(empty)';
+      return text.length > 20000 ? text.slice(0, 20000) + '\n… cut off here' : text;
+    };
+    return lines.join('\n') + '\n\nRequest body\n' + body(detail.request?.body) + '\n\nResponse body\n' + body(detail.response?.body);
+  }
   async function unmockNetworkResponse() {
     const mockRuleId = selectedTransactionDetail?.tags?.mockRuleId;
     if (!mockRuleId || !canEditMocks()) return;
-    await setMockRuleEnabled(mockRuleId, false);
+    if (isTestConditionRuleId(mockRuleId)) await deleteMockRule(mockRuleId);
+    else await setMockRuleEnabled(mockRuleId, false);
     renderNetworkDetail();
   }
   /** The "mock rule: <id>" fact link in the network detail head — navigates to Mocks and briefly
@@ -10669,13 +10814,16 @@
       return;
     }
     try {
-      const [overviewRes, metaRes] = await Promise.all([fetch('/api/v1/overview', { headers: auth() }), cachedJson('/api/v1/meta', 30000)]);
+      const [overviewRes, metaRes, runsRes] = await Promise.all([fetch('/api/v1/overview', { headers: auth() }), cachedJson('/api/v1/meta', 30000), cachedJson('/api/v1/runs', 30000).catch(() => null)]);
       loadCaptureState();
       const overview = overviewRes.ok ? await overviewRes.json() : null;
       const meta = metaRes.ok ? await metaRes.json() : null;
+      const run = runsRes?.ok ? ((await runsRes.json()).data || []).find((r) => r.current) : null;
+      networkBuildSummary = [overview?.app?.packageName, overview?.app?.versionName].filter(Boolean).join(' ');
+      networkDeviceSummary = [run?.deviceModel, run?.deviceOsVersion ? 'Android ' + run.deviceOsVersion : ''].filter(Boolean).join(' · ');
       if (currentView === 'network') renderNetworkDetail();
       const parts = [overview?.app?.packageName, overview?.app?.versionName, meta?.endpoint ? `${meta.endpoint.host}:${meta.endpoint.port}` : location.host].filter(Boolean);
-      el.textContent = overview?.app?.packageName || '';
+      el.textContent = [networkBuildSummary, networkDeviceSummary].filter(Boolean).join(' · ');
       el.title = parts.join(' · ');
     } catch {
       /* keep previous text on transient failure */
@@ -10905,6 +11053,13 @@
     // loadSockets() (connections + messages) rather than loadSocketMessages() alone.
     wireSeg($('socketProtocolSeg'), (value) => { socketProtocolFilter = value || 'all'; loadSockets(); });
     wireSeg($('socketModeSeg'), (value) => { socketMode = value; renderSockets(); });
+    $('socketConnections').addEventListener('click', (e) => {
+      const button = e.target.closest('[data-socket-conn]');
+      if (!button) return;
+      const id = button.dataset.socketConn;
+      socketSelectedConnIds.has(id) ? socketSelectedConnIds.delete(id) : socketSelectedConnIds.add(id);
+      loadSocketMessages(); renderSockets();
+    });
     $('socketApply').onclick = () => loadSocketMessages();
     // Enter in any "More filters" field applies the group, as it would in a form -- before this the
     // only way to run a typed filter was to find and click Apply.
@@ -11041,6 +11196,9 @@
 
     $('mockDisable').onclick = toggleMockEngine;
     $('mockNewRule').onclick = () => openMockRuleDialog(null);
+    $('mockConditionChips').addEventListener('click', (event) => { const button = event.target.closest('button[data-condition]'); if (button) selectTestCondition(button.dataset.condition); });
+    $('mockStatusButtons').addEventListener('click', (event) => { const button = event.target.closest('button[data-status]'); if (button) $('mockRuleStatus').value = button.dataset.status; });
+    $('mockRulePath').addEventListener('input', syncMockPathHelp);
     $('mockExportRules').onclick = exportMockRules;
     $('mockImportRules').onclick = () => $('mockImportRulesFile').click();
     $('mockImportRulesFile').addEventListener('change', async (e) => {

@@ -191,6 +191,7 @@ internal class PlatformFacadeProvider : DevConsoleFacadeProvider {
             { runtime.currentSessionId() },
             liveCaptureLock,
             captureGate,
+            onRecorded = { openTriggerController?.onNetworkTransactionRecorded(it) },
         )
     private val inMemorySocketStore = InMemorySocketStore()
     private val socketStore = TeeingSocketStore(inMemorySocketStore, captureBridge, liveCaptureLock, captureGate)

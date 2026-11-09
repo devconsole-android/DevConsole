@@ -369,7 +369,7 @@ class DashboardAssetsTest {
         assertTrue(header.contains("id=\"composerAllowHost\""))
         assertTrue(header.contains("id=\"composerAgentsRefresh\""))
         assertTrue(DashboardAssets.css().contains(".card-shell-actions"))
-        assertTrue(header.contains("Refresh Run On"))
+        assertTrue(header.contains("Refresh list"))
         assertTrue(DashboardAssets.js().contains("function updateComposerAllowHostButton("))
         assertTrue(DashboardAssets.js().contains("onclick = refreshRunOn"))
     }
@@ -405,7 +405,7 @@ class DashboardAssetsTest {
         assertTrue(script.contains("function syncRejectedHostPanel()"))
         assertTrue(script.contains("function showRejectedHostAllowed(host)"))
         assertTrue(script.contains("button.onclick = () => confirmAndAllowComposerHost(host)"))
-        assertTrue(script.contains("is allowed`, 'Press Execute request to run it again.'"))
+        assertTrue(script.contains("is allowed`, 'Press Send request to run it again.'"))
         assertTrue(script.substringAfter("function renderComposerHostList(").contains("syncRejectedHostPanel()"))
     }
 
