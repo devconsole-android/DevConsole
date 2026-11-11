@@ -102,8 +102,8 @@ Because of that, several design decisions in this feature are deliberately unfor
   `NOT_APPLICABLE` — only content types redaction genuinely cannot reach (like a screenshot's PNG bytes)
   may claim it. The field travels with the attachment everywhere it's read back
   (`GET /api/v1/attachments/{id}`'s response header, the evidence tray's item JSON, the export
-  manifest), so a screenshot is labelled **UNREDACTED** wherever it surfaces rather than looking
-  identical to a redacted text body next to it. See
+  manifest), so with redaction on a screenshot is labelled **UNREDACTED** wherever it surfaces rather
+  than looking identical to a redacted text body next to it. See
   [SECURITY_AND_REDACTION.md](SECURITY_AND_REDACTION.md#redactionapplicability-and-the-storage-boundary)
   for the exact mechanics.
 - **The evidence bundle contains screenshots as-is.** A flagged `SCREENSHOT` evidence item's attachment

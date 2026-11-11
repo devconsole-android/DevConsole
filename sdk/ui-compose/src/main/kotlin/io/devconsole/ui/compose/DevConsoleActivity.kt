@@ -1,7 +1,9 @@
 package io.devconsole.ui.compose
 
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -15,6 +17,11 @@ class DevConsoleActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent { DevConsoleWorkspace() }
+    }
+
+    internal fun matchSystemBarsToTheme(darkTheme: Boolean) {
+        val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { darkTheme }
+        enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
     }
 
     // Content capture re-walks the semantics tree on every change (~1/5 of main-thread time); pause it

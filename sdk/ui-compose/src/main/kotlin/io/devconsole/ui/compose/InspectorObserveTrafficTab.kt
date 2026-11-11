@@ -31,6 +31,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -48,20 +49,62 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+internal fun activeMockRuleIds(state: InspectorState): List<String> =
+    if (state.mocksEnabled && state.selectedSessionId == null) {
+        state.mockRules.filter { it.enabled && !it.id.isTestConditionRuleId() }.map { it.id }
+    } else {
+        emptyList()
+    }
+
+internal data class TrafficFakeResponsesNotice(
+    val text: String,
+    val ruleIds: List<String>,
+)
+
+internal fun trafficFakeResponsesNotice(state: InspectorState): TrafficFakeResponsesNotice? {
+    if (!state.mocksEnabled || state.selectedSessionId != null) return null
+    val condition = activeTestCondition(state)
+    val ruleIds = activeMockRuleIds(state)
+    val text =
+        when {
+            condition != null && ruleIds.isEmpty() -> condition.notice
+            condition != null -> {
+                val count = if (ruleIds.size == 1) "1 mock" else "${ruleIds.size} mocks"
+                "${condition.label} and $count are on. Some responses aren't real."
+            }
+            ruleIds.size == 1 -> "1 mock is on. Some responses aren't real."
+            ruleIds.isNotEmpty() -> "${ruleIds.size} mocks are on. Some responses aren't real."
+            else -> null
+        }
+    return text?.let { TrafficFakeResponsesNotice(it, listOfNotNull(condition?.toMockRule()?.id) + ruleIds) }
+}
+
+private fun trafficFilterDetailsVisible(
+    state: InspectorState,
+    ui: ObserveUiState,
+): Boolean =
+    ui.trafficFiltersOpen ||
+        state.trafficHost != null ||
+        state.trafficStatusClass != TrafficStatusClass.ALL ||
+        ui.trafficChip in setOf("GET", "POST")
+
 private const val TRAFFIC_HTTP_CLIENT_ERROR_START = 400
 private const val TRAFFIC_HTTP_CLIENT_ERROR_END = 499
 private const val TRAFFIC_HTTP_SERVER_ERROR_START = 500
 private const val TRAFFIC_HOST_LIMIT = 8
 
-/** Status-class chips in the traffic header, in HTTP bucket order. */
-private val TRAFFIC_STATUS_CLASS_LABELS =
+private val TRAFFIC_PRIMARY_STATUS_LABELS =
     listOf(
         TrafficStatusClass.ALL to "All",
-        TrafficStatusClass.SUCCESS to "2xx",
-        TrafficStatusClass.REDIRECT to "3xx",
-        TrafficStatusClass.CLIENT_ERROR to "4xx",
-        TrafficStatusClass.SERVER_ERROR to "5xx",
         TrafficStatusClass.FAILED to "Failed",
+    )
+private val TRAFFIC_DETAIL_STATUS_LABELS =
+    listOf(
+        TrafficStatusClass.SUCCESS to "Success",
+        TrafficStatusClass.REDIRECT to "Redirect",
+        TrafficStatusClass.CLIENT_ERROR to "Client error",
+        TrafficStatusClass.SERVER_ERROR to "Server error",
+        TrafficStatusClass.FAILED to "No response",
     )
 
 /**
@@ -132,6 +175,34 @@ private fun rememberTrafficStats(
     }
 
 @Composable
+private fun TrafficNoRowsState(hasCaptures: Boolean) {
+    if (hasCaptures) {
+        ObserveTabEmptyState("No matching captures.", EmptySpot.Search)
+    } else {
+        ObserveTabEmptyState("No traffic captured yet.", EmptySpot.Traffic)
+    }
+}
+
+@Composable
+private fun MocksOnNotice(
+    notice: TrafficFakeResponsesNotice,
+    colors: DevConsoleColors,
+    onTurnOff: (List<String>) -> Unit,
+) {
+    Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            notice.text,
+            modifier = Modifier.weight(1f),
+            color = colors.warn,
+            fontSize = 13.sp,
+        )
+        TextButton(onClick = { onTurnOff(notice.ruleIds) }) {
+            Text("Turn off", color = colors.ink, fontSize = 14.sp)
+        }
+    }
+}
+
+@Composable
 internal fun TrafficTabContent(
     state: InspectorState,
     ui: ObserveUiState,
@@ -139,7 +210,8 @@ internal fun TrafficTabContent(
 ) {
     val trafficFilterActive = state.trafficStatusClass != TrafficStatusClass.ALL || state.trafficHost != null
     val headerControlsOpen = ui.searchOpen || ui.trafficFiltersOpen
-    if (state.transactions.isEmpty() && !headerControlsOpen && !trafficFilterActive) {
+    val nothingToShow = state.transactions.isEmpty() && trafficFakeResponsesNotice(state) == null
+    if (nothingToShow && !headerControlsOpen && !trafficFilterActive) {
         TrafficEmptyState()
         return
     }
@@ -209,13 +281,20 @@ private fun TrafficList(
         // Keep the filter row reachable even when the filters match nothing, so a narrowing
         // selection is never a dead end.
         val filterActive = state.trafficStatusClass != TrafficStatusClass.ALL || state.trafficHost != null
+        val showFilterDetails = trafficFilterDetailsVisible(state, ui)
+        val notice = trafficFakeResponsesNotice(state)
+        if (notice != null) {
+            item(key = "mocks-on") { MocksOnNotice(notice, colors, actions.onTurnOffMockRules) }
+        }
         if (state.transactions.isNotEmpty() || filterActive) {
             item {
                 TrafficStatusFilterRow(
                     selectedClass = state.trafficStatusClass,
+                    trafficChip = ui.trafficChip,
                     selectedHost = state.trafficHost,
                     transactions = state.transactions,
                     actions = actions,
+                    showDetails = showFilterDetails,
                 )
             }
             item { Spacer(Modifier.height(12.dp)) }
@@ -224,11 +303,13 @@ private fun TrafficList(
             item { TrafficHero(stats, ui, colors, actions) }
             item { Spacer(Modifier.height(12.dp)) }
         }
-        if (ui.trafficFiltersOpen) {
-            item { TrafficChips(stats, ui.trafficChip, actions) }
+        if (showFilterDetails) {
+            item { TrafficChips(ui.trafficChip, actions) }
             item { Spacer(Modifier.height(12.dp)) }
         }
-        if (stats.rowsNewestFirst.isEmpty()) item { ObserveTabEmptyState("No matching captures.", EmptySpot.Search) }
+        if (stats.rowsNewestFirst.isEmpty()) {
+            item { TrafficNoRowsState(hasCaptures = state.transactions.isNotEmpty() || filterActive) }
+        }
         itemsIndexed(stats.rowsNewestFirst, key = { _, transaction -> transaction.id }) { index, transaction ->
             TrafficRow(
                 transaction = transaction,
@@ -346,20 +427,44 @@ private fun ExportPillIcon(colors: DevConsoleColors) {
 @Composable
 private fun TrafficStatusFilterRow(
     selectedClass: TrafficStatusClass,
+    trafficChip: String,
     selectedHost: String?,
     transactions: List<InspectorTransactionUi>,
     actions: ObserveActions,
+    showDetails: Boolean,
 ) {
     Column(Modifier.padding(top = 8.dp)) {
         FilterChipRow(
             chips =
-                TRAFFIC_STATUS_CLASS_LABELS.map { (statusClass, label) ->
-                    InspectorFilterChip(statusClass.name, label, statusClass == selectedClass)
+                TRAFFIC_PRIMARY_STATUS_LABELS.map { (statusClass, label) ->
+                    val selected =
+                        if (statusClass == TrafficStatusClass.FAILED) {
+                            trafficChip == "failing"
+                        } else {
+                            selectedClass == TrafficStatusClass.ALL && trafficChip != "failing"
+                        }
+                    InspectorFilterChip(statusClass.name, label, selected)
                 },
-            onChipClick = { chip -> actions.onTrafficStatusClassClick(TrafficStatusClass.valueOf(chip.id)) },
+            onChipClick = { chip ->
+                actions.onTrafficStatusClassClick(TrafficStatusClass.ALL)
+                actions.onTrafficChipClick(if (chip.id == TrafficStatusClass.FAILED.name) "failing" else "all")
+            },
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
         )
-        TrafficHostMenu(selectedHost, transactions, actions)
+        if (showDetails) {
+            FilterChipRow(
+                chips =
+                    TRAFFIC_DETAIL_STATUS_LABELS.map { (statusClass, label) ->
+                        InspectorFilterChip(statusClass.name, label, statusClass == selectedClass)
+                    },
+                onChipClick = { chip ->
+                    if (trafficChip == "failing") actions.onTrafficChipClick("all")
+                    actions.onTrafficStatusClassClick(TrafficStatusClass.valueOf(chip.id))
+                },
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+            )
+            TrafficHostMenu(selectedHost, transactions, actions)
+        }
     }
 }
 
@@ -413,15 +518,13 @@ private fun TrafficHostMenu(
 
 @Composable
 private fun TrafficChips(
-    stats: TrafficStats,
     trafficChip: String,
     actions: ObserveActions,
 ) {
     FilterChipRow(
         chips =
             listOf(
-                InspectorFilterChip("all", "All", trafficChip == "all", stats.total.toString()),
-                InspectorFilterChip("failing", "Failing", trafficChip == "failing", stats.failCount.toString()),
+                InspectorFilterChip("all", "Any method", trafficChip == "all" || trafficChip == "failing"),
                 InspectorFilterChip("GET", "GET", trafficChip == "GET"),
                 InspectorFilterChip("POST", "POST", trafficChip == "POST"),
             ),
@@ -501,7 +604,11 @@ private fun TrafficRow(
             // runs past two on a phone, and the part that gets cut is the query -- the very thing
             // that tells two captures of the same endpoint apart.
             titleMaxLines = 4,
-            subtitle = if (transaction.isMocked) "mocked" else "",
+            subtitle =
+                listOfNotNull(
+                    transaction.mockedLabel(),
+                    transaction.host.takeIf { it.isNotBlank() },
+                ).joinToString(" · "),
             trailValue = transaction.statusCode?.toString() ?: "ERR",
             trailValueColor = statusTint(transaction.statusCode, colors),
             trailSubtitle =

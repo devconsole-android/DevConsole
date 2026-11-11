@@ -8,6 +8,7 @@ import android.app.Activity
 import android.app.Application
 import android.hardware.Sensor
 import android.hardware.SensorManager
+import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -16,6 +17,12 @@ import androidx.test.core.app.ApplicationProvider
 import io.devconsole.api.DevConsoleConfig
 import io.devconsole.api.InitResult
 import io.devconsole.api.OpenTriggers
+import io.devconsole.network.NetworkCaptureFactory
+import io.devconsole.network.NetworkRequestInput
+import io.devconsole.network.NetworkResponseInput
+import io.devconsole.network.NetworkTransaction
+import io.devconsole.security.RedactionEngine
+import io.devconsole.security.RedactionPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -330,6 +337,50 @@ class OpenTriggerControllerTest {
         sendAcceleration(3.0f, atMs = 1_000)
         sendAcceleration(3.0f, atMs = 1_200)
         assertEquals(listOf<Activity>(first), opened)
+    }
+
+    private fun failedTransaction(id: String): NetworkTransaction =
+        NetworkTransaction(
+            id,
+            startedAtEpochMs = 0,
+            completedAtEpochMs = 1,
+            capture =
+                NetworkCaptureFactory(RedactionEngine(RedactionPolicy.recommended()))
+                    .capture(NetworkRequestInput("GET", "https://api.test/orders"), NetworkResponseInput(500)),
+        )
+
+    @Test
+    fun `a failed transaction badges the floating button`() {
+        controller.reconfigure(OpenTriggers(floatingButton = true))
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        controller.onActivityResumed(activity)
+
+        controller.onNetworkTransactionRecorded(failedTransaction("tx-1"))
+        shadowOf(Looper.getMainLooper()).idle()
+
+        val button = floatingButton(activity) as ImageView
+        assertEquals("Open DevConsole, 1 failed request", button.contentDescription.toString())
+        assertEquals(OpenTriggerController.BUTTON_ACTIVE_ALPHA, button.alpha, 0f)
+    }
+
+    @Test
+    fun `resuming the inspector resets the failed request count`() {
+        controller.reconfigure(OpenTriggers(floatingButton = true))
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        controller.onActivityResumed(activity)
+        controller.onNetworkTransactionRecorded(failedTransaction("tx-1"))
+        shadowOf(Looper.getMainLooper()).idle()
+
+        @Suppress("UNCHECKED_CAST")
+        val inspectorClass =
+            Class.forName(OpenTriggerController.INSPECTOR_ACTIVITY_CLASS_NAME) as Class<Activity>
+        controller.onActivityPaused(activity)
+        controller.onActivityResumed(Robolectric.buildActivity(inspectorClass).get())
+        controller.onActivityResumed(activity)
+
+        val button = floatingButton(activity) as ImageView
+        assertEquals(OpenTriggerController.BUTTON_CONTENT_DESCRIPTION, button.contentDescription.toString())
+        assertEquals(OpenTriggerController.BUTTON_IDLE_ALPHA, button.alpha, 0f)
     }
 
     @Test

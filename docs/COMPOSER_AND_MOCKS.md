@@ -35,7 +35,7 @@ If a request is refused, the result panel says why:
 |------|---------|-----|
 | `COMPOSER_DISABLED` (404) | Composer is off in the app | `composerEnabled(true)` |
 | `COMPOSER_HOST_REJECTED` (403) | Host not in `composerAllowedHosts`, **or** the phone refuses it because it resolves to a private/VPN/localhost address | Add the host to the allowlist; for private addresses use "Run on" a computer |
-| `AGENT_UNAVAILABLE` (409) | The chosen computer disconnected | Restart `devconsole-agent`, press *Refresh Run On* |
+| `AGENT_UNAVAILABLE` (409) | The chosen computer disconnected | Restart `devconsole-agent`, press *Refresh list* |
 | `AGENT_TIMEOUT` (504) | The computer accepted the request but never answered | Check the agent terminal |
 | `EXECUTION_FAILED` (502) | The target could not be reached; `detail` has the reason | Check URL, DNS, TLS |
 

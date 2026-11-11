@@ -6,21 +6,12 @@ package io.devconsole.ui.compose
 
 import io.devconsole.api.ScreenshotResult
 
-/**
- * Turns the More screen's [ScreenshotResult] into a distinct, human-readable flash message for
- * every variant -- in particular [ScreenshotResult.Disabled] names the exact config property the
- * host has to set (matching how every other gated control in this product explains itself, e.g.
- * [InspectorCommandResult.Disabled]'s "$capability capability is off"), and
- * [ScreenshotResult.SecureWindow] explains the real platform reason (`FLAG_SECURE`) rather than just
- * failing silently.
- */
+/** Formats screenshot results for the More screen. */
 internal fun ScreenshotResult.toFlashMessage(): String =
     when (this) {
         is ScreenshotResult.Captured ->
             "Screenshot captured — $widthPx×$heightPx, ${formatByteSize(byteCount.toLong())}"
-        ScreenshotResult.Disabled ->
-            "Screenshot capture is off — set screenshotPolicy.enabled = true on DevConsoleConfig " +
-                "(DevConsoleConfig().withScreenshotPolicy(ScreenshotPolicy(enabled = true))) to turn it on"
+        ScreenshotResult.Disabled -> "Screenshots are off in this build. A developer can enable screenshotPolicy."
         ScreenshotResult.DisabledForBuild -> "Screenshot capture isn't available in this release build"
         ScreenshotResult.NoForegroundActivity ->
             "No foreground activity to capture — bring the app to the front and try again"

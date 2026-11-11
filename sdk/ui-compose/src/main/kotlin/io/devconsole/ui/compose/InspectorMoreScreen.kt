@@ -71,7 +71,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import io.devconsole.api.ScreenshotResult
 import io.devconsole.ui.compose.qr.ConnectUrlQrCode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -90,7 +89,7 @@ import kotlinx.coroutines.launch
  * more than 200 transactions into [InspectorState.transactions] in the first place, well under the
  * 500-row bound.
  */
-private const val EXPORT_ALL_SUBTITLE = "Redacted · all captured traffic (capped at the 500 most recent)"
+private const val EXPORT_ALL_SUBTITLE = "All captured requests, latest 500"
 
 private const val LAN_BINDING = "LAN"
 private const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
@@ -298,6 +297,7 @@ internal fun MoreScreen(
 ) {
     val colors = DevConsoleTheme.colors
     val running = state.health?.state == SERVER_STATE_RUNNING
+    val buildSummary = rememberBuildSummary()
     // Plain state, matching Observe's clear-captures confirmation: losing an open dialog on a
     // rotation is harmless, and this one is a destructive action worth re-confirming.
     var purgeConfirmationVisible by remember { mutableStateOf(false) }
@@ -313,11 +313,34 @@ internal fun MoreScreen(
             contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            if (buildSummary.isNotBlank()) {
+                item(key = "more_this_build") {
+                    MorePanelRow(
+                        title = "This build",
+                        subtitle = buildSummary,
+                        onClick = { actions.onCopyUrl(buildSummary) },
+                    )
+                }
+            }
             item(key = "more_browser_dashboard", contentType = "browser_dashboard") {
                 BrowserDashboardPanel(state, running, actions, colors)
             }
             item(key = "more_export_title", contentType = "panel_title") {
                 MorePanelTitle("Export")
+            }
+            item(key = "more_export_note") {
+                Text(
+                    "Files include tokens and personal data exactly as captured.",
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = colors.muted,
+                    fontSize = 12.sp,
+                )
+            }
+            item(key = "more_export_zip", contentType = "export_row") {
+                ExportZipRow(state, actions)
+            }
+            item(key = "more_export_div_3", contentType = "divider") {
+                GroupedPanelDivider()
             }
             item(key = "more_export_har", contentType = "export_row") {
                 ExportHarRow(state, actions)
@@ -329,12 +352,6 @@ internal fun MoreScreen(
                 ExportPostmanRow(state, actions)
             }
             item(key = "more_export_div_2", contentType = "divider") {
-                GroupedPanelDivider()
-            }
-            item(key = "more_export_zip", contentType = "export_row") {
-                ExportZipRow(state, actions)
-            }
-            item(key = "more_export_div_3", contentType = "divider") {
                 GroupedPanelDivider()
             }
             item(key = "more_export_screenshot", contentType = "export_row") {
@@ -502,6 +519,7 @@ private fun MorePanelRow(
     title: String,
     meta: String = "",
     description: String = "",
+    subtitle: String = "",
     onClick: (() -> Unit)? = null,
     metaContent: (@Composable () -> Unit)? = null,
     /** Override for destructive rows (e.g. "Purge captured data"), which paint their label in error. */
@@ -520,7 +538,10 @@ private fun MorePanelRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(title, modifier = Modifier.weight(1f), color = titleColor ?: colors.ink, fontSize = 16.sp)
+        Column(Modifier.weight(1f)) {
+            Text(title, color = titleColor ?: colors.ink, fontSize = 16.sp)
+            if (subtitle.isNotBlank()) Text(subtitle, color = colors.muted, fontSize = 12.sp)
+        }
         if (metaContent != null) {
             metaContent()
         } else if (meta.isNotBlank()) {
@@ -769,10 +790,10 @@ private fun ExportHarRow(
         if (selection.isEmpty()) {
             EXPORT_ALL_SUBTITLE
         } else {
-            "Redacted · ${countLabel(selection.size, "selected transaction")}"
+            countLabel(selection.size, "selected request")
         }
     MorePanelRow(
-        title = "HAR",
+        title = "Network log (HAR)",
         description = subtitle,
         meta =
             if (selection.isEmpty()) {
@@ -798,7 +819,7 @@ private fun ExportPostmanRow(
         if (selection.isEmpty()) {
             EXPORT_ALL_SUBTITLE
         } else {
-            "Redacted · ${countLabel(selection.size, "selected transaction")}"
+            countLabel(selection.size, "selected request")
         }
     MorePanelRow(
         title = "Postman collection",
@@ -822,28 +843,19 @@ private fun ExportZipRow(
     actions: MoreActions,
 ) {
     MorePanelRow(
-        title = "Session ZIP",
-        description = "Timeline, captures, health snapshot",
+        title = "Full report",
+        subtitle = "Requests, logs, crashes and app info",
         meta = "${state.sessions.size} ${if (state.sessions.size == 1) "session" else "sessions"}",
         onClick = actions.onExportSessionZip,
     )
 }
 
-/**
- * Screenshot capture button, next to the export actions. Every [ScreenshotResult] variant
- * -- including [ScreenshotResult.Disabled] naming the exact config property to flip, and
- * [ScreenshotResult.SecureWindow] naming `FLAG_SECURE` -- surfaces through the shared flash-message
- * `LaunchedEffect` in [MoreRoute], so this row itself stays a plain, always-tappable action: capture
- * is the most sensitive artifact the SDK can emit and is off by default, so the row deliberately
- * doesn't pretend to know the host's policy up front and grey itself out -- it explains the real
- * reason after the fact instead, the same honesty rule the design spec states for every other
- * gated control in this product.
- */
+/** Captures the top window, which is the inspector itself while this row is on screen. */
 @Composable
 private fun CaptureScreenshotRow(actions: MoreActions) {
     MorePanelRow(
         title = "Capture screenshot",
-        description = "The foreground screen, unredacted — off by default",
+        subtitle = "Pictures this inspector. To capture your app, close this and use the web dashboard.",
         onClick = actions.onCaptureScreenshot,
     )
 }

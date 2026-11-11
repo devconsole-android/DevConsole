@@ -15,6 +15,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -281,6 +283,21 @@ internal fun FilterChipRow(
                 .horizontalScroll(rememberScrollState())
                 .padding(contentPadding),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        chips.forEach { chip -> InspectorChip(chip, onClick = { onChipClick(chip) }) }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun WrappingFilterChipRow(
+    chips: List<InspectorFilterChip>,
+    onChipClick: (InspectorFilterChip) -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         chips.forEach { chip -> InspectorChip(chip, onClick = { onChipClick(chip) }) }
     }

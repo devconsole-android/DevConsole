@@ -8,8 +8,11 @@ package io.devconsole.ui.compose
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -96,6 +99,7 @@ internal data class InspectorDetailSectionSpec(
     val copyDescription: String? = null,
     val onCopy: (() -> Unit)? = null,
     val tab: InspectorDetailTab = InspectorDetailTab.OVERVIEW,
+    val secondary: Boolean = false,
 )
 
 /** Bundles [InspectorDetailHeader]'s payload so [InspectorObserveDetailScreen] stays under the param-count limit. */
@@ -569,9 +573,12 @@ internal fun InspectorObserveDetailScreen(
     searchOptions: InspectorDetailSearchOptions? = null,
     /** Kind-specific content rendered after the sections, e.g. the socket frame's send composer. */
     trailingContent: (@Composable () -> Unit)? = null,
+    singlePage: Boolean = false,
+    pinnedActions: List<InspectorFooterAction> = emptyList(),
 ) {
     val tabs = remember(sections) { sections.map { it.tab }.distinct().sortedBy { it.ordinal } }
-    val showTabs = tabs.size > 1
+    val visibleTabs = tabs.takeUnless { singlePage }.orEmpty()
+    val showTabs = visibleTabs.size > 1
     var selectedTab by
         rememberSaveable(resetKey) {
             mutableStateOf(tabs.firstOrNull() ?: InspectorDetailTab.OVERVIEW)
@@ -692,7 +699,7 @@ internal fun InspectorObserveDetailScreen(
                             }
                         },
             )
-            ObserveDetailTabs(tabs, selectedTab) { selectedTab = it }
+            ObserveDetailTabs(visibleTabs, selectedTab) { selectedTab = it }
             if (searchVisible) {
                 ObserveDetailSearchBar(
                     query = query,
@@ -715,7 +722,7 @@ internal fun InspectorObserveDetailScreen(
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
-            key(resetKey, selectedTab) {
+            key(resetKey, selectedTab.takeIf { showTabs }) {
                 ObserveDetailTabBody(
                     showTabs = showTabs,
                     selectedTab = selectedTab,
@@ -731,6 +738,7 @@ internal fun InspectorObserveDetailScreen(
                     modifier = Modifier.weight(1f),
                 )
             }
+            ObserveDetailPinnedActions(pinnedActions)
         }
     }
     ObserveDetailSearchOptionsSheet(
@@ -829,29 +837,80 @@ private fun ObserveDetailTabBody(
         if (overviewVisible && notices.isNotEmpty()) {
             WarnNote(notices.joinToString(" · "), Modifier.padding(bottom = 16.dp))
         }
-        resolved.filter { (spec, _) -> !showTabs || spec.tab == selectedTab }.forEach { (spec, section) ->
-            key(spec.key) {
-                if (spec.tab == InspectorDetailTab.TIMING &&
-                    spec.body is InspectorDetailSectionBody.Empty
-                ) {
-                    ObserveDetailNoTiming()
-                } else {
-                    InspectorDetailSectionCard(
-                        spec = spec,
-                        resolved = section,
-                        currentMatchOrdinal = currentMatchOrdinal,
-                        formattableShowRaw = showRawOf(spec),
-                        onFormattableShowRawChange =
-                            onShowRawChange?.let { change -> { showRaw -> change(spec.key, showRaw) } },
-                        onToggle = { onToggleSection(spec.key, section.expanded) },
-                        onExpandCodeFullScreen = onExpandCodeFullScreen,
-                    )
-                }
+        val visibleSections = resolved.filter { (spec, _) -> !showTabs || spec.tab == selectedTab }
+        val secondarySections = visibleSections.filter { (spec, _) -> spec.secondary }
+        val renderSection: @Composable (InspectorDetailSectionSpec, ResolvedDetailSection) -> Unit =
+            { spec, section ->
+                ObserveDetailSection(
+                    spec,
+                    section,
+                    currentMatchOrdinal,
+                    showRawOf,
+                    onShowRawChange,
+                    onToggleSection,
+                    onExpandCodeFullScreen,
+                )
+            }
+        visibleSections.filter { (spec, _) -> !spec.secondary }.forEach { (spec, section) ->
+            renderSection(spec, section)
+        }
+        if (secondarySections.isNotEmpty()) {
+            var userOpened by rememberSaveable { mutableStateOf(false) }
+            val open = userOpened || secondarySections.any { (_, section) -> section.hits > 0 }
+            CollapsibleSection(
+                label = "More details",
+                expanded = open,
+                onToggle = { userOpened = !open },
+                meta =
+                    "Headers, timing and more".takeIf {
+                        secondarySections.any { (spec, _) ->
+                            spec.tab ==
+                                InspectorDetailTab.TIMING
+                        }
+                    },
+            ) {
+                secondarySections.forEach { (spec, section) -> renderSection(spec, section) }
             }
         }
         // After the sections, so the frame the operator opened stays the first thing they read.
         trailingContent?.invoke()
         if (overviewVisible) ObserveDetailActionRows(footerActions)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ObserveDetailPinnedActions(actions: List<InspectorFooterAction>) {
+    if (actions.isNotEmpty() && !WindowInsets.isImeVisible) InspectorDetailFooterBar(actions)
+}
+
+@Composable
+private fun ObserveDetailSection(
+    spec: InspectorDetailSectionSpec,
+    section: ResolvedDetailSection,
+    currentMatchOrdinal: Int?,
+    showRawOf: (InspectorDetailSectionSpec) -> Boolean?,
+    onShowRawChange: ((String, Boolean) -> Unit)?,
+    onToggleSection: (String, Boolean) -> Unit,
+    onExpandCodeFullScreen: (String) -> Unit,
+) {
+    key(spec.key) {
+        if (spec.tab == InspectorDetailTab.TIMING && spec.body is InspectorDetailSectionBody.Empty) {
+            ObserveDetailNoTiming()
+        } else {
+            InspectorDetailSectionCard(
+                spec = spec,
+                resolved = section,
+                currentMatchOrdinal = currentMatchOrdinal,
+                formattableShowRaw = showRawOf(spec),
+                onFormattableShowRawChange =
+                    onShowRawChange?.let { change ->
+                        { showRaw -> change(spec.key, showRaw) }
+                    },
+                onToggle = { onToggleSection(spec.key, section.expanded) },
+                onExpandCodeFullScreen = onExpandCodeFullScreen,
+            )
+        }
     }
 }
 
@@ -887,6 +946,8 @@ internal data class ObserveDetailContent(
      */
     val searchPlaceholder: String = DEFAULT_DETAIL_SEARCH_PLACEHOLDER,
     val searchOptions: InspectorDetailSearchOptions? = null,
+    val singlePage: Boolean = false,
+    val pinnedActions: List<InspectorFooterAction> = emptyList(),
 )
 
 /** Matches [InspectorDetailSearchField]'s own default; named here so callers can opt out of it. */

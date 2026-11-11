@@ -27,7 +27,7 @@ public final class io/devconsole/ui/compose/ComposableSingletons$InspectorContro
 	public final fun getLambda$1476698320$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$1634393397$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$1786299793$ui_compose_release ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$349785120$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1997923276$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$85198047$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 }
 
@@ -110,24 +110,24 @@ public final class io/devconsole/ui/compose/ComposableSingletons$InspectorMockRu
 public final class io/devconsole/ui/compose/ComposableSingletons$InspectorMoreScreenKt {
 	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorMoreScreenKt;
 	public fun <init> ()V
-	public final fun getLambda$-1399186756$ui_compose_release ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-1671241350$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-1110499125$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-1263159459$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-1535214053$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-1807268647$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-1876536276$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$-1899534585$ui_compose_release ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-1943295944$ui_compose_release ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-512121597$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-2079323241$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$-605975602$ui_compose_release ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-974471828$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$1129667334$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$1180200415$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1267130819$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$1347851092$ui_compose_release ()Lkotlin/jvm/functions/Function2;
 	public final fun getLambda$1403158116$ui_compose_release ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$2078997819$ui_compose_release ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$364036633$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$228009336$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$472592726$ui_compose_release ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$636091227$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$500063930$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$745029013$ui_compose_release ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$908145821$ui_compose_release ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$91982039$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$772118524$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 }
 
 public final class io/devconsole/ui/compose/ComposableSingletons$InspectorNavComponentsKt {
@@ -191,6 +191,7 @@ public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObserv
 	public final fun getLambda$-1043254971$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$-1938845183$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$-821038729$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$1744221774$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$407926864$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$413875354$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 }
@@ -199,10 +200,9 @@ public final class io/devconsole/ui/compose/ComposableSingletons$InspectorObserv
 	public static final field INSTANCE Lio/devconsole/ui/compose/ComposableSingletons$InspectorObserveTrafficTabKt;
 	public fun <init> ()V
 	public final fun getLambda$-1233546674$ui_compose_release ()Lkotlin/jvm/functions/Function2;
-	public final fun getLambda$-1342708358$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$-166503003$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 	public final fun getLambda$-284139772$ui_compose_release ()Lkotlin/jvm/functions/Function3;
-	public final fun getLambda$-48866234$ui_compose_release ()Lkotlin/jvm/functions/Function3;
+	public final fun getLambda$-401776541$ui_compose_release ()Lkotlin/jvm/functions/Function3;
 }
 
 public final class io/devconsole/ui/compose/ComposableSingletons$InspectorPastRunBannerKt {

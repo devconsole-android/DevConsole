@@ -28,13 +28,17 @@
              file is always inside a root that inspector already permits browsing. The name is an
              SDK-specific subclass on purpose: the merger keys providers by android:name, so naming
              androidx.core.content.FileProvider here collided with every host that declares its own
-             (see DevConsoleFileProvider). That subclass hands FileProvider the paths resource
-             itself, so this declaration needs no meta-data child to collide over either. -->
+             (see DevConsoleFileProvider). The meta-data is what the static getUriForFile reads, and
+             it sits under this uniquely named node, so it cannot collide with a host's. -->
         <provider
             android:name="io.devconsole.DevConsoleFileProvider"
             android:authorities="${applicationId}.devconsole.files"
             android:exported="false"
-            android:grantUriPermissions="true" />
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/devconsole_file_provider_paths" />
+        </provider>
         <!-- Keep-alive shell for the embedded dashboard server (docs/BACKGROUND_KEEPALIVE.md).
              sdk:full declares the required permissions above, so the service starts by default
              whenever the server starts. sdk:full is a debugImplementation artifact; sdk:noop has

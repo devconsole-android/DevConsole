@@ -22,6 +22,16 @@ joined this list.)
 
 ### Added
 
+- **Test conditions.** Control on the phone and Mocks on the web have one-tap Slow network, No
+  connection, Timeouts, Server errors and Signed out for every request. Setting one on either
+  surface shows on the other. A condition lasts until it is turned off or the app restarts, and
+  Traffic and Network say when one is on, with a one-tap Turn off.
+- **Copy for bug report on the web.** A network request copies as method, URL, result, time, build
+  and both bodies, ready to paste into a ticket.
+- **WebSockets on the web list each connection first.** A strip above the messages shows every
+  connection, whether it is connected, and how many messages went each way. Click one to filter.
+- **The floating button counts failed requests.** It uses the same rule as the Traffic "Failed"
+  filter, ignores mocked responses, and clears when the inspector opens.
 - **Composer can run a request on your computer, not just the phone.** A new `devconsole-agent`
   (`tools/composer-agent`, JDK 17+, macOS/Linux/Windows) connects to the device and appears under
   Composer -> **Run on**. Use it for APIs only the computer can reach (localhost, VPN, private IPs)
@@ -47,8 +57,27 @@ Nothing this plugin does should ever be the reason a release cannot be built. Ev
 from one release APK build that the plugin stopped for reasons that had nothing to do with whether
 the DevConsole runtime leaked.
 
+### Changed
+
+- **The web Network detail opens on Body, with request and response together.** Mock, Resend, Copy
+  for bug report and Flag are labelled buttons instead of unlabelled icons and a "..." menu. Rows
+  show the host on a second line, and a Failed filter matches the phone.
+- **Mock rules are simpler to write on the web.** The dialog asks for method, path, what to do and
+  the response, with status presets. Rule name, scheme, host and the rest are under Advanced
+  options. A blank path now warns that it matches every request.
+- **WebSockets on the web speak plainly.** Sent and Received replace RECV and SENT, messages replace
+  frames, and opcodes are gone.
+- **The web header names the build and device.** It shows the package, version, device model and
+  Android version, and Copy for bug report adds a Device line.
+- **Plainer web labels.** Timeline levels read Debug, Info, Warning and Error. Composer has Send
+  request and Refresh list.
+- **The UNREDACTED stamp only shows when redaction is on.** Redaction is off by default, so the
+  stamp would otherwise sit on every screenshot. The export manifest still records the field.
+
 ### Fixed
 
+- **Share and exports open the share sheet again.** Broken since 1.2.4: the provider lacked the
+  paths meta-data the static `FileProvider.getUriForFile` reads, and the error was swallowed.
 - **Socket frames recorded before (or without) `onOpen` are no longer thrown away.** The store
   silently dropped any frame whose `connectionId` it did not know, so a host driving
   `SocketRecorder` by hand that called `onMessage` without first calling `onCreated`/`onOpen` got an

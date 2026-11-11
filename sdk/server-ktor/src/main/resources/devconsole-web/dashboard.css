@@ -1370,6 +1370,8 @@ body.detail-zoom .split-shell.collapse-detail { grid-template-columns: 1fr; }
 /* The action editor only renders the fields the selected action type needs. The attribute-driven
    hide must beat `.field`'s own display rule. */
 #mockRuleModal [data-mock-fields][hidden] { display: none !important; }
+.mock-condition-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.mock-condition-chips button[aria-pressed="true"] { color: var(--signal); border-color: var(--signal); background: var(--signal-soft); }
 .mock-step-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; padding: 8px 0; }
 .mock-step-row .field { flex: 1 1 140px; min-width: 120px; margin: 0; }
 .mock-step-row .field-full { flex-basis: 100%; }
@@ -1972,9 +1974,6 @@ label.field.export-metadata { display: flex; flex-direction: row; align-items: c
 #networkView .toolbar-group-label { display: none; }
 #networkDetailPane .network-body-code .code-fullscreen-btn { display: none; }
 #networkView .list-head span { font-size: 12px; font-weight: 400; color: var(--muted); }
-#networkFullEndpoint { margin-left: auto; padding: 0 4px; min-height: 24px; border: 0; background: none; font-size: 11px; color: var(--text-3); }
-#networkFullEndpoint:hover { color: var(--muted); }
-#networkFullEndpoint[aria-pressed="true"] { color: var(--signal); }
 #networkView .col-badge, #transactions .row-badge { flex: 0 0 64px; font-family: var(--font-mono); }
 #networkView .col-network-metrics, #transactions .row-metrics-inline { flex: 0 0 auto; min-width: 104px; text-align: right; white-space: nowrap; }
 #transactions { --d-row-h: 44px; }
@@ -1991,7 +1990,7 @@ label.field.export-metadata { display: flex; flex-direction: row; align-items: c
 @media (max-width: 480px) {
   #networkView .col-badge, #transactions .row-badge { flex-basis: 44px; }
   #networkView .col-network-metrics, #transactions .row-metrics-inline { min-width: 0; }
-  #transactions .row-time, #networkFullEndpoint, #networkView .col-network-time { display: none; }
+  #transactions .row-time, #networkView .col-network-time { display: none; }
   #transactions .row { gap: 8px; }
 }
 #transactions .row.selected { background: var(--surface-2); box-shadow: inset 2px 0 var(--signal); }
@@ -2020,6 +2019,17 @@ body.mode-simple #networkDetailPane [data-detail-tab] { display: inline-flex; }
 #networkDetailPane .detail-body { min-width: 0; padding: 16px; }
 .network-section-label { color: var(--muted); font-size: 12px; margin: 12px 0 8px; }
 .network-body-code { position: relative; border: 1px solid var(--line); background: var(--code-bg); min-width: 0; }
+#networkFakeNotice:not([hidden]) { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; background: var(--warn-soft); color: var(--warn); font-size: 12px; }
+#networkFakeNotice { border-radius: 8px; margin-bottom: 8px; }
+#networkFakeNotice button { min-height: 26px; padding: 0 10px; }
+#networkRun { max-width: 150px; }
+#networkView .search-field { flex-basis: 200px; }
+#transactions .row-main { flex-direction: column; align-items: stretch; gap: 1px; justify-content: center; }
+#transactions .row-main-host { display: block; font-family: var(--font-ui); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.network-primary-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0; }
+.network-primary-actions button, #networkFakeNotice button { font-size: 12px; }
+.network-request-body { max-height: 260px; overflow: auto; }
+.network-mock-notice { color: var(--warn); font-size: 12px; margin-bottom: 10px; }
 .network-code-tools { display: flex; justify-content: flex-end; padding: 6px 8px; }
 .network-code-tools button { font-size: 12px; min-height: 26px; padding: 2px 6px; }
 .network-body-empty { font: 12px/1.6 var(--font-mono); padding: 12px; overflow-wrap: anywhere; }
@@ -2303,3 +2313,38 @@ body.mode-simple #networkDetailPane [data-detail-tab] { display: inline-flex; }
   .lp-track-field select { min-width: 0; max-width: 100%; }
   .lp-legend { left: 10px; right: auto; top: auto; bottom: 28px; }
 }
+#mockConditionsCard { margin-bottom: 18px; }
+#mockRuleModal .filter-grid { align-items: start; }
+#mockRuleBodyPreview { display: none; }
+.mock-modal-expanded #mockRuleBodyPreview { display: block; }
+#socketConnections { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 10px; }
+#socketConnections[hidden] { display: none; }
+.socket-conn { flex: 0 0 auto; display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; column-gap: 8px; align-items: center; min-width: 220px; max-width: 340px; height: auto; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: transparent; text-align: left; cursor: pointer; }
+.socket-conn[aria-pressed="true"] { border-color: var(--signal); background: var(--signal-soft); }
+.socket-conn-dot { width: 8px; height: 8px; border-radius: 50%; }
+.socket-conn-url { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.socket-conn-state { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.socket-conn-meta { grid-column: 2 / -1; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+:root[data-theme="light"] { --control-outline: #888d84; }
+.socket-conn { min-width: 280px; max-width: 440px; }
+#sockets .row-badge { text-transform: none; }
+#socketListHead .col-status, #sockets .row-status,
+#pushView .list-head .col-status, #pushEvents .row-status,
+#crashesView .list-head .col-status, #crashesList .row-status { flex: 0 0 92px; white-space: nowrap; }
+#crashesList .row-duration { display: none; }
+#crashesList .row-main { display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 1px; min-width: 0; }
+#crashesList .row-main-text { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#crashesList .row-main-host { display: block; font-family: var(--font-ui); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.card-row-group { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; border-bottom: 1px solid var(--line); }
+.card-row-group > .card-row { border-bottom: 0; }
+.card-row-actions { display: flex; gap: 6px; }
+.card-row-action { min-height: 28px; padding: 0 10px; font-size: 12px; }
+.card-row-editor { grid-column: 1 / -1; padding-bottom: 8px; }
+@media (min-width: 781px) {
+  .rail { padding: 8px 16px 12px; }
+  .rail-group { margin-top: 10px; }
+  .rail-group-label, .rail-group-label.rail-adv-toggle { font-size: 13px; padding-bottom: 4px; }
+  .rail button { height: 34px; border-radius: 8px; }
+  .rail button .ic { width: 18px; height: 18px; }
+}
+#events .row-badge { text-transform: none; }

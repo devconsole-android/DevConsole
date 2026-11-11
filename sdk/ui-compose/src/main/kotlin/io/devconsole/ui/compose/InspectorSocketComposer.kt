@@ -85,11 +85,11 @@ internal fun SocketSendComposer(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("Send a frame", color = colors.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text("Send a message", color = colors.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
-            label = { Text("Frame text") },
+            label = { Text("Message") },
             minLines = COMPOSER_TEXT_MIN_LINES,
             modifier = Modifier.fillMaxWidth().testTag("socketComposerText"),
         )

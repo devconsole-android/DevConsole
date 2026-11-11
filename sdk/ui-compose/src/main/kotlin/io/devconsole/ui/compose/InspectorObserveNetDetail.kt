@@ -183,13 +183,13 @@ private fun netBodySections(
     return listOf(
         textPreviewSection(
             InspectorExchangeSection.PRIMARY_BODY.key,
-            "Request payload",
+            "Request body",
             transaction.requestPreview,
             requestBinary,
             requestEmptyText,
             colors,
             copyText,
-            "Copy request payload",
+            "Copy request body",
         ).copy(tab = InspectorDetailTab.REQUEST),
         textPreviewSection(
             InspectorExchangeSection.SECONDARY_BODY.key,
@@ -360,12 +360,10 @@ private fun netSections(
     val (requestSection, responseSection) = netBodySections(transaction, colors, copyText, mockDiff)
     val requestHeadersBody = headerRowsBody(transaction.requestHeaders, colors)
     val responseHeadersBody = headerRowsBody(transaction.responseHeaders, colors)
-    val decodedSections = netDecodedSections(decoded, colors, copyText)
-    val responseDecoded = decodedSections.filter { it.tab == InspectorDetailTab.RESPONSE }
-    val requestDecoded = decodedSections.filter { it.tab == InspectorDetailTab.REQUEST }
     return buildList {
+        add(requestSection)
         add(responseSection)
-        addAll(responseDecoded)
+        addAll(netDecodedSections(decoded, colors, copyText).map { it.copy(secondary = true) })
         add(
             InspectorDetailSectionSpec(
                 InspectorExchangeSection.SECONDARY_HEADERS.key,
@@ -374,10 +372,9 @@ private fun netSections(
                 copyDescription = "Copy response headers",
                 onCopy = keyValuesCopyAction(responseHeadersBody.entries, copyText),
                 tab = InspectorDetailTab.RESPONSE,
+                secondary = true,
             ),
         )
-        add(requestSection)
-        addAll(requestDecoded)
         add(
             InspectorDetailSectionSpec(
                 InspectorExchangeSection.PRIMARY_HEADERS.key,
@@ -386,6 +383,7 @@ private fun netSections(
                 copyDescription = "Copy request headers",
                 onCopy = keyValuesCopyAction(requestHeadersBody.entries, copyText),
                 tab = InspectorDetailTab.REQUEST,
+                secondary = true,
             ),
         )
         add(
@@ -395,10 +393,11 @@ private fun netSections(
                 InspectorDetailSectionBody.KeyValues(generalEntries),
                 copyDescription = "Copy general info",
                 onCopy = { copyText(generalEntries.toCopyText()) },
+                secondary = true,
             ),
         )
-        add(netRedactionsSection(transaction, colors, copyText))
-        add(netTimingSection(transaction, colors, copyText))
+        add(netTimingSection(transaction, colors, copyText).copy(secondary = true))
+        add(netRedactionsSection(transaction, colors, copyText).copy(secondary = true))
     }
 }
 
@@ -440,12 +439,10 @@ internal fun netResendActions(
     )
 }
 
-/** Mock/unmock, resend and cURL retain their callbacks in the detail action panel. */
-private fun netFooterActions(
+private fun netPinnedActions(
     transaction: InspectorTransactionUi,
     colors: DevConsoleColors,
     onMockAction: (() -> Unit)?,
-    copyText: (String) -> Unit,
     resendActions: NetResendActions?,
 ): List<InspectorFooterAction> =
     buildList {
@@ -461,21 +458,11 @@ private fun netFooterActions(
                     contentColor = colors.ink,
                 ),
             )
-            add(
-                InspectorFooterAction(
-                    label = "Edit & resend",
-                    onClick = resendActions.onEditResend,
-                    weight = 1f,
-                    enabled = resendActions.enabled,
-                    containerColor = colors.surface3,
-                    contentColor = colors.ink,
-                ),
-            )
         }
         if (onMockAction != null) {
             add(
                 InspectorFooterAction(
-                    label = if (transaction.isMocked) "Unmock this response" else "Mock this response",
+                    label = mockActionLabel(transaction),
                     onClick = onMockAction,
                     weight = 2f,
                     icon = {
@@ -484,6 +471,37 @@ private fun netFooterActions(
                     },
                     containerColor = if (transaction.isMocked) colors.signalSoft else colors.signal,
                     contentColor = if (transaction.isMocked) colors.signal else colors.signalInk,
+                ),
+            )
+        }
+    }
+
+private fun netRowActions(
+    transaction: InspectorTransactionUi,
+    colors: DevConsoleColors,
+    copyText: (String) -> Unit,
+    resendActions: NetResendActions?,
+    buildSummary: String,
+): List<InspectorFooterAction> =
+    buildList {
+        add(
+            InspectorFooterAction(
+                label = "Copy for bug report",
+                onClick = { copyText(transaction.toBugReportText(buildSummary)) },
+                weight = 1f,
+                containerColor = colors.surface3,
+                contentColor = colors.ink,
+            ),
+        )
+        if (resendActions != null) {
+            add(
+                InspectorFooterAction(
+                    label = "Edit & resend",
+                    onClick = resendActions.onEditResend,
+                    weight = 1f,
+                    enabled = resendActions.enabled,
+                    containerColor = colors.surface3,
+                    contentColor = colors.ink,
                 ),
             )
         }
@@ -520,6 +538,7 @@ internal fun netDetailContent(
     onUnmockThisResponse: (String) -> Unit,
     mockDiff: JsonMockDiffResult? = null,
     resendActions: NetResendActions? = null,
+    buildSummary: String = "",
 ): ObserveDetailContent {
     // Prefilling a *new* mock rule from a response that's already mocked is pointless, so a mocked
     // transaction gets an "Unmock" action (disables the serving rule) instead -- unless its rule id
@@ -537,18 +556,9 @@ internal fun netDetailContent(
             httpStatusDescription(transaction.statusCode).takeIf { it.isNotEmpty() }?.let { add(it) }
             transaction.durationMs?.let { add("$it ms") }
             if (transaction.startedAtEpochMs > 0) add(formatCaptureClockTime(transaction.startedAtEpochMs))
+            transaction.host.takeIf { it.isNotBlank() }?.let { add(it) }
         }.joinToString(" · ")
-    val notices =
-        buildList {
-            if (transaction.isMocked) {
-                add("Mock rule ${transaction.mockRuleId ?: "unknown"}${mockDiffNoticeSuffix(mockDiff).orEmpty()}")
-            }
-            val redactedCount =
-                (transaction.requestHeaders.values + transaction.responseHeaders.values).count {
-                    it.looksRedacted()
-                }
-            if (redactedCount > 0) add("$redactedCount header fields masked on device")
-        }
+    val notices = netDetailNotices(transaction, mockDiff)
     val sections = netSections(transaction, colors, statusColor, copyText, mockDiff)
     val decodedKeys = sections.mapNotNullTo(mutableSetOf()) { spec -> spec.key.takeIf { it.startsWith("decoded-") } }
     return ObserveDetailContent(
@@ -571,7 +581,30 @@ internal fun netDetailContent(
             InspectorExchangeSection.keysOf(InspectorExchangeSection.defaultSearchScope) +
                 setOf("general", "timing") +
                 decodedKeys,
-        footerActions = netFooterActions(transaction, colors, onMockAction, copyText, resendActions),
+        footerActions = netRowActions(transaction, colors, copyText, resendActions, buildSummary),
+        singlePage = true,
+        pinnedActions = netPinnedActions(transaction, colors, onMockAction, resendActions),
         searchOptions = NetworkDetailSearchOptions,
     )
 }
+
+private fun netDetailNotices(
+    transaction: InspectorTransactionUi,
+    mockDiff: JsonMockDiffResult?,
+): List<String> =
+    buildList {
+        val condition = testConditionForRuleId(transaction.mockRuleId)
+        if (condition == InspectorTestCondition.SLOW_NETWORK) {
+            add("Real response, slowed by the Slow network test condition.")
+        } else if (condition != null) {
+            add("This response isn't real. Test condition: ${condition.label}")
+        } else if (transaction.isMocked) {
+            val ruleName = transaction.mockRuleId ?: "unknown"
+            add("This response isn't real. Rule: $ruleName${mockDiffNoticeSuffix(mockDiff).orEmpty()}")
+        }
+        val redactedCount =
+            (transaction.requestHeaders.values + transaction.responseHeaders.values).count {
+                it.looksRedacted()
+            }
+        if (redactedCount > 0) add("$redactedCount header fields masked on device")
+    }

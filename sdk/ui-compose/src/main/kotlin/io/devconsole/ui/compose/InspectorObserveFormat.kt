@@ -135,8 +135,7 @@ internal fun InspectorCommandResult.toFlashMessage(): String =
  * Shares [text] as plain text via the system Share sheet, standing in for "download JSON" actions
  * -- there is no on-device JSON file to write for a single capture, and real clipboard/share
  * behavior beats inventing a fake download. Failures (no activity can handle `ACTION_SEND`) are
- * swallowed, matching [shareFileFromPath]'s existing convention for this debug-only convenience
- * action.
+ * swallowed for this debug-only convenience action.
  */
 internal fun shareTextSnippet(
     context: Context,

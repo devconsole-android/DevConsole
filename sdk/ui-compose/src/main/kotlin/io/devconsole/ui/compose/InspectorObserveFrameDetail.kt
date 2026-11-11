@@ -26,10 +26,12 @@ private fun InspectorSocketUi.protocolLabel(): String = if (protocol == "mqtt") 
 
 private fun frameOpcodeLabel(frameType: String): String =
     when (frameType) {
-        "TEXT" -> "0x1 text"
-        "BINARY" -> "0x2 binary"
-        "PING", "PONG" -> "control ($frameType)"
-        else -> frameType.lowercase()
+        "TEXT" -> "Text"
+        "BINARY" -> "Binary"
+        "PING" -> "Ping"
+        "PONG" -> "Pong"
+        "CLOSE" -> "Close"
+        else -> frameType.replaceFirstChar { it.titlecase() }
     }
 
 private fun frameToJsonSnippet(
@@ -111,7 +113,7 @@ private fun frameFooterActions(
 ): List<InspectorFooterAction> =
     listOf(
         InspectorFooterAction(
-            label = "Copy payload",
+            label = "Copy message",
             onClick = { copyText(frame.preview.orEmpty()) },
             weight = 2f,
             icon = {
@@ -120,10 +122,10 @@ private fun frameFooterActions(
             },
         ),
         InspectorFooterAction(
-            label = "JSONL",
+            label = "Share all messages",
             onClick = {
                 val jsonl = socket.frames.joinToString("\n") { frameToJsonSnippet(socket, it) }
-                shareText(jsonl, "Share frame log as JSONL")
+                shareText(jsonl, "Share all messages")
             },
             weight = 1f,
             icon = {
@@ -148,34 +150,39 @@ internal fun frameDetailContent(
     val sizeLabel = socketFrameSizeLabel(frame)
     val frameJson = frameToJsonSnippet(socket, frame)
     val isMqtt = socket.protocol == "mqtt"
-    // Mirrors SocketFrameRow's title preference: an MQTT frame's topic is the meaningful identifier,
-    // not the broker URL every message on the connection shares.
-    val title = frame.topic ?: socket.url.removePrefix("wss://").removePrefix("ws://")
+    val title = frame.topic ?: socket.url.substringAfter("://")
     return ObserveDetailContent(
         header =
             InspectorObserveDetailHeaderSpec(
-                kindLabel = if (isMqtt) "MQTT message" else "WebSocket frame",
+                kindLabel = if (isMqtt) "MQTT message" else "WebSocket message",
                 leadText = if (received) "↓" else "↑",
                 leadColor = leadColor,
                 leadContainerColor = leadBg,
                 title = title,
-                subtitle = "${frame.direction} · ${frame.frameType} · $sizeLabel · ${formatCaptureClockTime(
-                    frame.timestampEpochMs,
-                )}",
+                subtitle =
+                    listOfNotNull(
+                        if (received) "Received" else "Sent",
+                        frameOpcodeLabel(frame.frameType).takeUnless { frame.frameType == "TEXT" },
+                        sizeLabel,
+                        formatCaptureClockTime(frame.timestampEpochMs),
+                    ).joinToString(" · "),
                 status = "",
                 statusColor = colors.ink,
                 actions =
                     listOf(
                         InspectorTopAction(
-                            contentDescription = "Share frame as JSON",
-                            onClick = { shareText(frameJson, "Share frame JSON") },
+                            contentDescription = "Share message as JSON",
+                            onClick = { shareText(frameJson, "Share message JSON") },
                             icon = shareIconAction(colors.muted),
                         ),
                     ),
             ),
-        sections = frameSections(socket, frame, colors, sizeLabel, copyText),
+        sections =
+            frameSections(socket, frame, colors, sizeLabel, copyText)
+                .map { it.copy(secondary = it.tab != InspectorDetailTab.PAYLOAD) },
         initiallyOpenSectionKeys =
             setOf("general", InspectorExchangeSection.PRIMARY_BODY.key, InspectorExchangeSection.SECONDARY_HEADERS.key),
         footerActions = frameFooterActions(socket, frame, colors, copyText, shareText),
+        singlePage = true,
     )
 }

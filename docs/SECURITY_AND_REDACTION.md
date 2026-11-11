@@ -156,7 +156,9 @@ collapsed to two.
 ## The UNREDACTED badge
 
 The dashboard badges an attachment **UNREDACTED** wherever it appears — the evidence tray, timeline/
-crash detail, the export manifest — whenever its `redactionApplicability` is `NOT_APPLICABLE`. That
+crash detail, the export manifest — whenever redaction is on and its `redactionApplicability` is `NOT_APPLICABLE`. With redaction off,
+which is the default, every capture is raw, so the dashboard leaves the badge out; the export
+manifest still records the field. That
 field is read from **stored data**, not inferred client-side. Earlier in this feature's development the
 badge was inferred from "is this a screenshot," which was correct at the time and would have silently
 stopped being correct the moment anything else was ever stored as `NOT_APPLICABLE` — exactly the kind

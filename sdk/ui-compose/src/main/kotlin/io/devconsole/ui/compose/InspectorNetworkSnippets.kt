@@ -8,6 +8,7 @@ package io.devconsole.ui.compose
 
 private const val RADIX_HEX = 16
 private const val UNICODE_ESCAPE_WIDTH = 4
+private const val BUG_REPORT_BODY_LIMIT = 20_000
 
 /**
  * The request body to actually reproduce (replay/cURL/fetch), or `null` when [requestPreview] is
@@ -102,6 +103,33 @@ internal fun InspectorTransactionUi.toJsonSnippet(): String =
         append("  \"responseBody\": ").append(responsePreview.jsonEmbeddedOrQuoted()).append(",\n")
         append("  \"error\": ").append(error.jsonQuotedOrNull()).append('\n')
         append('}')
+    }
+
+internal fun InspectorTransactionUi.toBugReportText(buildSummary: String): String =
+    buildString {
+        append(method).append(' ').append(displayUrl()).append('\n')
+        val result =
+            if (statusCode == null) {
+                listOfNotNull("Failed", error?.takeIf { it.isNotBlank() })
+            } else {
+                val status =
+                    listOf(statusCode.toString(), httpStatusDescription(statusCode))
+                        .filter { it.isNotEmpty() }
+                        .joinToString(" ")
+                listOfNotNull(status, durationMs?.let { "$it ms" }, mockedLabel())
+            }
+        append("Result: ").append(result.joinToString(" · ")).append('\n')
+        if (startedAtEpochMs != 0L) append("Time: ").append(formatCaptureClockTime(startedAtEpochMs)).append('\n')
+        if (buildSummary.isNotBlank()) append("Build: ").append(buildSummary).append('\n')
+        append("\nRequest body\n").append(requestPreview.bugReportBody())
+        append("\n\nResponse body\n").append(responsePreview.bugReportBody())
+    }
+
+private fun String?.bugReportBody(): String =
+    when {
+        this.isNullOrBlank() -> "(empty)"
+        length > BUG_REPORT_BODY_LIMIT -> take(BUG_REPORT_BODY_LIMIT) + "\n… cut off here"
+        else -> this
     }
 
 /** [InspectorTransactionUi.url] is empty for adapters that predate that field. */

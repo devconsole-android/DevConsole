@@ -122,6 +122,7 @@ internal class TeeingNetworkTransactionStore(
     private val activeSessionId: () -> String? = { null },
     private val liveCaptureLock: Any = Any(),
     private val captureGate: CaptureGate = CaptureGate(),
+    private val onRecorded: (NetworkTransaction) -> Unit = {},
 ) : NetworkTransactionStore by delegate {
     override fun record(transaction: NetworkTransaction) {
         synchronized(liveCaptureLock) {
@@ -162,6 +163,7 @@ internal class TeeingNetworkTransactionStore(
                 wallTimeMsOverride = transaction.completedAtEpochMs ?: transaction.startedAtEpochMs,
             )
         }
+        onRecorded(transaction)
     }
 
     private companion object {

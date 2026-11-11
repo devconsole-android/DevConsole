@@ -9,6 +9,7 @@ package io.devconsole.ui.compose
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -114,8 +115,7 @@ internal fun DataRoute(
  * it to the system Share sheet. [path] must be a regular file under one of [FileProvider]'s
  * declared roots (`devconsole_file_provider_paths.xml`, which mirrors `AndroidFileInspector`'s
  * sandbox roots) or [FileProvider.getUriForFile] throws; that failure -- and any failure to resolve
- * an activity that can handle `ACTION_SEND` -- is swallowed rather than crashing the host app, since
- * this is a debug-only convenience action.
+ * an activity that can handle `ACTION_SEND` -- shows a toast rather than crashing the host app.
  */
 internal fun shareFileFromPath(
     context: Context,
@@ -133,7 +133,7 @@ internal fun shareFileFromPath(
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         context.startActivity(Intent.createChooser(sendIntent, "Share ${file.name}"))
-    }
+    }.onFailure { Toast.makeText(context, "Couldn't open the share sheet", Toast.LENGTH_SHORT).show() }
 }
 
 /**
