@@ -35,11 +35,11 @@ dependencies {
     // client that installs it lives in src/debug (src/release builds the same client without it).
     debugImplementation(project(":sdk:network-ktor"))
     implementation(project(":sdk:logs-timber"))
-    implementation("io.ktor:ktor-client-core:3.0.3")
+    implementation("io.ktor:ktor-client-core:3.6.1")
     // CIO, not the OkHttp engine: a body captured through a pure-Kotlin engine is the proof that
     // the Ktor plugin captures on its own rather than riding on this sample's OkHttp adapter.
-    implementation("io.ktor:ktor-client-cio:3.0.3")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("io.ktor:ktor-client-cio:3.6.1")
+    implementation("com.squareup.okhttp3:okhttp:5.5.1")
     implementation(libs.paho.mqttv3)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.compose)
