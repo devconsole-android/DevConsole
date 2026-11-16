@@ -18,7 +18,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 
 dependencies {
     implementation("com.android.tools.build:gradle:8.13.0")
-    implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.20")
+    implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21")
     implementation("org.jlleitschuh.gradle:ktlint-gradle:14.2.0")
     implementation("io.gitlab.arturbosch.detekt:detekt-gradle-plugin:1.23.8")
     // Matches the `dokka` version in gradle/libs.versions.toml. Applied by
@@ -27,7 +27,7 @@ dependencies {
     // exposes the Dokka-specific outgoing configuration the aggregation needs. Without it, the
     // root's aggregation dependency falls back to resolving the module's ordinary AGP runtime
     // variants, which is both semantically wrong and ambiguous (debug vs release).
-    implementation("org.jetbrains.dokka:dokka-gradle-plugin:2.2.0")
+    implementation("org.jetbrains.dokka:dokka-gradle-plugin:2.3.0")
     implementation("com.vanniktech:gradle-maven-publish-plugin:0.37.0")
 }
 
