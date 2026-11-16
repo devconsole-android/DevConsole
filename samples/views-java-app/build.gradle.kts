@@ -9,7 +9,7 @@ android {
     defaultConfig {
         applicationId = "io.devconsole.sample.viewsjava"
         versionCode = 1
-        versionName = "1.4.0-SNAPSHOT"
+        versionName = "1.4.1-SNAPSHOT"
     }
 }
 

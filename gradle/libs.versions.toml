@@ -2,7 +2,7 @@
 agp = "8.13.0"
 kotlin = "2.2.20"
 ktor = "3.0.3"
-compose-bom = "2024.10.01"
+compose-bom = "2026.06.01"
 activity = "1.9.3"
 lifecycle = "2.8.7"
 coroutines = "1.9.0"
