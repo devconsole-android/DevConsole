@@ -35,7 +35,7 @@ devConsole {
 }
 ```
 
-`<version>` is a JitPack version — `1.3.1` for the current release. Releases are tagged `v1.3.1`,
+`<version>` is a JitPack version — `1.4.0` for the current release. Releases are tagged `v1.4.0`,
 and JitPack resolves a bare version against the `v`-prefixed tag, so the `v` is optional; the bare
 form is used here because it also matches the plugin's version on the Gradle Plugin Portal.
 
@@ -118,7 +118,7 @@ release-safe, so it can stay on `implementation` in every variant — in protect
 to DevConsole's disabled recorder:
 
 ```kotlin
-implementation("com.github.devconsole-android.DevConsole:devconsole-logs-timber:1.3.1")
+implementation("com.github.devconsole-android.DevConsole:devconsole-logs-timber:1.4.0")
 
 // Once, after DevConsole.initialize:
 Timber.plant(DevConsoleTimberTree(DevConsole.logRecorder()))
