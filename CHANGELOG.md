@@ -22,6 +22,15 @@ joined this list.)
 
 _Nothing yet._
 
+## 1.4.1 — 2026-11-16
+
+### Fixed
+
+- **Crash on the Control screen with Compose 1.8 or newer.** The inspector UI was compiled against
+  Compose 1.7, so opening Test conditions threw `NoSuchMethodError` for `FlowRow` in apps that
+  resolve a newer Compose. It is now built against Compose BOM 2026.06.01, so it needs Compose 1.11
+  or newer at runtime.
+
 ## 1.4.0 — 2026-11-16
 
 ### Added
