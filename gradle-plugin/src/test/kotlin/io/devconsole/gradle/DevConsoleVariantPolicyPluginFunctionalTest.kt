@@ -229,9 +229,9 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
             devConsoleBlock = "autoWireDependencies.set(false)",
             extraBuildScript = """
                 dependencies {
-                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole-network-ktor:1.3.1")
-                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole-ui-compose:1.3.1")
-                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole-ui-views:1.3.1")
+                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole-network-ktor:1.4.0")
+                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole-ui-compose:1.4.0")
+                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole-ui-views:1.4.0")
                 }
             """.trimIndent(),
         )
@@ -956,12 +956,12 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
         )
 
         // release is PROTECTED by default, so auto-wire adds the noop core coordinate. The published
-        // coordinate is 1.3.1 -- the DEFAULT_SDK_VERSION must not point at a 1.3.1-SNAPSHOT that was
+        // coordinate is 1.4.0 -- the DEFAULT_SDK_VERSION must not point at a 1.4.0-SNAPSHOT that was
         // never published, which would make every zero-config release build fail to resolve.
         val result = runner("dependencies", "--configuration", "releaseImplementation").build()
 
-        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole-noop:1.3.1"))
-        assertTrue(result.output, !result.output.contains("1.3.1-SNAPSHOT"))
+        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole-noop:1.4.0"))
+        assertTrue(result.output, !result.output.contains("1.4.0-SNAPSHOT"))
     }
 
     @Test
@@ -1011,13 +1011,13 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
     @Test
     fun `the JitPack coordinate trips the declared-dependency check`() {
-        addStubCoordinate("com.github.devconsole-android.DevConsole", "devconsole", "1.3.1")
+        addStubCoordinate("com.github.devconsole-android.DevConsole", "devconsole", "1.4.0")
         writeFixture(
             devConsoleBlock = "autoWireDependencies.set(false)",
             extraBuildScript =
                 """
                 dependencies {
-                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole:1.3.1")
+                    add("releaseImplementation", "com.github.devconsole-android.DevConsole:devconsole:1.4.0")
                 }
                 """.trimIndent(),
         )
@@ -1057,7 +1057,7 @@ class DevConsoleVariantPolicyPluginFunctionalTest {
 
         // debug is ENABLED, so the core runtime ("devconsole") must still be auto-wired alongside the
         // host's add-on declaration -- the add-on alone does not count as declaring the core runtime.
-        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole:1.3.1"))
+        assertTrue(result.output, result.output.contains("com.github.devconsole-android.DevConsole:devconsole:1.4.0"))
         assertTrue(result.output, result.output.contains("io.github.devconsole-android:devconsole-ui-compose"))
     }
 

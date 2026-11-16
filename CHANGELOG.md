@@ -20,6 +20,10 @@ joined this list.)
 
 ## Unreleased
 
+_Nothing yet._
+
+## 1.4.0 — 2026-11-16
+
 ### Added
 
 - **Test conditions.** Control on the phone and Mocks on the web have one-tap Slow network, No
