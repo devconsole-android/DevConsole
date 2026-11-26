@@ -12,7 +12,7 @@ android {
 dependencies {
     api(project(":sdk:network"))
     implementation(project(":sdk:mocks"))
-    implementation("io.ktor:ktor-client-core:3.0.3")
-    testImplementation("io.ktor:ktor-client-mock:3.0.3")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    implementation("io.ktor:ktor-client-core:3.6.1")
+    testImplementation("io.ktor:ktor-client-mock:3.6.1")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
 }
